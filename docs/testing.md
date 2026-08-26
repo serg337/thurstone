@@ -26,6 +26,8 @@ npm run verify:evidence
 
 The Vercel production build runs the durable-store check, isolated real Redis suite, confirmed guard bootstrap/status check, zero-token provider metadata check, and application build in that order. Preview has no production credentials and therefore fails closed before any provider request. Guard initialization additionally requires Vercel's independently supplied Git commit SHA to match the approved commit and one-time confirmation tuple.
 
+The production Vercel project is linked to `serg337/toolproof` on branch `main`. Vercel's system-provided `VERCEL_GIT_COMMIT_SHA` is the authoritative deployment-source identity for guard initialization and confirmed reaping; a manually claimed commit variable cannot substitute for it.
+
 ## Proof boundaries
 
 - Unit tests prove deterministic domain, schema, canonicalization, and evaluator behavior.
