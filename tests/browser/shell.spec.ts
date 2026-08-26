@@ -38,3 +38,33 @@ test("health and degraded readiness diagnostics are explicit", async ({ request 
   expect(pageResponse.headers()["strict-transport-security"]).toContain("max-age=63072000");
   expect(pageResponse.headers()["x-frame-options"]).toBe("DENY");
 });
+
+test("Probe controls disclose policy while inference routes fail closed", async ({ request }) => {
+  const status = await request.get("/api/probe/status");
+  expect(status.status()).toBe(503);
+  await expect(status.json()).resolves.toMatchObject({
+    status: "controls-pending",
+    enabled: false,
+    activation: "disabled",
+    policy: { callLimit: 160, spendCeilingUsd: "10.00" }
+  });
+
+  const headers = {
+    Origin: "https://toolproof-rust.vercel.app",
+    "Sec-Fetch-Site": "same-origin"
+  };
+  for (const route of ["/api/probe/issue", "/api/probe/decide"]) {
+    const response = await request.post(route, { headers, data: {} });
+    expect(response.status()).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      error: "probe_disabled",
+      inferencePerformed: false
+    });
+  }
+
+  const crossSite = await request.post("/api/probe/issue", {
+    headers: { ...headers, Origin: "https://attacker.example", "Sec-Fetch-Site": "cross-site" },
+    data: {}
+  });
+  expect(crossSite.status()).toBe(403);
+});

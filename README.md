@@ -4,7 +4,7 @@
 
 **ToolProof by Invarra — created by Sergio Valencia.**
 
-Status: Gate 0 implementation is active. The native `cart_get` provider is implemented, but deployed supported-runtime proof, the model-backed lane, authentic results, repository release, and video do not exist yet. No score or screenshot is presented as evidence.
+Status: Gate 0 closure is active. Chrome 151 authentically discovered and invoked the deployed `cart_get` provider, and its rendered handler receipt matched the deterministic fixture. The model-backed lane remains disabled; no model-selection run, score, public repository release, or video exists yet.
 
 **Simulated checkout — no purchase occurs.** ToolProof contains no payment, account, inventory, messaging, or external transaction path. When enabled later, model-backed evaluation may send synthetic prompts to the disclosed provider.
 
@@ -20,14 +20,14 @@ The full 60-second review-versus-checkout path will unlock only after all five s
 
 ## Supported-path status
 
-| Capability                                                     | Current status                                                                            |
-| -------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Site Tools provider via `document.modelContext.registerTool()` | Implemented; deployed native observation pending                                          |
-| In-page discovery via `getTools()`                             | Feature-detected; target-runtime verification pending                                     |
-| In-page execution via `executeTool()`                          | Narrow compatibility boundary planned; argument mode not yet frozen                       |
-| Direct ChatGPT observations                                    | Not collected                                                                             |
-| Judge-accessible model-backed lane                             | Disabled until credentials, durable replay/rate/spend controls, and hard cap are approved |
-| Authentic baseline/revised results                             | No run yet                                                                                |
+| Capability                                                     | Current status                                                                                 |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Site Tools provider via `document.modelContext.registerTool()` | Implemented and authentically observed on the deployed Chrome 151 path                         |
+| In-page discovery via `getTools()`                             | Feature-detected; target-runtime verification pending                                          |
+| In-page execution via `executeTool()`                          | Narrow compatibility boundary planned; argument mode not yet frozen                            |
+| Direct ChatGPT observations                                    | Not collected                                                                                  |
+| Judge-accessible model-backed lane                             | Disabled; immutable lifetime-guard source exists, but production Redis verification is pending |
+| Authentic baseline/revised results                             | No run yet                                                                                     |
 
 Mocks, direct domain calls, unit tests, and Playwright's ordinary browser build are never counted as native WebMCP or model-selection evidence.
 
@@ -54,11 +54,13 @@ npm run build
 npm run verify:publication
 ```
 
+`npm run durable-store:check`, `npm run probe-controls:integration`, and the operator-only Probe guard commands require a dedicated Redis environment. They perform no provider inference. Missing durable configuration fails closed.
+
 `npm run verify:evidence` deliberately fails closed until an authentic frozen-run manifest exists.
 
 ## Architecture
 
-ToolProof uses separate `/studio`, `/lab`, and `/results` documents as distinct trust surfaces. A strict TypeScript domain layer owns the deterministic fixture and state transitions. Normal UI controls and native WebMCP handlers call the same functions. A central registry manager owns registration promises and abort controllers so React StrictMode cannot silently double-register a tool.
+ToolProof uses separate `/studio`, `/lab`, and `/results` documents as distinct trust surfaces. A strict TypeScript domain layer owns the deterministic fixture and state transitions. Normal UI controls and native WebMCP handlers call the same functions. A central registry manager owns registration promises and abort controllers so React StrictMode cannot silently double-register a tool. Server-only Probe controls reserve one immutable challenge-lifetime call/spend slot before any future provider dispatch; public issue/decision routes currently fail closed with inference disabled.
 
 See [architecture](docs/architecture.md), [methodology](docs/methodology.md), [testing](docs/testing.md), [challenge requirements](CHALLENGE.md), and [official-source check](docs/OFFICIAL_SOURCE_CHECK.md).
 

@@ -46,7 +46,13 @@ try {
       id: payload.id,
       object: payload.object,
       ownedBy: payload.owned_by ?? null,
-      shutdownDate: payload.shutdown_date ?? null
+      shutdownDate: payload.shutdown_date ?? null,
+      requestIdPresent: response.headers.has("x-request-id"),
+      rateLimit: {
+        requests: response.headers.get("x-ratelimit-limit-requests"),
+        tokens: response.headers.get("x-ratelimit-limit-tokens"),
+        projectTokens: response.headers.get("x-ratelimit-limit-project-tokens")
+      }
     })
   );
 } catch (error) {

@@ -4,12 +4,15 @@ Checked for the initial Gate 0 dependency set on 26 August 2026. The release pro
 
 ## Runtime and application dependencies
 
-| Component         |    Pin | Source                                         | License | Use                                      |
-| ----------------- | -----: | ---------------------------------------------- | ------- | ---------------------------------------- |
-| Next.js           | 16.3.3 | https://github.com/vercel/next.js              | MIT     | Web application and server routes        |
-| React / React DOM | 19.2.8 | https://github.com/facebook/react              | MIT     | Interface runtime                        |
-| Zod               |  4.4.3 | https://github.com/colinhacks/zod              | MIT     | Runtime validation and schema generation |
-| json-canonicalize |  3.0.0 | https://github.com/snowyu/json-canonicalize.ts | MIT     | Canonical JSON evidence bytes            |
+| Component         |    Pin | Source                                         | License | Use                                        |
+| ----------------- | -----: | ---------------------------------------------- | ------- | ------------------------------------------ |
+| Next.js           | 16.3.3 | https://github.com/vercel/next.js              | MIT     | Web application and server routes          |
+| React / React DOM | 19.2.8 | https://github.com/facebook/react              | MIT     | Interface runtime                          |
+| Zod               |  4.4.3 | https://github.com/colinhacks/zod              | MIT     | Runtime validation and schema generation   |
+| json-canonicalize |  3.0.0 | https://github.com/snowyu/json-canonicalize.ts | MIT     | Canonical JSON evidence bytes              |
+| Upstash Redis SDK | 1.38.3 | https://github.com/upstash/redis-js            | MIT     | Server-only durable guard transport        |
+| uncrypto          |  0.1.3 | https://github.com/unjs/uncrypto               | MIT     | Upstash SDK cryptographic compatibility    |
+| server-only       |  0.0.1 | https://github.com/facebook/react              | MIT     | Prevents client imports of server controls |
 
 ## Development and verification dependencies
 
@@ -19,6 +22,7 @@ Checked for the initial Gate 0 dependency set on 26 August 2026. The release pro
 | ESLint                    |                                                 9.39.5 | https://github.com/eslint/eslint                   | MIT          | Static analysis; maintenance pin required by current Next plugins |
 | eslint-config-next        |                                                 16.3.3 | https://github.com/vercel/next.js                  | MIT          | Next/React lint rules                                             |
 | Prettier                  |                                                  3.9.6 | https://github.com/prettier/prettier               | MIT          | Formatting                                                        |
+| tsx                       |                                                4.23.12 | https://github.com/privatenumber/tsx               | MIT          | Operator-only TypeScript control scripts                          |
 | Vitest / coverage         |                                                 4.1.11 | https://github.com/vitest-dev/vitest               | MIT          | Deterministic tests and coverage                                  |
 | Testing Library packages  |                                See `package-lock.json` | https://github.com/testing-library                 | MIT          | Component interaction tests                                       |
 | jsdom                     |                                                 30.0.1 | https://github.com/jsdom/jsdom                     | MIT          | Test DOM runtime                                                  |
@@ -47,4 +51,4 @@ Checked for the initial Gate 0 dependency set on 26 August 2026. The release pro
 
 ## Assets
 
-The initial application uses project-authored CSS, text, and interface shapes with system fonts. It contains no third-party image, icon, music, video, sound, dataset, or adapted runner source.
+The initial application uses project-authored CSS, text, and interface shapes with system fonts. It contains no third-party image, icon, music, video, sound, dataset, or adapted runner sou

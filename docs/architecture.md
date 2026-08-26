@@ -22,9 +22,9 @@ The official ambient type package currently lacks `executeTool()`, while the dra
 
 ## Probe and evaluator boundary
 
-The preferred future Probe is a bounded server-assisted model decision plus in-page native execution. The model receives one natural-language request, minimum fixture synopsis, live state-appropriate catalog, and a frozen generic instruction. It receives no expectations, family/subset labels, prior result, or repair hint.
+The preferred Probe is a bounded server-assisted model decision plus in-page native execution. The model receives one natural-language request, minimum fixture synopsis, live state-appropriate catalog, and a frozen generic instruction. It receives no expectations, family/subset labels, prior result, or repair hint.
 
-Evaluator truth remains outside the Lab and model request. A server-issued signed single-use envelope binds opaque trial identity and manifest hash. Durable replay/rate/concurrency/spend controls are mandatory before the lane can be public.
+Evaluator truth remains outside the Lab and model request. A server-issued signed single-use envelope binds opaque run/case/trial, session, build, fixture, request, settings, and manifest hashes. A stable Redis namespace enforces an immutable 160-attempt/USD $10 lifetime policy across deployments and provider resets. Each granted call permanently consumes one slot and $0.0625 of admission capacity; uncertain outcomes quarantine rather than refund. The public status route is diagnostic, while issue/decision routes stay disabled until the remaining Gate 2 allowlist, CSRF, bounded-body, provider, and live-store checks pass.
 
 ## Evidence
 

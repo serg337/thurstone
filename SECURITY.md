@@ -16,9 +16,15 @@ ToolProof is a deterministic simulated checkout/review sandbox. It has no real p
 
 ## Model-backed lane
 
-The hosted Probe lane remains disabled until it has all of the following: a server-held provider secret, a Sergio-approved hard provider cap, signed short-lived single-use run tokens, durable replay/rate/concurrency/spend controls, allowlisted cases/manifests/model settings, origin and CSRF checks, strict body/output limits, safe redaction, and a terminal evidence receipt.
+The hosted Probe lane is disabled. Its frozen challenge-lifetime policy permits exactly 160 provider attempts: 4 calibration, 72 baseline, 2 Repair Builder, 72 revised, and 10 bounded judge/reference calls. Every granted attempt permanently commits 62,500,000 nano-USD, so 160 grants bind the USD $10 ceiling exactly and a resetting provider window cannot restore ToolProof capacity. Concurrency is one.
 
-It will accept no arbitrary public prompt, model, manifest, URL, code, or external action. Only synthetic challenge text and minimal fixture state may reach the disclosed provider.
+The server-only guard uses signed short-lived authorizations and atomic Redis transitions: `ISSUED → IN_FLIGHT → KNOWN | UNCERTAIN`. Policy/counter/authorization/tombstone records have no reset TTL. Only an explicit fresh `GRANTED_NEW` receipt can authorize one future provider request. Ambiguous outcomes retain the reservation and quarantine the guard; critical drift or settlement conflicts halt it. Production routes never initialize missing state.
+
+Activation remains forbidden until a dedicated claimed durable store, a random signing secret, Production-only provider/store credentials, real concurrent Lua verification, fixed case/manifest/model allowlists, session-bound CSRF, streamed body limits, safe redaction, and a terminal activation receipt are green. `/api/probe/issue` and `/api/probe/decide` currently return `503 probe_disabled` and make no inference.
+
+Public status/readiness receipts are CDN-cached briefly to protect the free durable-store command quota. They are diagnostics only and never authorize a call; the future decision path must revalidate Redis atomically for every dispatch.
+
+The active lane will accept no arbitrary public prompt, model, manifest, URL, code, or external action. Only synthetic challenge text and minimal fixture state may reach the disclosed provider. Preview deployments must not receive production provider, Redis-write, or signing credentials.
 
 ## Reporting a vulnerability
 

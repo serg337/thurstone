@@ -13,11 +13,18 @@
   "scripts": {
     "build": "next build",
     "dev": "next dev",
+    "durable-store:check": "node scripts/check-durable-store.mjs",
     "format": "prettier . --write",
     "format:check": "prettier . --check",
     "install:check": "node scripts/verify-install.mjs",
     "lint": "eslint . --max-warnings=0",
     "prebuild": "node scripts/clean-next-dev-types.mjs",
+    "probe-controls:hashes": "tsx --tsconfig tsconfig.operator.json scripts/probe-controls.ts hashes",
+    "probe-controls:init": "tsx --tsconfig tsconfig.operator.json scripts/probe-controls.ts init",
+    "probe-controls:bootstrap": "tsx --tsconfig tsconfig.operator.json scripts/probe-controls.ts bootstrap",
+    "probe-controls:integration": "tsx --tsconfig tsconfig.operator.json scripts/probe-controls.ts integration-test",
+    "probe-controls:reap": "tsx --tsconfig tsconfig.operator.json scripts/probe-controls.ts reap",
+    "probe-controls:status": "tsx --tsconfig tsconfig.operator.json scripts/probe-controls.ts status",
     "provider:check": "node scripts/check-openai-entitlement.mjs",
     "start": "next start",
     "test": "vitest run",
@@ -31,10 +38,12 @@
     "verify:publication": "node scripts/verify-publication.mjs"
   },
   "dependencies": {
+    "@upstash/redis": "1.38.3",
     "json-canonicalize": "3.0.0",
     "next": "16.3.3",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "server-only": "0.0.1",
     "zod": "4.4.3"
   },
   "devDependencies": {
@@ -53,6 +62,7 @@
     "eslint-config-prettier": "10.1.8",
     "jsdom": "30.0.1",
     "prettier": "3.9.6",
+    "tsx": "4.23.12",
     "typescript": "6.0.3",
     "vitest": "4.1.11",
     "webmcp-types": "0.1.5"
