@@ -28,6 +28,8 @@ The Vercel production build runs the durable-store check, isolated real Redis su
 
 The production Vercel project is linked to `serg337/toolproof` on branch `main`. Vercel's system-provided `VERCEL_GIT_COMMIT_SHA` is the authoritative deployment-source identity for guard initialization and confirmed reaping; a manually claimed commit variable cannot substitute for it.
 
+The production guard was initialized once from Git-linked commit `86584fe4fa308980bfb7d60f9722cc8b49b78644` after the isolated real Redis suite passed. Its initialization receipt recorded zero calls and zero committed nano-USD. The one-time confirmation variables were then removed; subsequent builds can only verify status unless a separately confirmed reap operation is present.
+
 ## Proof boundaries
 
 - Unit tests prove deterministic domain, schema, canonicalization, and evaluator behavior.

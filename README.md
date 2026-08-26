@@ -20,14 +20,14 @@ The full 60-second review-versus-checkout path will unlock only after all five s
 
 ## Supported-path status
 
-| Capability                                                     | Current status                                                                                 |
-| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| Site Tools provider via `document.modelContext.registerTool()` | Implemented and authentically observed on the deployed Chrome 151 path                         |
-| In-page discovery via `getTools()`                             | Feature-detected; target-runtime verification pending                                          |
-| In-page execution via `executeTool()`                          | Narrow compatibility boundary planned; argument mode not yet frozen                            |
-| Direct ChatGPT observations                                    | Not collected                                                                                  |
-| Judge-accessible model-backed lane                             | Disabled; immutable lifetime-guard source exists, but production Redis verification is pending |
-| Authentic baseline/revised results                             | No run yet                                                                                     |
+| Capability                                                     | Current status                                                                             |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Site Tools provider via `document.modelContext.registerTool()` | Implemented and authentically observed on the deployed Chrome 151 path                     |
+| In-page discovery via `getTools()`                             | Feature-detected; target-runtime verification pending                                      |
+| In-page execution via `executeTool()`                          | Narrow compatibility boundary planned; argument mode not yet frozen                        |
+| Direct ChatGPT observations                                    | Not collected                                                                              |
+| Judge-accessible model-backed lane                             | Disabled until Gate 2; production lifetime guard is initialized and verified at zero calls |
+| Authentic baseline/revised results                             | No run yet                                                                                 |
 
 Mocks, direct domain calls, unit tests, and Playwright's ordinary browser build are never counted as native WebMCP or model-selection evidence.
 
