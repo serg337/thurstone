@@ -33,7 +33,7 @@
     "test:coverage": "vitest run --coverage",
     "test:integration": "vitest run tests/integration",
     "typecheck": "next typegen && tsc --noEmit -p tsconfig.typecheck.json",
-    "vercel-build": "npm run provider:check && npm run build",
+    "vercel-build": "npm run durable-store:check && npm run probe-controls:integration && npm run probe-controls:bootstrap && npm run provider:check && npm run build",
     "verify:evidence": "node scripts/verify-evidence.mjs",
     "verify:publication": "node scripts/verify-publication.mjs"
   },

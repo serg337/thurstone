@@ -24,6 +24,8 @@ npm run verify:evidence
 
 `durable-store:check` verifies a configured Redis `PING` and non-mutating Lua execution without printing credentials. `probe-controls:integration` creates a random isolated namespace, executes the real atomic scripts through all 160 slots, proves concurrent replay and the 161st-call boundary, then removes only that isolated test namespace. It never calls the model provider. The production guard is initialized only by the separately confirmed operator path on an approved production commit.
 
+The Vercel production build runs the durable-store check, isolated real Redis suite, confirmed guard bootstrap/status check, zero-token provider metadata check, and application build in that order. Preview has no production credentials and therefore fails closed before any provider request. Guard initialization additionally requires Vercel's independently supplied Git commit SHA to match the approved commit and one-time confirmation tuple.
+
 ## Proof boundaries
 
 - Unit tests prove deterministic domain, schema, canonicalization, and evaluator behavior.

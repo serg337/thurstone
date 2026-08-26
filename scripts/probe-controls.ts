@@ -80,14 +80,13 @@ async function productionStatus(): Promise<void> {
 async function initializeProduction(): Promise<void> {
   const guardInstanceId = process.env.TOOLPROOF_GUARD_INSTANCE_ID;
   if (!guardInstanceId) throw new ProbeLedgerError("MISSING_GUARD_INSTANCE");
-  const sourceCommit = process.env.TOOLPROOF_COMMIT_SHA;
+  const sourceCommit = process.env.VERCEL_GIT_COMMIT_SHA;
   const approvedCommit = process.env.TOOLPROOF_PROBE_APPROVED_COMMIT;
-  const vercelGitCommit = process.env.VERCEL_GIT_COMMIT_SHA;
   if (
     !sourceCommit ||
     !/^[a-f0-9]{40}$/u.test(sourceCommit) ||
     approvedCommit !== sourceCommit ||
-    vercelGitCommit !== sourceCommit
+    process.env.TOOLPROOF_GUARD_INITIALIZED_COMMIT !== sourceCommit
   ) {
     throw new ProbeLedgerError("APPROVED_COMMIT_REQUIRED");
   }
@@ -134,12 +133,11 @@ async function reapProduction(): Promise<void> {
     throw new ProbeLedgerError("REAP_INPUT_REQUIRED");
   }
   const expected = await identity(guardInstanceId, initializedCommit);
-  const sourceCommit = process.env.TOOLPROOF_COMMIT_SHA;
+  const sourceCommit = process.env.VERCEL_GIT_COMMIT_SHA;
   if (
     !sourceCommit ||
     !/^[a-f0-9]{40}$/u.test(sourceCommit) ||
     process.env.TOOLPROOF_PROBE_APPROVED_COMMIT !== sourceCommit ||
-    process.env.VERCEL_GIT_COMMIT_SHA !== sourceCommit ||
     process.env.VERCEL !== "1" ||
     process.env.VERCEL_ENV !== "production" ||
     process.env.VERCEL_PROJECT_ID !== VERCEL_PROJECT_ID
