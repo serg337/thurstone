@@ -41,9 +41,10 @@ test("health and degraded readiness diagnostics are explicit", async ({ request 
 
 test("Probe controls disclose policy while inference routes fail closed", async ({ request }) => {
   const status = await request.get("/api/probe/status");
-  expect(status.status()).toBe(503);
+  const productionGuardExpected = Boolean(process.env.TOOLPROOF_BASE_URL);
+  expect(status.status()).toBe(productionGuardExpected ? 200 : 503);
   await expect(status.json()).resolves.toMatchObject({
-    status: "controls-pending",
+    status: productionGuardExpected ? "controls-ready" : "controls-pending",
     enabled: false,
     activation: "disabled",
     policy: { callLimit: 160, spendCeilingUsd: "10.00" }
