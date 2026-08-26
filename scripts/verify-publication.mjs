@@ -11,6 +11,8 @@ const mandatoryIgnoreEntries = [
   "/docs/ToolProof_Master_Codex_Goal_Prompt.md"
 ];
 
+const mandatoryDeploymentIgnoreEntries = [...mandatoryIgnoreEntries];
+
 const excludedPaths = mandatoryIgnoreEntries.map((entry) =>
   entry.replace(/^\//, "").replace(/\/$/, "")
 );
@@ -27,6 +29,16 @@ const ignoreLines = new Set(readFileSync(".gitignore", "utf8").split(/\r?\n/u));
 const missingEntries = mandatoryIgnoreEntries.filter((entry) => !ignoreLines.has(entry));
 if (missingEntries.length > 0) {
   throw new Error(`Missing mandatory .gitignore entries: ${missingEntries.join(", ")}`);
+}
+
+const deploymentIgnoreLines = new Set(readFileSync(".vercelignore", "utf8").split(/\r?\n/u));
+const missingDeploymentEntries = mandatoryDeploymentIgnoreEntries.filter(
+  (entry) => !deploymentIgnoreLines.has(entry)
+);
+if (missingDeploymentEntries.length > 0) {
+  throw new Error(
+    `Missing mandatory .vercelignore entries: ${missingDeploymentEntries.join(", ")}`
+  );
 }
 
 const tracked = git(["ls-files", "-z"]).split("\0").filter(Boolean);
@@ -49,5 +61,5 @@ if (historyViolations.length > 0) {
 }
 
 console.log(
-  `Publication boundary verified: ${mandatoryIgnoreEntries.length} mandatory ignores, ${tracked.length} tracked files, no excluded reachable paths.`
+  `Publication boundary verified: ${mandatoryIgnoreEntries.length} Git and deployment ignores, ${tracked.length} tracked files, no excluded reachable paths.`
 );

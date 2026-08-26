@@ -1,0 +1,40 @@
+# Private/local ToolProof source-of-truth and control records — never deploy
+/docs/csr.md
+/docs/lip.md
+/docs/ToolProof_Project_Brief_v2.md
+/docs/ToolProof_WebMCP_Challenge_Winning_Brief.md
+/.toolproof-local/
+/.toolproof-local
+/ToolProof_Master_Codex_Goal_Prompt.md
+/docs/ToolProof_Master_Codex_Goal_Prompt.md
+
+# Local credentials, provider state, and repository metadata
+/.env*
+/.git/
+/.git
+/.github/
+/.github
+/.vercel/
+/.vercel
+
+# Generated, dependency, and test artifacts
+/.next/
+/.next
+/node_modules/
+/node_modules
+/coverage/
+/coverage
+/playwright-report/
+/playwright-report
+/test-results/
+/test-results
+*.tsbuildinfo
+/next-env.d.ts
+
+# Source-only verification files not needed by the production build
+/tests/
+/tests
+/playwright.config.ts
+/vitest.config.ts
+/eslint.config.mjs
+/tsconfig.typecheck.json
