@@ -13,10 +13,12 @@
 
 # Framework and build output
 /.next/
+/next-env.d.ts
 /out/
 /dist/
 /coverage/
 /.turbo/
+*.tsbuildinfo
 
 # Browser and test output
 /playwright-report/

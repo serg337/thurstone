@@ -9,14 +9,14 @@
 
 Work begins on 26 August 2026 and will be linked to ordinary timestamped commits as each gate passes:
 
-| Area | Challenge-period work | Commit evidence |
-|---|---|---|
-| Repository safety | Publication boundary, source exclusions, durable gate controls | Pending first commit |
-| Web application | Studio, Lab, Results, responsive interface, diagnostics | Pending |
-| Native WebMCP | Imperative registration, lifecycle manager, discovery/execution adapter | Pending |
-| Sandbox | Deterministic checkout/review domain and five safe tools | Pending |
-| Evaluation | Frozen semantic contract, fresh-context runner, evaluator, evidence lineage | Pending |
-| Product evidence | Meaning Matrix, inspector, exports, Direct ChatGPT observations | Pending |
-| Release | CI, documentation, deployment, video package, submission and freeze records | Pending |
+| Area              | Challenge-period work                                                       | Commit evidence           |
+| ----------------- | --------------------------------------------------------------------------- | ------------------------- |
+| Repository safety | Publication boundary, source exclusions, durable gate controls              | `72d8381`, `7a5714d`      |
+| Web application   | Studio, Lab, Results, responsive interface, diagnostics                     | Pending Gate 0 checkpoint |
+| Native WebMCP     | Imperative registration, lifecycle manager, discovery/execution adapter     | Pending Gate 0 checkpoint |
+| Sandbox           | Deterministic checkout/review domain and five safe tools                    | Pending                   |
+| Evaluation        | Frozen semantic contract, fresh-context runner, evaluator, evidence lineage | Pending                   |
+| Product evidence  | Meaning Matrix, inspector, exports, Direct ChatGPT observations             | Pending                   |
+| Release           | CI, documentation, deployment, video package, submission and freeze records | Pending                   |
 
 This file will be updated with real commit identifiers. History will not be backdated or rewritten to manufacture challenge-period evidence.

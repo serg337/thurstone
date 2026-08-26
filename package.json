@@ -1,0 +1,58 @@
+{
+  "name": "toolproof",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Unit tests for meaning in WebMCP tool behavior.",
+  "license": "MIT",
+  "author": "Sergio Valencia",
+  "engines": {
+    "node": "22.x"
+  },
+  "packageManager": "npm@10.9.8",
+  "scripts": {
+    "build": "next build",
+    "dev": "next dev",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "install:check": "node scripts/verify-install.mjs",
+    "lint": "eslint . --max-warnings=0",
+    "prebuild": "node scripts/clean-next-dev-types.mjs",
+    "start": "next start",
+    "test": "vitest run",
+    "test:browser": "playwright test",
+    "test:browser:safe": "playwright test --grep-invert @native --grep-invert @model",
+    "test:coverage": "vitest run --coverage",
+    "test:integration": "vitest run tests/integration",
+    "typecheck": "next typegen && tsc --noEmit -p tsconfig.typecheck.json",
+    "verify:evidence": "node scripts/verify-evidence.mjs",
+    "verify:publication": "node scripts/verify-publication.mjs"
+  },
+  "dependencies": {
+    "json-canonicalize": "3.0.0",
+    "next": "16.3.3",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@playwright/test": "1.62.1",
+    "@testing-library/dom": "10.4.1",
+    "@testing-library/jest-dom": "7.0.1",
+    "@testing-library/react": "16.3.2",
+    "@testing-library/user-event": "14.6.6",
+    "@types/node": "22.20.1",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.5",
+    "@vitest/coverage-v8": "4.1.11",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.3.3",
+    "eslint-config-prettier": "10.1.8",
+    "jsdom": "30.0.1",
+    "prettier": "3.9.6",
+    "typescript": "6.0.3",
+    "vitest": "4.1.11",
+    "webmcp-types": "0.1.5"
+  }
+}

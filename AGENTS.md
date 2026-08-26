@@ -23,6 +23,7 @@ The pinned package scripts must provide these stable interfaces once the applica
 
 ```text
 npm ci
+npm run install:check
 npm run format:check
 npm run lint
 npm run typecheck

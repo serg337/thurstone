@@ -1,0 +1,40 @@
+import { expect, test } from "@playwright/test";
+
+test("judge shell is honest, navigable, and permanently marks the simulation", async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  await page.goto("/");
+
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Unit tests for meaning");
+  await expect(page.getByText("Simulated checkout — no purchase occurs.")).toBeVisible();
+
+  await page.getByRole("link", { name: "Open checkout lab" }).click();
+  await expect(page).toHaveURL(/\/lab$/);
+  await expect(page.getByRole("heading", { name: "Seeded checkout sandbox" })).toBeVisible();
+  await expect(page.getByText("No native invocation yet.")).toBeVisible();
+
+  await page.getByRole("link", { name: "Results" }).click();
+  await expect(page).toHaveURL(/\/results$/);
+  await expect(page.getByText("No authentic evidence is available.")).toBeVisible();
+  expect(pageErrors).toEqual([]);
+});
+
+test("health and degraded readiness diagnostics are explicit", async ({ request }) => {
+  const health = await request.get("/api/health");
+  expect(health.ok()).toBe(true);
+  await expect(health.json()).resolves.toMatchObject({ status: "ok", simulation: true });
+
+  const readiness = await request.get("/api/readiness");
+  expect(readiness.status()).toBe(503);
+  await expect(readiness.json()).resolves.toMatchObject({
+    status: "degraded",
+    probe: { enabled: false }
+  });
+
+  const pageResponse = await request.get("/");
+  expect(pageResponse.headers()["content-security-policy"]).toContain("default-src 'self'");
+  expect(pageResponse.headers()["permissions-policy"]).toContain("tools=(self)");
+  expect(pageResponse.headers()["origin-agent-cluster"]).toBe("?1");
+  expect(pageResponse.headers()["strict-transport-security"]).toContain("max-age=63072000");
+  expect(pageResponse.headers()["x-frame-options"]).toBe("DENY");
+});
