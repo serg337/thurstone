@@ -4,7 +4,7 @@
 
 **ToolProof by Invarra — created by Sergio Valencia.**
 
-Status: Gate 0 closure is active. Chrome 151 authentically discovered and invoked the deployed `cart_get` provider, and its rendered handler receipt matched the deterministic fixture. The model-backed lane remains disabled; no model-selection run, score, public repository release, or video exists yet.
+Status: Gate 0 is complete. Gate 1 is implementing the deterministic five-tool sandbox and native execution adapter. Chrome 151 authentically discovered and invoked the deployed `cart_get` provider, and the production lifetime guard is verified at zero use. The model-backed lane remains disabled; no model-selection run, score, public repository release, or video exists yet.
 
 **Simulated checkout — no purchase occurs.** ToolProof contains no payment, account, inventory, messaging, or external transaction path. When enabled later, model-backed evaluation may send synthetic prompts to the disclosed provider.
 

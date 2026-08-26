@@ -3,6 +3,8 @@
 Checked: **2026-08-26**
 Scope: current primary official WebMCP Challenge, OpenAI Site Tools, WebMCP draft, and Chrome implementation guidance only.
 
+The authenticated Devpost draft form was also inventoried read-only on 2026-08-26. Required fields cover project name/elevator pitch, public project story and technology tags, try-it links/media/video, entrant/status/country, live URL and optional private testing instructions, public licensed repository, tested WebMCP clients, AI development tools, and learning/career-value questions. No final submission or certification was performed; dynamic choices and final acknowledgments require release-time recheck.
+
 Every URL below returned HTTP 200 at retrieval. Material requirements are mapped to planned or completed public evidence in [`CHALLENGE.md`](../CHALLENGE.md). No unofficial post, search snippet, secondary article, or generated summary is treated as authority.
 
 ## Challenge sources
