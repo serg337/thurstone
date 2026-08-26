@@ -1,0 +1,18 @@
+# ToolProof execution plan
+
+Status values are `pending`, `in progress`, `human gate`, `blocked`, or `complete`. A gate is complete only with linked reproducible proof.
+
+| Gate | Scope | Depends on | Pass evidence | Status |
+|---|---|---|---|---|
+| 0 | Authority, environment, repository, official requirements, architecture, HTTPS shell, first native read-only tool, provider/fallback preflight | None | Deployed native registration observed in a supported WebMCP path plus Gate 0 ledger | In progress |
+| 1 | Deterministic five-tool sandbox, shared reducer, registry lifecycle, reset, native discovery/execution plumbing | Gate 0 | Green deterministic/integration tests and native invocation receipts for every active tool | Pending |
+| 2 | Four non-scored fresh-context model-selection calibration cases | Gate 1 | Authentic model choice → native execution → state/effect trace → deterministic score, with leakage tests | Pending |
+| 3 | Studio, human-reviewed semantic contract, exact 24-case 12/12 suite, protocol freeze | Gate 2 | Human approval receipt and canonical freeze hashes | Pending |
+| 4 | Complete frozen v1 baseline | Gate 3 | Terminal schedule receipt and raw-to-aggregate verification | Pending |
+| 5 | Isolated development-only repair, one approved description change, unchanged v2 rerun | Gate 4 | Human revision approval, one-variable diff, terminal v2 receipt | Pending |
+| 6 | Trace-derived Meaning Matrix, inspector, JSON/Markdown exports | Gate 5 | Clean recomputation matches UI and exports byte-for-byte | Pending |
+| 7 | Security, abuse/spend controls, accessibility, signed-out browser path, Direct ChatGPT observations | Gate 6 | Automated checks plus real deployed browser evidence | Pending |
+| 8 | Private public-ready repository, release-candidate deployment, clean clone, final docs and capture package | Gate 7 | Green publication audit and release-candidate approval package | Pending |
+| 9 | Human approval, collateral-only release commit, public repository/tag/release, video, Devpost receipt, freeze | Gate 8 | One truthful immutable submission chain and freeze receipt | Pending |
+
+P1 is deliberately deferred: higher-repetition follow-up, hot tool swapping, multi-step cases, second reviewer, generic contract import/export, and broader browser polish.

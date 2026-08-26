@@ -1,0 +1,38 @@
+# Private/local ToolProof source-of-truth and control records — never publish
+/docs/csr.md
+/docs/lip.md
+/docs/ToolProof_Project_Brief_v2.md
+/docs/ToolProof_WebMCP_Challenge_Winning_Brief.md
+/.toolproof-local/
+/ToolProof_Master_Codex_Goal_Prompt.md
+/docs/ToolProof_Master_Codex_Goal_Prompt.md
+
+# Dependencies and package-manager state
+/node_modules/
+/.npm/
+
+# Framework and build output
+/.next/
+/out/
+/dist/
+/coverage/
+/.turbo/
+
+# Browser and test output
+/playwright-report/
+/test-results/
+/blob-report/
+
+# Deployment-local state
+/.vercel/
+
+# Secrets and local environment files
+/.env
+/.env.*
+!/.env.example
+*.pem
+*.key
+
+# Editor and operating-system files
+.DS_Store
+*.swp
