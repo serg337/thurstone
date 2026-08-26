@@ -1,7 +1,7 @@
 import { cartGet, type CheckoutState } from "@/lib/domain/checkout";
 
 export const CART_GET_TOOL_NAME = "cart_get";
-export const CART_GET_HANDLER_VERSION = "cart_get@0.1.0";
+export const CART_GET_HANDLER_VERSION = "cart_get@0.1.1";
 
 export const CART_GET_METADATA = {
   name: CART_GET_TOOL_NAME,
@@ -21,14 +21,22 @@ interface CreateCartGetToolOptions {
   readonly onExecuted?: (result: ReturnType<typeof cartGet>) => void;
 }
 
-export function createCartGetTool({
-  getState,
-  onExecuted
-}: CreateCartGetToolOptions): WebMCP.ModelContextTool {
+interface CartGetExecutionContext {
+  readonly signal?: AbortSignal;
+}
+
+export type CartGetTool = Omit<WebMCP.ModelContextTool, "execute"> & {
+  execute: (
+    input: Record<string, unknown>,
+    context?: CartGetExecutionContext
+  ) => Promise<ReturnType<typeof cartGet>>;
+};
+
+export function createCartGetTool({ getState, onExecuted }: CreateCartGetToolOptions): CartGetTool {
   return {
     ...CART_GET_METADATA,
-    execute: async (_input, { signal }) => {
-      if (signal.aborted) {
+    execute: async (_input, { signal } = {}) => {
+      if (signal?.aborted) {
         throw signal.reason ?? new DOMException("Tool execution canceled.", "AbortError");
       }
 

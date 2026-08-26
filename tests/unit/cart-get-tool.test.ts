@@ -19,13 +19,16 @@ describe("cart_get WebMCP definition", () => {
     expect(CART_GET_METADATA.annotations).toEqual({ readOnlyHint: true });
   });
 
-  it("calls the same deterministic domain query and reports its receipt", async () => {
+  it("accepts both omitted and supplied execution contexts without changing the result", async () => {
     const onExecuted = vi.fn();
     const tool = createCartGetTool({ getState: createCheckoutFixture, onExecuted });
-    const result = await tool.execute({}, { signal: new AbortController().signal });
+    const withoutContext = await tool.execute({});
+    const withContext = await tool.execute({}, { signal: new AbortController().signal });
 
-    expect(result).toEqual(onExecuted.mock.calls[0]?.[0]);
-    expect(onExecuted).toHaveBeenCalledOnce();
+    expect(withoutContext).toEqual(withContext);
+    expect(withoutContext).toEqual(onExecuted.mock.calls[0]?.[0]);
+    expect(withContext).toEqual(onExecuted.mock.calls[1]?.[0]);
+    expect(onExecuted).toHaveBeenCalledTimes(2);
   });
 
   it("fails before reading state when execution is already canceled", async () => {
