@@ -18,6 +18,7 @@
     "install:check": "node scripts/verify-install.mjs",
     "lint": "eslint . --max-warnings=0",
     "prebuild": "node scripts/clean-next-dev-types.mjs",
+    "provider:check": "node scripts/check-openai-entitlement.mjs",
     "start": "next start",
     "test": "vitest run",
     "test:browser": "playwright test",
@@ -25,6 +26,7 @@
     "test:coverage": "vitest run --coverage",
     "test:integration": "vitest run tests/integration",
     "typecheck": "next typegen && tsc --noEmit -p tsconfig.typecheck.json",
+    "vercel-build": "npm run provider:check && npm run build",
     "verify:evidence": "node scripts/verify-evidence.mjs",
     "verify:publication": "node scripts/verify-publication.mjs"
   },

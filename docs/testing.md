@@ -18,6 +18,8 @@ npm run verify:evidence
 
 `verify:evidence` fails closed until a real frozen-run manifest exists. Paid model calls never run in ordinary CI.
 
+`npm run provider:check` performs only the official read-only model-metadata retrieval for the pinned Probe model. Vercel runs it before production builds with the Sensitive provider key; it never prints or stores that key and performs no inference.
+
 ## Proof boundaries
 
 - Unit tests prove deterministic domain, schema, canonicalization, and evaluator behavior.
