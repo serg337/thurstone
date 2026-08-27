@@ -4,6 +4,20 @@ import { Redis } from "@upstash/redis";
 
 import { canonicalSha256 } from "@/lib/evidence/digest";
 import {
+  PROBE_POLICY_MIGRATION_ID,
+  PROBE_POLICY_MIGRATION_PRESERVED_STATE,
+  PROBE_POLICY_MIGRATION_PRIOR_RECEIPT_VERSION,
+  PROBE_POLICY_MIGRATION_VERSION,
+  PROBE_PREVIOUS_PURPOSE_CALL_LIMITS,
+  createProbePolicyMigrationManifest,
+  createProbePolicyMigrationReceipt,
+  parseProbePolicyMigrationPriorReceipt,
+  probePolicyMigrationDigest,
+  type ProbePolicyMigrationPriorReceipt,
+  type ProbePolicyMigrationReceipt,
+  type ProbePolicyMigrationResult
+} from "@/lib/probe/policy-migration-contract";
+import {
   PROBE_CHALLENGE_CLOSES_AT,
   PROBE_GLOBAL_CALL_LIMIT,
   PROBE_INFLIGHT_LEASE_SECONDS,
@@ -15,6 +29,7 @@ import {
   PROBE_POLICY_VERSION,
   PROBE_PURPOSE_CALL_LIMITS,
   PROBE_TOKEN_TTL_SECONDS,
+  probePolicyHash,
   type ProbePurpose
 } from "@/lib/probe/policy";
 
@@ -476,6 +491,232 @@ redis.call("HSET", KEYS[4],
 return {1, "UNCERTAIN_NEW", reservation}
 `;
 
+const MIGRATE_POLICY_SCRIPT = `
+local receipt_exists = redis.call("EXISTS", KEYS[6])
+
+local function core_state_matches()
+  if redis.call("PTTL", KEYS[1]) ~= -1
+    or redis.call("PTTL", KEYS[2]) ~= -1
+    or redis.call("PTTL", KEYS[3]) ~= -1
+    or redis.call("PTTL", KEYS[4]) ~= -1
+    or redis.call("HGET", KEYS[1], "schema_version") ~= "1"
+    or redis.call("HGET", KEYS[1], "status") ~= "open"
+    or redis.call("HGET", KEYS[1], "guard_instance_id") ~= ARGV[7]
+    or redis.call("HGET", KEYS[1], "initialized_commit") ~= ARGV[8]
+    or redis.call("HGET", KEYS[1], "global_call_limit") ~= ARGV[15]
+    or redis.call("HGET", KEYS[1], "spend_ceiling_nusd") ~= ARGV[16]
+    or redis.call("HGET", KEYS[1], "per_call_reservation_nusd") ~= ARGV[17]
+    or redis.call("HGET", KEYS[1], "model") ~= ARGV[18]
+    or redis.call("HGET", KEYS[1], "max_concurrency") ~= ARGV[19]
+    or redis.call("HGET", KEYS[1], "challenge_closes_at_ms") ~= ARGV[20]
+    or redis.call("HEXISTS", KEYS[1], "halt_reason") == 1
+    or redis.call("HEXISTS", KEYS[1], "uncertain_jti") == 1
+    or redis.call("HGET", KEYS[2], "claimed_calls") ~= ARGV[31]
+    or redis.call("HGET", KEYS[2], "committed_nusd") ~= ARGV[32]
+    or redis.call("HGET", KEYS[2], "pending_count") ~= "0"
+    or redis.call("HGET", KEYS[2], "known_count") ~= ARGV[33]
+    or redis.call("HGET", KEYS[2], "uncertain_count") ~= "0"
+    or redis.call("HGET", KEYS[2], "known_actual_nusd") ~= ARGV[34]
+    or redis.call("HGET", KEYS[2], "uncertain_upper_nusd") ~= "0"
+    or redis.call("HGET", KEYS[2], "sequence") ~= ARGV[35]
+    or redis.call("HGET", KEYS[4], "calibration") ~= ARGV[31]
+    or redis.call("HGET", KEYS[4], "baseline") ~= "0"
+    or redis.call("HGET", KEYS[4], "repair") ~= "0"
+    or redis.call("HGET", KEYS[4], "revised") ~= "0"
+    or redis.call("HGET", KEYS[4], "judge") ~= "0"
+    or redis.call("ZCARD", KEYS[5]) ~= 0
+  then
+    return false
+  end
+  return true
+end
+
+local function config_matches(policy_version, policy_hash, script_hash, calibration_limit,
+  baseline_limit, repair_limit, revised_limit, judge_limit)
+  return redis.call("HGET", KEYS[1], "policy_version") == policy_version
+    and redis.call("HGET", KEYS[1], "policy_hash") == policy_hash
+    and redis.call("HGET", KEYS[1], "script_hash") == script_hash
+    and redis.call("HGET", KEYS[3], "calibration") == calibration_limit
+    and redis.call("HGET", KEYS[3], "baseline") == baseline_limit
+    and redis.call("HGET", KEYS[3], "repair") == repair_limit
+    and redis.call("HGET", KEYS[3], "revised") == revised_limit
+    and redis.call("HGET", KEYS[3], "judge") == judge_limit
+end
+
+local function calls_match()
+  if tonumber(ARGV[36]) ~= 4 then return false end
+  local seen_jti = {}
+  local seen_response = {}
+  local actual_sum = 0
+  for ordinal = 0, 3 do
+    local arg_base = 37 + ordinal * 7
+    local ordinal_value = tonumber(ARGV[arg_base])
+    local jti = ARGV[arg_base + 1]
+    local dispatch_sequence = ARGV[arg_base + 2]
+    local actual_nusd = ARGV[arg_base + 3]
+    local provider_hash = ARGV[arg_base + 4]
+    local settlement_digest = ARGV[arg_base + 5]
+    local usage_hash = ARGV[arg_base + 6]
+    local auth_key = KEYS[7 + ordinal * 2]
+    local provider_key = KEYS[8 + ordinal * 2]
+    if ordinal_value ~= ordinal
+      or dispatch_sequence ~= tostring(ordinal + 1)
+      or seen_jti[jti]
+      or seen_response[provider_hash]
+      or redis.call("PTTL", auth_key) ~= -1
+      or redis.call("PTTL", provider_key) ~= -1
+      or redis.call("HGET", auth_key, "state") ~= "KNOWN"
+      or redis.call("HGET", auth_key, "jti") ~= jti
+      or redis.call("HGET", auth_key, "purpose") ~= "calibration"
+      or redis.call("HGET", auth_key, "guard_instance_id") ~= ARGV[7]
+      or redis.call("HGET", auth_key, "policy_hash") ~= ARGV[10]
+      or redis.call("HGET", auth_key, "script_hash") ~= ARGV[11]
+      or redis.call("HGET", auth_key, "reservation_nusd") ~= ARGV[17]
+      or redis.call("HGET", auth_key, "dispatch_sequence") ~= dispatch_sequence
+      or redis.call("HGET", auth_key, "actual_nusd") ~= actual_nusd
+      or redis.call("HGET", auth_key, "provider_response_hash") ~= provider_hash
+      or redis.call("HGET", auth_key, "settlement_digest") ~= settlement_digest
+      or redis.call("HGET", auth_key, "usage_hash") ~= usage_hash
+      or tonumber(redis.call("HGET", auth_key, "settled_at_ms") or "-1") < 0
+      or redis.call("GET", provider_key) ~= jti
+    then
+      return false
+    end
+    seen_jti[jti] = true
+    seen_response[provider_hash] = true
+    actual_sum = actual_sum + tonumber(actual_nusd)
+  end
+  return actual_sum == tonumber(ARGV[34])
+end
+
+if receipt_exists == 1 then
+  if redis.call("PTTL", KEYS[6]) ~= -1
+    or redis.call("HGET", KEYS[6], "version") ~= ARGV[1]
+    or redis.call("HGET", KEYS[6], "migration_id") ~= ARGV[2]
+    or redis.call("HGET", KEYS[6], "migration_digest") ~= ARGV[3]
+    or redis.call("HGET", KEYS[6], "prior_app_commit") ~= ARGV[4]
+    or redis.call("HGET", KEYS[6], "prior_activation_hash") ~= ARGV[5]
+    or redis.call("HGET", KEYS[6], "prior_evidence_digest") ~= ARGV[6]
+    or redis.call("HGET", KEYS[6], "guard_instance_id") ~= ARGV[7]
+    or redis.call("HGET", KEYS[6], "initialized_commit") ~= ARGV[8]
+    or redis.call("HGET", KEYS[6], "previous_policy_version") ~= ARGV[9]
+    or redis.call("HGET", KEYS[6], "previous_policy_hash") ~= ARGV[10]
+    or redis.call("HGET", KEYS[6], "previous_script_hash") ~= ARGV[11]
+    or redis.call("HGET", KEYS[6], "next_policy_version") ~= ARGV[12]
+    or redis.call("HGET", KEYS[6], "next_policy_hash") ~= ARGV[13]
+    or redis.call("HGET", KEYS[6], "next_script_hash") ~= ARGV[14]
+    or redis.call("HGET", KEYS[6], "migration_commit") ~= ARGV[65]
+  then
+    return {0, "MIGRATION_RECEIPT_CONFLICT"}
+  end
+  for ordinal = 0, 3 do
+    local arg_base = 37 + ordinal * 7
+    local prefix = "call_" .. tostring(ordinal) .. "_"
+    if redis.call("HGET", KEYS[6], prefix .. "ordinal") ~= ARGV[arg_base]
+      or redis.call("HGET", KEYS[6], prefix .. "jti") ~= ARGV[arg_base + 1]
+      or redis.call("HGET", KEYS[6], prefix .. "dispatch_sequence") ~= ARGV[arg_base + 2]
+      or redis.call("HGET", KEYS[6], prefix .. "actual_nusd") ~= ARGV[arg_base + 3]
+      or redis.call("HGET", KEYS[6], prefix .. "provider_response_hash") ~= ARGV[arg_base + 4]
+      or redis.call("HGET", KEYS[6], prefix .. "settlement_digest") ~= ARGV[arg_base + 5]
+      or redis.call("HGET", KEYS[6], prefix .. "usage_hash") ~= ARGV[arg_base + 6]
+    then
+      return {0, "MIGRATION_RECEIPT_CONFLICT"}
+    end
+  end
+  if not core_state_matches()
+    or not config_matches(ARGV[12], ARGV[13], ARGV[14], ARGV[26], ARGV[27], ARGV[28],
+      ARGV[29], ARGV[30])
+    or not calls_match()
+  then
+    return {0, "MIGRATION_REPLAY_STATE_MISMATCH"}
+  end
+  return {2, "MIGRATED_EXISTING", redis.call("HGET", KEYS[6], "migrated_at_ms")}
+end
+
+if not core_state_matches() then return {0, "MIGRATION_STATE_MISMATCH"} end
+if not config_matches(ARGV[9], ARGV[10], ARGV[11], ARGV[21], ARGV[22], ARGV[23],
+  ARGV[24], ARGV[25])
+then
+  return {0, "MIGRATION_OLD_CONFIG_MISMATCH"}
+end
+if not calls_match() then return {0, "MIGRATION_KNOWN_CALL_MISMATCH"} end
+local now = redis.call("TIME")
+local migrated_at_ms = tonumber(now[1]) * 1000 + math.floor(tonumber(now[2]) / 1000)
+if migrated_at_ms >= tonumber(ARGV[20]) then return {0, "CHALLENGE_CLOSED"} end
+
+redis.call("HSET", KEYS[1],
+  "policy_version", ARGV[12],
+  "policy_hash", ARGV[13],
+  "script_hash", ARGV[14]
+)
+redis.call("HSET", KEYS[3], "calibration", ARGV[26], "judge", ARGV[30])
+redis.call("HSET", KEYS[6],
+  "version", ARGV[1],
+  "migration_id", ARGV[2],
+  "migration_digest", ARGV[3],
+  "prior_app_commit", ARGV[4],
+  "prior_activation_hash", ARGV[5],
+  "prior_evidence_digest", ARGV[6],
+  "guard_instance_id", ARGV[7],
+  "initialized_commit", ARGV[8],
+  "previous_policy_version", ARGV[9],
+  "previous_policy_hash", ARGV[10],
+  "previous_script_hash", ARGV[11],
+  "next_policy_version", ARGV[12],
+  "next_policy_hash", ARGV[13],
+  "next_script_hash", ARGV[14],
+  "migration_commit", ARGV[65],
+  "migrated_at_ms", migrated_at_ms
+)
+for ordinal = 0, 3 do
+  local arg_base = 37 + ordinal * 7
+  local prefix = "call_" .. tostring(ordinal) .. "_"
+  redis.call("HSET", KEYS[6],
+    prefix .. "ordinal", ARGV[arg_base],
+    prefix .. "jti", ARGV[arg_base + 1],
+    prefix .. "dispatch_sequence", ARGV[arg_base + 2],
+    prefix .. "actual_nusd", ARGV[arg_base + 3],
+    prefix .. "provider_response_hash", ARGV[arg_base + 4],
+    prefix .. "settlement_digest", ARGV[arg_base + 5],
+    prefix .. "usage_hash", ARGV[arg_base + 6]
+  )
+end
+return {1, "MIGRATED_NEW", migrated_at_ms}
+`;
+
+const READ_POLICY_MIGRATION_SCRIPT = `
+if redis.call("EXISTS", KEYS[1]) ~= 1 then return {0, "MISSING_MIGRATION_RECEIPT"} end
+if redis.call("PTTL", KEYS[1]) ~= -1 then return {0, "MIGRATION_RECEIPT_EXPIRES"} end
+local values = {1,
+  redis.call("HGET", KEYS[1], "version"),
+  redis.call("HGET", KEYS[1], "migration_id"),
+  redis.call("HGET", KEYS[1], "migration_digest"),
+  redis.call("HGET", KEYS[1], "prior_app_commit"),
+  redis.call("HGET", KEYS[1], "prior_activation_hash"),
+  redis.call("HGET", KEYS[1], "prior_evidence_digest"),
+  redis.call("HGET", KEYS[1], "guard_instance_id"),
+  redis.call("HGET", KEYS[1], "initialized_commit"),
+  redis.call("HGET", KEYS[1], "previous_policy_version"),
+  redis.call("HGET", KEYS[1], "previous_policy_hash"),
+  redis.call("HGET", KEYS[1], "previous_script_hash"),
+  redis.call("HGET", KEYS[1], "next_policy_version"),
+  redis.call("HGET", KEYS[1], "next_policy_hash"),
+  redis.call("HGET", KEYS[1], "next_script_hash"),
+  redis.call("HGET", KEYS[1], "migrated_at_ms"),
+  redis.call("HGET", KEYS[1], "migration_commit")}
+for ordinal = 0, 3 do
+  local prefix = "call_" .. tostring(ordinal) .. "_"
+  table.insert(values, redis.call("HGET", KEYS[1], prefix .. "ordinal"))
+  table.insert(values, redis.call("HGET", KEYS[1], prefix .. "jti"))
+  table.insert(values, redis.call("HGET", KEYS[1], prefix .. "dispatch_sequence"))
+  table.insert(values, redis.call("HGET", KEYS[1], prefix .. "actual_nusd"))
+  table.insert(values, redis.call("HGET", KEYS[1], prefix .. "provider_response_hash"))
+  table.insert(values, redis.call("HGET", KEYS[1], prefix .. "settlement_digest"))
+  table.insert(values, redis.call("HGET", KEYS[1], prefix .. "usage_hash"))
+end
+return values
+`;
+
 const STATUS_SCRIPT = `
 local instance = redis.call("HGET", KEYS[1], "guard_instance_id")
 if not instance then return {0, "MISSING_GUARD"} end
@@ -522,6 +763,8 @@ export const PROBE_LEDGER_SCRIPTS = Object.freeze({
   settleKnown: SETTLE_KNOWN_SCRIPT,
   settleUncertain: SETTLE_UNCERTAIN_SCRIPT,
   reap: REAP_SCRIPT,
+  migratePolicy: MIGRATE_POLICY_SCRIPT,
+  readPolicyMigration: READ_POLICY_MIGRATION_SCRIPT,
   status: STATUS_SCRIPT
 });
 
@@ -579,6 +822,11 @@ export interface ReapProbeCallInput extends ProbeGuardIdentity {
   readonly settlementDigest: string;
 }
 
+export interface MigrateProbeGuardPolicyInput {
+  readonly priorReceipt: ProbePolicyMigrationPriorReceipt;
+  readonly migrationCommit: string;
+}
+
 export interface ProbeGuardStatus extends ProbeGuardIdentity {
   readonly status: "open" | "quarantined" | "halted";
   readonly claimedCalls: number;
@@ -618,8 +866,8 @@ function integer(value: number, field: string): number {
   return value;
 }
 
-function gitCommit(value: string): string {
-  if (!/^[a-f0-9]{40}$/u.test(value)) throw new ProbeLedgerError("INVALID_INITIALIZED_COMMIT");
+function gitCommit(value: string, field = "INITIALIZED_COMMIT"): string {
+  if (!/^[a-f0-9]{40}$/u.test(value)) throw new ProbeLedgerError(`INVALID_${field}`);
   return value;
 }
 
@@ -664,6 +912,13 @@ function providerResponseKey(keyspace: ProbeLedgerKeyspace, responseHash: string
   return `${keyspace.namespace}:provider:${responseHash}`;
 }
 
+export function probePolicyMigrationKey(
+  keyspace: ProbeLedgerKeyspace,
+  migrationId: string = PROBE_POLICY_MIGRATION_ID
+): string {
+  return `${keyspace.namespace}:policy-migration:${opaque(migrationId, "MIGRATION_ID")}`;
+}
+
 export function createProbeRedis(environment: NodeJS.ProcessEnv = process.env): Redis {
   const url = environment.UPSTASH_REDIS_REST_URL ?? environment.KV_REST_API_URL;
   const token = environment.UPSTASH_REDIS_REST_TOKEN ?? environment.KV_REST_API_TOKEN;
@@ -673,6 +928,195 @@ export function createProbeRedis(environment: NodeJS.ProcessEnv = process.env): 
 
 export function probeLedgerScriptHash(): Promise<string> {
   return canonicalSha256(PROBE_LEDGER_SCRIPTS);
+}
+
+function policyMigrationArguments(
+  manifest: ReturnType<typeof createProbePolicyMigrationManifest>,
+  migrationDigest: string
+): string[] {
+  return [
+    manifest.version,
+    manifest.migrationId,
+    migrationDigest,
+    manifest.priorAppCommit,
+    manifest.priorActivationHash,
+    manifest.priorEvidenceDigest,
+    manifest.guardInstanceId,
+    manifest.initializedCommit,
+    manifest.previousPolicyVersion,
+    manifest.previousPolicyHash,
+    manifest.previousScriptHash,
+    manifest.nextPolicyVersion,
+    manifest.nextPolicyHash,
+    manifest.nextScriptHash,
+    String(PROBE_GLOBAL_CALL_LIMIT),
+    String(PROBE_LIFETIME_SPEND_CEILING_NANO_USD),
+    String(PROBE_PER_CALL_RESERVATION_NANO_USD),
+    PROBE_MODEL,
+    String(PROBE_MAX_CONCURRENCY),
+    String(Date.parse(PROBE_CHALLENGE_CLOSES_AT)),
+    String(PROBE_PREVIOUS_PURPOSE_CALL_LIMITS.calibration),
+    String(PROBE_PREVIOUS_PURPOSE_CALL_LIMITS.baseline),
+    String(PROBE_PREVIOUS_PURPOSE_CALL_LIMITS.repair),
+    String(PROBE_PREVIOUS_PURPOSE_CALL_LIMITS.revised),
+    String(PROBE_PREVIOUS_PURPOSE_CALL_LIMITS.judge),
+    String(PROBE_PURPOSE_CALL_LIMITS.calibration),
+    String(PROBE_PURPOSE_CALL_LIMITS.baseline),
+    String(PROBE_PURPOSE_CALL_LIMITS.repair),
+    String(PROBE_PURPOSE_CALL_LIMITS.revised),
+    String(PROBE_PURPOSE_CALL_LIMITS.judge),
+    String(PROBE_POLICY_MIGRATION_PRESERVED_STATE.claimedCalls),
+    String(PROBE_POLICY_MIGRATION_PRESERVED_STATE.committedNanoUsd),
+    String(PROBE_POLICY_MIGRATION_PRESERVED_STATE.knownCalls),
+    String(PROBE_POLICY_MIGRATION_PRESERVED_STATE.knownActualNanoUsd),
+    String(PROBE_POLICY_MIGRATION_PRESERVED_STATE.sequence),
+    String(manifest.knownCalls.length),
+    ...manifest.knownCalls.flatMap((call) => [
+      String(call.ordinal),
+      call.jti,
+      String(call.dispatchSequence),
+      String(call.actualNanoUsd),
+      call.providerResponseHash,
+      call.settlementDigest,
+      call.usageHash
+    ]),
+    manifest.migrationCommit
+  ];
+}
+
+async function migrationManifestFromReadReply(reply: unknown[]): Promise<{
+  readonly manifest: ReturnType<typeof createProbePolicyMigrationManifest>;
+  readonly migrationDigest: string;
+  readonly migratedAtMs: number;
+}> {
+  if (String(reply[1]) !== PROBE_POLICY_MIGRATION_VERSION) {
+    throw new ProbeLedgerError("MIGRATION_RECEIPT_VERSION_MISMATCH");
+  }
+  const knownCalls = Array.from({ length: 4 }, (_unused, ordinal) => {
+    const offset = 17 + ordinal * 7;
+    return {
+      ordinal: replyInteger(reply, offset),
+      jti: String(reply[offset + 1]),
+      dispatchSequence: replyInteger(reply, offset + 2),
+      actualNanoUsd: replyInteger(reply, offset + 3),
+      providerResponseHash: String(reply[offset + 4]),
+      settlementDigest: String(reply[offset + 5]),
+      usageHash: String(reply[offset + 6])
+    };
+  });
+  const priorReceipt = parseProbePolicyMigrationPriorReceipt({
+    version: PROBE_POLICY_MIGRATION_PRIOR_RECEIPT_VERSION,
+    migrationId: String(reply[2]),
+    priorAppCommit: String(reply[4]),
+    priorActivationHash: String(reply[5]),
+    priorEvidenceDigest: String(reply[6]),
+    guardInstanceId: String(reply[7]),
+    initializedCommit: String(reply[8]),
+    previousPolicyVersion: String(reply[9]),
+    previousPolicyHash: String(reply[10]),
+    previousScriptHash: String(reply[11]),
+    knownCalls
+  });
+  const nextPolicyHash = await probePolicyHash();
+  const nextScriptHash = await probeLedgerScriptHash();
+  if (
+    String(reply[12]) !== PROBE_POLICY_VERSION ||
+    String(reply[13]) !== nextPolicyHash ||
+    String(reply[14]) !== nextScriptHash
+  ) {
+    throw new ProbeLedgerError("MIGRATION_NEXT_IDENTITY_MISMATCH");
+  }
+  return {
+    manifest: createProbePolicyMigrationManifest({
+      priorReceipt,
+      migrationCommit: String(reply[16]),
+      nextPolicyHash,
+      nextScriptHash
+    }),
+    migrationDigest: hash(String(reply[3]), "MIGRATION_DIGEST"),
+    migratedAtMs: replyInteger(reply, 15)
+  };
+}
+
+export async function readProbePolicyMigrationReceipt(
+  redis: ProbeRedisClient,
+  input: { readonly expectedReceiptHash?: string } = {},
+  keyspace: ProbeLedgerKeyspace = PRODUCTION_PROBE_KEYSPACE
+): Promise<ProbePolicyMigrationReceipt> {
+  if (input.expectedReceiptHash !== undefined) {
+    hash(input.expectedReceiptHash, "MIGRATION_RECEIPT_HASH");
+  }
+  const reply = parseReply(
+    await redis.evalRo<[], unknown>(
+      READ_POLICY_MIGRATION_SCRIPT,
+      [probePolicyMigrationKey(keyspace)],
+      []
+    )
+  );
+  const parsed = await migrationManifestFromReadReply(reply);
+  const receipt = await createProbePolicyMigrationReceipt(
+    parsed.manifest,
+    parsed.migrationDigest,
+    parsed.migratedAtMs
+  );
+  if (
+    input.expectedReceiptHash !== undefined &&
+    receipt.receiptHash !== input.expectedReceiptHash
+  ) {
+    throw new ProbeLedgerError("MIGRATION_RECEIPT_HASH_MISMATCH");
+  }
+  return receipt;
+}
+
+export async function migrateProbeGuardPolicy(
+  redis: ProbeRedisClient,
+  input: MigrateProbeGuardPolicyInput,
+  keyspace: ProbeLedgerKeyspace = PRODUCTION_PROBE_KEYSPACE
+): Promise<ProbePolicyMigrationResult> {
+  const priorReceipt = parseProbePolicyMigrationPriorReceipt(input.priorReceipt);
+  const nextPolicyHash = await probePolicyHash();
+  const nextScriptHash = await probeLedgerScriptHash();
+  const manifest = createProbePolicyMigrationManifest({
+    priorReceipt,
+    migrationCommit: gitCommit(input.migrationCommit, "MIGRATION_COMMIT"),
+    nextPolicyHash,
+    nextScriptHash
+  });
+  const migrationDigest = await probePolicyMigrationDigest(manifest);
+  const keys = [
+    keyspace.config,
+    keyspace.totals,
+    keyspace.purposeLimits,
+    keyspace.purposeCounts,
+    keyspace.inflight,
+    probePolicyMigrationKey(keyspace),
+    ...manifest.knownCalls.flatMap((call) => [
+      authKey(keyspace, call.jti),
+      providerResponseKey(keyspace, call.providerResponseHash)
+    ])
+  ];
+  const reply = parseReply(
+    await redis.eval<string[], unknown>(
+      MIGRATE_POLICY_SCRIPT,
+      keys,
+      policyMigrationArguments(manifest, migrationDigest)
+    )
+  );
+  const disposition = Number(reply[0]) === 1 ? "new" : "existing";
+  if (reply[1] !== "MIGRATED_NEW" && reply[1] !== "MIGRATED_EXISTING") {
+    throw new ProbeLedgerError("AMBIGUOUS_POLICY_MIGRATION");
+  }
+  const expectedReceipt = await createProbePolicyMigrationReceipt(
+    manifest,
+    migrationDigest,
+    replyInteger(reply, 2)
+  );
+  const receipt = await readProbePolicyMigrationReceipt(
+    redis,
+    { expectedReceiptHash: expectedReceipt.receiptHash },
+    keyspace
+  );
+  return Object.freeze({ disposition, receipt });
 }
 
 export async function initializeProbeGuard(

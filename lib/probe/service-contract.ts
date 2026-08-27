@@ -6,7 +6,12 @@ import {
 import { PROBE_CLIENT_RUNNER_VERSION } from "@/lib/probe/client-runner";
 import { z } from "zod";
 
-export const PROBE_SERVICE_VERSION = "toolproof-probe-service@1.0.0";
+export const PROBE_SERVICE_VERSION = "toolproof-probe-service-attempt-2@1.0.0";
+export const PROBE_CALIBRATION_PROTOCOL_VERSION = "toolproof-probe-calibration-attempt-2@1.0.0";
+export const PROBE_CALIBRATION_ATTEMPT = 2 as const;
+export const PROBE_CALIBRATION_BASE_CALLS = 4 as const;
+export const PROBE_CALIBRATION_ATTEMPT_CASE_COUNT = 4 as const;
+export const PROBE_CALIBRATION_TERMINAL_CALLS = 8 as const;
 export const PROBE_MAX_CONTINUATION_CHARACTERS = 1_800_000;
 
 const opaqueId = z.string().regex(/^[A-Za-z0-9_-]{16,96}$/u);
@@ -46,7 +51,7 @@ export const probeBoundaryEvidenceSchema = z
   .strict();
 
 export const probeSessionStartBodySchema = z
-  .object({ intent: z.literal("start-four-case-calibration") })
+  .object({ intent: z.literal("start-final-four-case-calibration") })
   .strict();
 
 export const probeIssueBodySchema = z
@@ -61,6 +66,8 @@ export const probeIssueBodySchema = z
 export const probeIssueResponseSchema = z
   .object({
     version: z.literal(PROBE_SERVICE_VERSION),
+    protocolVersion: z.literal(PROBE_CALIBRATION_PROTOCOL_VERSION),
+    attempt: z.literal(PROBE_CALIBRATION_ATTEMPT),
     status: z.literal("issued"),
     runId: z.string().regex(/^run_[A-Za-z0-9_-]{22}$/u),
     caseId: z.string().regex(/^case_[A-Za-z0-9_-]{22}$/u),
@@ -79,9 +86,11 @@ export const probeIssueResponseSchema = z
 export const probeRecoveredCompletionResponseSchema = z
   .object({
     version: z.literal(PROBE_SERVICE_VERSION),
+    protocolVersion: z.literal(PROBE_CALIBRATION_PROTOCOL_VERSION),
+    attempt: z.literal(PROBE_CALIBRATION_ATTEMPT),
     status: z.literal("already-sealed"),
     continuation,
-    completedCount: z.number().int().min(1).max(4),
+    completedCount: z.number().int().min(1).max(PROBE_CALIBRATION_ATTEMPT_CASE_COUNT),
     terminal: z.boolean()
   })
   .strict();
@@ -172,9 +181,12 @@ export const probeRevealBodySchema = z.object({ continuation }).strict();
 
 export const probeCompleteResponseSchema = z
   .object({
+    version: z.literal(PROBE_SERVICE_VERSION),
+    protocolVersion: z.literal(PROBE_CALIBRATION_PROTOCOL_VERSION),
+    attempt: z.literal(PROBE_CALIBRATION_ATTEMPT),
     status: z.literal("sealed"),
     continuation,
-    completedCount: z.number().int().min(1).max(4),
+    completedCount: z.number().int().min(1).max(PROBE_CALIBRATION_ATTEMPT_CASE_COUNT),
     terminal: z.boolean()
   })
   .strict();

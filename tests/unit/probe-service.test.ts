@@ -72,6 +72,23 @@ import {
 import { getProbeCalibrationCase } from "@/lib/probe/calibration-catalog.server";
 import type { ProbeActivationContext } from "@/lib/probe/activation";
 import type { ProbeProviderKnownReceipt } from "@/lib/probe/openai";
+import { probeLedgerScriptHash } from "@/lib/probe/ledger";
+import {
+  PROBE_POLICY_MIGRATION_ID,
+  PROBE_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
+  PROBE_POLICY_MIGRATION_PRIOR_APP_COMMIT,
+  PROBE_POLICY_MIGRATION_PRIOR_EVIDENCE_DIGEST,
+  PROBE_POLICY_MIGRATION_PRIOR_RECEIPT_VERSION,
+  PROBE_PREVIOUS_LEDGER_SCRIPT_HASH,
+  PROBE_PREVIOUS_POLICY_HASH,
+  PROBE_PREVIOUS_POLICY_VERSION,
+  createProbePolicyMigrationManifest,
+  createProbePolicyMigrationReceipt,
+  probePolicyMigrationDigest,
+  type ProbePolicyMigrationPriorReceipt,
+  type ProbePolicyMigrationReceipt
+} from "@/lib/probe/policy-migration-contract";
+import { probePolicyHash } from "@/lib/probe/policy";
 import {
   completeProbeCalibrationTrial,
   admitProbeNativeDispatch,
@@ -91,7 +108,9 @@ const buildCommit = "a".repeat(40);
 const signingSecret = Buffer.alloc(32, 11).toString("base64url");
 const activationSecret = Buffer.alloc(32, 12).toString("base64url");
 const nowMs = Date.parse("2026-08-27T12:00:00.000Z");
-const policyHash = "9289f1def645e9ccc71a3ef95320281cef937be5ec1329beaf57f22b4b2c7939";
+let policyHash = "";
+let scriptHash = "";
+let policyMigration: ProbePolicyMigrationReceipt;
 const environment = {
   TOOLPROOF_SIGNING_SECRET: signingSecret,
   TOOLPROOF_PROBE_ACTIVATION_SECRET: activationSecret,
@@ -103,12 +122,14 @@ function activation(input: {
   known: number;
   pending: 0 | 1;
 }): ProbeActivationContext {
+  const cumulativeClaimed = 4 + input.claimed;
+  const cumulativeKnown = 4 + input.known;
   return {
     enabled: true,
     mode: "calibration",
     activationHash: "b".repeat(64),
     manifest: {
-      version: "toolproof-probe-activation@1.0.0",
+      version: "toolproof-probe-activation@2.0.0",
       mode: "calibration",
       origin: "https://toolproof-rust.vercel.app",
       activeCommit: buildCommit,
@@ -116,26 +137,28 @@ function activation(input: {
       guardInstanceId: "guard_fixture_service_001",
       guardInitializedCommit: "d".repeat(40),
       policyHash,
-      scriptHash: "f".repeat(64),
+      scriptHash,
       runnerContractHash: "1".repeat(64),
-      continuationScriptHash: "3".repeat(64)
+      continuationScriptHash: "3".repeat(64),
+      policyMigrationReceiptHash: policyMigration.receiptHash
     },
     guard: {
       phase: input.pending === 0 ? "idle" : "single-inflight",
-      claimedCalls: input.claimed,
-      knownCalls: input.known,
+      claimedCalls: cumulativeClaimed,
+      knownCalls: cumulativeKnown,
       pendingCalls: input.pending,
-      calibrationCalls: input.claimed,
-      committedNanoUsd: input.claimed * 62_500_000,
-      knownAccountedNanoUsd: input.known * 440_000,
+      calibrationCalls: cumulativeClaimed,
+      committedNanoUsd: cumulativeClaimed * 62_500_000,
+      knownAccountedNanoUsd: 11_360_800 + input.known * 440_000,
       uncertainCalls: 0
     },
     guardIdentity: {
       guardInstanceId: "guard_fixture_service_001",
       policyHash,
-      scriptHash: "f".repeat(64),
+      scriptHash,
       initializedCommit: "d".repeat(40)
-    }
+    },
+    migration: policyMigration
   };
 }
 
@@ -270,24 +293,25 @@ async function boundary(environment: TrialEnvironment, manifest: ProbeLiveManife
   };
 }
 
-const INPUTS = {
-  cart_get: {},
-  order_review: {},
-  cart_update: {
-    operationId: "calibration_update_0001",
-    operation: "set_quantity",
-    itemId: "stoneware-mug",
-    quantity: 3
-  },
-  checkout_request: { operationId: "calibration_request_001" }
-} as const;
+function inputForTool(toolName: CheckoutToolName, operationId: string) {
+  if (toolName === "cart_update") {
+    return {
+      operationId,
+      operation: "set_quantity" as const,
+      itemId: "stoneware-mug" as const,
+      quantity: 3
+    };
+  }
+  if (toolName === "checkout_request") return { operationId };
+  return {};
+}
 
 async function nativeExecution(
   environment: TrialEnvironment,
   toolName: CheckoutToolName,
-  manifestHash: string
+  manifestHash: string,
+  input: ReturnType<typeof inputForTool>
 ) {
-  const input = INPUTS[toolName as keyof typeof INPUTS];
   if (toolName === "cart_get") await environment.store.cartGet(input, { source: "native" });
   else if (toolName === "order_review")
     await environment.store.orderReview(input, { source: "native" });
@@ -325,7 +349,7 @@ async function providerReceipt(
   ordinal: number
 ): Promise<ProbeProviderKnownReceipt> {
   const tool = getProbeCalibrationCase(ordinal).expectedTool;
-  const toolInput = INPUTS[tool as keyof typeof INPUTS];
+  const toolInput = inputForTool(tool, envelope.runner.transport.operationId);
   const rawResponseBytes = JSON.stringify({ id: `resp_fixture_${ordinal}`, decision: tool });
   return {
     version: "toolproof-probe-provider@1.0.0",
@@ -361,6 +385,7 @@ async function providerReceipt(
     promptHash: envelope.runner.promptHash,
     settingsHash: envelope.runner.settingsHash,
     decisionSchemaHash: envelope.runner.decisionSchemaHash,
+    transportBindingHash: envelope.runner.transport.bindingHash,
     modelInputHash: "2".repeat(64),
     dispatchedAt: "2026-08-27T12:00:00.000Z",
     completedAt: "2026-08-27T12:00:00.100Z",
@@ -372,10 +397,76 @@ async function providerReceipt(
   };
 }
 
+async function migrationFixture(): Promise<ProbePolicyMigrationReceipt> {
+  const actualCosts = [2_840_200, 2_840_200, 2_840_200, 2_840_200] as const;
+  const priorReceipt: ProbePolicyMigrationPriorReceipt = {
+    version: PROBE_POLICY_MIGRATION_PRIOR_RECEIPT_VERSION,
+    migrationId: PROBE_POLICY_MIGRATION_ID,
+    priorAppCommit: PROBE_POLICY_MIGRATION_PRIOR_APP_COMMIT,
+    priorActivationHash: PROBE_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
+    priorEvidenceDigest: PROBE_POLICY_MIGRATION_PRIOR_EVIDENCE_DIGEST,
+    guardInstanceId: "guard_fixture_service_001",
+    initializedCommit: "d".repeat(40),
+    previousPolicyVersion: PROBE_PREVIOUS_POLICY_VERSION,
+    previousPolicyHash: PROBE_PREVIOUS_POLICY_HASH,
+    previousScriptHash: PROBE_PREVIOUS_LEDGER_SCRIPT_HASH,
+    knownCalls: actualCosts.map((actualNanoUsd, ordinal) => ({
+      ordinal,
+      jti: `prior_jti_fixture_${String(ordinal).padStart(2, "0")}`,
+      dispatchSequence: ordinal + 1,
+      actualNanoUsd,
+      providerResponseHash: String(ordinal + 1).repeat(64),
+      settlementDigest: String(ordinal + 5).repeat(64),
+      usageHash: String(ordinal + 1)
+        .repeat(64)
+        .split("")
+        .reverse()
+        .join("")
+    }))
+  };
+  const manifest = createProbePolicyMigrationManifest({
+    priorReceipt,
+    nextPolicyHash: policyHash,
+    nextScriptHash: scriptHash,
+    migrationCommit: buildCommit
+  });
+  return createProbePolicyMigrationReceipt(
+    manifest,
+    await probePolicyMigrationDigest(manifest),
+    nowMs - 1_000
+  );
+}
+
 describe("Probe service four-case lifecycle", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     serviceMocks.cache.clear();
     vi.clearAllMocks();
+    [policyHash, scriptHash] = await Promise.all([probePolicyHash(), probeLedgerScriptHash()]);
+    policyMigration = await migrationFixture();
+  });
+
+  it("starts only from the exact migrated four-known-call base and never from adjacent counts", async () => {
+    await expect(
+      startProbeCalibrationSession(request(), {
+        environment,
+        activation: activation({ claimed: 0, known: 0, pending: 0 }),
+        now: () => nowMs
+      })
+    ).resolves.toMatchObject({ buildCommit });
+    for (const state of [
+      { claimed: -1, known: -1, pending: 0 as const },
+      { claimed: 0, known: -1, pending: 0 as const },
+      { claimed: 1, known: 1, pending: 0 as const },
+      { claimed: 1, known: 0, pending: 1 as const }
+    ]) {
+      await expect(
+        startProbeCalibrationSession(request(), {
+          environment,
+          activation: activation(state),
+          now: () => nowMs
+        })
+      ).rejects.toThrowError(/calibration_session_unavailable/u);
+    }
   });
 
   it("automatically seals and reveals four authentic non-scored fake-provider trials", async () => {
@@ -513,10 +604,15 @@ describe("Probe service four-case lifecycle", () => {
         }
       );
       expect(repeatedAdmission.status).toBe("already-admitted");
-      const native = await nativeExecution(activeTrial, tool, manifest.manifestHash);
+      const native = await nativeExecution(
+        activeTrial,
+        tool,
+        manifest.manifestHash,
+        inputForTool(tool, activeIssued.authorization.envelope.runner.transport.operationId)
+      );
       const postResetBoundary = await boundary(activeTrial, manifest);
       const capture = {
-        runnerVersion: "toolproof-probe-client-runner@1.0.0",
+        runnerVersion: "toolproof-probe-client-runner@2.0.0",
         claim: {
           runId: activeIssued.runId,
           caseId: activeIssued.caseId,
@@ -565,7 +661,7 @@ describe("Probe service four-case lifecycle", () => {
         providerReceipt: decision.providerReceipt,
         continuation,
         completion: {
-          runnerVersion: "toolproof-probe-client-runner@1.0.0",
+          runnerVersion: "toolproof-probe-client-runner@2.0.0",
           claim: capture.claim,
           terminalStatus: "call_completed",
           nativeDispatchCount: 1,
@@ -676,9 +772,24 @@ describe("Probe service four-case lifecycle", () => {
       now: () => nowMs + 5_000
     });
     expect(revealed).toMatchObject({
-      lane: "custom-probe-calibration",
+      protocolVersion: "toolproof-probe-calibration-attempt-2@1.0.0",
+      attempt: 2,
+      lane: "custom-probe-calibration-attempt-2",
       calibrationOnly: true,
       includedInBenchmark: false,
+      priorAttempt: {
+        rawSha256: "4832959832a45379a82c23a8d08712e7cdc78f2a07e621467ca8f3cd76d9756b",
+        evidenceDigest: "016f607f498384bcac2d60474aaa3f3373635cd662bb2eb4d7bb71b0b223b863",
+        passedCount: 0,
+        caseCount: 4
+      },
+      policyMigration: { receiptHash: policyMigration.receiptHash },
+      terminalGuard: { claimedCalls: 8, knownCalls: 8, calibrationCalls: 8 },
+      attemptCost: {
+        priorCumulativeKnownAccountedNanoUsd: 11_360_800,
+        attemptAccountedNanoUsd: 1_760_000,
+        terminalCumulativeKnownAccountedNanoUsd: 13_120_800
+      },
       caseCount: 4,
       passedCount: 4
     });
@@ -698,6 +809,28 @@ describe("Probe service four-case lifecycle", () => {
     const tampered = structuredClone(revealed);
     (tampered.cases[0]!.evaluation as { expectedTool: string }).expectedTool = "order_review";
     await expect(verifyGate2CalibrationBundle(tampered)).rejects.toThrow();
+    const priorTamper = structuredClone(revealed);
+    (priorTamper.priorAttempt as { rawSha256: string }).rawSha256 = "0".repeat(64);
+    await expect(verifyGate2CalibrationBundle(priorTamper)).rejects.toThrowError(
+      /prior_attempt_lineage_mismatch/u
+    );
+    const migrationTamper = structuredClone(revealed);
+    (migrationTamper.policyMigration as { receiptHash: string }).receiptHash = "0".repeat(64);
+    await expect(verifyGate2CalibrationBundle(migrationTamper)).rejects.toThrowError(
+      /policy_migration_digest_mismatch/u
+    );
+    const costTamper = structuredClone(revealed);
+    costTamper.attemptCost.attemptAccountedNanoUsd += 1;
+    await expect(verifyGate2CalibrationBundle(costTamper)).rejects.toThrowError(
+      /attempt_cost_reconciliation_mismatch/u
+    );
+    await expect(
+      startProbeCalibrationSession(request(), {
+        environment,
+        activation: activation({ claimed: 4, known: 4, pending: 0 }),
+        now: () => nowMs + 61_000
+      })
+    ).rejects.toThrowError(/calibration_session_unavailable/u);
     expect(serviceMocks.provider).toHaveBeenCalledTimes(4);
     expect(serviceMocks.issue).toHaveBeenCalledTimes(4);
     expect(serviceMocks.begin).toHaveBeenCalledTimes(4);
@@ -768,7 +901,7 @@ describe("Probe service four-case lifecycle", () => {
     );
     const postResetBoundary = await boundary(trial, manifest);
     const capture = {
-      runnerVersion: "toolproof-probe-client-runner@1.0.0",
+      runnerVersion: "toolproof-probe-client-runner@2.0.0",
       claim: { runId: issued.runId, caseId: issued.caseId, trialId: issued.trialId },
       initialBoundary,
       liveBoundary: scenario.boundaryDrift
@@ -825,7 +958,7 @@ describe("Probe service four-case lifecycle", () => {
         providerReceipt: decision.providerReceipt,
         continuation: start.continuation,
         completion: {
-          runnerVersion: "toolproof-probe-client-runner@1.0.0",
+          runnerVersion: "toolproof-probe-client-runner@2.0.0",
           claim: capture.claim,
           terminalStatus: scenario.terminalStatus,
           nativeDispatchCount: 0,
@@ -947,7 +1080,7 @@ describe("Probe service four-case lifecycle", () => {
     expect(repeatedAdmission.status).toBe("already-admitted");
     const postResetBoundary = await boundary(recoveredDocument, manifest);
     const capture = {
-      runnerVersion: "toolproof-probe-client-runner@1.0.0",
+      runnerVersion: "toolproof-probe-client-runner@2.0.0",
       claim: { runId: issued.runId, caseId: issued.caseId, trialId: issued.trialId },
       initialBoundary: recoveredBoundary,
       liveBoundary: {
@@ -1002,7 +1135,7 @@ describe("Probe service four-case lifecycle", () => {
         providerReceipt: decision.providerReceipt,
         continuation: start.continuation,
         completion: {
-          runnerVersion: "toolproof-probe-client-runner@1.0.0",
+          runnerVersion: "toolproof-probe-client-runner@2.0.0",
           claim: capture.claim,
           terminalStatus: "call_failed",
           nativeDispatchCount: 1,

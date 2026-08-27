@@ -21,11 +21,20 @@ describe("frozen generic Probe runner contract", () => {
     });
     expect(PROBE_GENERIC_RUNNER_PROMPT).toContain("Return exactly one decision");
     expect(PROBE_GENERIC_RUNNER_PROMPT).toContain("live tool manifest");
+    expect(PROBE_GENERIC_RUNNER_PROMPT).toContain("not to answer the request yourself");
+    expect(PROBE_GENERIC_RUNNER_PROMPT).toContain("actionable tool use");
+    expect(PROBE_GENERIC_RUNNER_PROMPT).toContain("does not fulfill the request");
+    expect(PROBE_GENERIC_RUNNER_PROMPT).toContain("user-controlled intent or business parameters");
+    expect(PROBE_GENERIC_RUNNER_PROMPT).toContain("Runner-owned transport");
+    expect(PROBE_GENERIC_RUNNER_PROMPT).toContain("never ask the user for it");
     expect(PROBE_GENERIC_RUNNER_PROMPT).toContain('kind "call"');
     expect(PROBE_GENERIC_RUNNER_PROMPT).toContain('kind "clarify"');
     expect(PROBE_GENERIC_RUNNER_PROMPT).toContain('kind "abstain"');
     expect(PROBE_GENERIC_RUNNER_PROMPT).not.toMatch(
-      /cart_get|order_review|cart_update|checkout_request|checkout_cancel|development|holdout|score/iu
+      /cart_get|order_review|cart_update|checkout_request|checkout_cancel|expected|development|holdout|score/iu
+    );
+    expect(PROBE_GENERIC_RUNNER_PROMPT).not.toMatch(
+      /What items and quantities|Please review my current order|Stoneware mug|Open the simulated checkout for this cart/iu
     );
   });
 
@@ -64,12 +73,16 @@ describe("frozen generic Probe runner contract", () => {
     ).resolves.toEqual([combined, combined]);
   });
 
-  it("does not drift the already initialized spend-policy or guard-script hashes", async () => {
-    await expect(probePolicyHash()).resolves.toBe(
-      "9289f1def645e9ccc71a3ef95320281cef937be5ec1329beaf57f22b4b2c7939"
-    );
-    await expect(probeLedgerScriptHash()).resolves.toBe(
-      "41d351ad5d1adb81b0c6a90aa930cf1ae932b053d58b097c0283846728b798d2"
-    );
+  it("does not couple the runner hash to a stale policy-migration generation", async () => {
+    const [firstPolicy, secondPolicy, firstScript, secondScript] = await Promise.all([
+      probePolicyHash(),
+      probePolicyHash(),
+      probeLedgerScriptHash(),
+      probeLedgerScriptHash()
+    ]);
+    expect(firstPolicy).toMatch(/^[a-f0-9]{64}$/u);
+    expect(firstScript).toMatch(/^[a-f0-9]{64}$/u);
+    expect(secondPolicy).toBe(firstPolicy);
+    expect(secondScript).toBe(firstScript);
   });
 });

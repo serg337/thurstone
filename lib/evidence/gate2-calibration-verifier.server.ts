@@ -2,6 +2,7 @@ import "server-only";
 
 import { canonicalJson, canonicalSha256 } from "@/lib/evidence/digest";
 import {
+  GATE2_ATTEMPT_1_LINEAGE,
   verifyGate2CalibrationBundle,
   type VerifiedGate2CalibrationBundle
 } from "@/lib/evidence/gate2-calibration-bundle";
@@ -36,6 +37,18 @@ export async function verifyGate2CalibrationBundleServer(
   value: unknown
 ): Promise<VerifiedGate2CalibrationBundle> {
   const bundle = await verifyGate2CalibrationBundle(value);
+  if (canonicalJson(bundle.priorAttempt) !== canonicalJson(GATE2_ATTEMPT_1_LINEAGE)) {
+    throw new Error("server_prior_attempt_lineage_mismatch");
+  }
+  const migration = objectValue(bundle.policyMigration, "invalid_policy_migration");
+  if (
+    migration.priorEvidenceDigest !== GATE2_ATTEMPT_1_LINEAGE.evidenceDigest ||
+    migration.nextPolicyHash !== bundle.policyHash ||
+    migration.nextScriptHash !== bundle.ledgerScriptHash ||
+    migration.migrationCommit !== bundle.appCommit
+  ) {
+    throw new Error("server_policy_migration_mismatch");
+  }
   for (const [ordinal, row] of bundle.cases.entries()) {
     const trial = objectValue(row.trialEvidence, "invalid_trial_evidence");
     const capture = objectValue(trial.capture, "invalid_trial_capture");

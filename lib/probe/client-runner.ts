@@ -1,4 +1,4 @@
-export const PROBE_CLIENT_RUNNER_VERSION = "toolproof-probe-client-runner@1.0.0";
+export const PROBE_CLIENT_RUNNER_VERSION = "toolproof-probe-client-runner@2.0.0";
 
 const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
 const OPAQUE_ID_PATTERN = /^[A-Za-z0-9_-]{16,96}$/u;

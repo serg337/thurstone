@@ -1,6 +1,6 @@
 import { canonicalSha256 } from "@/lib/evidence/digest";
 
-export const PROBE_POLICY_VERSION = "toolproof-probe-policy@0.1.0";
+export const PROBE_POLICY_VERSION = "toolproof-probe-policy@0.2.0";
 export const PROBE_CHALLENGE_ID = "webmcp-2026";
 export const PROBE_PROVIDER = "OpenAI";
 export const PROBE_MODEL = "gpt-5.6-terra";
@@ -11,11 +11,11 @@ export const PROBE_PURPOSES = ["calibration", "baseline", "repair", "revised", "
 export type ProbePurpose = (typeof PROBE_PURPOSES)[number];
 
 export const PROBE_PURPOSE_CALL_LIMITS: Readonly<Record<ProbePurpose, number>> = Object.freeze({
-  calibration: 4,
+  calibration: 8,
   baseline: 72,
   repair: 2,
   revised: 72,
-  judge: 10
+  judge: 6
 });
 
 export const PROBE_GLOBAL_CALL_LIMIT = 160;

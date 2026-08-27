@@ -4,7 +4,7 @@
 
 **ToolProof by Invarra — created by Sergio Valencia.**
 
-Status: Gate 0 is complete. The Gate 1 five-tool sandbox, dynamic registry, native execution adapter, reset verifier, trace ledger, and one-file native-proof export are locally implemented and deterministically verified; authentic native proof must be rerun on the exact export-enabled deployment. Chrome previously discovered and invoked deployed ToolProof tools, and the production lifetime guard remains verified at zero use. The model-backed lane is disabled; no model-selection run, score, public repository release, or video exists yet.
+Status: Gates 0 and 1 are complete with an authentic Chrome native-proof bundle. Gate 2 attempt 1 is retained as an authentic, operationally valid 0/4 semantic failure. Sergio approved one same-cap policy migration and a separately versioned final four-case attempt; that successor is implemented and locally verified but not yet deployed or run. No scored request, public repository release, or video exists yet.
 
 **Simulated checkout — no purchase occurs.** ToolProof contains no payment, account, inventory, messaging, or external transaction path. When enabled later, model-backed evaluation may send synthetic prompts to the disclosed provider.
 
@@ -16,20 +16,20 @@ Status: Gate 0 is complete. The Gate 1 five-tool sandbox, dynamic registry, nati
 4. Click **Run clean Gate 1 proof and download** once. ToolProof reloads into a fresh document, waits for each exact Registry/Readiness boundary, runs the fixed ten native calls plus one verified reset, records step timing, verifies the strict sequence, and requests one JSON download.
 5. If the browser blocks the automatic download, click **Download verified proof again**; it reissues the identical already-verified bytes without rerunning tools.
 6. Use the normal UI or direct native controls only for diagnostics. A failure stops the automated sequence without a verified download and offers a clean one-click restart.
-7. Open `/results` and confirm ToolProof says **No authentic evidence is available** until terminal model-backed runs exist.
+7. Open `/results` and confirm model-backed rows appear only after a terminal sealed run; Gate 1 plumbing evidence never populates the semantic result denominator.
 
 Direct native-plumbing controls are deterministic Gate 1 diagnostics, not model-selection evidence.
 
 ## Supported-path status
 
-| Capability                                                     | Current status                                                                                             |
-| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Site Tools provider via `document.modelContext.registerTool()` | Implemented and authentically observed on the deployed Chrome 151 path                                     |
-| In-page discovery via `getTools()`                             | Exact four/five-tool comparison and canonical registry receipt implemented; fresh deployed proof pending   |
-| In-page execution via `executeTool()`                          | One-call object/JSON-string calibration and at-most-once adapter implemented; fresh deployed proof pending |
-| Direct ChatGPT observations                                    | Not collected                                                                                              |
-| Judge-accessible model-backed lane                             | Activation-ready four-case custom Probe; disabled by default until the exact reviewed production commit    |
-| Authentic baseline/revised results                             | No run yet                                                                                                 |
+| Capability                                                     | Current status                                                                                     |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Site Tools provider via `document.modelContext.registerTool()` | Implemented and authentically observed on the deployed Chrome 151 path                             |
+| In-page discovery via `getTools()`                             | Authentically verified across exact initial/pending/reset catalogs in Chrome 152                   |
+| In-page execution via `executeTool()`                          | Authentically verified for every active tool, replay/error/reset/cancellation boundaries           |
+| Direct ChatGPT observations                                    | Not collected                                                                                      |
+| Judge-accessible model-backed lane                             | Versioned final four-case custom Probe successor locally green; exact migration/deployment pending |
+| Authentic baseline/revised results                             | No run yet                                                                                         |
 
 Mocks, direct domain calls, unit tests, and Playwright's ordinary browser build are never counted as native WebMCP or model-selection evidence.
 
@@ -62,7 +62,7 @@ npm run verify:publication
 
 ## Architecture
 
-ToolProof uses separate `/studio`, `/lab`, and `/results` documents as distinct trust surfaces. A strict TypeScript domain/session layer owns deterministic state, schema validation, replay-safe operation IDs, reset admission, and document-lifetime tombstones. Normal UI controls and native WebMCP handlers share that store. A per-tool registry manager preserves unchanged registrations, drains in-flight handlers before catalog changes, verifies discovery, and fails closed under lifecycle faults. The native adapter freezes one argument mode with a harmless `cart_get` call and binds each later direct call to exactly one canonical handler trace. Server-only Probe controls reserve one immutable challenge-lifetime call/spend slot before provider dispatch. The four-case calibration route is implemented but remains fail-closed until an exact production activation binds the reviewed commit, project, frozen hashes, separate secret, session/CSRF, and live guard.
+ToolProof uses separate `/studio`, `/lab`, and `/results` documents as distinct trust surfaces. A strict TypeScript domain/session layer owns deterministic state, schema validation, replay-safe operation IDs, reset admission, and document-lifetime tombstones. Normal UI controls and native WebMCP handlers share that store. A per-tool registry manager preserves unchanged registrations, drains in-flight handlers before catalog changes, verifies discovery, and fails closed under lifecycle faults. The native adapter freezes one argument mode with a harmless `cart_get` call and binds each later direct call to exactly one canonical handler trace. Server-only Probe controls reserve one versioned challenge-lifetime call/spend slot before provider dispatch. The final calibration starts only from a verified atomic-migration receipt and four-known-call base, uses runner-owned trial-bound operation IDs, and reveals its four rows separately from the retained first attempt.
 
 The Lab also owns a document-lifetime proof journal. One local JSON download contains its sanitized Registry/Readiness transitions, native attempt starts/finishes, reset receipts, automated-step timestamps/durations, full trace ledger, state inspection, chained event hashes, and bundle digests. A bounded build/path/time-bound session marker requests one clean reload and is consumed before execution; it is never exported or treated as attestation. Application payloads are synthetic; the exact public origin and raw browser user agent are disclosed only as required runtime provenance. The export reads no account/browser-history data and performs no upload. Hashes prove internal consistency, not external attestation.
 

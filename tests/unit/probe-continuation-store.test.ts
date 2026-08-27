@@ -270,10 +270,10 @@ describe("encrypted Probe continuation store", () => {
     expect(PROBE_CONTINUATION_SCRIPTS.put).toContain('redis.call("PEXPIRE"');
     expect(PROBE_CONTINUATION_SCRIPTS.get).toContain('redis.call("PTTL"');
     await expect(probePolicyHash()).resolves.toBe(
-      "9289f1def645e9ccc71a3ef95320281cef937be5ec1329beaf57f22b4b2c7939"
+      "0667313bddeb02f0f2987348c56f0ad022c9bb33cf500eb94ef2a1a5fe86f0a8"
     );
     await expect(probeLedgerScriptHash()).resolves.toBe(
-      "41d351ad5d1adb81b0c6a90aa930cf1ae932b053d58b097c0283846728b798d2"
+      "34833e98044cee1472c9104ac70312f03c96e8d2707bee189631e2cf41ae9033"
     );
   });
 });

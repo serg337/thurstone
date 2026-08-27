@@ -6,15 +6,19 @@ import {
   PROBE_FIXTURE_SYNOPSIS_VERSION,
   PROBE_LIVE_MANIFEST_VERSION,
   PROBE_MODEL_INPUT_VERSION,
+  PROBE_TRANSPORT_BINDING_VERSION,
   ProbeExpectationLeakageError,
+  ProbeTransportBindingError,
   assertNoProbeExpectationLeakage,
   createProbeFixtureSynopsis,
   createProbeModelInput,
+  createProbeTransportBinding,
   parseExpectationFreeCalibrationEnvelope,
   probeCalibrationEnvelopeHash,
   probeCalibrationEnvelopeSchema,
   probeFixtureSynopsisSchema,
   probeLiveManifestSchema,
+  verifyProbeTransportBinding,
   type ProbeCalibrationEnvelope,
   type ProbeLiveManifest
 } from "@/lib/probe/calibration-envelope";
@@ -53,13 +57,17 @@ async function envelope(
   naturalLanguageRequest = "Show the cart contents."
 ): Promise<ProbeCalibrationEnvelope> {
   const manifest = liveManifest();
+  const identity = {
+    runId: `run_${"R".repeat(22)}`,
+    caseId: `case_${"C".repeat(22)}`,
+    trialId: `trial_${"T".repeat(22)}`
+  };
+  const transport = await createProbeTransportBinding(identity);
   return {
     version: PROBE_CALIBRATION_ENVELOPE_VERSION,
     purpose: "calibration",
     buildCommit: "b".repeat(40),
-    runId: `run_${"R".repeat(22)}`,
-    caseId: `case_${"C".repeat(22)}`,
-    trialId: `trial_${"T".repeat(22)}`,
+    ...identity,
     naturalLanguageRequest,
     fixture: createProbeFixtureSynopsis(createCheckoutFixture()),
     liveManifest: manifest,
@@ -68,23 +76,24 @@ async function envelope(
       promptHash: await probeRunnerPromptHash(),
       settingsVersion: PROBE_RUNNER_SETTINGS_VERSION,
       settingsHash: await probeRunnerSettingsHash(),
-      decisionSchemaHash: await probeDecisionJsonSchemaHash(manifest)
+      decisionSchemaHash: await probeDecisionJsonSchemaHash(manifest, transport),
+      transport
     }
   };
 }
 
 describe("minimum expectation-free calibration envelope", () => {
-  it("projects only synthetic line identity/quantity and initial-state facts", () => {
+  it("projects only synthetic fixture and item identity facts needed for selection", () => {
     const synopsis = createProbeFixtureSynopsis(createCheckoutFixture());
     expect(synopsis).toEqual({
       version: PROBE_FIXTURE_SYNOPSIS_VERSION,
       simulated: true,
       fixtureId: "checkout-seed-v1",
+      fixtureVersion: "checkout-fixture@1.0.0",
       stateRevision: 0,
-      currency: "USD",
-      lines: [
-        { itemId: "field-notebook", name: "Field notebook", quantity: 1 },
-        { itemId: "stoneware-mug", name: "Stoneware mug", quantity: 2 }
+      items: [
+        { itemId: "field-notebook", name: "Field notebook" },
+        { itemId: "stoneware-mug", name: "Stoneware mug" }
       ],
       pendingCheckout: false
     });
@@ -93,7 +102,12 @@ describe("minimum expectation-free calibration envelope", () => {
     expect(synopsis).not.toHaveProperty("delivery");
     expect(synopsis).not.toHaveProperty("pendingId");
     expect(synopsis).not.toHaveProperty("operationId");
-    for (const line of synopsis.lines) expect(line).not.toHaveProperty("unitPriceCents");
+    expect(synopsis).not.toHaveProperty("currency");
+    expect(synopsis).not.toHaveProperty("lines");
+    for (const item of synopsis.items) {
+      expect(item).not.toHaveProperty("quantity");
+      expect(item).not.toHaveProperty("unitPriceCents");
+    }
     expect(Object.isFrozen(synopsis)).toBe(true);
   });
 
@@ -109,13 +123,19 @@ describe("minimum expectation-free calibration envelope", () => {
     expect(
       probeFixtureSynopsisSchema.safeParse({
         ...base,
-        lines: [base.lines[0], base.lines[0]]
+        items: [base.items[0], base.items[0]]
       }).success
     ).toBe(false);
     expect(
       probeFixtureSynopsisSchema.safeParse({
         ...base,
-        lines: [{ ...base.lines[0], name: "Stoneware mug" }, base.lines[1]]
+        items: [{ ...base.items[0], name: "Stoneware mug" }, base.items[1]]
+      }).success
+    ).toBe(false);
+    expect(
+      probeFixtureSynopsisSchema.safeParse({
+        ...base,
+        items: [{ ...base.items[0], quantity: 1 }, base.items[1]]
       }).success
     ).toBe(false);
     expect(probeFixtureSynopsisSchema.safeParse({ ...base, seed: "private" }).success).toBe(false);
@@ -141,7 +161,7 @@ describe("minimum expectation-free calibration envelope", () => {
     });
     const bytes = JSON.stringify(modelInput);
     expect(bytes).not.toMatch(
-      /buildCommit|runId|caseId|trialId|manifestHash|promptHash|settingsHash|decisionSchemaHash/iu
+      /buildCommit|runId|caseId|trialId|manifestHash|promptHash|settingsHash|decisionSchemaHash|operationId|bindingHash/iu
     );
     expect(bytes).not.toMatch(/origin|window|execute|handlerVersion/iu);
   });
@@ -233,6 +253,35 @@ describe("minimum expectation-free calibration envelope", () => {
     await expect(probeCalibrationEnvelopeHash(second)).resolves.not.toBe(
       await probeCalibrationEnvelopeHash(first)
     );
+  });
+
+  it("derives one deterministic opaque runner transport binding and rejects tampering", async () => {
+    const source = await envelope();
+    const first = await createProbeTransportBinding(source);
+    const second = await createProbeTransportBinding(structuredClone(source));
+    expect(first).toEqual(second);
+    expect(first).toEqual(source.runner.transport);
+    expect(first).toMatchObject({
+      version: PROBE_TRANSPORT_BINDING_VERSION,
+      ownership: "runner",
+      operationId: expect.stringMatching(/^probe_[a-f0-9]{58}$/u),
+      bindingHash: expect.stringMatching(/^[a-f0-9]{64}$/u)
+    });
+    await expect(verifyProbeTransportBinding(source)).resolves.toEqual(first);
+
+    for (const field of ["operationId", "bindingHash"] as const) {
+      const tampered = structuredClone(source);
+      tampered.runner.transport[field] =
+        field === "operationId" ? `probe_${"0".repeat(58)}` : "0".repeat(64);
+      await expect(verifyProbeTransportBinding(tampered)).rejects.toThrowError(
+        expect.objectContaining<Partial<ProbeTransportBindingError>>({
+          code: "transport_binding_mismatch"
+        })
+      );
+      await expect(probeCalibrationEnvelopeHash(tampered)).rejects.toThrow(
+        "transport_binding_mismatch"
+      );
+    }
   });
 
   it("supports standalone recursive leakage checks on arrays and normalized key forms", () => {

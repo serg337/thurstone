@@ -4,6 +4,7 @@ import {
   PROBE_CALIBRATION_ENVELOPE_VERSION,
   PROBE_FIXTURE_SYNOPSIS_VERSION,
   PROBE_LIVE_MANIFEST_VERSION,
+  createProbeTransportBinding,
   type ProbeCalibrationEnvelope
 } from "@/lib/probe/calibration-envelope";
 import { decideWithOpenAi } from "@/lib/probe/openai";
@@ -12,24 +13,28 @@ import {
   PROBE_RUNNER_SETTINGS_VERSION
 } from "@/lib/probe/runner-contract";
 
-function envelope(): ProbeCalibrationEnvelope {
+async function envelope(): Promise<ProbeCalibrationEnvelope> {
+  const identity = {
+    runId: `run_${"b".repeat(22)}`,
+    caseId: `case_${"c".repeat(22)}`,
+    trialId: `trial_${"d".repeat(22)}`
+  };
+  const transport = await createProbeTransportBinding(identity);
   return {
     version: PROBE_CALIBRATION_ENVELOPE_VERSION,
     purpose: "calibration",
     buildCommit: "a".repeat(40),
-    runId: `run_${"b".repeat(22)}`,
-    caseId: `case_${"c".repeat(22)}`,
-    trialId: `trial_${"d".repeat(22)}`,
+    ...identity,
     naturalLanguageRequest: "What is in my cart?",
     fixture: {
       version: PROBE_FIXTURE_SYNOPSIS_VERSION,
       simulated: true,
       fixtureId: "checkout-seed-v1",
+      fixtureVersion: "checkout-fixture@1.0.0",
       stateRevision: 0,
-      currency: "USD",
-      lines: [
-        { itemId: "field-notebook", name: "Field notebook", quantity: 1 },
-        { itemId: "stoneware-mug", name: "Stoneware mug", quantity: 2 }
+      items: [
+        { itemId: "field-notebook", name: "Field notebook" },
+        { itemId: "stoneware-mug", name: "Stoneware mug" }
       ],
       pendingCheckout: false
     },
@@ -43,6 +48,24 @@ function envelope(): ProbeCalibrationEnvelope {
           description: "Return current cart identities and quantities.",
           inputSchema: { type: "object", properties: {}, additionalProperties: false },
           annotations: { readOnlyHint: true, untrustedContentHint: false }
+        },
+        {
+          name: "cart_update",
+          title: "Set cart quantity",
+          description: "Set one current cart line to the requested quantity.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              operationId: {
+                type: "string",
+                pattern: "^[A-Za-z0-9][A-Za-z0-9_-]{15,63}$"
+              },
+              quantity: { type: "integer", minimum: 1, maximum: 10 }
+            },
+            required: ["operationId", "quantity"],
+            additionalProperties: false
+          },
+          annotations: { readOnlyHint: false, untrustedContentHint: false }
         }
       ]
     },
@@ -51,7 +74,8 @@ function envelope(): ProbeCalibrationEnvelope {
       promptHash: "f".repeat(64),
       settingsVersion: PROBE_RUNNER_SETTINGS_VERSION,
       settingsHash: "1".repeat(64),
-      decisionSchemaHash: "2".repeat(64)
+      decisionSchemaHash: "2".repeat(64),
+      transport
     }
   };
 }
@@ -89,8 +113,9 @@ function response(payload: unknown, init: ResponseInit = {}) {
 describe("OpenAI Probe decision adapter", () => {
   it("makes one stateless, fixed-model request and preserves exact raw evidence", async () => {
     const fetchImplementation = vi.fn(async () => response(successPayload()));
+    const source = await envelope();
     const receipt = await decideWithOpenAi({
-      envelope: envelope(),
+      envelope: source,
       apiKey: "sk-test-not-real",
       safetyIdentifier: "3".repeat(64),
       fetchImplementation,
@@ -120,10 +145,32 @@ describe("OpenAI Probe decision adapter", () => {
       required: ["decision"],
       additionalProperties: false
     });
+    const modelInput = JSON.parse(String(body.input)) as Record<string, unknown>;
+    expect(modelInput.fixture).toEqual(source.fixture);
+    expect(JSON.stringify(modelInput.fixture)).not.toMatch(
+      /quantity|unitPrice|subtotal|shipping|total|operationId|bindingHash/iu
+    );
+    expect(JSON.stringify(modelInput)).not.toContain(source.runner.transport.operationId);
+    expect(JSON.stringify(modelInput)).not.toMatch(/bindingHash|expectedTool/iu);
+    const decisionBranches = (
+      body.text as { format: { schema: { properties: { decision: { anyOf: unknown[] } } } } }
+    ).format.schema.properties.decision.anyOf as Array<{
+      properties?: { tool?: { enum?: string[] }; arguments?: unknown };
+    }>;
+    const mutationBranch = decisionBranches.find(
+      (branch) => branch.properties?.tool?.enum?.[0] === "cart_update"
+    );
+    expect(mutationBranch?.properties?.arguments).toMatchObject({
+      properties: {
+        operationId: { enum: [source.runner.transport.operationId] }
+      }
+    });
     expect(receipt.decision).toEqual({ kind: "call", tool: "cart_get", arguments: {} });
     expect(receipt.rawResponse).toEqual(successPayload());
     expect(receipt.rawResponseBytes).toBe(JSON.stringify(successPayload()));
     expect(receipt.providerCallCount).toBe(1);
+    expect(receipt.transportBindingHash).toBe(source.runner.transport.bindingHash);
+    expect(receipt.decisionSchemaHash).toMatch(/^[a-f0-9]{64}$/u);
     expect(receipt.usage.accountedNanoUsd).toBeLessThanOrEqual(62_500_000);
     expect(receipt.usage.costBasis).toBe("frozen-list-price-plus-10pct-uplift");
   });
@@ -134,7 +181,7 @@ describe("OpenAI Probe decision adapter", () => {
       { type: "message", content: [{ type: "refusal", refusal: "Cannot comply." }] }
     ];
     const refused = await decideWithOpenAi({
-      envelope: envelope(),
+      envelope: await envelope(),
       apiKey: "sk-test-not-real",
       safetyIdentifier: "4".repeat(64),
       fetchImplementation: async () => response(refusal)
@@ -146,7 +193,7 @@ describe("OpenAI Probe decision adapter", () => {
     const incomplete = structuredClone(successPayload()) as { output: unknown[]; status: string };
     incomplete.status = "incomplete";
     const incompleteReceipt = await decideWithOpenAi({
-      envelope: envelope(),
+      envelope: await envelope(),
       apiKey: "sk-test-not-real",
       safetyIdentifier: "5".repeat(64),
       fetchImplementation: async () => response(incomplete)
@@ -155,7 +202,7 @@ describe("OpenAI Probe decision adapter", () => {
     expect(incompleteReceipt.decisionError).toBe("provider_incomplete");
 
     const malformed = await decideWithOpenAi({
-      envelope: envelope(),
+      envelope: await envelope(),
       apiKey: "sk-test-not-real",
       safetyIdentifier: "6".repeat(64),
       fetchImplementation: async () => response(successPayload({ decision: { kind: "other" } }))
@@ -166,26 +213,26 @@ describe("OpenAI Probe decision adapter", () => {
 
   it("classifies HTTP, network, and oversized-response failures as uncertain after dispatch", async () => {
     const cases: Array<() => Promise<unknown>> = [
-      () =>
+      async () =>
         decideWithOpenAi({
-          envelope: envelope(),
+          envelope: await envelope(),
           apiKey: "sk-test-not-real",
           safetyIdentifier: "7".repeat(64),
           fetchImplementation: async () =>
             response({ error: { type: "server_error" } }, { status: 500 })
         }),
-      () =>
+      async () =>
         decideWithOpenAi({
-          envelope: envelope(),
+          envelope: await envelope(),
           apiKey: "sk-test-not-real",
           safetyIdentifier: "8".repeat(64),
           fetchImplementation: async () => {
             throw new Error("network detail must not escape");
           }
         }),
-      () =>
+      async () =>
         decideWithOpenAi({
-          envelope: envelope(),
+          envelope: await envelope(),
           apiKey: "sk-test-not-real",
           safetyIdentifier: "9".repeat(64),
           fetchImplementation: async () =>
@@ -207,13 +254,27 @@ describe("OpenAI Probe decision adapter", () => {
     const beforeDispatch = vi.fn(async () => undefined);
     await expect(
       decideWithOpenAi({
-        envelope: envelope(),
+        envelope: await envelope(),
         apiKey: "",
         safetyIdentifier: "a".repeat(64),
         fetchImplementation,
         beforeDispatch
       })
     ).rejects.toMatchObject({ dispatch: "before_dispatch", code: "missing_provider_key" });
+    expect(fetchImplementation).not.toHaveBeenCalled();
+    expect(beforeDispatch).not.toHaveBeenCalled();
+
+    const tampered = structuredClone(await envelope());
+    (tampered.runner.transport as { operationId: string }).operationId = `probe_${"0".repeat(58)}`;
+    await expect(
+      decideWithOpenAi({
+        envelope: tampered,
+        apiKey: "sk-test-not-real",
+        safetyIdentifier: "a".repeat(64),
+        fetchImplementation,
+        beforeDispatch
+      })
+    ).rejects.toThrow("transport_binding_mismatch");
     expect(fetchImplementation).not.toHaveBeenCalled();
     expect(beforeDispatch).not.toHaveBeenCalled();
   });
@@ -225,7 +286,7 @@ describe("OpenAI Probe decision adapter", () => {
       return response(successPayload());
     });
     await decideWithOpenAi({
-      envelope: envelope(),
+      envelope: await envelope(),
       apiKey: "sk-test-not-real",
       safetyIdentifier: "c".repeat(64),
       beforeDispatch: async () => {
@@ -239,7 +300,7 @@ describe("OpenAI Probe decision adapter", () => {
     const blockedFetch = vi.fn();
     await expect(
       decideWithOpenAi({
-        envelope: envelope(),
+        envelope: await envelope(),
         apiKey: "sk-test-not-real",
         safetyIdentifier: "d".repeat(64),
         beforeDispatch: async () => {
@@ -264,7 +325,7 @@ describe("OpenAI Probe decision adapter", () => {
     );
     await expect(
       decideWithOpenAi({
-        envelope: envelope(),
+        envelope: await envelope(),
         apiKey: "sk-test-not-real",
         safetyIdentifier: "b".repeat(64),
         fetchImplementation,

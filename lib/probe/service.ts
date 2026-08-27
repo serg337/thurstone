@@ -3,6 +3,13 @@ import "server-only";
 import { canonicalJson, canonicalSha256, sha256Hex } from "@/lib/evidence/digest";
 import { verifyGate2CalibrationBundleServer } from "@/lib/evidence/gate2-calibration-verifier.server";
 import {
+  GATE2_ATTEMPT_1_KNOWN_ACCOUNTED_NANO_USD,
+  GATE2_ATTEMPT_1_LINEAGE,
+  GATE2_ATTEMPT_COST_RECONCILIATION_VERSION,
+  GATE2_CALIBRATION_BUNDLE_VERSION,
+  GATE2_CALIBRATION_LANE
+} from "@/lib/evidence/gate2-calibration-bundle";
+import {
   PROBE_CALIBRATION_CASE_COUNT,
   evaluateProbeCalibrationCase,
   getProbeCalibrationCase,
@@ -13,10 +20,12 @@ import {
 import {
   PROBE_CALIBRATION_ENVELOPE_VERSION,
   PROBE_LIVE_MANIFEST_VERSION,
+  createProbeTransportBinding,
   createProbeFixtureSynopsis,
   parseExpectationFreeCalibrationEnvelope,
   probeCalibrationEnvelopeHash,
   probeLiveManifestSchema,
+  verifyProbeTransportBinding,
   type ProbeCalibrationEnvelope,
   type ProbeLiveManifest
 } from "@/lib/probe/calibration-envelope";
@@ -27,6 +36,7 @@ import {
   type ProbeContinuationRedisClient
 } from "@/lib/probe/continuation-store";
 import { probeDecisionJsonSchemaHash } from "@/lib/probe/decision";
+import { PROBE_CLIENT_RUNNER_VERSION } from "@/lib/probe/client-runner";
 import {
   ProbeLedgerError,
   beginProbeCall,
@@ -41,7 +51,13 @@ import {
   decideWithOpenAi,
   type ProbeProviderKnownReceipt
 } from "@/lib/probe/openai";
-import { probePolicyHash } from "@/lib/probe/policy";
+import { PROBE_PER_CALL_RESERVATION_NANO_USD, probePolicyHash } from "@/lib/probe/policy";
+import {
+  PROBE_POLICY_MIGRATION_PRESERVED_STATE,
+  PROBE_POLICY_MIGRATION_PRIOR_EVIDENCE_DIGEST,
+  PROBE_POLICY_MIGRATION_VERSION,
+  type ProbePolicyMigrationReceipt
+} from "@/lib/probe/policy-migration-contract";
 import {
   advanceProbeRunContinuation,
   createInitialProbeRunContinuation,
@@ -60,6 +76,11 @@ import { signProbeArtifact, verifyProbeArtifact } from "@/lib/probe/server-artif
 import { verifyProbeToken, verifyProbeTokenForRecovery } from "@/lib/probe/token";
 import {
   PROBE_SERVICE_VERSION,
+  PROBE_CALIBRATION_ATTEMPT,
+  PROBE_CALIBRATION_ATTEMPT_CASE_COUNT,
+  PROBE_CALIBRATION_BASE_CALLS,
+  PROBE_CALIBRATION_PROTOCOL_VERSION,
+  PROBE_CALIBRATION_TERMINAL_CALLS,
   probeBoundaryEvidenceSchema,
   probeCompleteBodySchema,
   probeDecideBodySchema,
@@ -164,9 +185,12 @@ const decisionCacheSchema = z
 
 const completionResponseSchema = z
   .object({
+    version: z.literal(PROBE_SERVICE_VERSION),
+    protocolVersion: z.literal(PROBE_CALIBRATION_PROTOCOL_VERSION),
+    attempt: z.literal(PROBE_CALIBRATION_ATTEMPT),
     status: z.literal("sealed"),
     continuation: z.string().min(32).max(1_800_000),
-    completedCount: z.number().int().min(1).max(PROBE_CALIBRATION_CASE_COUNT),
+    completedCount: z.number().int().min(1).max(PROBE_CALIBRATION_ATTEMPT_CASE_COUNT),
     terminal: z.boolean()
   })
   .strict();
@@ -242,6 +266,25 @@ async function activationOf(
   } catch {
     throw new ProbeServiceError("probe_disabled", 503);
   }
+}
+
+function migrationOf(activation: ProbeActivationContext): ProbePolicyMigrationReceipt {
+  const migration = activation.migration;
+  if (
+    !migration ||
+    migration.version !== PROBE_POLICY_MIGRATION_VERSION ||
+    migration.priorEvidenceDigest !== PROBE_POLICY_MIGRATION_PRIOR_EVIDENCE_DIGEST ||
+    migration.nextPolicyHash !== activation.manifest.policyHash ||
+    migration.nextScriptHash !== activation.manifest.scriptHash ||
+    migration.migrationCommit !== activation.manifest.activeCommit ||
+    migration.receiptHash !== activation.manifest.policyMigrationReceiptHash ||
+    migration.guardInstanceId !== activation.manifest.guardInstanceId ||
+    migration.initializedCommit !== activation.manifest.guardInitializedCommit ||
+    canonicalJson(migration.preserved) !== canonicalJson(PROBE_POLICY_MIGRATION_PRESERVED_STATE)
+  ) {
+    throw new ProbeServiceError("probe_policy_migration_unavailable", 503);
+  }
+  return migration;
 }
 
 function cookieFromRequest(request: Request): string {
@@ -449,6 +492,7 @@ async function validateFrozenEnvelope(
   const definition = getProbeCalibrationCase(ordinal);
   const expectedManifest = await expectedLiveManifest(activation.manifest.activeCommit);
   const expectedFixture = createProbeFixtureSynopsis(createCheckoutFixture());
+  const transport = await verifyProbeTransportBinding(envelope);
   if (
     envelope.naturalLanguageRequest !== definition.naturalLanguageRequest ||
     envelope.buildCommit !== activation.manifest.activeCommit ||
@@ -458,7 +502,8 @@ async function validateFrozenEnvelope(
     envelope.runner.promptHash !== (await probeRunnerPromptHash()) ||
     envelope.runner.settingsVersion !== PROBE_RUNNER_SETTINGS_VERSION ||
     envelope.runner.settingsHash !== (await probeRunnerSettingsHash()) ||
-    envelope.runner.decisionSchemaHash !== (await probeDecisionJsonSchemaHash(expectedManifest))
+    envelope.runner.decisionSchemaHash !==
+      (await probeDecisionJsonSchemaHash(expectedManifest, transport))
   ) {
     throw new ProbeServiceError("frozen_envelope_mismatch", 403);
   }
@@ -470,7 +515,18 @@ export async function startProbeCalibrationSession(
 ) {
   const environment = environmentOf(dependencies);
   const activation = await activationOf(dependencies);
-  if (activation.guard.phase !== "idle" || activation.guard.calibrationCalls !== 0) {
+  migrationOf(activation);
+  if (
+    activation.guard.phase !== "idle" ||
+    activation.guard.claimedCalls !== PROBE_CALIBRATION_BASE_CALLS ||
+    activation.guard.knownCalls !== PROBE_CALIBRATION_BASE_CALLS ||
+    activation.guard.calibrationCalls !== PROBE_CALIBRATION_BASE_CALLS ||
+    activation.guard.pendingCalls !== 0 ||
+    activation.guard.uncertainCalls !== 0 ||
+    activation.guard.committedNanoUsd !==
+      PROBE_CALIBRATION_BASE_CALLS * PROBE_PER_CALL_RESERVATION_NANO_USD ||
+    activation.guard.knownAccountedNanoUsd !== GATE2_ATTEMPT_1_KNOWN_ACCOUNTED_NANO_USD
+  ) {
     throw new ProbeServiceError("calibration_session_unavailable", 409);
   }
   const signingSecret = requiredEnvironment(environment, "TOOLPROOF_SIGNING_SECRET");
@@ -527,6 +583,11 @@ export async function issueProbeCalibrationTrial(
   const ordinal = continuation.nextOrdinal;
   const definition = getProbeCalibrationCase(ordinal);
   const ids = deriveProbeTrialOpaqueIds({ runId: session.runId, ordinal, activationSecret });
+  const transport = await createProbeTransportBinding({
+    runId: session.runId,
+    caseId: ids.caseId,
+    trialId: ids.trialId
+  });
   const envelope: ProbeCalibrationEnvelope = {
     version: PROBE_CALIBRATION_ENVELOPE_VERSION,
     purpose: "calibration",
@@ -542,7 +603,8 @@ export async function issueProbeCalibrationTrial(
       promptHash: await probeRunnerPromptHash(),
       settingsVersion: PROBE_RUNNER_SETTINGS_VERSION,
       settingsHash: await probeRunnerSettingsHash(),
-      decisionSchemaHash: await probeDecisionJsonSchemaHash(body.liveManifest)
+      decisionSchemaHash: await probeDecisionJsonSchemaHash(body.liveManifest, transport),
+      transport
     }
   };
   const redis = redisOf(dependencies, environment);
@@ -568,10 +630,13 @@ export async function issueProbeCalibrationTrial(
     return probeIssueResultSchema.parse({
       ...cached.response,
       version: PROBE_SERVICE_VERSION,
+      protocolVersion: PROBE_CALIBRATION_PROTOCOL_VERSION,
+      attempt: PROBE_CALIBRATION_ATTEMPT,
       status: "already-sealed"
     });
   }
-  const expectedClaims = activation.guard.phase === "idle" ? ordinal : ordinal + 1;
+  const expectedClaims =
+    PROBE_CALIBRATION_BASE_CALLS + (activation.guard.phase === "idle" ? ordinal : ordinal + 1);
   if (activation.guard.calibrationCalls !== expectedClaims) {
     throw new ProbeServiceError("calibration_sequence_mismatch", 409);
   }
@@ -622,6 +687,8 @@ export async function issueProbeCalibrationTrial(
     );
     const response = probeIssueResponseSchema.parse({
       version: PROBE_SERVICE_VERSION,
+      protocolVersion: PROBE_CALIBRATION_PROTOCOL_VERSION,
+      attempt: PROBE_CALIBRATION_ATTEMPT,
       status: "issued",
       runId: session.runId,
       caseId: ids.caseId,
@@ -724,7 +791,10 @@ export async function decideProbeCalibrationTrial(
   } catch {
     throw new ProbeServiceError("expired_probe_authorization", 403);
   }
-  if (activation.guard.phase !== "idle" || activation.guard.calibrationCalls !== ordinal) {
+  if (
+    activation.guard.phase !== "idle" ||
+    activation.guard.calibrationCalls !== PROBE_CALIBRATION_BASE_CALLS + ordinal
+  ) {
     throw new ProbeServiceError("decision_recovery_missing", 409);
   }
   let grantSucceeded = false;
@@ -874,7 +944,7 @@ export async function admitProbeNativeDispatch(
   const redis = redisOf(dependencies, environment);
   if (
     activation.guard.phase !== "single-inflight" ||
-    activation.guard.calibrationCalls !== ordinal + 1
+    activation.guard.calibrationCalls !== PROBE_CALIBRATION_BASE_CALLS + ordinal + 1
   ) {
     throw new ProbeServiceError("native_grant_mismatch", 409);
   }
@@ -1220,7 +1290,7 @@ async function extractCalibrationObservation(
     "captureStartedAtMs"
   ];
   if (
-    capture.runnerVersion !== "toolproof-probe-client-runner@1.0.0" ||
+    capture.runnerVersion !== PROBE_CLIENT_RUNNER_VERSION ||
     capture.decisionRequestCount !== 1 ||
     Object.keys(timings).sort().join("|") !== [...timingKeys].sort().join("|") ||
     timingKeys
@@ -1470,7 +1540,7 @@ export async function completeProbeCalibrationTrial(
   }
   if (
     activation.guard.phase !== "single-inflight" ||
-    activation.guard.calibrationCalls !== ordinal + 1
+    activation.guard.calibrationCalls !== PROBE_CALIBRATION_BASE_CALLS + ordinal + 1
   ) {
     throw new ProbeServiceError("completion_grant_mismatch", 409);
   }
@@ -1483,10 +1553,12 @@ export async function completeProbeCalibrationTrial(
     claimsHash: verified.claimsHash,
     envelopeHash: verified.envelopeHash
   });
+  const transport = await verifyProbeTransportBinding(verified.envelope);
   if (
     provider.promptHash !== verified.envelope.runner.promptHash ||
     provider.settingsHash !== verified.envelope.runner.settingsHash ||
-    provider.decisionSchemaHash !== verified.envelope.runner.decisionSchemaHash
+    provider.decisionSchemaHash !== verified.envelope.runner.decisionSchemaHash ||
+    provider.transportBindingHash !== transport.bindingHash
   ) {
     throw new ProbeServiceError("provider_contract_mismatch", 409);
   }
@@ -1617,6 +1689,9 @@ export async function completeProbeCalibrationTrial(
       : {})
   });
   const response = completionResponseSchema.parse({
+    version: PROBE_SERVICE_VERSION,
+    protocolVersion: PROBE_CALIBRATION_PROTOCOL_VERSION,
+    attempt: PROBE_CALIBRATION_ATTEMPT,
     status: "sealed",
     continuation: advanced.token,
     completedCount: advanced.continuation.nextOrdinal,
@@ -1648,6 +1723,7 @@ export async function revealProbeCalibrationRun(
 ) {
   const environment = environmentOf(dependencies);
   const activation = await activationOf(dependencies);
+  const migration = migrationOf(activation);
   const nowMs = nowOf(dependencies);
   const session = authenticateSession({
     request,
@@ -1658,8 +1734,13 @@ export async function revealProbeCalibrationRun(
   });
   if (
     activation.guard.phase !== "idle" ||
-    activation.guard.calibrationCalls !== PROBE_CALIBRATION_CASE_COUNT ||
-    activation.guard.knownCalls !== PROBE_CALIBRATION_CASE_COUNT
+    activation.guard.claimedCalls !== PROBE_CALIBRATION_TERMINAL_CALLS ||
+    activation.guard.calibrationCalls !== PROBE_CALIBRATION_TERMINAL_CALLS ||
+    activation.guard.knownCalls !== PROBE_CALIBRATION_TERMINAL_CALLS ||
+    activation.guard.pendingCalls !== 0 ||
+    activation.guard.uncertainCalls !== 0 ||
+    activation.guard.committedNanoUsd !==
+      PROBE_CALIBRATION_TERMINAL_CALLS * PROBE_PER_CALL_RESERVATION_NANO_USD
   ) {
     throw new ProbeServiceError("calibration_not_complete", 409);
   }
@@ -1678,26 +1759,40 @@ export async function revealProbeCalibrationRun(
   ) {
     throw new ProbeServiceError("calibration_not_complete", 409);
   }
-  const accountedNanoUsd = continuation.rows.reduce((total, row) => {
+  const attemptAccountedNanoUsd = continuation.rows.reduce((total, row) => {
     const settlement = objectValue(row.settlement, "invalid_settlement");
     return total + Number(settlement.accountedNanoUsd ?? Number.NaN);
   }, 0);
   if (
-    !Number.isSafeInteger(accountedNanoUsd) ||
-    accountedNanoUsd !== activation.guard.knownAccountedNanoUsd
+    !Number.isSafeInteger(attemptAccountedNanoUsd) ||
+    attemptAccountedNanoUsd < 0 ||
+    activation.guard.knownAccountedNanoUsd - GATE2_ATTEMPT_1_KNOWN_ACCOUNTED_NANO_USD !==
+      attemptAccountedNanoUsd
   ) {
     throw new ProbeServiceError("terminal_guard_cost_mismatch", 409);
   }
   const evidence = {
-    version: "toolproof-gate2-calibration-evidence@1.0.0",
-    lane: "custom-probe-calibration",
+    version: GATE2_CALIBRATION_BUNDLE_VERSION,
+    protocolVersion: PROBE_CALIBRATION_PROTOCOL_VERSION,
+    attempt: PROBE_CALIBRATION_ATTEMPT,
+    lane: GATE2_CALIBRATION_LANE,
     calibrationOnly: true,
     includedInBenchmark: false,
+    attemptScope: {
+      designation: "separate-versioned-final-attempt",
+      baseCalibrationCalls: PROBE_CALIBRATION_BASE_CALLS,
+      terminalCalibrationCalls: PROBE_CALIBRATION_TERMINAL_CALLS,
+      caseCount: PROBE_CALIBRATION_ATTEMPT_CASE_COUNT,
+      priorAttemptMerged: false
+    },
+    priorAttempt: GATE2_ATTEMPT_1_LINEAGE,
+    policyMigration: migration,
     provider: "OpenAI",
     model: "gpt-5.6-terra",
     appCommit: activation.manifest.activeCommit,
     activationHash: activation.activationHash,
     policyHash: activation.manifest.policyHash,
+    ledgerScriptHash: activation.manifest.scriptHash,
     runnerContractHash: activation.manifest.runnerContractHash,
     continuationScriptHash: activation.manifest.continuationScriptHash,
     runId: continuation.runId,
@@ -1713,6 +1808,12 @@ export async function revealProbeCalibrationRun(
       calibrationCalls: activation.guard.calibrationCalls,
       committedNanoUsd: activation.guard.committedNanoUsd,
       knownAccountedNanoUsd: activation.guard.knownAccountedNanoUsd
+    },
+    attemptCost: {
+      version: GATE2_ATTEMPT_COST_RECONCILIATION_VERSION,
+      priorCumulativeKnownAccountedNanoUsd: GATE2_ATTEMPT_1_KNOWN_ACCOUNTED_NANO_USD,
+      attemptAccountedNanoUsd,
+      terminalCumulativeKnownAccountedNanoUsd: activation.guard.knownAccountedNanoUsd
     },
     passedCount: continuation.rows.filter(
       ({ evaluation }) => objectValue(evaluation, "invalid_evaluation").passed === true

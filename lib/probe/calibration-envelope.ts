@@ -1,4 +1,8 @@
-import { CHECKOUT_CURRENCY, CHECKOUT_FIXTURE_ID, type CheckoutState } from "@/lib/domain/checkout";
+import {
+  CHECKOUT_FIXTURE_ID,
+  CHECKOUT_FIXTURE_VERSION,
+  type CheckoutState
+} from "@/lib/domain/checkout";
 import { canonicalJson, canonicalSha256 } from "@/lib/evidence/digest";
 import {
   PROBE_RUNNER_PROMPT_VERSION,
@@ -6,10 +10,11 @@ import {
 } from "@/lib/probe/runner-contract";
 import { z } from "zod";
 
-export const PROBE_CALIBRATION_ENVELOPE_VERSION = "toolproof-probe-calibration-envelope@1.0.0";
-export const PROBE_FIXTURE_SYNOPSIS_VERSION = "toolproof-probe-fixture-synopsis@1.0.0";
+export const PROBE_CALIBRATION_ENVELOPE_VERSION = "toolproof-probe-calibration-envelope@2.0.0";
+export const PROBE_FIXTURE_SYNOPSIS_VERSION = "toolproof-probe-fixture-synopsis@2.0.0";
 export const PROBE_LIVE_MANIFEST_VERSION = "toolproof-probe-live-manifest@1.0.0";
-export const PROBE_MODEL_INPUT_VERSION = "toolproof-probe-model-input@1.0.0";
+export const PROBE_MODEL_INPUT_VERSION = "toolproof-probe-model-input@2.0.0";
+export const PROBE_TRANSPORT_BINDING_VERSION = "toolproof-probe-transport-binding@1.0.0";
 
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/u);
 const gitCommitSchema = z.string().regex(/^[a-f0-9]{40}$/u);
@@ -77,11 +82,10 @@ export const probeLiveManifestSchema = z
     }
   });
 
-const probeFixtureLineSchema = z
+const probeFixtureItemSchema = z
   .object({
     itemId: z.enum(["field-notebook", "stoneware-mug"]),
-    name: z.enum(["Field notebook", "Stoneware mug"]),
-    quantity: z.number().int().min(1).max(10)
+    name: z.enum(["Field notebook", "Stoneware mug"])
   })
   .strict();
 
@@ -90,31 +94,31 @@ export const probeFixtureSynopsisSchema = z
     version: z.literal(PROBE_FIXTURE_SYNOPSIS_VERSION),
     simulated: z.literal(true),
     fixtureId: z.literal(CHECKOUT_FIXTURE_ID),
+    fixtureVersion: z.literal(CHECKOUT_FIXTURE_VERSION),
     stateRevision: z.number().int().nonnegative(),
-    currency: z.literal(CHECKOUT_CURRENCY),
-    lines: z.array(probeFixtureLineSchema).length(2),
+    items: z.array(probeFixtureItemSchema).length(2),
     pendingCheckout: z.literal(false)
   })
   .strict()
-  .superRefine(({ lines }, context) => {
+  .superRefine(({ items }, context) => {
     const expectedNames = new Map([
       ["field-notebook", "Field notebook"],
       ["stoneware-mug", "Stoneware mug"]
     ]);
     const names = new Set<string>();
-    for (const [index, line] of lines.entries()) {
-      if (names.has(line.itemId)) {
+    for (const [index, item] of items.entries()) {
+      if (names.has(item.itemId)) {
         context.addIssue({
           code: "custom",
-          path: ["lines", index, "itemId"],
+          path: ["items", index, "itemId"],
           message: "Fixture synopsis item IDs must be unique."
         });
       }
-      names.add(line.itemId);
-      if (expectedNames.get(line.itemId) !== line.name) {
+      names.add(item.itemId);
+      if (expectedNames.get(item.itemId) !== item.name) {
         context.addIssue({
           code: "custom",
-          path: ["lines", index, "name"],
+          path: ["items", index, "name"],
           message: "Fixture synopsis item identity does not match its synthetic name."
         });
       }
@@ -122,11 +126,20 @@ export const probeFixtureSynopsisSchema = z
     if (names.size !== expectedNames.size) {
       context.addIssue({
         code: "custom",
-        path: ["lines"],
+        path: ["items"],
         message: "Fixture synopsis must contain both declared synthetic items."
       });
     }
   });
+
+export const probeTransportBindingSchema = z
+  .object({
+    version: z.literal(PROBE_TRANSPORT_BINDING_VERSION),
+    ownership: z.literal("runner"),
+    operationId: z.string().regex(/^probe_[a-f0-9]{58}$/u),
+    bindingHash: sha256Schema
+  })
+  .strict();
 
 export const probeRunnerBindingSchema = z
   .object({
@@ -134,7 +147,8 @@ export const probeRunnerBindingSchema = z
     promptHash: sha256Schema,
     settingsVersion: z.literal(PROBE_RUNNER_SETTINGS_VERSION),
     settingsHash: sha256Schema,
-    decisionSchemaHash: sha256Schema
+    decisionSchemaHash: sha256Schema,
+    transport: probeTransportBindingSchema
   })
   .strict();
 
@@ -165,8 +179,15 @@ export const probeModelInputSchema = z
 export type ProbeLiveTool = z.infer<typeof probeLiveToolSchema>;
 export type ProbeLiveManifest = z.infer<typeof probeLiveManifestSchema>;
 export type ProbeFixtureSynopsis = z.infer<typeof probeFixtureSynopsisSchema>;
+export type ProbeTransportBinding = z.infer<typeof probeTransportBindingSchema>;
 export type ProbeCalibrationEnvelope = z.infer<typeof probeCalibrationEnvelopeSchema>;
 export type ProbeModelInput = z.infer<typeof probeModelInputSchema>;
+
+export interface ProbeSignedTrialIdentity {
+  readonly runId: string;
+  readonly caseId: string;
+  readonly trialId: string;
+}
 
 const FORBIDDEN_LEAKAGE_KEYS = new Set([
   "answer",
@@ -211,6 +232,13 @@ export class ProbeExpectationLeakageError extends Error {
   }
 }
 
+export class ProbeTransportBindingError extends Error {
+  constructor(readonly code: "transport_binding_mismatch") {
+    super(code);
+    this.name = "ProbeTransportBindingError";
+  }
+}
+
 export function assertNoProbeExpectationLeakage(value: unknown, path = "$root"): void {
   if (Array.isArray(value)) {
     value.forEach((entry, index) => assertNoProbeExpectationLeakage(entry, `${path}[${index}]`));
@@ -239,6 +267,48 @@ function canonicalClone<T>(value: T): T {
   return JSON.parse(canonicalJson(value)) as T;
 }
 
+function signedTrialIdentity(value: ProbeSignedTrialIdentity): ProbeSignedTrialIdentity {
+  return Object.freeze({
+    runId: opaqueRunIdSchema.parse(value.runId),
+    caseId: opaqueCaseIdSchema.parse(value.caseId),
+    trialId: opaqueTrialIdSchema.parse(value.trialId)
+  });
+}
+
+export async function createProbeTransportBinding(
+  value: ProbeSignedTrialIdentity
+): Promise<ProbeTransportBinding> {
+  const identity = signedTrialIdentity(value);
+  const identityDigest = await canonicalSha256({
+    version: PROBE_TRANSPORT_BINDING_VERSION,
+    identity
+  });
+  const operationId = `probe_${identityDigest.slice(0, 58)}`;
+  return deepFreeze(
+    probeTransportBindingSchema.parse({
+      version: PROBE_TRANSPORT_BINDING_VERSION,
+      ownership: "runner",
+      operationId,
+      bindingHash: await canonicalSha256({
+        version: PROBE_TRANSPORT_BINDING_VERSION,
+        identity,
+        operationId
+      })
+    })
+  );
+}
+
+export async function verifyProbeTransportBinding(
+  value: Pick<ProbeCalibrationEnvelope, "runId" | "caseId" | "trialId" | "runner">
+): Promise<ProbeTransportBinding> {
+  const actual = probeTransportBindingSchema.parse(value.runner.transport);
+  const expected = await createProbeTransportBinding(value);
+  if (canonicalJson(actual) !== canonicalJson(expected)) {
+    throw new ProbeTransportBindingError("transport_binding_mismatch");
+  }
+  return expected;
+}
+
 export function parseExpectationFreeCalibrationEnvelope(value: unknown): ProbeCalibrationEnvelope {
   assertNoProbeExpectationLeakage(value);
   return deepFreeze(canonicalClone(probeCalibrationEnvelopeSchema.parse(value)));
@@ -250,9 +320,9 @@ export function createProbeFixtureSynopsis(state: CheckoutState): ProbeFixtureSy
       version: PROBE_FIXTURE_SYNOPSIS_VERSION,
       simulated: true,
       fixtureId: state.fixtureId,
+      fixtureVersion: state.fixtureVersion,
       stateRevision: state.revision,
-      currency: state.currency,
-      lines: state.lines.map(({ itemId, name, quantity }) => ({ itemId, name, quantity })),
+      items: state.lines.map(({ itemId, name }) => ({ itemId, name })),
       pendingCheckout: state.pendingCheckout !== null
     })
   );
@@ -270,6 +340,8 @@ export function createProbeModelInput(envelope: ProbeCalibrationEnvelope): Probe
   return deepFreeze(canonicalClone(projection));
 }
 
-export function probeCalibrationEnvelopeHash(value: unknown): Promise<string> {
-  return canonicalSha256(parseExpectationFreeCalibrationEnvelope(value));
+export async function probeCalibrationEnvelopeHash(value: unknown): Promise<string> {
+  const envelope = parseExpectationFreeCalibrationEnvelope(value);
+  await verifyProbeTransportBinding(envelope);
+  return canonicalSha256(envelope);
 }

@@ -51,7 +51,7 @@ export default async function LabPage() {
               catalog, and the operational runner needed for this one trial.
             </p>
           </div>
-          <StatusPill state="pending">Gate 2 · non-scored calibration</StatusPill>
+          <StatusPill state="pending">Gate 2 · final non-scored calibration</StatusPill>
         </header>
         {sessionState === "active" ? <ProbeCalibrationRunner /> : <ProbeSessionBlocked />}
       </div>

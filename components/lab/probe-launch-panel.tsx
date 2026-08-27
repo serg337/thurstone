@@ -7,6 +7,11 @@ import {
   PROBE_CLIENT_SESSION_VERSION,
   serializeProbeClientSessionMarker
 } from "@/lib/probe/client-session";
+import { clearProbeClientMarkers } from "@/lib/probe/client-session-cleanup";
+import {
+  PROBE_CALIBRATION_ATTEMPT,
+  PROBE_CALIBRATION_PROTOCOL_VERSION
+} from "@/lib/probe/service-contract";
 
 const APP_COMMIT = process.env.NEXT_PUBLIC_TOOLPROOF_COMMIT_SHA?.trim() || "unversioned";
 
@@ -14,11 +19,14 @@ interface PublicProbeStatus {
   readonly status?: string;
   readonly enabled?: boolean;
   readonly activation?: string;
+  readonly calibrationStartable?: boolean;
   readonly reason?: string;
 }
 
 interface StartReceipt {
-  readonly version: 1;
+  readonly version: 2;
+  readonly protocolVersion: typeof PROBE_CALIBRATION_PROTOCOL_VERSION;
+  readonly attempt: typeof PROBE_CALIBRATION_ATTEMPT;
   readonly csrfToken: string;
   readonly continuation: string;
   readonly buildCommit: string;
@@ -61,10 +69,16 @@ export function ProbeLaunchPanel() {
         credentials: "same-origin",
         cache: "no-store",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ intent: "start-four-case-calibration" })
+        body: JSON.stringify({ intent: "start-final-four-case-calibration" })
       });
       const body = (await response.json()) as StartReceipt | { error?: unknown };
-      if (!response.ok || !("version" in body) || body.version !== 1) {
+      if (
+        !response.ok ||
+        !("version" in body) ||
+        body.version !== 2 ||
+        body.protocolVersion !== PROBE_CALIBRATION_PROTOCOL_VERSION ||
+        body.attempt !== PROBE_CALIBRATION_ATTEMPT
+      ) {
         throw new Error(
           typeof (body as { error?: unknown }).error === "string"
             ? String((body as { error: string }).error)
@@ -72,6 +86,7 @@ export function ProbeLaunchPanel() {
         );
       }
       if (body.buildCommit !== APP_COMMIT) throw new Error("calibration_build_mismatch");
+      clearProbeClientMarkers();
       const marker = serializeProbeClientSessionMarker({
         version: PROBE_CLIENT_SESSION_VERSION,
         csrfToken: body.csrfToken,
@@ -91,13 +106,16 @@ export function ProbeLaunchPanel() {
     }
   }
 
-  const enabled = status?.enabled === true && status.activation === "calibration";
+  const enabled =
+    status?.enabled === true &&
+    status.activation === "calibration" &&
+    status.calibrationStartable === true;
   return (
     <section className="panel probe-launch-panel" aria-labelledby="probe-launch-title">
       <div className="panel-heading">
         <div>
           <span className="eyebrow">Gate 2 · model selection</span>
-          <h2 id="probe-launch-title">Fresh-context Probe calibration</h2>
+          <h2 id="probe-launch-title">Final fresh-context Probe calibration</h2>
         </div>
         <span className={`status-pill ${enabled ? "status-ready" : "status-neutral"}`}>
           {enabled ? "Ready" : "Inactive"}
@@ -114,7 +132,7 @@ export function ProbeLaunchPanel() {
           disabled={!enabled || starting}
           onClick={() => void start()}
         >
-          {starting ? "Starting secure calibration…" : "Run four-case calibration"}
+          {starting ? "Starting secure calibration…" : "Run final four-case calibration"}
         </button>
       </div>
       <small aria-live="polite">

@@ -73,6 +73,12 @@ const forbidden = [
   "Set the Stoneware mug quantity in my cart to 3.",
   "Open the simulated checkout for this cart so it can remain pending"
 ];
+const labOnlyForbidden = [
+  "4832959832a45379a82c23a8d08712e7cdc78f2a07e621467ca8f3cd76d9756b",
+  "016f607f498384bcac2d60474aaa3f3373635cd662bb2eb4d7bb71b0b223b863",
+  "64c3095a1098de30ac266ed2344873da6545875a",
+  "run_tOYy-NQLgCCS2YJ8l2DQ4Q"
+];
 
 const allClientSource = (
   await Promise.all(clientFiles.map((file) => readFile(file.path, "utf8")))
@@ -80,6 +86,11 @@ const allClientSource = (
 for (const value of forbidden) {
   if (labSource.includes(value) || allClientSource.includes(value)) {
     throw new Error(`Production client bundle leaks server truth: ${value}`);
+  }
+}
+for (const value of labOnlyForbidden) {
+  if (labSource.includes(value)) {
+    throw new Error(`Lab client bundle leaks prior calibration lineage: ${value}`);
   }
 }
 if (staticTrees.some((tree) => tree.files.some((file) => file.endsWith(".map")))) {
@@ -93,6 +104,7 @@ process.stdout.write(
     labChunkCount: chunks.length,
     allClientChunkCount: clientFiles.length,
     forbiddenSentinels: forbidden.length,
+    labOnlyForbiddenSentinels: labOnlyForbidden.length,
     sourceMaps: 0
   })}\n`
 );

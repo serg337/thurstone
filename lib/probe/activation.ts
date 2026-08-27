@@ -8,10 +8,18 @@ import { probeContinuationScriptHash } from "@/lib/probe/continuation-store";
 import {
   createProbeRedis,
   probeLedgerScriptHash,
+  readProbePolicyMigrationReceipt,
   readProbeGuardStatus,
   type ProbeGuardIdentity,
   type ProbeGuardStatus
 } from "@/lib/probe/ledger";
+import {
+  PROBE_POLICY_MIGRATION_ID,
+  PROBE_POLICY_MIGRATION_PRESERVED_STATE,
+  PROBE_POLICY_MIGRATION_PRIOR_EVIDENCE_DIGEST,
+  probePolicyMigrationReceiptHash,
+  type ProbePolicyMigrationReceipt
+} from "@/lib/probe/policy-migration-contract";
 import {
   PROBE_CHALLENGE_CLOSES_AT,
   PROBE_GLOBAL_CALL_LIMIT,
@@ -27,7 +35,7 @@ import {
 import { probeRunnerContractHash } from "@/lib/probe/runner-contract";
 import { decodeProbeSigningSecret } from "@/lib/probe/signing-secret";
 
-export const PROBE_ACTIVATION_VERSION = "toolproof-probe-activation@1.0.0";
+export const PROBE_ACTIVATION_VERSION = "toolproof-probe-activation@2.0.0";
 export const PROBE_ACTIVATION_MODE = "calibration";
 
 const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
@@ -58,6 +66,7 @@ export interface ProbeActivationManifest {
   readonly scriptHash: string;
   readonly runnerContractHash: string;
   readonly continuationScriptHash: string;
+  readonly policyMigrationReceiptHash: string;
 }
 
 export type ProbeActivationGuardPhase = "idle" | "single-inflight";
@@ -80,6 +89,7 @@ export interface ProbeActivationContext {
   readonly manifest: ProbeActivationManifest;
   readonly guard: ProbeActivationGuardReceipt;
   readonly guardIdentity: ProbeGuardIdentity;
+  readonly migration: ProbePolicyMigrationReceipt;
 }
 
 export class ProbeActivationError extends Error {
@@ -118,6 +128,14 @@ function requireExactHash(value: string | undefined, expected: string): void {
 
 function freezeManifest(manifest: ProbeActivationManifest): ProbeActivationManifest {
   return Object.freeze(manifest);
+}
+
+function deepFreeze<T>(value: T): T {
+  if (value && typeof value === "object" && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const nested of Object.values(value as Record<string, unknown>)) deepFreeze(nested);
+  }
+  return value;
 }
 
 export async function probeActivationFrozenHashes(): Promise<ProbeActivationFrozenHashes> {
@@ -179,6 +197,10 @@ export async function createProbeActivationManifest(
     environment.TOOLPROOF_PROBE_ACTIVE_CONTINUATION_HASH,
     hashes.continuationScriptHash
   );
+  const policyMigrationReceiptHash = environment.TOOLPROOF_PROBE_POLICY_MIGRATION_RECEIPT_HASH;
+  if (!policyMigrationReceiptHash || !SHA256_PATTERN.test(policyMigrationReceiptHash)) {
+    throw new ProbeActivationError("activation_migration_receipt_hash_invalid");
+  }
 
   return freezeManifest({
     version: PROBE_ACTIVATION_VERSION,
@@ -191,7 +213,8 @@ export async function createProbeActivationManifest(
     policyHash: hashes.policyHash,
     scriptHash: hashes.scriptHash,
     runnerContractHash: hashes.runnerContractHash,
-    continuationScriptHash: hashes.continuationScriptHash
+    continuationScriptHash: hashes.continuationScriptHash,
+    policyMigrationReceiptHash
   });
 }
 
@@ -288,12 +311,17 @@ export async function requireProbeActivation(
     readonly environment?: EnvironmentLike;
     readonly guard?: ProbeGuardStatus;
     readonly readGuard?: () => Promise<ProbeGuardStatus>;
+    readonly migration?: ProbePolicyMigrationReceipt;
+    readonly readMigration?: () => Promise<ProbePolicyMigrationReceipt>;
     readonly nowMs?: number;
   } = {}
 ): Promise<ProbeActivationContext> {
   const environment = options.environment ?? process.env;
   if (options.guard && options.readGuard) {
     throw new ProbeActivationError("activation_guard_source_ambiguous");
+  }
+  if (options.migration && options.readMigration) {
+    throw new ProbeActivationError("activation_migration_source_ambiguous");
   }
   if (environment.TOOLPROOF_PROBE_ACTIVATION_MODE !== PROBE_ACTIVATION_MODE) {
     throw new ProbeActivationError("activation_disabled");
@@ -330,16 +358,54 @@ export async function requireProbeActivation(
     scriptHash: manifest.scriptHash,
     initializedCommit: manifest.guardInitializedCommit
   });
+  const redis =
+    (!options.guard && !options.readGuard) || (!options.migration && !options.readMigration)
+      ? createProbeRedis(environment as NodeJS.ProcessEnv)
+      : undefined;
   const guard =
     options.guard ??
-    (options.readGuard
-      ? await options.readGuard()
-      : await readProbeGuardStatus(createProbeRedis(environment as NodeJS.ProcessEnv)));
+    (options.readGuard ? await options.readGuard() : await readProbeGuardStatus(redis!));
   const guardReceipt = validateProbeActivationGuard(
     guard,
     guardIdentity,
     options.nowMs ?? Date.now()
   );
+  let migration: ProbePolicyMigrationReceipt;
+  try {
+    migration =
+      options.migration ??
+      (options.readMigration
+        ? await options.readMigration()
+        : await readProbePolicyMigrationReceipt(redis!, {
+            expectedReceiptHash: manifest.policyMigrationReceiptHash
+          }));
+    if (
+      migration.receiptHash !== manifest.policyMigrationReceiptHash ||
+      migration.receiptHash !== (await probePolicyMigrationReceiptHash(migration)) ||
+      migration.migrationId !== PROBE_POLICY_MIGRATION_ID ||
+      migration.migrationCommit !== manifest.activeCommit ||
+      migration.priorEvidenceDigest !== PROBE_POLICY_MIGRATION_PRIOR_EVIDENCE_DIGEST ||
+      migration.guardInstanceId !== manifest.guardInstanceId ||
+      migration.initializedCommit !== manifest.guardInitializedCommit ||
+      migration.nextPolicyVersion !== PROBE_POLICY_VERSION ||
+      migration.nextPolicyHash !== manifest.policyHash ||
+      migration.nextScriptHash !== manifest.scriptHash ||
+      canonicalJson(migration.nextPurposeLimits) !== canonicalJson(PROBE_PURPOSE_CALL_LIMITS) ||
+      canonicalJson(migration.preserved) !==
+        canonicalJson(PROBE_POLICY_MIGRATION_PRESERVED_STATE) ||
+      guard.claimedCalls < PROBE_POLICY_MIGRATION_PRESERVED_STATE.claimedCalls ||
+      guard.knownCount < PROBE_POLICY_MIGRATION_PRESERVED_STATE.knownCalls ||
+      guard.committedNanoUsd < PROBE_POLICY_MIGRATION_PRESERVED_STATE.committedNanoUsd ||
+      guard.knownActualNanoUsd < PROBE_POLICY_MIGRATION_PRESERVED_STATE.knownActualNanoUsd ||
+      guard.sequence < PROBE_POLICY_MIGRATION_PRESERVED_STATE.sequence ||
+      guard.purposeCounts.calibration <
+        PROBE_POLICY_MIGRATION_PRESERVED_STATE.purposeCounts.calibration
+    ) {
+      throw new ProbeActivationError("activation_migration_invalid");
+    }
+  } catch {
+    throw new ProbeActivationError("activation_migration_invalid");
+  }
 
   return Object.freeze({
     enabled: true as const,
@@ -347,6 +413,7 @@ export async function requireProbeActivation(
     activationHash,
     manifest,
     guard: guardReceipt,
-    guardIdentity
+    guardIdentity,
+    migration: deepFreeze(JSON.parse(canonicalJson(migration)) as ProbePolicyMigrationReceipt)
   });
 }

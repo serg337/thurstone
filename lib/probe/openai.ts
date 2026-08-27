@@ -10,6 +10,7 @@ import {
   assertNoProbeExpectationLeakage,
   createProbeModelInput,
   parseExpectationFreeCalibrationEnvelope,
+  verifyProbeTransportBinding,
   type ProbeCalibrationEnvelope
 } from "@/lib/probe/calibration-envelope";
 import {
@@ -82,6 +83,7 @@ export interface ProbeProviderKnownReceipt {
   readonly promptHash: string;
   readonly settingsHash: string;
   readonly decisionSchemaHash: string;
+  readonly transportBindingHash: string;
   readonly modelInputHash: string;
   readonly dispatchedAt: string;
   readonly completedAt: string;
@@ -201,13 +203,14 @@ function parseJson(source: string): unknown {
   }
 }
 
-function requestBody(input: {
+async function requestBody(input: {
   readonly envelope: ProbeCalibrationEnvelope;
   readonly safetyIdentifier: string;
 }) {
   const envelope = parseExpectationFreeCalibrationEnvelope(input.envelope);
+  const transport = await verifyProbeTransportBinding(envelope);
   const modelInput = createProbeModelInput(envelope);
-  const format = createProbeDecisionJsonSchema(envelope.liveManifest);
+  const format = createProbeDecisionJsonSchema(envelope.liveManifest, transport);
   const body = {
     model: PROBE_MODEL,
     instructions: PROBE_GENERIC_RUNNER_PROMPT,
@@ -230,7 +233,7 @@ function requestBody(input: {
     safety_identifier: input.safetyIdentifier
   } as const;
   assertNoProbeExpectationLeakage(modelInput);
-  return { envelope, modelInput, format, body };
+  return { envelope, transport, modelInput, format, body };
 }
 
 export async function decideWithOpenAi(
@@ -240,7 +243,7 @@ export async function decideWithOpenAi(
   if (!/^[a-f0-9]{64}$/u.test(input.safetyIdentifier)) {
     throw new ProbeProviderError("invalid_safety_identifier", "before_dispatch");
   }
-  const prepared = requestBody(input);
+  const prepared = await requestBody(input);
   const requestBodyBytes = canonicalJson(prepared.body);
   if (new TextEncoder().encode(requestBodyBytes).byteLength > PROBE_MAX_PROVIDER_REQUEST_BYTES) {
     throw new ProbeProviderError("provider_request_too_large", "before_dispatch");
@@ -325,7 +328,8 @@ export async function decideWithOpenAi(
     try {
       decision = parseProbeDecisionOutput(
         JSON.parse(extracted.outputText),
-        prepared.envelope.liveManifest
+        prepared.envelope.liveManifest,
+        prepared.transport
       );
     } catch {
       decisionError = "invalid_structured_decision";
@@ -366,6 +370,7 @@ export async function decideWithOpenAi(
     promptHash: await probeRunnerPromptHash(),
     settingsHash: await probeRunnerSettingsHash(),
     decisionSchemaHash,
+    transportBindingHash: prepared.transport.bindingHash,
     modelInputHash,
     dispatchedAt: exactTimestamp(startedMs),
     completedAt: exactTimestamp(completedMs),

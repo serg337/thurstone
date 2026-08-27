@@ -1,5 +1,7 @@
 "use client";
 
+import { ProbeSessionCleanupControl } from "@/components/lab/probe-session-cleanup-control";
+
 export function ProbeSessionBlocked() {
   return (
     <section className="panel probe-runner-panel" aria-labelledby="probe-blocked-title">
@@ -20,10 +22,7 @@ export function ProbeSessionBlocked() {
           Retry isolated session verification
         </button>
       </div>
-      <small>
-        Session cleanup remains locked until the server can prove that no calibration grant is in
-        flight.
-      </small>
+      <ProbeSessionCleanupControl />
     </section>
   );
 }

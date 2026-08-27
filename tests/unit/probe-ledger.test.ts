@@ -1,18 +1,37 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { canonicalSha256 } from "@/lib/evidence/digest";
 import {
   PROBE_LEDGER_SCRIPTS,
   ProbeLedgerError,
   beginProbeCall,
   initializeProbeGuard,
   issueProbeAuthorization,
+  migrateProbeGuardPolicy,
   probeLedgerScriptHash,
+  readProbeGuardStatus,
+  readProbePolicyMigrationReceipt,
   reapExpiredProbeCall,
   settleProbeCallKnown,
   settleProbeCallUncertain,
   type ProbeGuardIdentity,
   type ProbeRedisClient
 } from "@/lib/probe/ledger";
+import {
+  PROBE_POLICY_MIGRATION_ID,
+  PROBE_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
+  PROBE_POLICY_MIGRATION_PRIOR_APP_COMMIT,
+  PROBE_POLICY_MIGRATION_PRIOR_EVIDENCE_DIGEST,
+  PROBE_POLICY_MIGRATION_PRIOR_RECEIPT_VERSION,
+  PROBE_PREVIOUS_LEDGER_SCRIPT_HASH,
+  PROBE_PREVIOUS_POLICY_HASH,
+  PROBE_PREVIOUS_POLICY_VERSION,
+  createProbePolicyMigrationManifest,
+  parseProbePolicyMigrationPriorReceipt,
+  probePolicyMigrationDigest,
+  type ProbePolicyMigrationPriorReceipt
+} from "@/lib/probe/policy-migration-contract";
+import { PROBE_POLICY_VERSION, probePolicyHash } from "@/lib/probe/policy";
 
 const identity: ProbeGuardIdentity = {
   guardInstanceId: "guard_0123456789abcdef",
@@ -32,10 +51,98 @@ function fakeRedis(reply: unknown): {
   };
 }
 
+function migrationPriorReceipt(): ProbePolicyMigrationPriorReceipt {
+  return parseProbePolicyMigrationPriorReceipt({
+    version: PROBE_POLICY_MIGRATION_PRIOR_RECEIPT_VERSION,
+    migrationId: PROBE_POLICY_MIGRATION_ID,
+    priorAppCommit: PROBE_POLICY_MIGRATION_PRIOR_APP_COMMIT,
+    priorActivationHash: PROBE_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
+    priorEvidenceDigest: PROBE_POLICY_MIGRATION_PRIOR_EVIDENCE_DIGEST,
+    guardInstanceId: "guard_migration_0123456789abcdef",
+    initializedCommit: "f".repeat(40),
+    previousPolicyVersion: PROBE_PREVIOUS_POLICY_VERSION,
+    previousPolicyHash: PROBE_PREVIOUS_POLICY_HASH,
+    previousScriptHash: PROBE_PREVIOUS_LEDGER_SCRIPT_HASH,
+    knownCalls: [
+      [0, "jti_migration_000000000000", 1, 2_752_200, "1", "2", "3"],
+      [1, "jti_migration_111111111111", 2, 2_745_600, "4", "5", "6"],
+      [2, "jti_migration_222222222222", 3, 2_862_200, "7", "8", "9"],
+      [3, "jti_migration_333333333333", 4, 3_000_800, "a", "b", "c"]
+    ].map(([ordinal, jti, dispatchSequence, actualNanoUsd, response, settlement, usage]) => ({
+      ordinal,
+      jti,
+      dispatchSequence,
+      actualNanoUsd,
+      providerResponseHash: String(response).repeat(64),
+      settlementDigest: String(settlement).repeat(64),
+      usageHash: String(usage).repeat(64)
+    }))
+  });
+}
+
+async function migrationReadReply(migratedAtMs = 1_800_000_000_000): Promise<unknown[]> {
+  const prior = migrationPriorReceipt();
+  const manifest = createProbePolicyMigrationManifest({
+    priorReceipt: prior,
+    migrationCommit: "e".repeat(40),
+    nextPolicyHash: await probePolicyHash(),
+    nextScriptHash: await probeLedgerScriptHash()
+  });
+  return [
+    1,
+    manifest.version,
+    manifest.migrationId,
+    await probePolicyMigrationDigest(manifest),
+    manifest.priorAppCommit,
+    manifest.priorActivationHash,
+    manifest.priorEvidenceDigest,
+    manifest.guardInstanceId,
+    manifest.initializedCommit,
+    manifest.previousPolicyVersion,
+    manifest.previousPolicyHash,
+    manifest.previousScriptHash,
+    manifest.nextPolicyVersion,
+    manifest.nextPolicyHash,
+    manifest.nextScriptHash,
+    migratedAtMs,
+    manifest.migrationCommit,
+    ...manifest.knownCalls.flatMap((call) => [
+      call.ordinal,
+      call.jti,
+      call.dispatchSequence,
+      call.actualNanoUsd,
+      call.providerResponseHash,
+      call.settlementDigest,
+      call.usageHash
+    ])
+  ];
+}
+
+function migrationRedis(evalReply: unknown, evalRoReply: unknown) {
+  const evalMock = vi.fn(async () => evalReply);
+  const evalRoMock = vi.fn(async () => evalRoReply);
+  return {
+    client: { eval: evalMock, evalRo: evalRoMock } as unknown as ProbeRedisClient,
+    evalMock,
+    evalRoMock
+  };
+}
+
 describe("durable Probe guard adapter", () => {
   it("freezes the reviewed Lua bundle hash", async () => {
+    await expect(
+      canonicalSha256({
+        init: PROBE_LEDGER_SCRIPTS.init,
+        issue: PROBE_LEDGER_SCRIPTS.issue,
+        begin: PROBE_LEDGER_SCRIPTS.begin,
+        settleKnown: PROBE_LEDGER_SCRIPTS.settleKnown,
+        settleUncertain: PROBE_LEDGER_SCRIPTS.settleUncertain,
+        reap: PROBE_LEDGER_SCRIPTS.reap,
+        status: PROBE_LEDGER_SCRIPTS.status
+      })
+    ).resolves.toBe(PROBE_PREVIOUS_LEDGER_SCRIPT_HASH);
     await expect(probeLedgerScriptHash()).resolves.toBe(
-      "41d351ad5d1adb81b0c6a90aa930cf1ae932b053d58b097c0283846728b798d2"
+      "34833e98044cee1472c9104ac70312f03c96e8d2707bee189631e2cf41ae9033"
     );
   });
 
@@ -173,5 +280,180 @@ describe("durable Probe guard adapter", () => {
   it("keeps subject, authorization, policy, and counter records free of TTL resets", () => {
     expect(PROBE_LEDGER_SCRIPTS.issue).not.toContain('redis.call("EXPIRE"');
     expect(PROBE_LEDGER_SCRIPTS.begin).not.toContain('redis.call("EXPIRE"');
+  });
+
+  it("atomically migrates the exact four-call guard and returns a durable self-verifying receipt", async () => {
+    const migratedAtMs = 1_800_000_000_000;
+    const redis = migrationRedis(
+      [1, "MIGRATED_NEW", migratedAtMs],
+      await migrationReadReply(migratedAtMs)
+    );
+    const result = await migrateProbeGuardPolicy(redis.client, {
+      priorReceipt: migrationPriorReceipt(),
+      migrationCommit: "e".repeat(40)
+    });
+    expect(result.disposition).toBe("new");
+    expect(result.receipt).toMatchObject({
+      migrationId: PROBE_POLICY_MIGRATION_ID,
+      previousPolicyVersion: PROBE_PREVIOUS_POLICY_VERSION,
+      nextPolicyVersion: PROBE_POLICY_VERSION,
+      migratedAtMs,
+      preserved: {
+        claimedCalls: 4,
+        knownCalls: 4,
+        committedNanoUsd: 250_000_000,
+        knownActualNanoUsd: 11_360_800,
+        sequence: 4
+      }
+    });
+    expect(result.receipt.receiptHash).toMatch(/^[a-f0-9]{64}$/u);
+    const firstEvalCall = redis.evalMock.mock.calls[0] as unknown[] | undefined;
+    const keys = firstEvalCall?.[1] as string[];
+    const args = firstEvalCall?.[2] as string[];
+    expect(keys).toHaveLength(14);
+    expect(keys[5]).toContain(`:policy-migration:${PROBE_POLICY_MIGRATION_ID}`);
+    expect(args[30]).toBe("4");
+    expect(args[31]).toBe("250000000");
+    expect(args[32]).toBe("4");
+    expect(args[33]).toBe("11360800");
+    expect(args[34]).toBe("4");
+    expect(args[35]).toBe("4");
+    expect(args[64]).toBe("e".repeat(40));
+    expect(redis.evalRoMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns the identical immutable receipt on an exact migration replay", async () => {
+    const migratedAtMs = 1_800_000_000_000;
+    const reply = await migrationReadReply(migratedAtMs);
+    const redis = migrationRedis([2, "MIGRATED_EXISTING", migratedAtMs], reply);
+    const result = await migrateProbeGuardPolicy(redis.client, {
+      priorReceipt: migrationPriorReceipt(),
+      migrationCommit: "e".repeat(40)
+    });
+    const read = await readProbePolicyMigrationReceipt(redis.client);
+    expect(result.disposition).toBe("existing");
+    expect(result.receipt).toEqual(read);
+  });
+
+  it.each([
+    "MIGRATION_RECEIPT_CONFLICT",
+    "MIGRATION_STATE_MISMATCH",
+    "MIGRATION_OLD_CONFIG_MISMATCH",
+    "MIGRATION_KNOWN_CALL_MISMATCH",
+    "MIGRATION_REPLAY_STATE_MISMATCH",
+    "CHALLENGE_CLOSED"
+  ])("rejects %s without accepting a receipt", async (code) => {
+    const redis = migrationRedis([0, code], await migrationReadReply());
+    await expect(
+      migrateProbeGuardPolicy(redis.client, {
+        priorReceipt: migrationPriorReceipt(),
+        migrationCommit: "e".repeat(40)
+      })
+    ).rejects.toMatchObject({ code });
+    expect(redis.evalRoMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps migration Lua free of reset/counter mutations and binds every old/new invariant", () => {
+    expect(PROBE_LEDGER_SCRIPTS.migratePolicy).toContain('return {0, "MIGRATION_STATE_MISMATCH"}');
+    expect(PROBE_LEDGER_SCRIPTS.migratePolicy).toContain(
+      'return {0, "MIGRATION_KNOWN_CALL_MISMATCH"}'
+    );
+    expect(PROBE_LEDGER_SCRIPTS.migratePolicy).toContain('return {0, "CHALLENGE_CLOSED"}');
+    expect(PROBE_LEDGER_SCRIPTS.migratePolicy).toContain('redis.call("PTTL", auth_key) ~= -1');
+    expect(PROBE_LEDGER_SCRIPTS.migratePolicy).toContain('redis.call("GET", provider_key) ~= jti');
+    expect(PROBE_LEDGER_SCRIPTS.migratePolicy).not.toContain("HINCRBY");
+    expect(PROBE_LEDGER_SCRIPTS.migratePolicy).not.toContain('redis.call("DEL"');
+    expect(PROBE_LEDGER_SCRIPTS.migratePolicy).not.toContain('redis.call("EXPIRE"');
+    expect(PROBE_LEDGER_SCRIPTS.migratePolicy).not.toContain('redis.call("ZADD"');
+    expect(PROBE_LEDGER_SCRIPTS.migratePolicy).not.toContain('redis.call("ZREM"');
+  });
+
+  it("parses the preserved old status and the exact migrated vNext status without conflation", async () => {
+    const prior = migrationPriorReceipt();
+    const oldStatus = fakeRedis([
+      1,
+      "open",
+      prior.guardInstanceId,
+      PROBE_PREVIOUS_POLICY_HASH,
+      PROBE_PREVIOUS_LEDGER_SCRIPT_HASH,
+      4,
+      250_000_000,
+      0,
+      4,
+      0,
+      11_360_800,
+      0,
+      PROBE_PREVIOUS_POLICY_VERSION,
+      "gpt-5.6-terra",
+      160,
+      10_000_000_000,
+      62_500_000,
+      1,
+      1_790_000_000_000,
+      prior.initializedCommit,
+      4,
+      72,
+      2,
+      72,
+      10,
+      4,
+      0,
+      0,
+      0,
+      0,
+      0,
+      4,
+      0,
+      0
+    ]);
+    const nextPolicyHash = await probePolicyHash();
+    const nextScriptHash = await probeLedgerScriptHash();
+    const newStatus = fakeRedis([
+      1,
+      "open",
+      prior.guardInstanceId,
+      nextPolicyHash,
+      nextScriptHash,
+      4,
+      250_000_000,
+      0,
+      4,
+      0,
+      11_360_800,
+      0,
+      PROBE_POLICY_VERSION,
+      "gpt-5.6-terra",
+      160,
+      10_000_000_000,
+      62_500_000,
+      1,
+      1_790_000_000_000,
+      prior.initializedCommit,
+      8,
+      72,
+      2,
+      72,
+      6,
+      4,
+      0,
+      0,
+      0,
+      0,
+      0,
+      4,
+      0,
+      0
+    ]);
+    await expect(readProbeGuardStatus(oldStatus.client)).resolves.toMatchObject({
+      policyVersion: PROBE_PREVIOUS_POLICY_VERSION,
+      purposeLimits: { calibration: 4, judge: 10 }
+    });
+    await expect(readProbeGuardStatus(newStatus.client)).resolves.toMatchObject({
+      policyVersion: PROBE_POLICY_VERSION,
+      purposeLimits: { calibration: 8, judge: 6 },
+      claimedCalls: 4,
+      knownCount: 4,
+      sequence: 4
+    });
   });
 });

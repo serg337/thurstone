@@ -11,9 +11,18 @@ import {
 } from "@/lib/probe/decision";
 import {
   PROBE_LIVE_MANIFEST_VERSION,
+  PROBE_TRANSPORT_BINDING_VERSION,
   probeLiveManifestSchema,
-  type ProbeLiveManifest
+  type ProbeLiveManifest,
+  type ProbeTransportBinding
 } from "@/lib/probe/calibration-envelope";
+
+const transport: ProbeTransportBinding = {
+  version: PROBE_TRANSPORT_BINDING_VERSION,
+  ownership: "runner",
+  operationId: `probe_${"a".repeat(58)}`,
+  bindingHash: "b".repeat(64)
+};
 
 function manifest(): ProbeLiveManifest {
   return {
@@ -38,9 +47,13 @@ function manifest(): ProbeLiveManifest {
         inputSchema: {
           type: "object",
           properties: {
+            operationId: {
+              type: "string",
+              pattern: "^[A-Za-z0-9][A-Za-z0-9_-]{15,63}$"
+            },
             quantity: { type: "integer", minimum: 1, maximum: 10 }
           },
-          required: ["quantity"],
+          required: ["operationId", "quantity"],
           additionalProperties: false
         },
         annotations: { readOnlyHint: false, untrustedContentHint: false }
@@ -53,16 +66,31 @@ describe("Probe strict decision union", () => {
   it("accepts exactly one call, clarification, or abstention decision", () => {
     expect(
       parseProbeDecision(
-        { kind: "call", tool: "cart_update", arguments: { quantity: 3 } },
-        manifest()
+        {
+          kind: "call",
+          tool: "cart_update",
+          arguments: { operationId: transport.operationId, quantity: 3 }
+        },
+        manifest(),
+        transport
       )
-    ).toEqual({ kind: "call", tool: "cart_update", arguments: { quantity: 3 } });
-    expect(parseProbeDecision({ kind: "clarify", text: "Which item?" }, manifest())).toEqual({
+    ).toEqual({
+      kind: "call",
+      tool: "cart_update",
+      arguments: { operationId: transport.operationId, quantity: 3 }
+    });
+    expect(
+      parseProbeDecision({ kind: "clarify", text: "Which item?" }, manifest(), transport)
+    ).toEqual({
       kind: "clarify",
       text: "Which item?"
     });
     expect(
-      parseProbeDecision({ kind: "abstain", reason: "No live tool applies." }, manifest())
+      parseProbeDecision(
+        { kind: "abstain", reason: "No live tool applies." },
+        manifest(),
+        transport
+      )
     ).toEqual({
       kind: "abstain",
       reason: "No live tool applies."
@@ -73,7 +101,8 @@ describe("Probe strict decision union", () => {
     expect(
       parseProbeDecisionOutput(
         { decision: { kind: "call", tool: "order_review", arguments: {} } },
-        manifest()
+        manifest(),
+        transport
       )
     ).toEqual({ kind: "call", tool: "order_review", arguments: {} });
 
@@ -83,7 +112,8 @@ describe("Probe strict decision union", () => {
           decision: { kind: "call", tool: "order_review", arguments: {} },
           commentary: "extra"
         },
-        manifest()
+        manifest(),
+        transport
       )
     ).toThrow();
   });
@@ -104,18 +134,26 @@ describe("Probe strict decision union", () => {
 
   it("rejects a syntactically valid call to a tool outside the live catalog", () => {
     expect(() =>
-      parseProbeDecision({ kind: "call", tool: "checkout_request", arguments: {} }, manifest())
+      parseProbeDecision(
+        { kind: "call", tool: "checkout_request", arguments: {} },
+        manifest(),
+        transport
+      )
     ).toThrowError(
       expect.objectContaining<Partial<ProbeDecisionError>>({ code: "tool_not_in_live_manifest" })
     );
   });
 
   it("revalidates call arguments against the selected live schema", () => {
-    for (const argumentsValue of [{ quantity: 11 }, { quantity: 3, extra: true }]) {
+    for (const argumentsValue of [
+      { operationId: transport.operationId, quantity: 11 },
+      { operationId: transport.operationId, quantity: 3, extra: true }
+    ]) {
       expect(() =>
         parseProbeDecision(
           { kind: "call", tool: "cart_update", arguments: argumentsValue },
-          manifest()
+          manifest(),
+          transport
         )
       ).toThrowError(
         expect.objectContaining<Partial<ProbeDecisionError>>({
@@ -124,11 +162,29 @@ describe("Probe strict decision union", () => {
       );
     }
   });
+
+  it("rejects a mutation decision whose runner-owned operation ID is not the bound value", () => {
+    expect(() =>
+      parseProbeDecision(
+        {
+          kind: "call",
+          tool: "cart_update",
+          arguments: { operationId: `probe_${"c".repeat(58)}`, quantity: 3 }
+        },
+        manifest(),
+        transport
+      )
+    ).toThrowError(
+      expect.objectContaining<Partial<ProbeDecisionError>>({
+        code: "operation_id_binding_mismatch"
+      })
+    );
+  });
 });
 
 describe("live-manifest-derived decision JSON Schema", () => {
   it("uses the required provider root object and exact inner anyOf branches", () => {
-    const format = createProbeDecisionJsonSchema(manifest());
+    const format = createProbeDecisionJsonSchema(manifest(), transport);
     expect(format.name).toBe(PROBE_DECISION_JSON_SCHEMA_NAME);
     expect(format.strict).toBe(true);
     expect(format.schema).toMatchObject({
@@ -153,7 +209,17 @@ describe("live-manifest-derived decision JSON Schema", () => {
       properties: {
         kind: { enum: ["call"] },
         tool: { enum: ["cart_update"] },
-        arguments: manifest().tools[1]?.inputSchema
+        arguments: {
+          ...manifest().tools[1]?.inputSchema,
+          properties: {
+            ...((manifest().tools[1]?.inputSchema.properties ?? {}) as Record<string, unknown>),
+            operationId: {
+              type: "string",
+              pattern: "^[A-Za-z0-9][A-Za-z0-9_-]{15,63}$",
+              enum: [transport.operationId]
+            }
+          }
+        }
       }
     });
     expect(decision.anyOf[2]).toMatchObject({
@@ -168,13 +234,57 @@ describe("live-manifest-derived decision JSON Schema", () => {
     });
   });
 
+  it("prebinds the same opaque operation ID in every mutation branch without changing read-only branches", () => {
+    const multiple = structuredClone(manifest());
+    multiple.tools.push({
+      name: "checkout_request",
+      title: "Request simulated checkout",
+      description: "Open one pending simulated checkout.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          operationId: {
+            type: "string",
+            pattern: "^[A-Za-z0-9][A-Za-z0-9_-]{15,63}$"
+          }
+        },
+        required: ["operationId"],
+        additionalProperties: false
+      },
+      annotations: { readOnlyHint: false, untrustedContentHint: false }
+    });
+    const format = createProbeDecisionJsonSchema(multiple, transport);
+    const branches = (
+      format.schema.properties as { decision: { anyOf: Array<Record<string, unknown>> } }
+    ).decision.anyOf.filter((branch) => {
+      const properties = branch.properties as { tool?: { enum?: string[] } } | undefined;
+      return properties?.tool?.enum;
+    });
+    const byName = new Map(
+      branches.map((branch) => {
+        const properties = branch.properties as {
+          tool: { enum: string[] };
+          arguments: { properties: Record<string, unknown> };
+        };
+        return [properties.tool.enum[0], properties.arguments];
+      })
+    );
+    expect(byName.get("order_review")?.properties).toEqual({});
+    for (const toolName of ["cart_update", "checkout_request"]) {
+      expect(byName.get(toolName)?.properties.operationId).toMatchObject({
+        enum: [transport.operationId]
+      });
+    }
+    expect(JSON.stringify(format)).not.toMatch(/expectedTool|internalTruthId|calibration_truth_/u);
+  });
+
   it("is canonical, deterministic, immutable, and changes with the live call contract", async () => {
-    const first = createProbeDecisionJsonSchema(manifest());
-    const second = createProbeDecisionJsonSchema(structuredClone(manifest()));
+    const first = createProbeDecisionJsonSchema(manifest(), transport);
+    const second = createProbeDecisionJsonSchema(structuredClone(manifest()), transport);
     await expect(
       Promise.all([
-        probeDecisionJsonSchemaHash(manifest()),
-        probeDecisionJsonSchemaHash(manifest())
+        probeDecisionJsonSchemaHash(manifest(), transport),
+        probeDecisionJsonSchemaHash(manifest(), transport)
       ])
     ).resolves.toSatisfy(([left, right]) => left === right);
     expect(second).toEqual(first);
@@ -184,12 +294,23 @@ describe("live-manifest-derived decision JSON Schema", () => {
     const changed = structuredClone(manifest());
     changed.tools[1]!.inputSchema = {
       type: "object",
-      properties: { quantity: { type: "integer", minimum: 2, maximum: 10 } },
-      required: ["quantity"],
+      properties: {
+        operationId: {
+          type: "string",
+          pattern: "^[A-Za-z0-9][A-Za-z0-9_-]{15,63}$"
+        },
+        quantity: { type: "integer", minimum: 2, maximum: 10 }
+      },
+      required: ["operationId", "quantity"],
       additionalProperties: false
     };
-    await expect(probeDecisionJsonSchemaHash(changed)).resolves.not.toBe(
-      await probeDecisionJsonSchemaHash(manifest())
+    await expect(probeDecisionJsonSchemaHash(changed, transport)).resolves.not.toBe(
+      await probeDecisionJsonSchemaHash(manifest(), transport)
+    );
+
+    const changedTransport = { ...transport, operationId: `probe_${"d".repeat(58)}` };
+    await expect(probeDecisionJsonSchemaHash(manifest(), changedTransport)).resolves.not.toBe(
+      await probeDecisionJsonSchemaHash(manifest(), transport)
     );
   });
 
@@ -200,6 +321,19 @@ describe("live-manifest-derived decision JSON Schema", () => {
 
     const permissive = structuredClone(manifest());
     permissive.tools[0]!.inputSchema.additionalProperties = true;
-    expect(() => createProbeDecisionJsonSchema(permissive)).toThrow();
+    expect(() => createProbeDecisionJsonSchema(permissive, transport)).toThrow();
+
+    const missingTransportField = structuredClone(manifest());
+    missingTransportField.tools[1]!.inputSchema = {
+      type: "object",
+      properties: { quantity: { type: "integer" } },
+      required: ["quantity"],
+      additionalProperties: false
+    };
+    expect(() => createProbeDecisionJsonSchema(missingTransportField, transport)).toThrowError(
+      expect.objectContaining<Partial<ProbeDecisionError>>({
+        code: "runner_owned_operation_id_missing"
+      })
+    );
   });
 });

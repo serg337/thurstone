@@ -2,9 +2,9 @@ import { z } from "zod";
 
 import { PROBE_MAX_CONTINUATION_CHARACTERS } from "@/lib/probe/service-contract";
 
-export const PROBE_CLIENT_LAB_SESSION_KEY = "toolproof:probe-calibration-session@1";
-export const PROBE_CLIENT_RESULTS_KEY = "toolproof:probe-calibration-results@1";
-export const PROBE_CLIENT_SESSION_VERSION = 1 as const;
+export const PROBE_CLIENT_LAB_SESSION_KEY = "toolproof:probe-final-calibration-session@2";
+export const PROBE_CLIENT_RESULTS_KEY = "toolproof:probe-final-calibration-results@2";
+export const PROBE_CLIENT_SESSION_VERSION = 2 as const;
 
 const markerSchema = z
   .object({

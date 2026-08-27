@@ -63,6 +63,7 @@ describe("Probe production client boundary verifier", () => {
       labChunkCount: 2,
       allClientChunkCount: 2,
       forbiddenSentinels: 7,
+      labOnlyForbiddenSentinels: 4,
       sourceMaps: 0
     });
   });
@@ -95,6 +96,31 @@ describe("Probe production client boundary verifier", () => {
       stderr: expect.stringContaining(
         "Production client source maps must remain disabled during blinded execution."
       )
+    });
+  });
+
+  it("permits prior-attempt lineage only outside the Lab-referenced client chunks", async () => {
+    const priorEvidenceDigest = "016f607f498384bcac2d60474aaa3f3373635cd662bb2eb4d7bb71b0b223b863";
+    const { root, staticRoot: outputRoot } = await buildFixture("vercel-builder");
+    await mkdir(`${outputRoot}/results`, { recursive: true });
+    await writeFile(
+      `${outputRoot}/results/post-unlock.js`,
+      `const priorEvidenceDigest = "${priorEvidenceDigest}";`,
+      "utf8"
+    );
+    await expect(
+      execFileAsync(process.execPath, [verifierPath], { cwd: root })
+    ).resolves.toMatchObject({ stdout: expect.stringContaining('"labOnlyForbiddenSentinels":4') });
+
+    await writeFile(
+      `${outputRoot}/${emittedChunkPath("vercel-builder", "app/lab/page.js")}`,
+      `const priorEvidenceDigest = "${priorEvidenceDigest}";`,
+      "utf8"
+    );
+    await expect(
+      execFileAsync(process.execPath, [verifierPath], { cwd: root })
+    ).rejects.toMatchObject({
+      stderr: expect.stringContaining("Lab client bundle leaks prior calibration lineage")
     });
   });
 });

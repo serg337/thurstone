@@ -24,7 +24,7 @@ function request(path: string, body: unknown, extraHeaders: Record<string, strin
 describe("Probe routes remain fail-closed before exact activation", () => {
   it("returns one honest no-inference receipt from every active-lane route", async () => {
     const routes: Array<[string, (request: Request) => Promise<Response>, unknown]> = [
-      ["/api/probe/session", session, { intent: "start-four-case-calibration" }],
+      ["/api/probe/session", session, { intent: "start-final-four-case-calibration" }],
       ["/api/probe/issue", issue, {}],
       ["/api/probe/decide", decide, {}],
       ["/api/probe/native", native, {}],

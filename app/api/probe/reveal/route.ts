@@ -4,7 +4,10 @@ import { readBoundedProbeJson } from "@/lib/probe/http";
 import { requireProbeActivation } from "@/lib/probe/activation";
 import { probeRouteErrorResponse } from "@/lib/probe/route-response";
 import { revealProbeCalibrationRun } from "@/lib/probe/service";
-import { probeRevealBodySchema } from "@/lib/probe/service-contract";
+import {
+  PROBE_CALIBRATION_TERMINAL_CALLS,
+  probeRevealBodySchema
+} from "@/lib/probe/service-contract";
 import { PROBE_RESULTS_COOKIE, PROBE_SESSION_COOKIE } from "@/lib/probe/session";
 
 export const dynamic = "force-dynamic";
@@ -43,8 +46,9 @@ export async function DELETE(request: Request) {
     const activation = await requireProbeActivation();
     if (
       activation.guard.phase !== "idle" ||
-      activation.guard.calibrationCalls !== 4 ||
-      activation.guard.knownCalls !== 4
+      activation.guard.claimedCalls !== PROBE_CALIBRATION_TERMINAL_CALLS ||
+      activation.guard.calibrationCalls !== PROBE_CALIBRATION_TERMINAL_CALLS ||
+      activation.guard.knownCalls !== PROBE_CALIBRATION_TERMINAL_CALLS
     ) {
       return NextResponse.json(
         { error: "terminal_evidence_required", inferencePerformed: false },

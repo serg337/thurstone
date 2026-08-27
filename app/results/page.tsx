@@ -13,6 +13,7 @@ export default async function ResultsPage() {
   if (cookieStore.has(PROBE_SESSION_COOKIE) && !cookieStore.has(PROBE_RESULTS_COOKIE)) {
     redirect("/lab");
   }
+  const terminalEvidence = cookieStore.has(PROBE_RESULTS_COOKIE);
   return (
     <div className="page-shell route-page">
       <header className="route-hero">
@@ -24,7 +25,9 @@ export default async function ResultsPage() {
             direct expected calls, or hand-edited rows.
           </p>
         </div>
-        <StatusPill state="neutral">No run yet</StatusPill>
+        <StatusPill state={terminalEvidence ? "ready" : "neutral"}>
+          {terminalEvidence ? "Final evidence ready" : "No run yet"}
+        </StatusPill>
       </header>
 
       <ProbeCalibrationResults />

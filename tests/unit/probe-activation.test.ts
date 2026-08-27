@@ -11,6 +11,20 @@ import {
 } from "@/lib/probe/activation";
 import { probeLedgerScriptHash, type ProbeGuardStatus } from "@/lib/probe/ledger";
 import {
+  PROBE_POLICY_MIGRATION_ID,
+  PROBE_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
+  PROBE_POLICY_MIGRATION_PRIOR_APP_COMMIT,
+  PROBE_POLICY_MIGRATION_PRIOR_EVIDENCE_DIGEST,
+  PROBE_POLICY_MIGRATION_PRIOR_RECEIPT_VERSION,
+  PROBE_PREVIOUS_LEDGER_SCRIPT_HASH,
+  PROBE_PREVIOUS_POLICY_HASH,
+  PROBE_PREVIOUS_POLICY_VERSION,
+  createProbePolicyMigrationManifest,
+  createProbePolicyMigrationReceipt,
+  parseProbePolicyMigrationPriorReceipt,
+  probePolicyMigrationDigest
+} from "@/lib/probe/policy-migration-contract";
+import {
   PROBE_CHALLENGE_CLOSES_AT,
   PROBE_GLOBAL_CALL_LIMIT,
   PROBE_LIFETIME_SPEND_CEILING_NANO_USD,
@@ -63,6 +77,43 @@ function guard(overrides: Partial<ProbeGuardStatus> = {}): ProbeGuardStatus {
 
 async function validFixture() {
   const hashes = await probeActivationFrozenHashes();
+  const priorReceipt = parseProbePolicyMigrationPriorReceipt({
+    version: PROBE_POLICY_MIGRATION_PRIOR_RECEIPT_VERSION,
+    migrationId: PROBE_POLICY_MIGRATION_ID,
+    priorAppCommit: PROBE_POLICY_MIGRATION_PRIOR_APP_COMMIT,
+    priorActivationHash: PROBE_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
+    priorEvidenceDigest: PROBE_POLICY_MIGRATION_PRIOR_EVIDENCE_DIGEST,
+    guardInstanceId,
+    initializedCommit,
+    previousPolicyVersion: PROBE_PREVIOUS_POLICY_VERSION,
+    previousPolicyHash: PROBE_PREVIOUS_POLICY_HASH,
+    previousScriptHash: PROBE_PREVIOUS_LEDGER_SCRIPT_HASH,
+    knownCalls: [
+      [0, "jti_activation_000000000000", 1, 2_752_200, "1", "2", "3"],
+      [1, "jti_activation_111111111111", 2, 2_745_600, "4", "5", "6"],
+      [2, "jti_activation_222222222222", 3, 2_862_200, "7", "8", "9"],
+      [3, "jti_activation_333333333333", 4, 3_000_800, "a", "b", "c"]
+    ].map(([ordinal, jti, dispatchSequence, actualNanoUsd, response, settlement, usage]) => ({
+      ordinal,
+      jti,
+      dispatchSequence,
+      actualNanoUsd,
+      providerResponseHash: String(response).repeat(64),
+      settlementDigest: String(settlement).repeat(64),
+      usageHash: String(usage).repeat(64)
+    }))
+  });
+  const migrationManifest = createProbePolicyMigrationManifest({
+    priorReceipt,
+    migrationCommit: activeCommit,
+    nextPolicyHash: hashes.policyHash,
+    nextScriptHash: hashes.scriptHash
+  });
+  const migration = await createProbePolicyMigrationReceipt(
+    migrationManifest,
+    await probePolicyMigrationDigest(migrationManifest),
+    nowMs - 1_000
+  );
   const environment: Record<string, string> = {
     VERCEL: "1",
     VERCEL_ENV: "production",
@@ -81,6 +132,7 @@ async function validFixture() {
     TOOLPROOF_PROBE_ACTIVE_SCRIPT_HASH: hashes.scriptHash,
     TOOLPROOF_PROBE_ACTIVE_RUNNER_HASH: hashes.runnerContractHash,
     TOOLPROOF_PROBE_ACTIVE_CONTINUATION_HASH: hashes.continuationScriptHash,
+    TOOLPROOF_PROBE_POLICY_MIGRATION_RECEIPT_HASH: migration.receiptHash,
     OPENAI_API_KEY: "configured",
     KV_REST_API_URL: "https://fixture.upstash.io",
     KV_REST_API_TOKEN: "configured"
@@ -90,33 +142,50 @@ async function validFixture() {
     manifest,
     activationSecret
   );
-  const liveGuard = guard({ policyHash: hashes.policyHash, scriptHash: hashes.scriptHash });
-  return { environment, hashes, manifest, liveGuard };
+  const liveGuard = guard({
+    policyHash: hashes.policyHash,
+    scriptHash: hashes.scriptHash,
+    claimedCalls: 4,
+    committedNanoUsd: 250_000_000,
+    knownCount: 4,
+    knownActualNanoUsd: 11_360_800,
+    purposeCounts: { calibration: 4, baseline: 0, repair: 0, revised: 0, judge: 0 },
+    sequence: 4
+  });
+  return { environment, hashes, manifest, liveGuard, migration };
 }
 
 describe("Probe activation", () => {
   it("is disabled by default without reading durable state", async () => {
     const readGuard = vi.fn(async () => guard());
-    await expect(requireProbeActivation({ environment: {}, readGuard, nowMs })).rejects.toEqual(
+    const readMigration = vi.fn();
+    await expect(
+      requireProbeActivation({ environment: {}, readGuard, readMigration, nowMs })
+    ).rejects.toEqual(
       expect.objectContaining<Partial<ProbeActivationError>>({ code: "activation_disabled" })
     );
     expect(readGuard).not.toHaveBeenCalled();
+    expect(readMigration).not.toHaveBeenCalled();
   });
 
   it("binds exact production, project, build, guard, and frozen contract identities", async () => {
     const fixture = await validFixture();
     const readGuard = vi.fn(async () => fixture.liveGuard);
+    const readMigration = vi.fn(async () => fixture.migration);
     const activation = await requireProbeActivation({
       environment: fixture.environment,
       readGuard,
+      readMigration,
       nowMs
     });
     expect(readGuard).toHaveBeenCalledTimes(1);
+    expect(readMigration).toHaveBeenCalledTimes(1);
     expect(activation).toMatchObject({
       enabled: true,
       mode: "calibration",
       activationHash: fixture.environment.TOOLPROOF_PROBE_ACTIVATION_HASH,
       manifest: {
+        version: "toolproof-probe-activation@2.0.0",
         activeCommit,
         vercelProjectId: projectId,
         guardInstanceId,
@@ -124,12 +193,16 @@ describe("Probe activation", () => {
         policyHash: fixture.hashes.policyHash,
         scriptHash: fixture.hashes.scriptHash,
         runnerContractHash: fixture.hashes.runnerContractHash,
-        continuationScriptHash: fixture.hashes.continuationScriptHash
+        continuationScriptHash: fixture.hashes.continuationScriptHash,
+        policyMigrationReceiptHash: fixture.migration.receiptHash
       },
-      guard: { phase: "idle", claimedCalls: 0, pendingCalls: 0 }
+      guard: { phase: "idle", claimedCalls: 4, pendingCalls: 0 },
+      migration: { receiptHash: fixture.migration.receiptHash }
     });
     expect(Object.isFrozen(activation)).toBe(true);
     expect(Object.isFrozen(activation.manifest)).toBe(true);
+    expect(Object.isFrozen(activation.migration)).toBe(true);
+    expect(Object.isFrozen(activation.migration.knownCalls)).toBe(true);
   });
 
   it.each([
@@ -157,7 +230,12 @@ describe("Probe activation", () => {
     const fixture = await validFixture();
     fixture.environment.TOOLPROOF_PROBE_ACTIVATION_SECRET = "weak";
     await expect(
-      requireProbeActivation({ environment: fixture.environment, guard: fixture.liveGuard, nowMs })
+      requireProbeActivation({
+        environment: fixture.environment,
+        guard: fixture.liveGuard,
+        migration: fixture.migration,
+        nowMs
+      })
     ).rejects.toMatchObject({ code: "activation_secret_invalid" });
 
     const reused = await validFixture();
@@ -168,8 +246,61 @@ describe("Probe activation", () => {
       signingSecret
     );
     await expect(
-      requireProbeActivation({ environment: reused.environment, guard: reused.liveGuard, nowMs })
+      requireProbeActivation({
+        environment: reused.environment,
+        guard: reused.liveGuard,
+        migration: reused.migration,
+        nowMs
+      })
     ).rejects.toMatchObject({ code: "activation_secret_not_separate" });
+  });
+
+  it("requires the env-pinned durable migration receipt and rejects receipt or base-state drift", async () => {
+    const missing = await validFixture();
+    await expect(
+      requireProbeActivation({
+        environment: missing.environment,
+        guard: missing.liveGuard,
+        readMigration: async () => {
+          throw new Error("missing");
+        },
+        nowMs
+      })
+    ).rejects.toMatchObject({ code: "activation_migration_invalid" });
+
+    const tampered = await validFixture();
+    await expect(
+      requireProbeActivation({
+        environment: tampered.environment,
+        guard: tampered.liveGuard,
+        migration: { ...tampered.migration, migratedAtMs: tampered.migration.migratedAtMs + 1 },
+        nowMs
+      })
+    ).rejects.toMatchObject({ code: "activation_migration_invalid" });
+
+    const reset = await validFixture();
+    await expect(
+      requireProbeActivation({
+        environment: reset.environment,
+        guard: guard({
+          policyHash: reset.hashes.policyHash,
+          scriptHash: reset.hashes.scriptHash
+        }),
+        migration: reset.migration,
+        nowMs
+      })
+    ).rejects.toMatchObject({ code: "activation_migration_invalid" });
+
+    const unpinned = await validFixture();
+    delete unpinned.environment.TOOLPROOF_PROBE_POLICY_MIGRATION_RECEIPT_HASH;
+    await expect(
+      requireProbeActivation({
+        environment: unpinned.environment,
+        guard: unpinned.liveGuard,
+        migration: unpinned.migration,
+        nowMs
+      })
+    ).rejects.toMatchObject({ code: "activation_migration_receipt_hash_invalid" });
   });
 
   it("accepts idle progress and exactly one in-flight calibration call", async () => {
@@ -257,12 +388,12 @@ describe("Probe activation", () => {
     ).toThrowError(expect.objectContaining({ code: "activation_guard_invalid" }));
   });
 
-  it("preserves the initialized policy and Lua bundle hashes", async () => {
+  it("freezes the migrated policy and Lua bundle hashes", async () => {
     await expect(probePolicyHash()).resolves.toBe(
-      "9289f1def645e9ccc71a3ef95320281cef937be5ec1329beaf57f22b4b2c7939"
+      "0667313bddeb02f0f2987348c56f0ad022c9bb33cf500eb94ef2a1a5fe86f0a8"
     );
     await expect(probeLedgerScriptHash()).resolves.toBe(
-      "41d351ad5d1adb81b0c6a90aa930cf1ae932b053d58b097c0283846728b798d2"
+      "34833e98044cee1472c9104ac70312f03c96e8d2707bee189631e2cf41ae9033"
     );
   });
 });

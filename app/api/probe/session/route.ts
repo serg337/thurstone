@@ -3,7 +3,12 @@ import { NextResponse } from "next/server";
 import { readBoundedProbeJson } from "@/lib/probe/http";
 import { probeRouteErrorResponse } from "@/lib/probe/route-response";
 import { requireProbeActivation } from "@/lib/probe/activation";
-import { probeSessionStartBodySchema } from "@/lib/probe/service-contract";
+import {
+  PROBE_CALIBRATION_ATTEMPT,
+  PROBE_CALIBRATION_BASE_CALLS,
+  PROBE_CALIBRATION_PROTOCOL_VERSION,
+  probeSessionStartBodySchema
+} from "@/lib/probe/service-contract";
 import { startProbeCalibrationSession } from "@/lib/probe/service";
 import {
   PROBE_RESULTS_COOKIE,
@@ -21,7 +26,9 @@ export async function POST(request: Request) {
     const session = await startProbeCalibrationSession(request);
     const response = NextResponse.json(
       {
-        version: 1,
+        version: 2,
+        protocolVersion: PROBE_CALIBRATION_PROTOCOL_VERSION,
+        attempt: PROBE_CALIBRATION_ATTEMPT,
         csrfToken: session.csrfToken,
         continuation: session.continuation,
         buildCommit: session.buildCommit,
@@ -30,6 +37,13 @@ export async function POST(request: Request) {
       },
       { status: 201, headers: { "Cache-Control": "no-store" } }
     );
+    response.cookies.set(PROBE_RESULTS_COOKIE, "", {
+      httpOnly: true,
+      secure: true,
+      sameSite: "strict",
+      path: "/",
+      maxAge: 0
+    });
     response.cookies.set(PROBE_SESSION_COOKIE, session.cookieValue, probeSessionCookieOptions());
     return response;
   } catch (error) {
@@ -49,7 +63,12 @@ export async function DELETE(request: Request) {
   }
   try {
     const activation = await requireProbeActivation();
-    if (activation.guard.phase !== "idle" || activation.guard.calibrationCalls !== 0) {
+    if (
+      activation.guard.phase !== "idle" ||
+      activation.guard.claimedCalls !== PROBE_CALIBRATION_BASE_CALLS ||
+      activation.guard.knownCalls !== PROBE_CALIBRATION_BASE_CALLS ||
+      activation.guard.calibrationCalls !== PROBE_CALIBRATION_BASE_CALLS
+    ) {
       return NextResponse.json(
         { error: "session_recovery_required", inferencePerformed: false },
         { status: 409, headers: { "Cache-Control": "no-store" } }

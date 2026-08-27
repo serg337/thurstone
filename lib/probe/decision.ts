@@ -1,9 +1,14 @@
 import { canonicalJson, canonicalSha256 } from "@/lib/evidence/digest";
-import { probeLiveManifestSchema, type ProbeLiveManifest } from "@/lib/probe/calibration-envelope";
+import {
+  probeLiveManifestSchema,
+  probeTransportBindingSchema,
+  type ProbeLiveManifest,
+  type ProbeTransportBinding
+} from "@/lib/probe/calibration-envelope";
 import { z } from "zod";
 
-export const PROBE_DECISION_VERSION = "toolproof-probe-decision@1.0.0";
-export const PROBE_DECISION_JSON_SCHEMA_NAME = "toolproof_probe_decision";
+export const PROBE_DECISION_VERSION = "toolproof-probe-decision@2.0.0";
+export const PROBE_DECISION_JSON_SCHEMA_NAME = "toolproof_probe_decision_v2";
 export const PROBE_DECISION_TEXT_MAX_CHARACTERS = 800;
 
 const jsonObjectSchema = z.record(z.string(), z.json());
@@ -59,6 +64,8 @@ export class ProbeDecisionError extends Error {
       | "tool_not_in_live_manifest"
       | "invalid_live_argument_schema"
       | "arguments_do_not_match_live_schema"
+      | "runner_owned_operation_id_missing"
+      | "operation_id_binding_mismatch"
   ) {
     super(code);
     this.name = "ProbeDecisionError";
@@ -77,8 +84,54 @@ function canonicalClone<T>(value: T): T {
   return JSON.parse(canonicalJson(value)) as T;
 }
 
-export function parseProbeDecision(value: unknown, manifest: ProbeLiveManifest): ProbeDecision {
+function runnerOwnedOperationIdSchema(
+  inputSchema: Readonly<Record<string, unknown>>,
+  transport: ProbeTransportBinding
+): Readonly<Record<string, unknown>> {
+  const properties = inputSchema.properties;
+  const required = inputSchema.required;
+  if (
+    !properties ||
+    typeof properties !== "object" ||
+    Array.isArray(properties) ||
+    !Array.isArray(required) ||
+    !required.includes("operationId") ||
+    !("operationId" in properties)
+  ) {
+    throw new ProbeDecisionError("runner_owned_operation_id_missing");
+  }
+  const operationId = properties.operationId;
+  if (!operationId || typeof operationId !== "object" || Array.isArray(operationId)) {
+    throw new ProbeDecisionError("invalid_live_argument_schema");
+  }
+  return canonicalClone({
+    ...inputSchema,
+    properties: {
+      ...properties,
+      operationId: {
+        ...(operationId as Record<string, unknown>),
+        enum: [transport.operationId]
+      }
+    }
+  });
+}
+
+function decisionArgumentSchema(
+  tool: ProbeLiveManifest["tools"][number],
+  transport: ProbeTransportBinding
+): Readonly<Record<string, unknown>> {
+  return tool.annotations.readOnlyHint
+    ? canonicalClone(tool.inputSchema)
+    : runnerOwnedOperationIdSchema(tool.inputSchema, transport);
+}
+
+export function parseProbeDecision(
+  value: unknown,
+  manifest: ProbeLiveManifest,
+  transportValue: ProbeTransportBinding
+): ProbeDecision {
   const parsedManifest = probeLiveManifestSchema.parse(manifest);
+  const transport = probeTransportBindingSchema.parse(transportValue);
   const decision = probeDecisionSchema.parse(value);
   if (decision.kind === "call") {
     const selected = parsedManifest.tools.find(({ name }) => name === decision.tool);
@@ -95,16 +148,23 @@ export function parseProbeDecision(value: unknown, manifest: ProbeLiveManifest):
     if (!argumentSchema.safeParse(decision.arguments).success) {
       throw new ProbeDecisionError("arguments_do_not_match_live_schema");
     }
+    if (
+      !selected.annotations.readOnlyHint &&
+      decision.arguments.operationId !== transport.operationId
+    ) {
+      throw new ProbeDecisionError("operation_id_binding_mismatch");
+    }
   }
   return deepFreeze(canonicalClone(decision));
 }
 
 export function parseProbeDecisionOutput(
   value: unknown,
-  manifest: ProbeLiveManifest
+  manifest: ProbeLiveManifest,
+  transport: ProbeTransportBinding
 ): ProbeDecision {
   const output = probeDecisionOutputSchema.parse(value);
-  return parseProbeDecision(output.decision, manifest);
+  return parseProbeDecision(output.decision, manifest, transport);
 }
 
 export interface ProbeDecisionJsonSchemaFormat {
@@ -128,9 +188,11 @@ function textBranch(kind: "clarify" | "abstain", field: "text" | "reason") {
 }
 
 export function createProbeDecisionJsonSchema(
-  manifest: ProbeLiveManifest
+  manifest: ProbeLiveManifest,
+  transportValue: ProbeTransportBinding
 ): ProbeDecisionJsonSchemaFormat {
   const parsed = probeLiveManifestSchema.parse(manifest);
+  const transport = probeTransportBindingSchema.parse(transportValue);
   const callBranches = [...parsed.tools]
     .sort((left, right) => left.name.localeCompare(right.name))
     .map((tool) => ({
@@ -138,7 +200,7 @@ export function createProbeDecisionJsonSchema(
       properties: {
         kind: { type: "string", enum: ["call"] },
         tool: { type: "string", enum: [tool.name] },
-        arguments: canonicalClone(tool.inputSchema)
+        arguments: decisionArgumentSchema(tool, transport)
       },
       required: ["kind", "tool", "arguments"],
       additionalProperties: false
@@ -162,6 +224,9 @@ export function createProbeDecisionJsonSchema(
   );
 }
 
-export function probeDecisionJsonSchemaHash(manifest: ProbeLiveManifest): Promise<string> {
-  return canonicalSha256(createProbeDecisionJsonSchema(manifest));
+export function probeDecisionJsonSchemaHash(
+  manifest: ProbeLiveManifest,
+  transport: ProbeTransportBinding
+): Promise<string> {
+  return canonicalSha256(createProbeDecisionJsonSchema(manifest, transport));
 }

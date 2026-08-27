@@ -20,6 +20,10 @@ import {
   type ProbeGuardStatus
 } from "@/lib/probe/ledger";
 import { requireProbeActivation } from "@/lib/probe/activation";
+import {
+  PROBE_CALIBRATION_BASE_CALLS,
+  PROBE_CALIBRATION_TERMINAL_CALLS
+} from "@/lib/probe/service-contract";
 
 interface EnvironmentLike {
   readonly [key: string]: string | undefined;
@@ -108,12 +112,29 @@ export async function readPublicProbeControlStatus(environment: EnvironmentLike 
     if (environment.TOOLPROOF_PROBE_ACTIVATION_MODE === "calibration") {
       try {
         const activation = await requireProbeActivation({ environment, guard });
+        const calibrationStartable =
+          activation.guard.phase === "idle" &&
+          activation.guard.claimedCalls === PROBE_CALIBRATION_BASE_CALLS &&
+          activation.guard.knownCalls === PROBE_CALIBRATION_BASE_CALLS &&
+          activation.guard.calibrationCalls === PROBE_CALIBRATION_BASE_CALLS &&
+          activation.guard.pendingCalls === 0 &&
+          activation.guard.uncertainCalls === 0;
+        const calibrationTerminal =
+          activation.guard.phase === "idle" &&
+          activation.guard.claimedCalls === PROBE_CALIBRATION_TERMINAL_CALLS &&
+          activation.guard.knownCalls === PROBE_CALIBRATION_TERMINAL_CALLS &&
+          activation.guard.calibrationCalls === PROBE_CALIBRATION_TERMINAL_CALLS;
         return {
           status: "controls-ready" as const,
           enabled: true,
           activation: "calibration" as const,
+          calibrationStartable,
           policy,
-          reason: "The bounded four-case calibration lane is active for this exact build.",
+          reason: calibrationStartable
+            ? "The separately versioned final four-case calibration is ready for this exact build."
+            : calibrationTerminal
+              ? "The final four-case calibration is terminal; another run is not admitted."
+              : "The final calibration session is active or requires exact recovery.",
           commit,
           guard: {
             phase: activation.guard.phase,

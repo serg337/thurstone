@@ -43,5 +43,13 @@ describe("Probe client session marker", () => {
         1_700_000_000_000
       )
     ).toThrow();
+    expect(() =>
+      parseProbeClientSessionMarker(
+        JSON.stringify({ ...marker, version: 1 }),
+        "/lab",
+        marker.buildCommit,
+        1_700_000_000_000
+      )
+    ).toThrow();
   });
 });

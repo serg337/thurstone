@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { cartGet } from "@/lib/domain/checkout";
+import { ProbeSessionCleanupControl } from "@/components/lab/probe-session-cleanup-control";
 import { verifyCheckoutReset } from "@/lib/domain/checkout-reset";
 import { CheckoutSessionStore } from "@/lib/domain/checkout-session";
 import { canonicalJson, canonicalSha256, sha256Hex } from "@/lib/evidence/digest";
@@ -261,6 +262,7 @@ export function ProbeCalibrationRunner() {
   const [phase, setPhase] = useState("Preparing a fresh native runtime…");
   const [error, setError] = useState<string>();
   const [uncertain, setUncertain] = useState(false);
+  const [markerCleanupEligible, setMarkerCleanupEligible] = useState(false);
   const runtimeRef = useRef<RuntimeView>({
     session,
     registry,
@@ -464,9 +466,10 @@ export function ProbeCalibrationRunner() {
       marker = parseProbeClientSessionMarker(raw, "/lab", APP_COMMIT);
       markerRef.current = marker;
     } catch (failure) {
-      queueMicrotask(() =>
-        setError(failure instanceof Error ? failure.message : "probe_session_marker_invalid")
-      );
+      queueMicrotask(() => {
+        setMarkerCleanupEligible(true);
+        setError(failure instanceof Error ? failure.message : "probe_session_marker_invalid");
+      });
       return;
     }
 
@@ -734,8 +737,8 @@ export function ProbeCalibrationRunner() {
     <section className="panel probe-runner-panel" aria-labelledby="probe-runner-title">
       <div className="panel-heading">
         <div>
-          <span className="eyebrow">Gate 2 · isolated evaluation document</span>
-          <h2 id="probe-runner-title">Fresh-context calibration in progress</h2>
+          <span className="eyebrow">Gate 2 · isolated final calibration document</span>
+          <h2 id="probe-runner-title">Final fresh-context calibration in progress</h2>
         </div>
         <span className="status-pill status-pending">Running</span>
       </div>
@@ -759,6 +762,7 @@ export function ProbeCalibrationRunner() {
             Keep this tab and its opaque continuation intact. Session cleanup is available only
             before the first provider grant or after terminal evidence acknowledgement.
           </small>
+          {markerCleanupEligible ? <ProbeSessionCleanupControl /> : null}
         </div>
       ) : null}
     </section>
