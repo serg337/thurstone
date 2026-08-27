@@ -30,7 +30,7 @@ A document-owned Gate 1 proof journal records explicit Registry statuses, saniti
 
 Reset temporarily closes session admission, drains prior work through the serialized store, archives the old trajectory, restores exact fixture bytes, reconciles the initial catalog, and verifies both session summaries and full canonical trace-ledger evidence before releasing admission. An invalid or interrupted verification cannot start a trial.
 
-Raw input is captured at public method entry before queueing or validation. Descriptor-safe normalization does not invoke ordinary getters and retains otherwise non-JSON structure as tagged evidence. Canonical arguments remain separate. Cancellation is latched through asynchronous trace finalization; post-result cancellation and post-state-commit cancellation are recorded separately.
+Raw input is captured at public method entry before queueing or validation. Descriptor-safe normalization does not invoke ordinary getters and retains otherwise non-JSON structure as tagged evidence. Canonical arguments remain separate. Cancellation is latched through asynchronous trace finalization; post-result cancellation and post-state-commit cancellation are recorded separately. Chrome can reject the consumer-side `executeTool()` promise after a harmless handler has naturally completed, so adapter cancellation and handler status remain separate facts: the verifier accepts a reached completed `cart_get` only with exact empty arguments/result, null handler error, no commit, identical state, and a complete no-effect binding.
 
 ## Probe and evaluator boundary
 

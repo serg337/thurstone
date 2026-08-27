@@ -1255,6 +1255,12 @@ export function LabClient() {
           </button>
         </div>
 
+        <p className="trace-note">
+          Cancellation is recorded at both boundaries. Chrome may reject the consumer call after the
+          harmless cart_get handler has already completed; the journal preserves that completed
+          no-effect handler trace separately and never relabels it as handler cancellation.
+        </p>
+
         <div className="receipt-grid">
           <article>
             <h3>Native adapter receipt</h3>

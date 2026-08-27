@@ -468,6 +468,52 @@ describe("WebMcpRuntime.executeOnce", () => {
     expect(execute).toHaveBeenCalledTimes(2);
   });
 
+  it("preserves a one-call boundary when consumer cancellation follows handler completion", async () => {
+    const controller = new AbortController();
+    let handlerCompleted = false;
+    const execute = vi.fn(
+      async (
+        _tool: WebMCP.RegisteredTool,
+        _input: object | string,
+        options?: { readonly signal?: AbortSignal }
+      ) => {
+        if (execute.mock.calls.length === 1) return JSON.stringify(CART_RESULT);
+        const signal = options?.signal;
+        expect(signal).toBe(controller.signal);
+        handlerCompleted = true;
+        await Promise.resolve();
+        if (signal?.aborted) {
+          throw signal.reason ?? new DOMException("Canceled", "AbortError");
+        }
+        return JSON.stringify(CART_RESULT);
+      }
+    );
+    const fixture = harness({ execute });
+    const runtime = new WebMcpRuntime();
+    await runtime.initializeWithCartGet(fixture.request);
+    const onNativeDispatch = vi.fn(() =>
+      controller.abort(new DOMException("Canceled after handler completion", "AbortError"))
+    );
+
+    await expect(
+      executeWithObservation(runtime, fixture, {
+        executionId: "post-completion-consumer-cancel",
+        manifestHash: "manifest-hash",
+        tool: fixture.tool,
+        input: {},
+        signal: controller.signal,
+        onNativeDispatch
+      })
+    ).rejects.toSatisfy((error: unknown) => {
+      expectRuntimeCode(error, "execution_canceled");
+      expect((error as WebMcpRuntimeError).nativeCallMade).toBe(true);
+      return true;
+    });
+    expect(handlerCompleted).toBe(true);
+    expect(onNativeDispatch).toHaveBeenCalledOnce();
+    expect(execute).toHaveBeenCalledTimes(2);
+  });
+
   it("rejects a post-dispatch hook on non-cart_get tools before native dispatch", async () => {
     const { runtime, executeOnce, executeTool } = await readyRuntime();
     const mutation = registeredTool("cart_update");

@@ -4,7 +4,7 @@ import type {
   CheckoutSessionSnapshot,
   CheckoutTrajectoryArchive
 } from "@/lib/domain/checkout-session";
-import type { CheckoutState } from "@/lib/domain/checkout";
+import { cartGet, type CheckoutState } from "@/lib/domain/checkout";
 import {
   CHECKOUT_FIXTURE_STATE_HASH,
   type CheckoutResetReceipt as VerifiedResetReceipt
@@ -452,7 +452,7 @@ export async function createGate1ProofBundle(
       applicationPayloadsSyntheticOnly: true,
       fullReloadStartsNewDocument: true,
       limitation:
-        "Application payloads are synthetic; exact origin and raw browser user agent are runtime provenance. Hashes prove internal consistency only, not external attestation or model-selection evidence."
+        "Application payloads are synthetic; exact origin and raw browser user agent are runtime provenance. Consumer cancellation and handler status are preserved as separate facts when they race. Hashes prove internal consistency only, not external attestation or model-selection evidence."
     },
     journal,
     capabilities: input.capabilities,
@@ -494,6 +494,48 @@ async function verifyCanonicalEvidence(value: CanonicalEvidence): Promise<void> 
   if (value.sha256 !== (await sha256Hex(value.bytes))) {
     throw new Error("Canonical evidence SHA-256 does not match its bytes.");
   }
+}
+
+function isCanonicalNull(value: CanonicalEvidence | null): boolean {
+  return value !== null && value.value === null;
+}
+
+function isExactHarmlessCanceledReadTrace(trace: OperationTrace): boolean {
+  if (
+    trace.source !== "native" ||
+    trace.toolName !== "cart_get" ||
+    trace.operationId !== null ||
+    trace.commitDisposition !== "none" ||
+    typeof trace.cancellationObservedAfterCommit !== "boolean" ||
+    typeof trace.cancellationObservedAfterCompletion !== "boolean" ||
+    trace.cancellationObservedAfterCommit ||
+    trace.effect.stateChanged ||
+    trace.stateBefore.sha256 !== trace.stateAfter.sha256 ||
+    canonicalJson(trace.rawArguments.value) !== canonicalJson({})
+  ) {
+    return false;
+  }
+
+  if (trace.status === "canceled") {
+    const error = trace.error?.value;
+    return (
+      trace.cancellationObservedAfterCompletion === false &&
+      isCanonicalNull(trace.canonicalArguments) &&
+      isCanonicalNull(trace.rawResult) &&
+      isCanonicalNull(trace.canonicalResult) &&
+      canonicalJson(error) ===
+        canonicalJson({ name: "AbortError", message: "Canceled before state commit." })
+    );
+  }
+
+  if (trace.status !== "completed") return false;
+  const expectedResult = cartGet(trace.stateBefore.value as unknown as CheckoutState);
+  return (
+    canonicalJson(trace.canonicalArguments?.value) === canonicalJson({}) &&
+    canonicalJson(trace.rawResult?.value) === canonicalJson(expectedResult) &&
+    canonicalJson(trace.canonicalResult?.value) === canonicalJson(expectedResult) &&
+    isCanonicalNull(trace.error)
+  );
 }
 
 function traceList(value: unknown): readonly OperationTrace[] {
@@ -565,6 +607,7 @@ export async function verifyGate1ProofBundle(
   }
   let previousEventHash: string | null = null;
   const attemptStarts = new Map<string, Readonly<Record<string, unknown>>>();
+  const attemptArgumentModes = new Map<string, "object" | "json-string">();
   let nativeAttemptCount = 0;
   let latestReadiness: Readonly<Record<string, unknown>> | null = null;
   for (const [index, eventValue] of journal.events.entries()) {
@@ -591,8 +634,10 @@ export async function verifyGate1ProofBundle(
         { readonly generation?: unknown; readonly manifestHash?: unknown } | null | undefined;
       const manifest = latestReadiness?.manifest as
         { readonly catalogState?: unknown } | null | undefined;
+      const argumentMode = latestReadiness?.argumentMode;
       if (
         latestReadiness?.status !== "consumer-ready" ||
+        (argumentMode !== "object" && argumentMode !== "json-string") ||
         runtimeCatalog?.generation !== payload.registrationGeneration ||
         runtimeCatalog?.manifestHash !== payload.manifestHash ||
         manifest?.catalogState !== payload.catalogState ||
@@ -602,6 +647,7 @@ export async function verifyGate1ProofBundle(
         throw new Error("Native attempt start does not bind the current consumer-ready catalog.");
       }
       attemptStarts.set(executionId, payload);
+      attemptArgumentModes.set(executionId, argumentMode);
       nativeAttemptCount += 1;
     }
   }
@@ -735,6 +781,31 @@ export async function verifyGate1ProofBundle(
       throw new Error("Native attempt tool binding mismatch.");
     if (payload.outcome === "error") {
       const observation = payload.traceObservation as ExecuteTraceObservation | null;
+      const error = payload.error as {
+        readonly name?: unknown;
+        readonly message?: unknown;
+        readonly code?: unknown;
+        readonly nativeCallMade?: unknown;
+        readonly rawResult?: unknown;
+      };
+      const isCancellation = error.code === "execution_canceled";
+      const exactCancellationError = {
+        name: "WebMcpRuntimeError",
+        message: "Native execution was canceled.",
+        code: "execution_canceled",
+        nativeCallMade: true,
+        rawResult: null
+      } as const;
+      if (
+        isCancellation &&
+        (canonicalJson(error) !== canonicalJson(exactCancellationError) ||
+          started.toolName !== "cart_get" ||
+          canonicalJson(started.input) !== canonicalJson({}) ||
+          observation === null ||
+          payload.observationError !== null)
+      ) {
+        throw new Error("Cancellation probe did not preserve its native/read-only boundary.");
+      }
       if (observation !== null) {
         const initialTraceCount = started.traceCount;
         if (typeof initialTraceCount !== "number") {
@@ -753,6 +824,7 @@ export async function verifyGate1ProofBundle(
             receiptTraceIds.has(trace.eventId) ||
             trace.source !== "native" ||
             trace.toolName !== payload.toolName ||
+            trace.runtime.argumentMode !== attemptArgumentModes.get(executionId) ||
             trace.registryHash !== started.manifestHash ||
             trace.stateBefore.sha256 !== started.stateHash ||
             trace.stateAfter.sha256 !== observation.stateHash ||
@@ -772,29 +844,21 @@ export async function verifyGate1ProofBundle(
             throw new Error("Native error trace effect binding mismatch.");
           }
         }
-        const error = payload.error as {
-          readonly code?: unknown;
-          readonly nativeCallMade?: unknown;
-        };
         if (traceDelta === 1 && error.nativeCallMade !== true) {
           throw new Error("Native error reached a handler trace without a native-call receipt.");
         }
-        if (error.code === "execution_canceled") {
-          if (error.nativeCallMade !== true || observation.stateHash !== started.stateHash) {
+        if (isCancellation) {
+          if (observation.stateHash !== started.stateHash) {
             throw new Error("Cancellation probe did not preserve its native/state boundary.");
           }
           if (traceDelta === 1) {
             const canceledTrace = observation.lastTrace
               ? traceById.get(observation.lastTrace.eventId)
               : undefined;
-            if (
-              !canceledTrace ||
-              canceledTrace.toolName !== "cart_get" ||
-              canceledTrace.status !== "canceled" ||
-              canceledTrace.commitDisposition !== "none" ||
-              canceledTrace.effect.stateChanged
-            ) {
-              throw new Error("Reached cancellation trace is not a harmless canceled cart_get.");
+            if (!canceledTrace || !isExactHarmlessCanceledReadTrace(canceledTrace)) {
+              throw new Error(
+                "Reached cancellation trace is not an exact harmless completed-or-canceled cart_get."
+              );
             }
           }
         }
@@ -824,6 +888,7 @@ export async function verifyGate1ProofBundle(
       receipt.toolName !== trace.toolName ||
       receipt.handlerTraceStatus !== trace.status ||
       receipt.argumentMode !== trace.runtime.argumentMode ||
+      receipt.argumentMode !== attemptArgumentModes.get(executionId) ||
       receipt.manifestHash !== started.manifestHash ||
       receipt.manifestHash !== trace.registryHash ||
       started.stateHash !== trace.stateBefore.sha256 ||

@@ -16,7 +16,7 @@ Status: Gate 0 is complete. The Gate 1 five-tool sandbox, dynamic registry, nati
 4. Use the normal UI or the clearly labeled direct native-plumbing controls to read, update, and review the shared deterministic fixture.
 5. Request simulated checkout and confirm `checkout_cancel` appears only while that request is pending; cancel it and verify the four-tool catalog returns.
 6. Hard reset and inspect the registry-bound reset verification receipt.
-7. Download the Gate 1 proof JSON once to preserve the document&apos;s complete Registry/Readiness timeline, native attempts, reset receipts, and trace ledger.
+7. Download the Gate 1 proof JSON once to preserve the document&apos;s complete Registry/Readiness timeline, native attempts, reset receipts, and trace ledger. Consumer cancellation and handler completion are recorded separately when they race.
 8. Open `/results` and confirm ToolProof says **No authentic evidence is available** until terminal model-backed runs exist.
 
 Direct native-plumbing controls are deterministic Gate 1 diagnostics, not model-selection evidence.

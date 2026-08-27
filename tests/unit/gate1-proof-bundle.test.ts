@@ -71,6 +71,16 @@ async function resealBundle(bundle: Gate1ProofBundle): Promise<Gate1ProofBundle>
   return mutable as unknown as Gate1ProofBundle;
 }
 
+async function overwriteCanonicalEvidence(
+  target: { value: unknown; bytes: string; sha256: string },
+  value: unknown
+): Promise<void> {
+  const bytes = canonicalJson(value);
+  target.value = value;
+  target.bytes = bytes;
+  target.sha256 = await sha256Hex(bytes);
+}
+
 function emptyBundleInput(
   journal: Gate1EvidenceJournal,
   store = new CheckoutSessionStore(),
@@ -420,6 +430,236 @@ describe("Gate 1 proof journal and bundle", () => {
         testCase.expected
       );
     }
+  });
+
+  it("accepts only an exact completed cart_get when the native consumer cancels afterward", async () => {
+    const journal = new Gate1EvidenceJournal({ clock: timestamps() });
+    const preliminaryReadiness = await initialReadiness(createCheckoutFixture());
+    const registryHash = preliminaryReadiness.manifestHash;
+    const ledger = new CheckoutTraceLedger({
+      appCommit: APP_COMMIT,
+      getRegistryHash: () => registryHash,
+      getArgumentMode: () => "json-string",
+      origin: ORIGIN,
+      userAgent: "Synthetic Chrome"
+    });
+    const store = new CheckoutSessionStore({ traceSink: ledger });
+    journal.recordCapabilities(CAPABILITIES);
+    journal.recordReadinessReceipt(preliminaryReadiness, window, ORIGIN);
+
+    const calibrationResult = await store.cartGet({}, { source: "native" });
+    const calibrationTrace = ledger.snapshot().current[0]!;
+    const compatibilityReceipt: RuntimeCompatibilityReceipt = {
+      status: "compatibility-verified",
+      argumentMode: "json-string",
+      toolName: "cart_get",
+      nativeCallCount: 1,
+      coercionCount: 1,
+      rawResult: JSON.stringify(calibrationResult),
+      canonicalResult: calibrationResult,
+      resultDigest: calibrationTrace.canonicalResult!.sha256,
+      handlerTraceId: calibrationTrace.eventId,
+      effectDigest: await canonicalSha256(calibrationTrace.effect),
+      stateBeforeDigest: calibrationTrace.stateBefore.sha256,
+      stateAfterDigest: calibrationTrace.stateAfter.sha256,
+      manifestHashBefore: registryHash,
+      manifestHashAfter: registryHash,
+      registrationGeneration: 1
+    };
+    const readiness = readyReadiness(preliminaryReadiness, compatibilityReceipt);
+    journal.recordReadinessReceipt(readiness, window, ORIGIN);
+
+    const executionId = "cancel_after_completed_read_0001";
+    journal.recordNativeAttemptStarted({
+      executionId,
+      toolName: "cart_get",
+      input: {},
+      manifestHash: registryHash,
+      registrationGeneration: 1,
+      catalogState: "initial",
+      fixtureRevision: 0,
+      stateHash: readiness.stateHash,
+      traceCount: 1
+    });
+    await store.cartGet({}, { source: "native" });
+    const trace = ledger.snapshot().current[1]!;
+    expect(trace).toMatchObject({
+      toolName: "cart_get",
+      status: "completed",
+      commitDisposition: "none",
+      cancellationObservedAfterCommit: false,
+      cancellationObservedAfterCompletion: false,
+      effect: { stateChanged: false }
+    });
+    const adapterError = {
+      name: "WebMcpRuntimeError",
+      message: "Native execution was canceled.",
+      code: "execution_canceled",
+      nativeCallMade: true,
+      rawResult: null
+    } as const;
+    journal.recordNativeAttemptFinished({
+      executionId,
+      toolName: "cart_get",
+      outcome: "error",
+      error: adapterError,
+      traceObservation: {
+        stateHash: trace.stateAfter.sha256,
+        handlerTraceCount: 2,
+        lastTrace: {
+          eventId: trace.eventId,
+          source: trace.source,
+          toolName: trace.toolName,
+          status: trace.status,
+          registryHash: trace.registryHash,
+          resultDigest: trace.canonicalResult?.sha256 ?? null,
+          effectDigest: await canonicalSha256(trace.effect),
+          stateBeforeDigest: trace.stateBefore.sha256,
+          stateAfterDigest: trace.stateAfter.sha256
+        }
+      },
+      observationError: null
+    });
+
+    const base = emptyBundleInput(journal, store, ledger);
+    const bundle = await createGate1ProofBundle({
+      ...base,
+      readiness,
+      journal: journal.snapshot(),
+      session: store.getSnapshot(),
+      inspection: store.inspect(),
+      traceLedger: ledger.snapshot(),
+      currentReceipts: { ...base.currentReceipts, nativeError: adapterError }
+    });
+    await expect(verifyGate1ProofBundle(bundle)).resolves.toMatchObject({
+      status: "internally-consistent",
+      nativeAttemptCount: 1
+    });
+
+    const handlerObservedAfterCompletion = JSON.parse(JSON.stringify(bundle)) as Gate1ProofBundle;
+    (
+      handlerObservedAfterCompletion.evidence.traceLedger as unknown as {
+        current: Array<{ cancellationObservedAfterCompletion: boolean }>;
+      }
+    ).current[1]!.cancellationObservedAfterCompletion = true;
+    await resealBundle(handlerObservedAfterCompletion);
+    await expect(verifyGate1ProofBundle(handlerObservedAfterCompletion)).resolves.toMatchObject({
+      status: "internally-consistent"
+    });
+
+    const wrongTerminal = JSON.parse(JSON.stringify(bundle)) as Gate1ProofBundle;
+    (
+      wrongTerminal.evidence.traceLedger as unknown as {
+        current: Array<{ status: string }>;
+      }
+    ).current[1]!.status = "expected_error";
+    const finishEvents = wrongTerminal.evidence.journal.events as Array<{
+      kind: string;
+      payload: { traceObservation?: { lastTrace?: { status: string } } };
+    }>;
+    finishEvents.find(
+      ({ kind }) => kind === "native_attempt_finished"
+    )!.payload.traceObservation!.lastTrace!.status = "expected_error";
+    await resealBundle(wrongTerminal);
+    await expect(verifyGate1ProofBundle(wrongTerminal)).rejects.toThrow(
+      "exact harmless completed-or-canceled cart_get"
+    );
+
+    const wrongResult = JSON.parse(JSON.stringify(bundle)) as Gate1ProofBundle;
+    const wrongResultTrace = (
+      wrongResult.evidence.traceLedger as unknown as {
+        current: Array<{
+          rawResult: { value: unknown; bytes: string; sha256: string };
+          canonicalResult: { value: unknown; bytes: string; sha256: string };
+        }>;
+      }
+    ).current[1]!;
+    await overwriteCanonicalEvidence(wrongResultTrace.rawResult, { ok: false });
+    await overwriteCanonicalEvidence(wrongResultTrace.canonicalResult, { ok: false });
+    const wrongResultEvents = wrongResult.evidence.journal.events as Array<{
+      kind: string;
+      payload: { traceObservation?: { lastTrace?: { resultDigest: string } } };
+    }>;
+    wrongResultEvents.find(
+      ({ kind }) => kind === "native_attempt_finished"
+    )!.payload.traceObservation!.lastTrace!.resultDigest = wrongResultTrace.canonicalResult.sha256;
+    await resealBundle(wrongResult);
+    await expect(verifyGate1ProofBundle(wrongResult)).rejects.toThrow(
+      "exact harmless completed-or-canceled cart_get"
+    );
+
+    const wrongInput = JSON.parse(JSON.stringify(bundle)) as Gate1ProofBundle;
+    const wrongInputEvents = wrongInput.evidence.journal.events as Array<{
+      kind: string;
+      payload: { input?: Record<string, unknown> };
+    }>;
+    wrongInputEvents.find(({ kind }) => kind === "native_attempt_started")!.payload.input = {
+      unexpected: true
+    };
+    const wrongInputTrace = (
+      wrongInput.evidence.traceLedger as unknown as {
+        current: Array<{
+          rawArguments: { value: unknown; bytes: string; sha256: string };
+          canonicalArguments: { value: unknown; bytes: string; sha256: string };
+        }>;
+      }
+    ).current[1]!;
+    await overwriteCanonicalEvidence(wrongInputTrace.rawArguments, { unexpected: true });
+    await overwriteCanonicalEvidence(wrongInputTrace.canonicalArguments, { unexpected: true });
+    await resealBundle(wrongInput);
+    await expect(verifyGate1ProofBundle(wrongInput)).rejects.toThrow("native/read-only boundary");
+
+    const handlerError = JSON.parse(JSON.stringify(bundle)) as Gate1ProofBundle;
+    const handlerErrorEvidence = (
+      handlerError.evidence.traceLedger as unknown as {
+        current: Array<{ error: { value: unknown; bytes: string; sha256: string } }>;
+      }
+    ).current[1]!.error;
+    await overwriteCanonicalEvidence(handlerErrorEvidence, {
+      name: "Error",
+      message: "Unexpected completed-handler error"
+    });
+    await resealBundle(handlerError);
+    await expect(verifyGate1ProofBundle(handlerError)).rejects.toThrow(
+      "exact harmless completed-or-canceled cart_get"
+    );
+
+    const wrongCommit = JSON.parse(JSON.stringify(bundle)) as Gate1ProofBundle;
+    (
+      wrongCommit.evidence.traceLedger as unknown as {
+        current: Array<{ commitDisposition: string }>;
+      }
+    ).current[1]!.commitDisposition = "committed";
+    await resealBundle(wrongCommit);
+    await expect(verifyGate1ProofBundle(wrongCommit)).rejects.toThrow(
+      "exact harmless completed-or-canceled cart_get"
+    );
+
+    const malformedAdapterError = JSON.parse(JSON.stringify(bundle)) as Gate1ProofBundle;
+    const malformedEvents = malformedAdapterError.evidence.journal.events as Array<{
+      kind: string;
+      payload: { error?: Record<string, unknown> };
+    }>;
+    malformedEvents.find(
+      ({ kind }) => kind === "native_attempt_finished"
+    )!.payload.error!.unexpected = true;
+    await resealBundle(malformedAdapterError);
+    await expect(verifyGate1ProofBundle(malformedAdapterError)).rejects.toThrow(
+      "native/read-only boundary"
+    );
+
+    const missingObservation = JSON.parse(JSON.stringify(bundle)) as Gate1ProofBundle;
+    const missingObservationEvents = missingObservation.evidence.journal.events as Array<{
+      kind: string;
+      payload: { traceObservation?: unknown };
+    }>;
+    missingObservationEvents.find(
+      ({ kind }) => kind === "native_attempt_finished"
+    )!.payload.traceObservation = null;
+    await resealBundle(missingObservation);
+    await expect(verifyGate1ProofBundle(missingObservation)).rejects.toThrow(
+      "native/read-only boundary"
+    );
   });
 
   it("binds domain reset, archive, terminal verification, and current reset receipts", async () => {

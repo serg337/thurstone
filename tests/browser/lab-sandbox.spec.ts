@@ -49,6 +49,7 @@ async function installEmulatedConsumer(page: Page, mode: "object" | "json-string
         readonly handlerSettled: boolean;
         readonly inputType: string;
       }> = [];
+      const nativeBehavior = { completeCanceledCartGetBeforeReject: false };
       let delayNextDigest = false;
       let releaseDigest: (() => void) | undefined;
       const subtle = globalThis.crypto?.subtle;
@@ -77,6 +78,12 @@ async function installEmulatedConsumer(page: Page, mode: "object" | "json-string
       }
       Object.defineProperty(window, "__toolProofNativeObservations", {
         value: observations,
+        configurable: false,
+        enumerable: false,
+        writable: false
+      });
+      Object.defineProperty(window, "__toolProofNativeBehavior", {
+        value: nativeBehavior,
         configurable: false,
         enumerable: false,
         writable: false
@@ -148,24 +155,30 @@ async function installEmulatedConsumer(page: Page, mode: "object" | "json-string
                 : (input as Record<string, unknown>);
           const proveVisibleBeforeSettlement =
             selected.name === "cart_update" && semanticInput.operationId === "native_update_0001";
+          const completeCanceledCartGetBeforeReject =
+            selected.name === "cart_get" &&
+            options?.signal !== undefined &&
+            nativeBehavior.completeCanceledCartGetBeforeReject;
           if (proveVisibleBeforeSettlement) {
             delayNextDigest = true;
             releaseDigest = undefined;
           }
           let handlerSettled = false;
           const handler = Promise.resolve(
-            mode === "json-string"
-              ? Reflect.apply(
-                  active.execute,
-                  active,
-                  options?.signal ? [semanticInput, { signal: options.signal }] : [semanticInput]
-                )
-              : active.execute(
-                  semanticInput,
-                  options?.signal
-                    ? { signal: options.signal }
-                    : { signal: new AbortController().signal }
-                )
+            completeCanceledCartGetBeforeReject
+              ? Reflect.apply(active.execute, active, [semanticInput])
+              : mode === "json-string"
+                ? Reflect.apply(
+                    active.execute,
+                    active,
+                    options?.signal ? [semanticInput, { signal: options.signal }] : [semanticInput]
+                  )
+                : active.execute(
+                    semanticInput,
+                    options?.signal
+                      ? { signal: options.signal }
+                      : { signal: new AbortController().signal }
+                  )
           ).finally(() => {
             handlerSettled = true;
           });
@@ -195,6 +208,9 @@ async function installEmulatedConsumer(page: Page, mode: "object" | "json-string
               handlerSettled,
               inputType
             });
+          }
+          if (completeCanceledCartGetBeforeReject && options.signal?.aborted) {
+            throw options.signal.reason ?? new DOMException("Canceled", "AbortError");
           }
           await new Promise((resolve) => setTimeout(resolve, 15));
           return JSON.stringify(result);
@@ -491,6 +507,13 @@ test("JSON-string one download preserves the complete Gate 1 journal and trace h
   await page.getByLabel("checkout_cancel operationId").fill("bundle_cancel_0001");
   await page.getByRole("button", { name: "Native checkout_cancel" }).click();
   await expect(page.getByText(/Simulated checkout pending human approval/iu)).toBeHidden();
+  await page.evaluate(() => {
+    (
+      window as typeof window & {
+        __toolProofNativeBehavior: { completeCanceledCartGetBeforeReject: boolean };
+      }
+    ).__toolProofNativeBehavior.completeCanceledCartGetBeforeReject = true;
+  });
   await page.getByRole("button", { name: "Native cart_get cancellation probe" }).click();
   await expect(nativeReceipt).toContainText('"code": "execution_canceled"');
   await expect(nativeReceipt).toContainText('"nativeCallMade": true');
@@ -523,8 +546,9 @@ test("JSON-string one download preserves the complete Gate 1 journal and trace h
       };
       traceLedger: {
         totalTraceCount: number;
-        archives: Array<{ traces: unknown[] }>;
-        resetTraces: unknown[];
+        archives: Array<{ traces: Array<Record<string, unknown>> }>;
+        resetTraces: Array<Record<string, unknown>>;
+        current: Array<Record<string, unknown>>;
       };
       currentReceipts: { verifiedReset: { status: string } };
     };
@@ -600,12 +624,39 @@ test("JSON-string one download preserves the complete Gate 1 journal and trace h
   expect(cancellationFinish?.payload.traceObservation).toMatchObject({
     lastTrace: {
       toolName: "cart_get",
-      status: "canceled",
+      status: "completed",
       stateBeforeDigest: expect.any(String),
       stateAfterDigest: expect.any(String),
       effectDigest: expect.any(String)
     }
   });
+  const cancellationTraceId = (
+    cancellationFinish?.payload.traceObservation as {
+      lastTrace?: { eventId?: string };
+    }
+  )?.lastTrace?.eventId;
+  const cancellationTrace = [
+    ...bundle.evidence.traceLedger.archives.flatMap(({ traces }) => traces),
+    ...bundle.evidence.traceLedger.resetTraces,
+    ...bundle.evidence.traceLedger.current
+  ].find(({ eventId }) => eventId === cancellationTraceId);
+  expect(cancellationTrace).toMatchObject({
+    toolName: "cart_get",
+    operationId: null,
+    status: "completed",
+    commitDisposition: "none",
+    cancellationObservedAfterCommit: false,
+    cancellationObservedAfterCompletion: false,
+    rawArguments: { value: {} },
+    canonicalArguments: { value: {} },
+    rawResult: { value: { ok: true } },
+    canonicalResult: { value: { ok: true } },
+    error: { value: null },
+    effect: { stateChanged: false }
+  });
+  expect((cancellationTrace?.stateBefore as { sha256?: string } | undefined)?.sha256).toBe(
+    (cancellationTrace?.stateAfter as { sha256?: string } | undefined)?.sha256
+  );
   expect(bundle.evidence.traceLedger.totalTraceCount).toBeGreaterThanOrEqual(10);
   expect(bundle.evidence.traceLedger.archives).toHaveLength(1);
   expect(bundle.evidence.traceLedger.resetTraces).toHaveLength(1);
