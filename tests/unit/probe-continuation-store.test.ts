@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { canonicalJson } from "@/lib/evidence/digest";
 import {
   PROBE_CONTINUATION_SCRIPTS,
   PROBE_CONTINUATION_TTL_SECONDS,
@@ -146,17 +147,18 @@ describe("encrypted Probe continuation store", () => {
     const reader = fakeRedis({
       evalRo: async () => [1, "FOUND", token, binding, createdAtMs, expiresAtMs, ttlMs - 5_000]
     });
-    await expect(
-      getProbeContinuation<typeof payload>(reader.client, {
-        jti,
-        stage: "completion",
-        artifactSecret
-      })
-    ).resolves.toMatchObject({
+    const recovered = await getProbeContinuation<typeof payload>(reader.client, {
+      jti,
+      stage: "completion",
+      artifactSecret
+    });
+    expect(recovered).toMatchObject({
       disposition: "recovered",
       payload,
       ttlRemainingMs: ttlMs - 5_000
     });
+    expect(JSON.stringify(recovered?.payload)).not.toBe(JSON.stringify(payload));
+    expect(canonicalJson(recovered?.payload)).toBe(canonicalJson(payload));
     expect(reader.evalMock).not.toHaveBeenCalled();
     expect(PROBE_CONTINUATION_SCRIPTS.get).not.toContain("PEXPIRE");
 

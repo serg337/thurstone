@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 
+import { canonicalJson } from "../lib/evidence/digest";
 import {
   PROBE_CONTINUATION_STAGES,
   createProbeContinuationKeyspace,
@@ -38,7 +39,7 @@ try {
       { jti, stage, artifactSecret },
       keyspace
     );
-    if (!recovered || JSON.stringify(recovered.payload) !== JSON.stringify(payload)) {
+    if (!recovered || canonicalJson(recovered.payload) !== canonicalJson(payload)) {
       throw new Error("continuation_recovery_mismatch");
     }
   }
