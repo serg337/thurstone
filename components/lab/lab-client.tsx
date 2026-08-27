@@ -24,6 +24,11 @@ import {
   CheckoutTraceLedger,
   type CheckoutTraceLedgerSnapshot
 } from "@/lib/evidence/checkout-trace-ledger";
+import {
+  createGate1ProofBundle,
+  downloadGate1ProofBundle,
+  Gate1EvidenceJournal
+} from "@/lib/evidence/gate1-proof-bundle";
 import type { OperationTrace } from "@/lib/evidence/operation-trace";
 import { detectWebMcpCapabilities, type WebMcpCapabilities } from "@/lib/webmcp/capabilities";
 import {
@@ -67,6 +72,7 @@ interface LabEnvironment {
   readonly binding: EvidenceBinding;
   readonly store: CheckoutSessionStore;
   readonly ledger: CheckoutTraceLedger;
+  readonly proofJournal: Gate1EvidenceJournal;
   readonly tools: CheckoutToolSet;
 }
 
@@ -101,8 +107,15 @@ function createEnvironment(): LabEnvironment {
     getArgumentMode: () => webMcpRuntime.argumentMode ?? "unverified",
     appCommit: APP_COMMIT
   });
+  const proofJournal = new Gate1EvidenceJournal();
   const store = new CheckoutSessionStore({ traceSink: ledger });
-  return Object.freeze({ binding, store, ledger, tools: createCheckoutTools(store) });
+  return Object.freeze({
+    binding,
+    store,
+    ledger,
+    proofJournal,
+    tools: createCheckoutTools(store)
+  });
 }
 
 function documentEnvironment(): LabEnvironment {
@@ -208,6 +221,9 @@ export function LabClient() {
   const [pendingDomainReset, setPendingDomainReset] = useState<DomainResetReceipt>();
   const [busy, setBusy] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [proofExporting, setProofExporting] = useState(false);
+  const [proofExportStatus, setProofExportStatus] = useState<string>();
+  const [proofExportError, setProofExportError] = useState<Readonly<Record<string, unknown>>>();
   const [quantities, setQuantities] = useState<Record<string, string>>(() =>
     Object.fromEntries(
       environment.store
@@ -226,6 +242,7 @@ export function LabClient() {
     let disposed = false;
     queueMicrotask(() => {
       if (!disposed) {
+        environment.proofJournal.recordCapabilities(detected);
         setCapabilities(detected);
         setCapabilitiesChecked(true);
       }
@@ -233,7 +250,7 @@ export function LabClient() {
     return () => {
       disposed = true;
     };
-  }, []);
+  }, [environment]);
 
   useEffect(
     () => () => {
@@ -262,10 +279,11 @@ export function LabClient() {
     }
 
     return webMcpRegistryManager.acquire(context, desiredTools, (status) => {
+      environment.proofJournal.recordRegistryStatus(status);
       setRegistryStatus(status);
       if (status.phase !== "ready") setReadiness(undefined);
     });
-  }, [desiredTools]);
+  }, [desiredTools, environment]);
 
   useEffect(() => {
     const context = document.modelContext;
@@ -301,6 +319,11 @@ export function LabClient() {
           receipt.runtimeCatalog &&
           typeof consumer.executeTool === "function"
         ) {
+          environment.proofJournal.recordReadinessReceipt(
+            receipt,
+            globalThis.window,
+            globalThis.location?.origin
+          );
           const cartTool = receipt.runtimeCatalog.tools.find(({ name }) => name === "cart_get");
           if (!cartTool) throw new Error("The verified runtime catalog has no cart_get tool.");
           const observe = async (): Promise<RuntimeObservation> => {
@@ -360,13 +383,20 @@ export function LabClient() {
             webMcpRuntime.verifyRegistry(receipt.runtimeCatalog);
           }
           environment.binding.setRegistryHash(receipt.manifestHash);
+          environment.proofJournal.recordReadinessReceipt(
+            receipt,
+            globalThis.window,
+            globalThis.location?.origin
+          );
           setReadiness(receipt);
           setReadinessError(undefined);
         }
       } catch (error) {
         if (!disposed && epoch === readinessEpoch.current) {
+          const receipt = errorReceipt(error);
+          environment.proofJournal.recordReadinessError(receipt);
           setReadiness(undefined);
-          setReadinessError(errorReceipt(error));
+          setReadinessError(receipt);
         }
       }
     })();
@@ -402,26 +432,37 @@ export function LabClient() {
     })
       .then((receipt) => {
         const released = environment.store.releaseResetAdmission(receipt.resetId);
-        if (!disposed) {
-          if (!released) {
+        if (!released) {
+          const error = Object.freeze({
+            name: "ResetAdmissionMismatch",
+            message: "Reset verification could not release the matching admission lock.",
+            resetId: receipt.resetId
+          });
+          environment.proofJournal.recordResetError(error);
+          if (!disposed) {
             setVerifiedReset(undefined);
-            setUiError(
-              Object.freeze({
-                name: "ResetAdmissionMismatch",
-                message: "Reset verification could not release the matching admission lock."
-              })
-            );
-          } else {
+            setUiError(error);
+          }
+        } else {
+          environment.proofJournal.recordResetVerificationReceipt(receipt);
+          if (!disposed) {
             setVerifiedReset(receipt);
           }
+        }
+        if (!disposed) {
           setResetting(false);
         }
       })
       .catch((error: unknown) => {
         environment.store.releaseResetAdmission(pendingDomainReset.resetId);
+        const receipt = errorReceipt(error);
+        environment.proofJournal.recordResetError({
+          resetId: pendingDomainReset.resetId,
+          error: receipt
+        });
         if (!disposed) {
           setVerifiedReset(undefined);
-          setUiError(errorReceipt(error));
+          setUiError(receipt);
           setResetting(false);
         }
       });
@@ -449,14 +490,30 @@ export function LabClient() {
         })
           .then((receipt) => {
             if (environment.store.isResetAdmissionLocked()) {
-              environment.store.releaseResetAdmission(receipt.resetId);
-              setVerifiedReset(receipt);
+              const released = environment.store.releaseResetAdmission(receipt.resetId);
+              if (released) {
+                environment.proofJournal.recordResetVerificationReceipt(receipt);
+                setVerifiedReset(receipt);
+              } else {
+                const error = Object.freeze({
+                  name: "ResetAdmissionMismatch",
+                  message: "Fallback reset verification could not release admission.",
+                  resetId: receipt.resetId
+                });
+                environment.proofJournal.recordResetError(error);
+                setUiError(error);
+              }
               setResetting(false);
             }
           })
           .catch((error: unknown) => {
             environment.store.releaseResetAdmission(pendingDomainReset.resetId);
-            setUiError(errorReceipt(error));
+            const receipt = errorReceipt(error);
+            environment.proofJournal.recordResetError({
+              resetId: pendingDomainReset.resetId,
+              error: receipt
+            });
+            setUiError(receipt);
             setResetting(false);
           });
       },
@@ -473,7 +530,7 @@ export function LabClient() {
   ]);
 
   async function runUi(operation: () => Promise<LabReceipt>): Promise<void> {
-    if (busy || resetting || !capabilitiesChecked) return;
+    if (busy || resetting || proofExporting || !capabilitiesChecked) return;
     setBusy(true);
     setUiReceipt(undefined);
     setUiError(undefined);
@@ -502,7 +559,8 @@ export function LabClient() {
   }
 
   async function hardReset(): Promise<void> {
-    if (busy || resetting || !capabilitiesChecked) return;
+    if (busy || resetting || proofExporting || !capabilitiesChecked) return;
+    let attemptedResetId: string | null = null;
     setResetting(true);
     setVerifiedReset(undefined);
     setUiError(undefined);
@@ -514,6 +572,8 @@ export function LabClient() {
         source: "ui",
         holdForVerification: true
       });
+      attemptedResetId = domainReceipt.resetId;
+      environment.proofJournal.recordDomainResetReceipt(domainReceipt);
       setPendingDomainReset(domainReceipt);
       setUiReceipt(domainReceipt);
       setNativeReceipt(undefined);
@@ -534,22 +594,82 @@ export function LabClient() {
           },
           checkedAt: new Date().toISOString()
         });
-        environment.store.releaseResetAdmission(receipt.resetId);
+        const released = environment.store.releaseResetAdmission(receipt.resetId);
+        if (!released) throw new Error("Reset verification could not release admission.");
+        environment.proofJournal.recordResetVerificationReceipt(receipt);
         setVerifiedReset(receipt);
         setResetting(false);
       }
     } catch (error) {
       environment.store.abandonResetAdmission();
-      setUiError(errorReceipt(error));
+      const receipt = errorReceipt(error);
+      environment.proofJournal.recordResetError({ resetId: attemptedResetId, error: receipt });
+      setUiError(receipt);
       setResetting(false);
     }
+  }
+
+  async function observeNativeTrace(): Promise<ExecuteTraceObservation> {
+    const traceSnapshot = environment.ledger.snapshot();
+    const trace = latestTrace(traceSnapshot);
+    return {
+      stateHash: await canonicalSha256(environment.store.getSnapshot().state),
+      handlerTraceCount: traceSnapshot.totalTraceCount,
+      lastTrace: trace
+        ? {
+            eventId: trace.eventId,
+            source: trace.source,
+            toolName: trace.toolName,
+            status: trace.status,
+            registryHash: trace.registryHash,
+            resultDigest: trace.canonicalResult?.sha256 ?? null,
+            effectDigest: await canonicalSha256(trace.effect),
+            stateBeforeDigest: trace.stateBefore.sha256,
+            stateAfterDigest: trace.stateAfter.sha256
+          }
+        : null
+    };
+  }
+
+  async function recordNativeAttemptError(
+    executionId: string,
+    toolName: string,
+    traceCountBefore: number,
+    error: unknown
+  ): Promise<Readonly<Record<string, unknown>>> {
+    const receipt = errorReceipt(error);
+    let traceObservation: ExecuteTraceObservation | null = null;
+    let observationError: Readonly<Record<string, unknown>> | null = null;
+    try {
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        traceObservation = await observeNativeTrace();
+        if (
+          traceObservation.handlerTraceCount !== traceCountBefore ||
+          receipt.nativeCallMade !== true
+        ) {
+          break;
+        }
+        await new Promise<void>((resolve) => setTimeout(resolve, 10));
+      }
+    } catch (observationFailure) {
+      observationError = errorReceipt(observationFailure);
+    }
+    environment.proofJournal.recordNativeAttemptFinished({
+      executionId,
+      toolName,
+      outcome: "error",
+      error: receipt,
+      traceObservation,
+      observationError
+    });
+    return receipt;
   }
 
   async function runNative(
     toolName: CheckoutToolName,
     input: Readonly<Record<string, unknown>>
   ): Promise<void> {
-    if (busy || resetting || !capabilitiesChecked) return;
+    if (busy || resetting || proofExporting || !capabilitiesChecked) return;
     const catalogState = session.state.pendingCheckout ? "pending" : "initial";
     if (
       !readiness?.runtimeCatalog ||
@@ -561,55 +681,54 @@ export function LabClient() {
       readiness.fixtureRevision !== session.state.revision ||
       readiness.manifest.catalogState !== catalogState
     ) {
-      setNativeError(
-        Object.freeze({
-          name: "RuntimeNotReady",
-          message: "Native plumbing controls require a consumer-ready WebMCP receipt."
-        })
-      );
+      const error = Object.freeze({
+        name: "RuntimeNotReady",
+        message: "Native plumbing controls require a consumer-ready WebMCP receipt."
+      });
+      environment.proofJournal.recordNativeControlError({ toolName, input, error });
+      setNativeError(error);
       return;
     }
     const tool = readiness.runtimeCatalog.tools.find(({ name }) => name === toolName);
     if (!tool) {
-      setNativeError(
-        Object.freeze({
-          name: "ToolUnavailable",
-          message: `${toolName} is not present in the current verified catalog.`
-        })
-      );
+      const error = Object.freeze({
+        name: "ToolUnavailable",
+        message: `${toolName} is not present in the current verified catalog.`
+      });
+      environment.proofJournal.recordNativeControlError({ toolName, input, error });
+      setNativeError(error);
       return;
     }
 
+    const executionId = operationId("plumbing");
+    const traceCountBefore = environment.ledger.snapshot().totalTraceCount;
+    environment.proofJournal.recordNativeAttemptStarted({
+      executionId,
+      toolName,
+      input,
+      manifestHash: readiness.manifestHash,
+      registrationGeneration: readiness.runtimeCatalog.generation,
+      catalogState,
+      fixtureRevision: readiness.fixtureRevision,
+      stateHash: readiness.stateHash,
+      traceCount: traceCountBefore
+    });
     setBusy(true);
     setNativeError(undefined);
     setNativeReceipt(undefined);
     try {
       const result = await webMcpRuntime.executeOnce({
-        executionId: operationId("plumbing"),
+        executionId,
         manifestHash: readiness.manifestHash,
         tool,
         input,
-        observe: async (): Promise<ExecuteTraceObservation> => {
-          const traceSnapshot = environment.ledger.snapshot();
-          const trace = latestTrace(traceSnapshot);
-          return {
-            stateHash: await canonicalSha256(environment.store.getSnapshot().state),
-            handlerTraceCount: traceSnapshot.totalTraceCount,
-            lastTrace: trace
-              ? {
-                  eventId: trace.eventId,
-                  source: trace.source,
-                  toolName: trace.toolName,
-                  status: trace.status,
-                  registryHash: trace.registryHash,
-                  resultDigest: trace.canonicalResult?.sha256 ?? null,
-                  effectDigest: await canonicalSha256(trace.effect),
-                  stateBeforeDigest: trace.stateBefore.sha256,
-                  stateAfterDigest: trace.stateAfter.sha256
-                }
-              : null
-          };
-        }
+        observe: observeNativeTrace
+      });
+      environment.proofJournal.recordNativeAttemptFinished({
+        executionId,
+        toolName,
+        outcome: "receipt",
+        receipt: result
       });
       setNativeReceipt(result);
       if (
@@ -623,9 +742,145 @@ export function LabClient() {
         if (toolName === "checkout_cancel") setNativeCancelId(operationId("native_cancel"));
       }
     } catch (error) {
-      setNativeError(errorReceipt(error));
+      const receipt = await recordNativeAttemptError(
+        executionId,
+        toolName,
+        traceCountBefore,
+        error
+      );
+      setNativeError(receipt);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function runNativeCancellationProbe(): Promise<void> {
+    if (busy || resetting || proofExporting || !capabilitiesChecked) return;
+    const catalogState = session.state.pendingCheckout ? "pending" : "initial";
+    if (
+      !readiness?.runtimeCatalog ||
+      readiness.status !== "consumer-ready" ||
+      readinessError ||
+      registryStatus.phase !== "ready" ||
+      !sameNames(registryStatus.toolNames, desiredNames) ||
+      readiness.runtimeCatalog.generation !== (registryStatus.generation ?? 0) ||
+      readiness.fixtureRevision !== session.state.revision ||
+      readiness.manifest.catalogState !== catalogState
+    ) {
+      const error = Object.freeze({
+        name: "RuntimeNotReady",
+        message: "Native cancellation requires a consumer-ready WebMCP receipt."
+      });
+      environment.proofJournal.recordNativeControlError({
+        action: "cart_get_cancellation_probe",
+        error
+      });
+      setNativeError(error);
+      return;
+    }
+    const tool = readiness.runtimeCatalog.tools.find(({ name }) => name === "cart_get");
+    if (!tool) {
+      const error = Object.freeze({
+        name: "ToolUnavailable",
+        message: "The verified catalog has no cart_get cancellation probe tool."
+      });
+      environment.proofJournal.recordNativeControlError({
+        action: "cart_get_cancellation_probe",
+        error
+      });
+      setNativeError(error);
+      return;
+    }
+
+    const executionId = operationId("cancel_probe");
+    const traceCountBefore = environment.ledger.snapshot().totalTraceCount;
+    const input = Object.freeze({});
+    const controller = new AbortController();
+    environment.proofJournal.recordNativeAttemptStarted({
+      executionId,
+      toolName: "cart_get",
+      input,
+      manifestHash: readiness.manifestHash,
+      registrationGeneration: readiness.runtimeCatalog.generation,
+      catalogState,
+      fixtureRevision: readiness.fixtureRevision,
+      stateHash: readiness.stateHash,
+      traceCount: traceCountBefore
+    });
+    setBusy(true);
+    setNativeReceipt(undefined);
+    setNativeError(undefined);
+    try {
+      const result = await webMcpRuntime.executeOnce({
+        executionId,
+        manifestHash: readiness.manifestHash,
+        tool,
+        input,
+        observe: observeNativeTrace,
+        signal: controller.signal,
+        onNativeDispatch: () =>
+          controller.abort(new DOMException("Operator cancellation probe", "AbortError"))
+      });
+      environment.proofJournal.recordNativeAttemptFinished({
+        executionId,
+        toolName: "cart_get",
+        outcome: "receipt",
+        receipt: result
+      });
+      setNativeReceipt(result);
+    } catch (error) {
+      const receipt = await recordNativeAttemptError(
+        executionId,
+        "cart_get",
+        traceCountBefore,
+        error
+      );
+      setNativeError(receipt);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function exportGate1Proof(): Promise<void> {
+    if (busy || resetting || proofExporting || !capabilitiesChecked) return;
+    setProofExporting(true);
+    setProofExportStatus(undefined);
+    setProofExportError(undefined);
+    try {
+      const exportedAt = new Date().toISOString();
+      const bundle = await createGate1ProofBundle({
+        exportedAt,
+        appCommit: APP_COMMIT,
+        origin: globalThis.location.origin,
+        userAgent: globalThis.navigator.userAgent,
+        capabilities,
+        registryStatus,
+        readiness: readiness ?? null,
+        readinessError: readinessError ?? null,
+        ownerWindow: globalThis.window,
+        session: environment.store.getSnapshot(),
+        inspection: environment.store.inspect(),
+        domainArchives: environment.store.archivedTrajectories(),
+        traceLedger: environment.ledger.snapshot(),
+        journal: environment.proofJournal.snapshot(),
+        currentReceipts: {
+          uiReceipt: uiReceipt ?? null,
+          uiError: uiError ?? null,
+          nativeReceipt: nativeReceipt ?? null,
+          nativeError: nativeError ?? null,
+          verifiedReset: verifiedReset ?? null,
+          pendingDomainReset: pendingDomainReset ?? null,
+          lastNativeMutation: lastNativeMutation ?? null
+        }
+      });
+      const filename = downloadGate1ProofBundle(bundle);
+      setProofExportStatus(
+        `Download started for ${filename} · ${bundle.evidence.journal.eventCount} journal events · ${bundle.evidence.traceLedger.totalTraceCount} traces · evidence SHA-256 ${bundle.evidenceDigest}`
+      );
+    } catch (error) {
+      setProofExportError(errorReceipt(error));
+    } finally {
+      setProofExporting(false);
     }
   }
 
@@ -654,7 +909,8 @@ export function LabClient() {
         (registryStatus.phase === "ready" &&
           (!readinessCurrent ||
             (consumerPresent && readiness?.status === "consumer-discovered")))));
-  const controlsDisabled = busy || resetting || runtimeSetupPending || !!session.haltedReason;
+  const controlsDisabled =
+    busy || resetting || proofExporting || runtimeSetupPending || !!session.haltedReason;
   const nativeControlsReady =
     readiness?.status === "consumer-ready" &&
     !readinessError &&
@@ -668,7 +924,7 @@ export function LabClient() {
     !!readiness?.runtimeCatalog?.tools.some(({ name }) => name === lastNativeMutation.toolName);
 
   return (
-    <div className="lab-layout" aria-busy={busy || resetting}>
+    <div className="lab-layout" aria-busy={busy || resetting || proofExporting}>
       <section className="panel cart-panel" aria-labelledby="cart-title">
         <div className="panel-heading">
           <div>
@@ -947,6 +1203,13 @@ export function LabClient() {
           <button
             className="button button-secondary"
             disabled={controlsDisabled || !nativeControlsReady}
+            onClick={() => void runNativeCancellationProbe()}
+          >
+            Native cart_get cancellation probe
+          </button>
+          <button
+            className="button button-secondary"
+            disabled={controlsDisabled || !nativeControlsReady}
             onClick={() => void runNative("order_review", {})}
           >
             Native order_review
@@ -1057,6 +1320,47 @@ export function LabClient() {
           UI and native handlers share one serialized checkout store. Direct expected calls above
           are plumbing evidence only and are never counted as semantic model-selection evidence.
         </p>
+      </section>
+
+      <section className="panel trace-panel" aria-labelledby="proof-export-title">
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">One document · one attachment</span>
+            <h2 id="proof-export-title">Gate 1 proof bundle</h2>
+          </div>
+        </div>
+        <p>
+          Download one JSON file containing this document&apos;s Registry and Readiness history,
+          native attempts and receipts, reset receipts, full trace ledger, current synthetic state,
+          and canonical hash chain. It includes no cookies, browser history, account data, or
+          automatic upload. Exact public origin and raw browser user agent are included only as
+          runtime provenance.
+        </p>
+        <div className="button-row">
+          <button
+            type="button"
+            className="button button-primary"
+            disabled={busy || resetting || proofExporting || runtimeSetupPending}
+            onClick={() => void exportGate1Proof()}
+          >
+            {proofExporting ? "Preparing proof JSON…" : "Download Gate 1 proof JSON"}
+          </button>
+        </div>
+        <p className="trace-note">
+          This is native-plumbing evidence only. Its hashes prove internal consistency, not external
+          attestation, model selection, semantic scoring, or Direct ChatGPT behavior. A full page
+          reload starts a new proof document.
+        </p>
+        {proofExportStatus ? (
+          <p className="proof-export-status" role="status" aria-live="polite">
+            {proofExportStatus}
+          </p>
+        ) : null}
+        {proofExportError ? (
+          <pre className="error-text" role="alert" tabIndex={0}>
+            {JSON.stringify(proofExportError, null, 2)}
+          </pre>
+        ) : null}
       </section>
     </div>
   );

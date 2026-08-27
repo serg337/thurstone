@@ -1,8 +1,44 @@
-import { expect, test, type Page } from "@playwright/test";
+import { createHash } from "node:crypto";
+
+import { expect, test, type Download, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { canonicalize } from "json-canonicalize";
 
 const pageErrors = new WeakMap<Page, string[]>();
 const hydrationWarnings = new WeakMap<Page, string[]>();
+
+function sha256(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+async function downloadText(download: Download): Promise<string> {
+  const stream = await download.createReadStream();
+  let value = "";
+  for await (const chunk of stream) value += chunk.toString();
+  return value;
+}
+
+async function overflowingElements(page: Page): Promise<readonly unknown[]> {
+  return page.evaluate(() => {
+    const viewportWidth = document.documentElement.clientWidth;
+    return [...document.body.querySelectorAll<HTMLElement>("*")]
+      .filter((element) => {
+        const rect = element.getBoundingClientRect();
+        return rect.left < -1 || rect.right > viewportWidth + 1;
+      })
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          tag: element.tagName.toLowerCase(),
+          className: element.className,
+          text: (element.textContent ?? "").trim().slice(0, 120),
+          left: Math.round(rect.left),
+          right: Math.round(rect.right),
+          viewportWidth
+        };
+      });
+  });
+}
 
 async function installEmulatedConsumer(page: Page, mode: "object" | "json-string"): Promise<void> {
   await page.addInitScript(
@@ -119,7 +155,11 @@ async function installEmulatedConsumer(page: Page, mode: "object" | "json-string
           let handlerSettled = false;
           const handler = Promise.resolve(
             mode === "json-string"
-              ? Reflect.apply(active.execute, active, [semanticInput])
+              ? Reflect.apply(
+                  active.execute,
+                  active,
+                  options?.signal ? [semanticInput, { signal: options.signal }] : [semanticInput]
+                )
               : active.execute(
                   semanticInput,
                   options?.signal
@@ -297,7 +337,7 @@ test("quantity editor resynchronizes from persistent state after a route remount
 test("emulated consumer exercises the exact native boundary and observes state before resolution", async ({
   page
 }) => {
-  await page.getByRole("button", { name: "Native cart_get" }).click();
+  await page.getByRole("button", { name: "Native cart_get", exact: true }).click();
   await page.getByRole("button", { name: "Native order_review" }).click();
   await page.getByLabel("cart_update operationId").fill("short");
   await page.getByRole("button", { name: "Native cart_update" }).click();
@@ -363,7 +403,7 @@ test("emulated consumer exercises the exact native boundary and observes state b
 test("JSON-string emulated consumer serializes once and supports omitted handler context", async ({
   page
 }) => {
-  await page.getByRole("button", { name: "Native cart_get" }).click();
+  await page.getByRole("button", { name: "Native cart_get", exact: true }).click();
   await page.getByRole("button", { name: "Native order_review" }).click();
 
   const nativeReceipt = page.locator("article").filter({ hasText: "Native adapter receipt" });
@@ -387,6 +427,247 @@ test("JSON-string emulated consumer serializes once and supports omitted handler
     toolName: "order_review",
     inputType: "string"
   });
+
+  await page.getByRole("button", { name: "Native cart_get cancellation probe" }).click();
+  await expect(nativeReceipt).toContainText('"code": "execution_canceled"');
+  await expect(nativeReceipt).toContainText('"nativeCallMade": true');
+  const traceText = await page
+    .locator("article")
+    .filter({ hasText: "Latest native handler trace" })
+    .locator("pre")
+    .textContent();
+  const canceledTrace = JSON.parse(traceText ?? "null") as {
+    status: string;
+    stateBefore: { sha256: string };
+    stateAfter: { sha256: string };
+    effect: { stateChanged: boolean };
+  };
+  expect(canceledTrace.status).toBe("canceled");
+  expect(canceledTrace.stateAfter.sha256).toBe(canceledTrace.stateBefore.sha256);
+  expect(canceledTrace.effect.stateChanged).toBe(false);
+});
+
+test("JSON-string one download preserves the complete Gate 1 journal and trace history", async ({
+  page
+}) => {
+  const nativeReceipt = page.locator("article").filter({ hasText: "Native adapter receipt" });
+
+  await page.getByRole("button", { name: "Native cart_get", exact: true }).click();
+  await expect(nativeReceipt).toContainText('"toolName": "cart_get"');
+  await page.getByRole("button", { name: "Native order_review" }).click();
+  await expect(nativeReceipt).toContainText('"toolName": "order_review"');
+
+  await page.getByLabel("cart_update operationId").fill("short");
+  await page.getByRole("button", { name: "Native cart_update" }).click();
+  await expect(nativeReceipt).toContainText('"code": "invalid_operation_id"');
+  await page.getByLabel("cart_update operationId").fill("bundle_update_0001");
+  await page.getByRole("button", { name: "Native cart_update" }).click();
+  await expect(nativeReceipt).toContainText('"replayed": false');
+  await page.getByRole("button", { name: "Replay last native mutation" }).click();
+  await expect(nativeReceipt).toContainText('"replayed": true');
+
+  await page.getByRole("link", { name: "Results" }).click();
+  await expect(page).toHaveURL(/\/results$/u);
+  await page.evaluate(() => {
+    const owner = window as typeof window & {
+      next?: { readonly router?: { push(href: string): void } };
+    };
+    if (!owner.next?.router) throw new Error("Next.js app router is unavailable.");
+    owner.next.router.push("/lab?proof-remount=1");
+  });
+  await expect(page).toHaveURL(/\/lab\?proof-remount=1$/u);
+  await expect(page.getByText("consumer-ready", { exact: true })).toBeVisible();
+
+  await page.getByLabel("checkout_request operationId").fill("bundle_request_0001");
+  await page.getByRole("button", { name: "Native checkout_request" }).click();
+  await expect(page.getByText(/Simulated checkout pending human approval/iu)).toBeVisible();
+  await expect(page.locator(".runtime-receipt").first()).toContainText("checkout_cancel");
+  await page.getByRole("button", { name: "Replay last native mutation" }).click();
+  await expect(nativeReceipt).toContainText('"replayed": true');
+  await page.getByLabel("checkout_request operationId").fill("bundle_request_0002");
+  await page.getByRole("button", { name: "Native checkout_request" }).click();
+  await expect(nativeReceipt).toContainText('"code": "already_pending"');
+
+  await page.getByLabel("checkout_cancel operationId").fill("bundle_cancel_0001");
+  await page.getByRole("button", { name: "Native checkout_cancel" }).click();
+  await expect(page.getByText(/Simulated checkout pending human approval/iu)).toBeHidden();
+  await page.getByRole("button", { name: "Native cart_get cancellation probe" }).click();
+  await expect(nativeReceipt).toContainText('"code": "execution_canceled"');
+  await expect(nativeReceipt).toContainText('"nativeCallMade": true');
+  await page.getByRole("button", { name: "Hard reset fixture" }).click();
+  const resetArticle = page.locator("article").filter({ hasText: "Reset verification receipt" });
+  await expect(resetArticle).toContainText('"status": "verified"');
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download Gate 1 proof JSON" }).click();
+  const download = await downloadPromise;
+  const text = await downloadText(download);
+  const bundle = JSON.parse(text) as {
+    bundleVersion: string;
+    exportedAt: string;
+    evidenceDigest: string;
+    bundleDigest: string;
+    evidence: {
+      classification: Record<string, unknown>;
+      provenance: { appCommit: string };
+      journal: {
+        eventCount: number;
+        headHash: string;
+        events: Array<{
+          sequence: number;
+          kind: string;
+          previousEventHash: string | null;
+          eventHash: string;
+          payload: Record<string, unknown>;
+        }>;
+      };
+      traceLedger: {
+        totalTraceCount: number;
+        archives: Array<{ traces: unknown[] }>;
+        resetTraces: unknown[];
+      };
+      currentReceipts: { verifiedReset: { status: string } };
+    };
+  };
+
+  expect(bundle.bundleVersion).toBe("toolproof-gate1-native-proof@1");
+  expect(bundle.evidence.classification).toMatchObject({
+    evidenceClass: "native-plumbing",
+    modelSelectionEvidence: false,
+    semanticScoringEvidence: false,
+    directChatGPTEvidence: false,
+    gate1CompletionClaim: false,
+    externalAttestation: false,
+    applicationPayloadsSyntheticOnly: true
+  });
+  expect(bundle.evidenceDigest).toBe(
+    sha256(`toolproof-gate1-evidence@1\n${canonicalize(bundle.evidence)}`)
+  );
+  const { bundleDigest, ...unsignedBundle } = bundle;
+  expect(bundleDigest).toBe(sha256(`toolproof-gate1-bundle@1\n${canonicalize(unsignedBundle)}`));
+
+  let previousEventHash: string | null = null;
+  for (const [index, event] of bundle.evidence.journal.events.entries()) {
+    expect(event.sequence).toBe(index + 1);
+    expect(event.previousEventHash).toBe(previousEventHash);
+    const { eventHash, ...content } = event;
+    expect(eventHash).toBe(sha256(`toolproof-gate1-journal-event@1\n${canonicalize(content)}`));
+    previousEventHash = eventHash;
+  }
+  expect(bundle.evidence.journal.headHash).toBe(previousEventHash);
+  expect(bundle.evidence.journal.eventCount).toBe(bundle.evidence.journal.events.length);
+
+  const kinds = bundle.evidence.journal.events.map(({ kind }) => kind);
+  expect(kinds).toEqual(
+    expect.arrayContaining([
+      "capabilities",
+      "registry_status",
+      "readiness_receipt",
+      "native_attempt_started",
+      "native_attempt_finished",
+      "domain_reset_receipt",
+      "reset_verification_receipt"
+    ])
+  );
+  const readinessStates = bundle.evidence.journal.events
+    .filter(({ kind }) => kind === "readiness_receipt")
+    .map(({ payload }) => (payload.manifest as { catalogState: string }).catalogState);
+  expect(new Set(readinessStates)).toEqual(new Set(["initial", "pending"]));
+  expect(
+    bundle.evidence.journal.events
+      .filter(({ kind }) => kind === "registry_status")
+      .some(({ payload }) => (payload.toolNames as string[]).includes("checkout_cancel"))
+  ).toBe(true);
+  expect(
+    bundle.evidence.journal.events
+      .filter(({ kind }) => kind === "native_attempt_started")
+      .some(
+        ({ payload }) =>
+          (payload.input as { operationId?: string }).operationId === "bundle_update_0001"
+      )
+  ).toBe(true);
+  expect(
+    bundle.evidence.journal.events.filter(({ kind }) => kind === "native_attempt_finished").length
+  ).toBeGreaterThanOrEqual(10);
+  const cancellationFinish = bundle.evidence.journal.events
+    .filter(({ kind }) => kind === "native_attempt_finished")
+    .find(
+      ({ payload }) =>
+        payload.outcome === "error" &&
+        (payload.error as { code?: string }).code === "execution_canceled"
+    );
+  expect(cancellationFinish?.payload.error).toMatchObject({ nativeCallMade: true });
+  expect(cancellationFinish?.payload.traceObservation).toMatchObject({
+    lastTrace: {
+      toolName: "cart_get",
+      status: "canceled",
+      stateBeforeDigest: expect.any(String),
+      stateAfterDigest: expect.any(String),
+      effectDigest: expect.any(String)
+    }
+  });
+  expect(bundle.evidence.traceLedger.totalTraceCount).toBeGreaterThanOrEqual(10);
+  expect(bundle.evidence.traceLedger.archives).toHaveLength(1);
+  expect(bundle.evidence.traceLedger.resetTraces).toHaveLength(1);
+  expect(bundle.evidence.currentReceipts.verifiedReset.status).toBe("verified");
+  expect(text).not.toMatch(/"(?:window|execute|signal|controller|cookie)"\s*:/u);
+  expect(text).not.toMatch(/\/Users\/|\/home\/|\/mnt\/|\/Volumes\//u);
+  expect(download.suggestedFilename()).toMatch(
+    /^toolproof-gate1-native-[A-Za-z0-9_-]{1,12}-\d{8}T\d{6}Z\.json$/u
+  );
+  await expect(page.getByRole("status")).toContainText(bundle.evidenceDigest);
+  const exportViolations = (await new AxeBuilder({ page }).analyze()).violations.filter(
+    ({ impact }) => impact === "serious" || impact === "critical"
+  );
+  expect(exportViolations).toEqual([]);
+  expect(await overflowingElements(page)).toEqual([]);
+});
+
+test("full reload starts a new proof document instead of mixing prior evidence", async ({
+  page
+}) => {
+  await page.getByRole("button", { name: "Native cart_get", exact: true }).click();
+  const before = await page.evaluate(() => {
+    const environment = (
+      window as typeof window & {
+        __toolProofLabEnvironment: {
+          store: { getSnapshot(): { sessionId: string } };
+          proofJournal: {
+            snapshot(): { eventCount: number; entries: readonly { kind: string }[] };
+          };
+        };
+      }
+    ).__toolProofLabEnvironment;
+    return {
+      sessionId: environment.store.getSnapshot().sessionId,
+      eventCount: environment.proofJournal.snapshot().eventCount
+    };
+  });
+  expect(before.eventCount).toBeGreaterThan(0);
+
+  await page.reload();
+  await expect(page.getByText("consumer-ready", { exact: true })).toBeVisible();
+  const after = await page.evaluate(() => {
+    const environment = (
+      window as typeof window & {
+        __toolProofLabEnvironment: {
+          store: { getSnapshot(): { sessionId: string } };
+          proofJournal: {
+            snapshot(): { eventCount: number; entries: readonly { kind: string }[] };
+          };
+        };
+      }
+    ).__toolProofLabEnvironment;
+    const journal = environment.proofJournal.snapshot();
+    return {
+      sessionId: environment.store.getSnapshot().sessionId,
+      eventCount: journal.eventCount,
+      nativeStarts: journal.entries.filter(({ kind }) => kind === "native_attempt_started").length
+    };
+  });
+  expect(after.sessionId).not.toBe(before.sessionId);
+  expect(after.nativeStarts).toBe(0);
+  expect(after.eventCount).toBeLessThan(before.eventCount);
 });
 
 test("consumer-ready pending and reset states remain accessible without horizontal overflow", async ({

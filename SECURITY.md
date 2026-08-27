@@ -15,6 +15,8 @@ ToolProof is a deterministic simulated checkout/review sandbox. It has no real p
 - Cancellation is latched through asynchronous evidence finalization. Duplicate operations, blocked admission, partial mutations, and unexpected failures remain explicitly distinguishable.
 - Registry transitions stop new admission, preserve in-flight calls, verify exact discovery, and fail closed or quarantine on bounded lifecycle failure.
 - Reset holds operation admission until state, registry, session-summary, archive, and full trace evidence agree.
+- The Gate 1 evidence download uses controlled project snapshots and explicit allowlisted runtime projections. Application payloads are synthetic; exact public origin and raw browser user agent are the limited runtime-provenance exception. It never reads or exports cookies, browser history, account data, storage outside ToolProof, live `Window`/ModelContext objects, handlers, signals, controllers, secrets, or environment variables.
+- Export fails closed on unfinished native attempts, journal faults/overflow, chain/digest mismatch, oversized output, credential-like material, email addresses, or absolute local paths. The file is downloaded locally through a temporary object URL and is never uploaded automatically.
 - Unsupported clients receive an honest explanation and never a polyfilled native result.
 
 ## Model-backed lane

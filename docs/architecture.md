@@ -24,6 +24,8 @@ Chrome 151's `getTools()` descriptor serializes `inputSchema`. Discovery parses 
 
 Readiness keeps the active tool-registry hash separate from the fixture state hash. The registry hash covers the state-appropriate metadata, annotations, handler/domain/toolset versions, and application commit; ordinary quantity changes therefore do not masquerade as registry changes. Each direct native adapter receipt binds raw/canonical result, trace ID, before/after state, effect digest, and the registry used at dispatch.
 
+A document-owned Gate 1 proof journal records explicit Registry statuses, sanitized Readiness receipts, native attempt starts/finishes, and reset outcomes across same-document route remounts. It never serializes live `Window`, ModelContext, handler, signal, store, or controller objects. Export seals the journal into a SHA-256 chain and combines it with the full trace ledger, state inspection, archives, current receipts, commit, origin, and runtime identity in one local JSON download. Full reload intentionally starts a new proof document.
+
 ## Reset and trace boundary
 
 Reset temporarily closes session admission, drains prior work through the serialized store, archives the old trajectory, restores exact fixture bytes, reconciles the initial catalog, and verifies both session summaries and full canonical trace-ledger evidence before releasing admission. An invalid or interrupted verification cannot start a trial.
@@ -38,4 +40,4 @@ Evaluator truth remains outside the Lab and model request. A server-issued signe
 
 ## Evidence
 
-Raw model bytes, parsed decision, raw/canonical arguments, native result, before/after state bytes, effect diff, runtime identity, and deterministic score remain separate layers joined by canonical hashes and terminal receipts. Hashes establish internal consistency; they are not independent attestation.
+Raw model bytes, parsed decision, raw/canonical arguments, native result, before/after state bytes, effect diff, runtime identity, and deterministic score remain separate layers joined by canonical hashes and terminal receipts. The Gate 1 bundle is explicitly native-plumbing evidence, never model-selection, semantic-scoring, or Direct ChatGPT evidence. Hashes establish internal consistency; they are not independent attestation.

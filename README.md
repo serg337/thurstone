@@ -4,7 +4,7 @@
 
 **ToolProof by Invarra — created by Sergio Valencia.**
 
-Status: Gate 0 is complete. The Gate 1 five-tool sandbox, dynamic registry, native execution adapter, reset verifier, and trace ledger are locally implemented and deterministically verified; authentic native receipts on the exact Gate 1 deployment are still pending. Chrome 151 previously discovered and invoked the deployed Gate 0 `cart_get` provider, and the production lifetime guard remains verified at zero use. The model-backed lane is disabled; no model-selection run, score, public repository release, or video exists yet.
+Status: Gate 0 is complete. The Gate 1 five-tool sandbox, dynamic registry, native execution adapter, reset verifier, trace ledger, and one-file native-proof export are locally implemented and deterministically verified; authentic native proof must be rerun on the exact export-enabled deployment. Chrome previously discovered and invoked deployed ToolProof tools, and the production lifetime guard remains verified at zero use. The model-backed lane is disabled; no model-selection run, score, public repository release, or video exists yet.
 
 **Simulated checkout — no purchase occurs.** ToolProof contains no payment, account, inventory, messaging, or external transaction path. When enabled later, model-backed evaluation may send synthetic prompts to the disclosed provider.
 
@@ -16,7 +16,8 @@ Status: Gate 0 is complete. The Gate 1 five-tool sandbox, dynamic registry, nati
 4. Use the normal UI or the clearly labeled direct native-plumbing controls to read, update, and review the shared deterministic fixture.
 5. Request simulated checkout and confirm `checkout_cancel` appears only while that request is pending; cancel it and verify the four-tool catalog returns.
 6. Hard reset and inspect the registry-bound reset verification receipt.
-7. Open `/results` and confirm ToolProof says **No authentic evidence is available** until terminal model-backed runs exist.
+7. Download the Gate 1 proof JSON once to preserve the document&apos;s complete Registry/Readiness timeline, native attempts, reset receipts, and trace ledger.
+8. Open `/results` and confirm ToolProof says **No authentic evidence is available** until terminal model-backed runs exist.
 
 Direct native-plumbing controls are deterministic Gate 1 diagnostics, not model-selection evidence.
 
@@ -63,6 +64,8 @@ npm run verify:publication
 ## Architecture
 
 ToolProof uses separate `/studio`, `/lab`, and `/results` documents as distinct trust surfaces. A strict TypeScript domain/session layer owns deterministic state, schema validation, replay-safe operation IDs, reset admission, and document-lifetime tombstones. Normal UI controls and native WebMCP handlers share that store. A per-tool registry manager preserves unchanged registrations, drains in-flight handlers before catalog changes, verifies discovery, and fails closed under lifecycle faults. The native adapter freezes one argument mode with a harmless `cart_get` call and binds each later direct call to exactly one canonical handler trace. Server-only Probe controls reserve one immutable challenge-lifetime call/spend slot before any future provider dispatch; public issue/decision routes currently fail closed with inference disabled.
+
+The Lab also owns a document-lifetime proof journal. One local JSON download contains its sanitized Registry/Readiness transitions, native attempt starts/finishes, reset receipts, full trace ledger, state inspection, chained event hashes, and bundle digests. Application payloads are synthetic; the exact public origin and raw browser user agent are disclosed only as required runtime provenance. The export reads no account/browser-history data and performs no upload. Hashes prove internal consistency, not external attestation.
 
 See [architecture](docs/architecture.md), [methodology](docs/methodology.md), [testing](docs/testing.md), [challenge requirements](CHALLENGE.md), and [official-source check](docs/OFFICIAL_SOURCE_CHECK.md).
 

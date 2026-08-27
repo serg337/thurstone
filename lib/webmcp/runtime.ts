@@ -69,6 +69,8 @@ export interface ExecuteOnceRequest {
   readonly input: Readonly<Record<string, unknown>>;
   readonly observe: () => ExecuteTraceObservation | Promise<ExecuteTraceObservation>;
   readonly signal?: AbortSignal;
+  /** Runs synchronously after executeTool() has been called, for an exact cancellation boundary. */
+  readonly onNativeDispatch?: () => void;
 }
 
 export interface ExecuteOnceResult {
@@ -529,6 +531,12 @@ export class WebMcpRuntime {
       );
     }
     assertToolBinding(request.tool, binding);
+    if (request.onNativeDispatch && binding.name !== "cart_get") {
+      throw new WebMcpRuntimeError(
+        "invalid_input",
+        "The post-dispatch hook is restricted to the harmless read-only cart_get cancellation probe."
+      );
+    }
     const capturedInput = snapshotJsonObject(request.input);
     this.consumedExecutionIds.add(request.executionId);
 
@@ -552,11 +560,22 @@ export class WebMcpRuntime {
       this.receipt.argumentMode === "json-string" ? this.serialize(capturedInput) : capturedInput;
     let rawResult: string | null;
     try {
-      rawResult = await this.context.executeTool(
+      const nativeResult = this.context.executeTool(
         request.tool,
         wireInput,
         request.signal ? { signal: request.signal } : undefined
       );
+      try {
+        request.onNativeDispatch?.();
+      } catch (hookFailure) {
+        try {
+          await nativeResult;
+        } catch {
+          // The read-only call reached a terminal boundary; preserve the hook failure as cause.
+        }
+        throw hookFailure;
+      }
+      rawResult = await nativeResult;
     } catch (cause) {
       if (abortErrorCode(cause, request.signal)) {
         throw new WebMcpRuntimeError("execution_canceled", "Native execution was canceled.", {

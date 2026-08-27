@@ -423,6 +423,72 @@ describe("WebMcpRuntime.executeOnce", () => {
     expect(execute).toHaveBeenCalledTimes(2);
   });
 
+  it("exposes an exact post-dispatch hook for a one-call cancellation probe", async () => {
+    const controller = new AbortController();
+    const execute = vi.fn(
+      async (
+        _tool: WebMCP.RegisteredTool,
+        _input: object | string,
+        options?: { readonly signal?: AbortSignal }
+      ) => {
+        if (execute.mock.calls.length === 1) return JSON.stringify(CART_RESULT);
+        expect(options?.signal).toBe(controller.signal);
+        await new Promise<void>((_resolve, reject) => {
+          options?.signal?.addEventListener(
+            "abort",
+            () => reject(options.signal?.reason ?? new DOMException("Canceled", "AbortError")),
+            { once: true }
+          );
+        });
+        return JSON.stringify(CART_RESULT);
+      }
+    );
+    const fixture = harness({ execute });
+    const runtime = new WebMcpRuntime();
+    await runtime.initializeWithCartGet(fixture.request);
+    const onNativeDispatch = vi.fn(() =>
+      controller.abort(new DOMException("Canceled", "AbortError"))
+    );
+
+    await expect(
+      executeWithObservation(runtime, fixture, {
+        executionId: "post-dispatch-cancel",
+        manifestHash: "manifest-hash",
+        tool: fixture.tool,
+        input: {},
+        signal: controller.signal,
+        onNativeDispatch
+      })
+    ).rejects.toSatisfy((error: unknown) => {
+      expectRuntimeCode(error, "execution_canceled");
+      expect((error as WebMcpRuntimeError).nativeCallMade).toBe(true);
+      return true;
+    });
+    expect(onNativeDispatch).toHaveBeenCalledOnce();
+    expect(execute).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects a post-dispatch hook on non-cart_get tools before native dispatch", async () => {
+    const { runtime, executeOnce, executeTool } = await readyRuntime();
+    const mutation = registeredTool("cart_update");
+    runtime.verifyRegistry({
+      generation: 2,
+      manifestHash: "mutation-manifest",
+      tools: [mutation]
+    });
+
+    await expect(
+      executeOnce({
+        executionId: "unsafe-dispatch-hook",
+        manifestHash: "mutation-manifest",
+        tool: mutation,
+        input: {},
+        onNativeDispatch: () => undefined
+      })
+    ).rejects.toSatisfy((error: unknown) => expectRuntimeCode(error, "invalid_input"));
+    expect(executeTool).toHaveBeenCalledOnce();
+  });
+
   it("rejects non-JSON, cyclic, sparse, accessor, and exotic input before native dispatch", async () => {
     const { executeOnce, tool, executeTool } = await readyRuntime();
     const cyclic: Record<string, unknown> = {};

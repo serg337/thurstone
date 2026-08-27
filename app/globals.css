@@ -676,6 +676,10 @@ nav a:hover {
   align-items: start;
 }
 
+.lab-layout > * {
+  min-width: 0;
+}
+
 .trace-panel {
   grid-column: 1 / -1;
 }
@@ -934,6 +938,14 @@ pre {
   color: var(--cyan);
 }
 
+.proof-export-status {
+  margin: 1rem 0 0;
+  color: var(--cyan);
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
 .empty-results {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -1030,9 +1042,12 @@ pre {
 
 @media (max-width: 900px) {
   .hero,
-  .judge-path,
-  .lab-layout {
+  .judge-path {
     grid-template-columns: 1fr;
+  }
+
+  .lab-layout {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .hero {

@@ -34,13 +34,13 @@ The production guard was initialized once from Git-linked commit `86584fe4fa3089
 
 - Unit tests prove deterministic domain, schema, canonicalization, and evaluator behavior.
 - Integration tests with controlled test doubles prove registration-manager logic but are not native WebMCP proof.
-- Ordinary Playwright tests prove the signed-out shell, responsive layouts, diagnostics, accessibility, error states, shared UI/native state, dynamic four/five-tool registration, reset locking, object mode, and JSON-string mode. Their in-page consumer is explicitly emulated and is not supported-runtime proof.
+- Ordinary Playwright tests prove the signed-out shell, responsive layouts, diagnostics, accessibility, error states, shared UI/native state, dynamic four/five-tool registration, reset locking, object mode, JSON-string mode, and the actual downloaded Gate 1 JSON bytes. Their in-page consumer is explicitly emulated and is not supported-runtime proof.
 - Descriptor tests cover Chrome's serialized-schema representation while continuing to reject malformed or semantically different schemas and wrong titles.
 - Native proof requires the deployed HTTPS origin in the supported ChatGPT browser or exact Chrome/WebMCP build, with the active tool and invocation visible in the supported runtime/DevTools path.
 - Gate 0 native proof was observed in Chrome 151 for `cart_get`. Gate 1 requires fresh exact-deployment discovery/execution receipts for every active tool, the pending-only cancel transition, argument mode, raw/canonical result, state/effect binding, and reset receipt. Direct ChatGPT remains a separate later evidence lane.
 - Direct expected calls prove plumbing only. Model-selection evidence requires a fresh model decision from natural language followed by native execution.
 - Direct ChatGPT and custom Probe observations remain separately labeled.
 
-The Gate 1 browser harness delays canonical trace finalization for one mutation and verifies that committed state is visible before the registered handler settles. It also exercises same-document route remounting, mutation replay versus fresh IDs, post-reset fresh operation IDs, dynamic-state accessibility, keyboard focus, and mobile horizontal overflow.
+The Gate 1 browser harness delays canonical trace finalization for one mutation and verifies that committed state is visible before the registered handler settles. It also exercises same-document route remounting, mutation replay versus fresh IDs, post-reset fresh operation IDs, dynamic-state accessibility, keyboard focus, and mobile horizontal overflow. A complete emulated sequence downloads one proof bundle; the test recomputes its journal chain and evidence/bundle digests, checks initial/pending/reset history and adapter-to-trace bindings, and rejects live runtime objects or local/sensitive material. That remains deterministic export verification, not authentic native proof.
 
 The release record will include exact commands, browser/build, deployment/commit, registry fingerprint, raw trace location, failures, retries, and limitations.
