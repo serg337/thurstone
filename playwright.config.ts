@@ -15,7 +15,8 @@ export default defineConfig({
     ? {}
     : {
         webServer: {
-          command: "npm run dev",
+          command:
+            "TOOLPROOF_BROWSER_FAKE_PROBE=1 TOOLPROOF_COMMIT_SHA=eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee npm run dev",
           url: "http://127.0.0.1:3000/api/health",
           reuseExistingServer: !process.env.CI,
           timeout: 120_000

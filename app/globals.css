@@ -684,6 +684,50 @@ nav a:hover {
   grid-column: 1 / -1;
 }
 
+.probe-launch-panel {
+  margin-top: 1rem;
+}
+
+.probe-evaluation-shell .probe-runner-panel {
+  max-width: 820px;
+}
+
+.calibration-results > p,
+.probe-launch-panel > p,
+.probe-runner-panel > p {
+  color: var(--ink-muted);
+}
+
+.result-list {
+  display: grid;
+  gap: 0.65rem;
+  margin: 1.2rem 0;
+  padding: 0;
+  list-style: none;
+}
+
+.result-list li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.25rem 1rem;
+  padding: 0.9rem 1rem;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+}
+
+.result-list li > span {
+  color: var(--cyan);
+  font-size: 0.75rem;
+  font-weight: 760;
+  text-transform: uppercase;
+}
+
+.result-list li > small {
+  grid-column: 1 / -1;
+  color: var(--ink-muted);
+}
+
 .fixture-id {
   padding: 0.3rem 0.5rem;
   color: var(--ink-faint);
@@ -849,6 +893,7 @@ nav a:hover {
   color: var(--cyan);
   font-size: 0.75rem;
   text-transform: uppercase;
+  overflow-wrap: anywhere;
 }
 
 .runtime-receipt small {

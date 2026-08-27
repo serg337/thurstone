@@ -1,10 +1,18 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
+import { ProbeCalibrationResults } from "@/components/results/probe-calibration-results";
 import { StatusPill } from "@/components/status-pill";
+import { PROBE_RESULTS_COOKIE, PROBE_SESSION_COOKIE } from "@/lib/probe/session";
 
 export const metadata: Metadata = { title: "Results" };
 
-export default function ResultsPage() {
+export default async function ResultsPage() {
+  const cookieStore = await cookies();
+  if (cookieStore.has(PROBE_SESSION_COOKIE) && !cookieStore.has(PROBE_RESULTS_COOKIE)) {
+    redirect("/lab");
+  }
   return (
     <div className="page-shell route-page">
       <header className="route-hero">
@@ -19,22 +27,7 @@ export default function ResultsPage() {
         <StatusPill state="neutral">No run yet</StatusPill>
       </header>
 
-      <section className="empty-results" aria-labelledby="empty-results-title">
-        <div className="empty-glyph" aria-hidden="true">
-          <span />
-          <span />
-          <span />
-          <span />
-        </div>
-        <div>
-          <h2 id="empty-results-title">No authentic evidence is available.</h2>
-          <p>
-            Gate 0 is still establishing native runtime proof. Calibration, scored baseline,
-            revision, and exports remain unavailable until their required approvals and terminal
-            receipts exist.
-          </p>
-        </div>
-      </section>
+      <ProbeCalibrationResults />
     </div>
   );
 }

@@ -22,15 +22,21 @@ ToolProof is a deterministic simulated checkout/review sandbox. It has no real p
 
 ## Model-backed lane
 
-The hosted Probe lane is disabled. Its frozen challenge-lifetime policy permits exactly 160 provider attempts: 4 calibration, 72 baseline, 2 Repair Builder, 72 revised, and 10 bounded judge/reference calls. Every granted attempt permanently commits 62,500,000 nano-USD, so 160 grants bind the USD $10 ceiling exactly and a resetting provider window cannot restore ToolProof capacity. Concurrency is one.
+The hosted Probe lane is disabled by default. Its frozen challenge-lifetime policy permits exactly 160 provider attempts: 4 calibration, 72 baseline, 2 Repair Builder, 72 revised, and 10 bounded judge/reference calls. Every granted attempt permanently commits 62,500,000 nano-USD, so 160 grants bind the USD $10 ceiling exactly and a resetting provider window cannot restore ToolProof capacity. Concurrency is one.
 
 The server-only guard uses signed short-lived authorizations and atomic Redis transitions: `ISSUED → IN_FLIGHT → KNOWN | UNCERTAIN`. Policy/counter/authorization/tombstone records have no reset TTL. Only an explicit fresh `GRANTED_NEW` receipt can authorize one future provider request. Ambiguous outcomes retain the reservation and quarantine the guard; critical drift or settlement conflicts halt it. Production routes never initialize missing state.
 
-The dedicated claimed durable store, random signing secret, Production-only provider/store credentials, real concurrent Lua verification, and immutable zero-use guard receipt are established. Activation remains forbidden until Gate 2 adds fixed case/manifest/model allowlists, session-bound CSRF, streamed body limits, safe redaction, and a terminal activation receipt. `/api/probe/issue` and `/api/probe/decide` currently return `503 probe_disabled` and make no inference.
+The dedicated claimed durable store, separate random signing and activation secrets, Production-only provider/store credentials, real concurrent Lua verification, and immutable guard receipt are established. The implemented Gate 2 route requires one exact production project/build, operator-pinned policy/Lua/runner hashes, a valid activation HMAC, an open internally consistent guard, a short-lived HttpOnly Secure SameSite=Strict session, and a constant-time matching CSRF header. Without every binding, all model routes return `503 probe_disabled` and make no inference.
+
+The active calibration issuer chooses only one of four server-held synthetic requests. It rejects arbitrary prompts, models, settings, manifests, fixtures, URLs, or tools. Request bodies are streamed through byte limits, require exact JSON media type and same-origin fetch metadata, and never enter logs. The Responses adapter is stateless (`store:false`, no conversation or previous response), fixed to `gpt-5.6-terra`, permits one provider request with no inference retry, and retains its timeout through body delivery.
+
+Each trial occupies the guard from provider dispatch through native execution, evidence capture, deterministic server-side evaluation, and verified post-reset. Provider and completion responses are AES-GCM sealed into a separate replay-recovery namespace before delivery or settlement, so a lost HTTP response cannot cause another model call. Uncertain dispatch quarantines rather than retries. The Lab carries only an opaque encrypted continuation between fresh documents; prior requests, decisions, results, and evaluator truth are absent from its DOM, accessibility tree, URL, client chunks, and session storage. Only the terminal `/results` path reveals the four calibration rows, which remain permanently excluded from benchmark counts.
+
+Native execution has its own durable single-use admission written immediately before `executeTool()`. A recovered document can never redispatch an already-admitted target action; if the prior document vanished before terminal evidence, the row is preserved as an indeterminate infrastructure failure and cannot pass calibration. Terminal reveal is byte-stable and remains recoverable until the user explicitly acknowledges that the verified evidence file has been saved.
 
 Public status/readiness receipts are CDN-cached briefly to protect the free durable-store command quota. They are diagnostics only and never authorize a call; the future decision path must revalidate Redis atomically for every dispatch.
 
-The active lane will accept no arbitrary public prompt, model, manifest, URL, code, or external action. Only synthetic challenge text and minimal fixture state may reach the disclosed provider. Preview deployments must not receive production provider, Redis-write, or signing credentials.
+Only synthetic challenge text and minimal fixture state may reach the disclosed provider. Preview deployments must not receive production provider, Redis-write, signing, or activation credentials.
 
 ## Reporting a vulnerability
 

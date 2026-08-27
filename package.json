@@ -23,6 +23,7 @@
     "probe-controls:init": "tsx --tsconfig tsconfig.operator.json scripts/probe-controls.ts init",
     "probe-controls:bootstrap": "tsx --tsconfig tsconfig.operator.json scripts/probe-controls.ts bootstrap",
     "probe-controls:integration": "tsx --tsconfig tsconfig.operator.json scripts/probe-controls.ts integration-test",
+    "probe-continuation:integration": "tsx --tsconfig tsconfig.operator.json scripts/probe-continuation-integration.ts",
     "probe-controls:reap": "tsx --tsconfig tsconfig.operator.json scripts/probe-controls.ts reap",
     "probe-controls:status": "tsx --tsconfig tsconfig.operator.json scripts/probe-controls.ts status",
     "provider:check": "node scripts/check-openai-entitlement.mjs",
@@ -33,8 +34,9 @@
     "test:coverage": "vitest run --coverage",
     "test:integration": "vitest run tests/integration",
     "typecheck": "next typegen && tsc --noEmit -p tsconfig.typecheck.json",
-    "vercel-build": "npm run durable-store:check && npm run probe-controls:integration && npm run probe-controls:bootstrap && npm run provider:check && npm run build",
+    "vercel-build": "npm run durable-store:check && npm run probe-controls:integration && npm run probe-continuation:integration && npm run probe-controls:bootstrap && npm run provider:check && npm run build && npm run verify:probe-no-leakage",
     "verify:evidence": "node scripts/verify-evidence.mjs",
+    "verify:probe-no-leakage": "node scripts/verify-probe-no-leakage.mjs",
     "verify:publication": "node scripts/verify-publication.mjs"
   },
   "dependencies": {

@@ -6,7 +6,7 @@ const navigation = [
   { href: "/results", label: "Results" }
 ];
 
-export function SiteHeader() {
+export function SiteHeader({ isolated = false }: { readonly isolated?: boolean }) {
   return (
     <header className="site-header">
       <div className="header-inner">
@@ -19,13 +19,17 @@ export function SiteHeader() {
             <small>by Invarra</small>
           </span>
         </Link>
-        <nav aria-label="Primary navigation">
-          {navigation.map(({ href, label }) => (
-            <Link href={href} key={href}>
-              {label}
-            </Link>
-          ))}
-        </nav>
+        {isolated ? (
+          <span className="fixture-id">Isolated calibration</span>
+        ) : (
+          <nav aria-label="Primary navigation">
+            {navigation.map(({ href, label }) => (
+              <Link href={href} key={href}>
+                {label}
+              </Link>
+            ))}
+          </nav>
+        )}
       </div>
     </header>
   );

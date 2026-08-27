@@ -1,8 +1,35 @@
-import { probeDisabledResponse, rejectInvalidProbeRequest } from "@/lib/probe/http";
+import { NextResponse } from "next/server";
+
+import { readBoundedProbeJson } from "@/lib/probe/http";
+import { probeRouteErrorResponse } from "@/lib/probe/route-response";
+import { issueProbeCalibrationTrial } from "@/lib/probe/service";
+import { PROBE_RESULTS_COOKIE } from "@/lib/probe/session";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
-  return rejectInvalidProbeRequest(request) ?? probeDisabledResponse();
+  try {
+    const body = await readBoundedProbeJson(request, {
+      maximumBodyBytes: 2_200_000,
+      requireCsrfHeader: true
+    });
+    const receipt = await issueProbeCalibrationTrial(request, body);
+    const response = NextResponse.json(receipt, {
+      status: receipt.status === "issued" ? 201 : 200,
+      headers: { "Cache-Control": "no-store" }
+    });
+    if ("status" in receipt && receipt.status === "already-sealed" && receipt.terminal) {
+      response.cookies.set(PROBE_RESULTS_COOKIE, "terminal", {
+        httpOnly: true,
+        secure: true,
+        sameSite: "strict",
+        path: "/",
+        maxAge: 20 * 60
+      });
+    }
+    return response;
+  } catch (error) {
+    return probeRouteErrorResponse(error);
+  }
 }

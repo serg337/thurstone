@@ -151,7 +151,7 @@ export async function verifyCheckoutReset(
   if (
     input.traceLedger.current.length !== 0 ||
     !fullResetTrace ||
-    input.traceLedger.resetTraces.at(-1) !== fullResetTrace ||
+    canonicalJson(input.traceLedger.resetTraces.at(-1)) !== canonicalJson(fullResetTrace) ||
     fullResetTrace.eventId !== domainReceipt.resetEventId ||
     fullResetTrace.sessionId !== domainReceipt.sessionId ||
     fullResetTrace.runId !== domainReceipt.trajectoryId ||

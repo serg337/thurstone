@@ -65,6 +65,33 @@ describe("verified checkout reset receipt", () => {
     expect(store.inspect().retainedTombstoneCount).toBe(1);
   });
 
+  it("recomputes identically after a complete JSON evidence round trip", async () => {
+    const { store, ledger, domainReceipt } = await resetFixture();
+    const input = JSON.parse(
+      JSON.stringify({
+        domainReceipt,
+        inspection: store.inspect(),
+        archives: store.archivedTrajectories(),
+        traceLedger: ledger.snapshot()
+      })
+    ) as {
+      domainReceipt: Parameters<typeof verifyCheckoutReset>[0]["domainReceipt"];
+      inspection: Parameters<typeof verifyCheckoutReset>[0]["inspection"];
+      archives: Parameters<typeof verifyCheckoutReset>[0]["archives"];
+      traceLedger: Parameters<typeof verifyCheckoutReset>[0]["traceLedger"];
+    };
+    const receipt = await verifyCheckoutReset({
+      ...input,
+      registry: {
+        verified: true,
+        registryHash: "a".repeat(64),
+        registeredToolNames: INITIAL_CHECKOUT_TOOL_NAMES
+      },
+      checkedAt: "2026-08-26T12:00:00.000Z"
+    });
+    expect(receipt.status).toBe("verified");
+  });
+
   it("fails closed for registry, ledger, trajectory, timestamp, or domain-core drift", async () => {
     const cases = [
       {

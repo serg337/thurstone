@@ -19,6 +19,7 @@ import {
   type ProbeGuardIdentity,
   type ProbeGuardStatus
 } from "@/lib/probe/ledger";
+import { requireProbeActivation } from "@/lib/probe/activation";
 
 interface EnvironmentLike {
   readonly [key: string]: string | undefined;
@@ -98,12 +99,42 @@ export async function readPublicProbeControlStatus(environment: EnvironmentLike 
   try {
     const guard = await readProbeGuardStatus(createProbeRedis(environment as NodeJS.ProcessEnv));
     const expectedGuard = environment.TOOLPROOF_GUARD_INSTANCE_ID;
-    const internallyConsistent = isProbeGuardStatusConsistent(guard, {
+    const expectedIdentity = {
       guardInstanceId: expectedGuard ?? "",
       policyHash: expectedPolicyHash,
       scriptHash: expectedScriptHash,
       initializedCommit: environment.TOOLPROOF_GUARD_INITIALIZED_COMMIT ?? ""
-    });
+    };
+    if (environment.TOOLPROOF_PROBE_ACTIVATION_MODE === "calibration") {
+      try {
+        const activation = await requireProbeActivation({ environment, guard });
+        return {
+          status: "controls-ready" as const,
+          enabled: true,
+          activation: "calibration" as const,
+          policy,
+          reason: "The bounded four-case calibration lane is active for this exact build.",
+          commit,
+          guard: {
+            phase: activation.guard.phase,
+            claimedCalls: activation.guard.claimedCalls,
+            knownCalls: activation.guard.knownCalls,
+            calibrationCalls: activation.guard.calibrationCalls
+          },
+          activationHash: activation.activationHash
+        };
+      } catch {
+        return {
+          status: "controls-unavailable" as const,
+          enabled: false,
+          activation: "invalid" as const,
+          policy,
+          reason: "Probe activation is configured but does not match this build or guard.",
+          commit
+        };
+      }
+    }
+    const internallyConsistent = isProbeGuardStatusConsistent(guard, expectedIdentity);
 
     if (!internallyConsistent) {
       return {

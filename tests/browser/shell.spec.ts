@@ -15,7 +15,7 @@ test("judge shell is honest, navigable, and permanently marks the simulation", a
 
   await page.getByRole("link", { name: "Results" }).click();
   await expect(page).toHaveURL(/\/results$/);
-  await expect(page.getByText("No authentic evidence is available.")).toBeVisible();
+  await expect(page.getByText("No terminal evidence yet.")).toBeVisible();
   expect(pageErrors).toEqual([]);
 });
 
@@ -52,9 +52,15 @@ test("Probe controls disclose policy while inference routes fail closed", async 
 
   const headers = {
     Origin: "https://toolproof-rust.vercel.app",
-    "Sec-Fetch-Site": "same-origin"
+    "Sec-Fetch-Site": "same-origin",
+    "X-ToolProof-CSRF": "disabled-route-boundary-token-0001"
   };
-  for (const route of ["/api/probe/issue", "/api/probe/decide"]) {
+  for (const route of [
+    "/api/probe/issue",
+    "/api/probe/decide",
+    "/api/probe/native",
+    "/api/probe/complete"
+  ]) {
     const response = await request.post(route, { headers, data: {} });
     expect(response.status()).toBe(503);
     await expect(response.json()).resolves.toEqual({

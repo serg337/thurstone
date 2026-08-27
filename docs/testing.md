@@ -14,15 +14,21 @@ npm run test:browser:safe
 npm run build
 npm run durable-store:check
 npm run probe-controls:integration
+npm run probe-continuation:integration
+npm run verify:probe-no-leakage
 npm run verify:publication
 npm run verify:evidence
 ```
 
 `verify:evidence` fails closed until a real frozen-run manifest exists. Paid model calls never run in ordinary CI.
 
+`verify:probe-no-leakage` inspects the production Lab client-reference manifest and every referenced client chunk, rejects server-truth sentinels and production source maps, and proves that evaluator-only calibration fields remain isolated in the post-unlock Results chunk. The fake-provider service test runs all four exact non-scored cases through signed issuance, decision receipts, authentic domain traces, post-reset evaluation, sealing, settlement, and terminal reveal without network inference. The browser fake-provider test repeats the four trials across fresh documents, checks the DOM/URL/network/session-storage boundary before every completion, and remains explicitly emulated evidence rather than Gate 2 proof.
+
 `npm run provider:check` performs only the official read-only model-metadata retrieval for the pinned Probe model. Vercel runs it before production builds with the Sensitive provider key; it never prints or stores that key and performs no inference.
 
 `durable-store:check` verifies a configured Redis `PING` and non-mutating Lua execution without printing credentials. `probe-controls:integration` creates a random isolated namespace, executes the real atomic scripts through all 160 slots, proves concurrent replay and the 161st-call boundary, then removes only that isolated test namespace. It never calls the model provider. The production guard is initialized only by the separately confirmed operator path on an approved production commit.
+
+`probe-continuation:integration` creates a second random isolated Redis namespace, exercises encrypted idempotent issue/decision/native/completion put/get/TTL recovery through the real Lua scripts, and deletes and verifies deletion of only those temporary keys. It never touches the immutable production guard namespace and never calls the model provider.
 
 The Vercel production build runs the durable-store check, isolated real Redis suite, confirmed guard bootstrap/status check, zero-token provider metadata check, and application build in that order. Preview has no production credentials and therefore fails closed before any provider request. Guard initialization additionally requires Vercel's independently supplied Git commit SHA to match the approved commit and one-time confirmation tuple.
 

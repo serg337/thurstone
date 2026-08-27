@@ -123,10 +123,11 @@ export function createProbeToken(input: CreateProbeTokenInput, secret: string): 
   return { token: `${body}.${signature}`, claims };
 }
 
-export function verifyProbeToken(
+function verifyProbeTokenInternal(
   token: string,
   secret: string,
-  nowMs: number = Date.now()
+  nowMs: number,
+  allowExpiredRecovery: boolean
 ): ProbeTokenClaims {
   signingKey(secret);
   if (token.length > 8_192) throw new ProbeTokenError("token_too_large");
@@ -159,11 +160,27 @@ export function verifyProbeToken(
 
   const now = Math.floor(nowMs / 1_000);
   const { issuedAt, expiresAt } = parsed.data;
-  if (issuedAt > now + 5) throw new ProbeTokenError("issued_in_future");
-  if (expiresAt <= now) throw new ProbeTokenError("expired_token");
+  if (!allowExpiredRecovery && issuedAt > now + 5) throw new ProbeTokenError("issued_in_future");
+  if (!allowExpiredRecovery && expiresAt <= now) throw new ProbeTokenError("expired_token");
   if (expiresAt <= issuedAt || expiresAt - issuedAt > PROBE_TOKEN_TTL_SECONDS) {
     throw new ProbeTokenError("invalid_lifetime");
   }
 
   return parsed.data;
+}
+
+export function verifyProbeToken(
+  token: string,
+  secret: string,
+  nowMs: number = Date.now()
+): ProbeTokenClaims {
+  return verifyProbeTokenInternal(token, secret, nowMs, false);
+}
+
+/**
+ * Verifies signature, strict claims, and the originally issued short lifetime without authorizing
+ * a new provider dispatch. Callers may use this only to recover already-durable later-stage state.
+ */
+export function verifyProbeTokenForRecovery(token: string, secret: string): ProbeTokenClaims {
+  return verifyProbeTokenInternal(token, secret, Date.now(), true);
 }

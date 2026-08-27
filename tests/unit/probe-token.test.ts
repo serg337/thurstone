@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import { PROBE_TOKEN_TTL_SECONDS, probePolicyHash } from "@/lib/probe/policy";
-import { ProbeTokenError, createProbeToken, verifyProbeToken } from "@/lib/probe/token";
+import {
+  ProbeTokenError,
+  createProbeToken,
+  verifyProbeToken,
+  verifyProbeTokenForRecovery
+} from "@/lib/probe/token";
 
 const secret = Buffer.alloc(32, 7).toString("base64url");
 const hash = (character: string) => character.repeat(64);
@@ -51,6 +56,10 @@ describe("signed Probe authorization", () => {
         tokenInput.nowMs + (PROBE_TOKEN_TTL_SECONDS + 1) * 1_000
       )
     ).toThrowError(expect.objectContaining<Partial<ProbeTokenError>>({ code: "expired_token" }));
+    expect(verifyProbeTokenForRecovery(signed.token, secret)).toEqual(signed.claims);
+    expect(() => verifyProbeTokenForRecovery(tampered, secret)).toThrowError(
+      expect.objectContaining<Partial<ProbeTokenError>>({ code: "invalid_signature" })
+    );
     expect(() => createProbeToken(tokenInput, "too-short")).toThrowError(
       expect.objectContaining<Partial<ProbeTokenError>>({ code: "weak_signing_secret" })
     );
