@@ -5,6 +5,9 @@ import AxeBuilder from "@axe-core/playwright";
 import { canonicalize } from "json-canonicalize";
 
 import {
+  GATE1_AUTOMATED_PROOF_MIN_STEP_MS,
+  GATE1_AUTOMATED_PROOF_SEQUENCE_VERSION,
+  GATE1_AUTOMATED_PROOF_STEP_NAMES,
   verifyGate1ProofBundle,
   verifyGate1NativeProofSequence,
   type Gate1ProofBundle
@@ -89,7 +92,13 @@ async function installEmulatedConsumer(page: Page, mode: "object" | "json-string
         readonly handlerSettled: boolean;
         readonly inputType: string;
       }> = [];
-      const nativeBehavior = { completeCanceledCartGetBeforeReject: false };
+      const failToolName = sessionStorage.getItem("__toolProofTestFailAutomatedTool");
+      sessionStorage.removeItem("__toolProofTestFailAutomatedTool");
+      const nativeBehavior = {
+        completeCanceledCartGetBeforeReject: false,
+        failToolName,
+        failureConsumed: false
+      };
       let delayNextDigest = false;
       let releaseDigest: (() => void) | undefined;
       const subtle = globalThis.crypto?.subtle;
@@ -185,6 +194,10 @@ async function installEmulatedConsumer(page: Page, mode: "object" | "json-string
           const activeRegistration = this.active.get(selected.name);
           const active = activeRegistration?.tool;
           if (!active) throw new Error(`Emulated tool is not active: ${selected.name}`);
+          if (nativeBehavior.failToolName === selected.name && !nativeBehavior.failureConsumed) {
+            nativeBehavior.failureConsumed = true;
+            throw new Error(`Synthetic automated failure for ${selected.name}.`);
+          }
           const inputType = typeof input;
           const semanticInput =
             mode === "json-string"
@@ -569,7 +582,7 @@ test("JSON-string one download preserves the complete Gate 1 journal and trace h
   await expect(nativeReceipt).toContainText('"nativeCallMade": true');
 
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Download Gate 1 proof JSON" }).click();
+  await page.getByRole("button", { name: "Download current diagnostic JSON" }).click();
   const download = await downloadPromise;
   const text = await downloadText(download);
   const bundle = JSON.parse(text) as {
@@ -907,12 +920,226 @@ test("JSON-string one download preserves the complete Gate 1 journal and trace h
   expect(download.suggestedFilename()).toMatch(
     /^toolproof-gate1-native-[A-Za-z0-9_-]{1,12}-\d{8}T\d{6}Z\.json$/u
   );
-  await expect(page.getByRole("status")).toContainText(bundle.evidenceDigest);
+  await expect(page.getByText(new RegExp(bundle.evidenceDigest, "u"))).toBeVisible();
   const exportViolations = (await new AxeBuilder({ page }).analyze()).violations.filter(
     ({ impact }) => impact === "serious" || impact === "critical"
   );
   expect(exportViolations).toEqual([]);
   expect(await overflowingElements(page)).toEqual([]);
+});
+
+test("JSON-string one button reloads clean, runs the exact proof, and requests one download", async ({
+  page
+}) => {
+  await page.getByRole("button", { name: "Native cart_get", exact: true }).click();
+  const oldSessionId = await page.evaluate(
+    () =>
+      (
+        window as typeof window & {
+          __toolProofLabEnvironment: { store: { getSnapshot(): { sessionId: string } } };
+        }
+      ).__toolProofLabEnvironment.store.getSnapshot().sessionId
+  );
+  let downloadCount = 0;
+  page.on("download", () => {
+    downloadCount += 1;
+  });
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Run clean Gate 1 proof and download" }).click();
+  const download = await downloadPromise;
+  const text = await downloadText(download);
+  const bundle = JSON.parse(text) as Gate1ProofBundle;
+
+  await expect(verifyGate1ProofBundle(bundle)).resolves.toMatchObject({
+    status: "internally-consistent",
+    nativeAttemptCount: 10
+  });
+  const strictVerification = await verifyGate1NativeProofSequence(bundle);
+  expect(strictVerification).toMatchObject({
+    status: "gate1-native-sequence-complete",
+    attemptCount: 10
+  });
+  expect(["canceled", "completed"]).toContain(strictVerification.cancellationTraceStatus);
+  expect(bundle.evidence.provenance.sessionId).not.toBe(oldSessionId);
+  expect(downloadCount).toBe(1);
+  expect(
+    await page.evaluate(() => sessionStorage.getItem("toolproof:gate1-auto-request@1"))
+  ).toBeNull();
+
+  const automationEvents = bundle.evidence.journal.events as Array<{
+    sequence: number;
+    recordedAt: string;
+    kind: string;
+    payload: Record<string, unknown>;
+  }>;
+  const automatedStart = automationEvents.filter(
+    ({ kind }) => kind === "automated_sequence_started"
+  );
+  const automatedSteps = automationEvents.filter(({ kind }) => kind === "automated_sequence_step");
+  const automatedFinish = automationEvents.filter(
+    ({ kind }) => kind === "automated_sequence_finished"
+  );
+  expect(automatedStart).toHaveLength(1);
+  expect(automatedSteps).toHaveLength(GATE1_AUTOMATED_PROOF_STEP_NAMES.length);
+  expect(automatedFinish).toHaveLength(1);
+  expect(automatedStart[0]!.payload).toMatchObject({
+    sequenceVersion: GATE1_AUTOMATED_PROOF_SEQUENCE_VERSION,
+    navigation: "reload",
+    stepCount: GATE1_AUTOMATED_PROOF_STEP_NAMES.length
+  });
+  expect(automatedSteps.map(({ payload }) => payload.stepName)).toEqual([
+    ...GATE1_AUTOMATED_PROOF_STEP_NAMES
+  ]);
+  expect(automatedSteps.map(({ payload }) => payload.stepIndex)).toEqual(
+    GATE1_AUTOMATED_PROOF_STEP_NAMES.map((_name, index) => index + 1)
+  );
+  expect(
+    automatedSteps.every(
+      ({ payload }) =>
+        payload.status === "completed" &&
+        typeof payload.durationMs === "number" &&
+        payload.durationMs >= GATE1_AUTOMATED_PROOF_MIN_STEP_MS
+    )
+  ).toBe(true);
+  expect(automatedFinish[0]!.payload).toMatchObject({
+    status: "verified",
+    completedSteps: GATE1_AUTOMATED_PROOF_STEP_NAMES.length,
+    nativeAttemptCount: 10,
+    verificationStatus: "gate1-native-sequence-complete"
+  });
+  const tamperedTiming = structuredClone(bundle) as unknown as Gate1ProofBundle;
+  const tamperedTimingEvents = tamperedTiming.evidence.journal.events as Array<{
+    kind: string;
+    payload: { stepIndex?: number; durationMs?: number };
+  }>;
+  tamperedTimingEvents.find(({ kind }) => kind === "automated_sequence_step")!.payload.durationMs =
+    0;
+  resealDownloadedBundle(tamperedTiming);
+  await expect(verifyGate1ProofBundle(tamperedTiming)).resolves.toMatchObject({
+    status: "internally-consistent"
+  });
+  await expect(verifyGate1NativeProofSequence(tamperedTiming)).rejects.toThrow(
+    "automated step 1 metadata is invalid"
+  );
+  for (const [field, value] of [
+    ["startedAt", bundle.exportedAt],
+    ["completedAt", automatedStart[0]!.payload.startedAt as string]
+  ] as const) {
+    const tamperedBoundary = structuredClone(bundle) as unknown as Gate1ProofBundle;
+    const firstStep = (
+      tamperedBoundary.evidence.journal.events as Array<{
+        kind: string;
+        payload: { startedAt?: string; completedAt?: string };
+      }>
+    ).find(({ kind }) => kind === "automated_sequence_step")!.payload;
+    firstStep[field] = value;
+    resealDownloadedBundle(tamperedBoundary);
+    await expect(verifyGate1ProofBundle(tamperedBoundary)).resolves.toMatchObject({
+      status: "internally-consistent"
+    });
+    await expect(verifyGate1NativeProofSequence(tamperedBoundary)).rejects.toThrow(
+      "automated step 1 timestamps are out of order"
+    );
+  }
+  for (let index = 1; index < automationEvents.length; index += 1) {
+    expect(Date.parse(automationEvents[index]!.recordedAt)).toBeGreaterThanOrEqual(
+      Date.parse(automationEvents[index - 1]!.recordedAt)
+    );
+  }
+  await expect(page.getByText(/Verified proof download requested/u)).toBeVisible();
+  const retryButton = page.getByRole("button", { name: "Download verified proof again" });
+  await expect(retryButton).toBeVisible();
+  expect(await overflowingElements(page)).toEqual([]);
+  const retryPromise = page.waitForEvent("download");
+  await retryButton.click();
+  const retryDownload = await retryPromise;
+  expect(await downloadText(retryDownload)).toBe(text);
+  expect(retryDownload.suggestedFilename()).toBe(download.suggestedFilename());
+  expect(downloadCount).toBe(2);
+  await page.reload();
+  await expect(page.getByText("consumer-ready", { exact: true })).toBeVisible();
+  await page.waitForTimeout(300);
+  expect(downloadCount).toBe(2);
+  expect(
+    await page.evaluate(
+      () =>
+        (
+          window as typeof window & {
+            __toolProofLabEnvironment: {
+              proofJournal: { snapshot(): { entries: Array<{ kind: string }> } };
+            };
+          }
+        ).__toolProofLabEnvironment.proofJournal
+          .snapshot()
+          .entries.filter(({ kind }) => kind === "native_attempt_started").length
+    )
+  ).toBe(0);
+});
+
+test("JSON-string automated proof stops on the first native failure without downloading", async ({
+  page
+}) => {
+  await page.evaluate(() =>
+    sessionStorage.setItem("__toolProofTestFailAutomatedTool", "order_review")
+  );
+  let downloadCount = 0;
+  page.on("download", () => {
+    downloadCount += 1;
+  });
+  await page.getByRole("button", { name: "Run clean Gate 1 proof and download" }).click();
+  await expect(page.getByText(/Proof run stopped at order_review/u)).toBeVisible();
+  await page.waitForTimeout(300);
+  expect(downloadCount).toBe(0);
+  const failure = await page.evaluate(() => {
+    const environment = (
+      window as typeof window & {
+        __toolProofLabEnvironment: {
+          proofJournal: {
+            snapshot(): {
+              entries: Array<{ kind: string; payload: Record<string, unknown> }>;
+            };
+          };
+        };
+      }
+    ).__toolProofLabEnvironment;
+    const entries = environment.proofJournal.snapshot().entries;
+    return {
+      nativeStarts: entries.filter(({ kind }) => kind === "native_attempt_started").length,
+      resets: entries.filter(({ kind }) => kind === "domain_reset_receipt").length,
+      finish: entries.find(({ kind }) => kind === "automated_sequence_finished")?.payload,
+      marker: sessionStorage.getItem("toolproof:gate1-auto-request@1")
+    };
+  });
+  expect(failure.nativeStarts).toBe(2);
+  expect(failure.resets).toBe(0);
+  expect(failure.finish).toMatchObject({ status: "failed", failedStep: "order_review" });
+  expect(failure.marker).toBeNull();
+  await expect(page.getByRole("button", { name: "Restart clean Gate 1 proof run" })).toBeEnabled();
+  expect(await overflowingElements(page)).toEqual([]);
+});
+
+test("malformed automated proof markers are consumed without native execution", async ({
+  page
+}) => {
+  await page.evaluate(() =>
+    sessionStorage.setItem("toolproof:gate1-auto-request@1", JSON.stringify({ version: "wrong" }))
+  );
+  await page.reload();
+  await expect(page.getByText(/one-shot proof request was rejected/u)).toBeVisible();
+  const result = await page.evaluate(() => {
+    const entries = (
+      window as typeof window & {
+        __toolProofLabEnvironment: {
+          proofJournal: { snapshot(): { entries: Array<{ kind: string }> } };
+        };
+      }
+    ).__toolProofLabEnvironment.proofJournal.snapshot().entries;
+    return {
+      marker: sessionStorage.getItem("toolproof:gate1-auto-request@1"),
+      nativeStarts: entries.filter(({ kind }) => kind === "native_attempt_started").length
+    };
+  });
+  expect(result).toEqual({ marker: null, nativeStarts: 0 });
 });
 
 test("full reload starts a new proof document instead of mixing prior evidence", async ({

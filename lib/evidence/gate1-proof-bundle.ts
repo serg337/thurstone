@@ -29,6 +29,22 @@ import type {
 export const GATE1_PROOF_BUNDLE_VERSION = "toolproof-gate1-native-proof@1";
 export const GATE1_PROOF_MAX_JOURNAL_EVENTS = 4_096;
 export const GATE1_PROOF_MAX_JSON_BYTES = 5_000_000;
+export const GATE1_AUTOMATED_PROOF_SEQUENCE_VERSION = "gate1-native-sequence@1";
+export const GATE1_AUTOMATED_PROOF_MIN_STEP_MS = 200;
+export const GATE1_AUTOMATED_PROOF_READY_TIMEOUT_MS = 12_000;
+export const GATE1_AUTOMATED_PROOF_STEP_NAMES = Object.freeze([
+  "cart_get",
+  "order_review",
+  "cart_update_invalid",
+  "cart_update_valid",
+  "cart_update_replay",
+  "verified_hard_reset",
+  "checkout_request",
+  "checkout_request_replay",
+  "checkout_request_already_pending",
+  "checkout_cancel",
+  "cart_get_cancellation"
+] as const);
 
 const JOURNAL_HASH_DOMAIN = "toolproof-gate1-journal-event@1\n";
 const EVIDENCE_HASH_DOMAIN = "toolproof-gate1-evidence@1\n";
@@ -44,7 +60,10 @@ export type Gate1JournalKind =
   | "native_control_error"
   | "domain_reset_receipt"
   | "reset_verification_receipt"
-  | "reset_error";
+  | "reset_error"
+  | "automated_sequence_started"
+  | "automated_sequence_step"
+  | "automated_sequence_finished";
 
 export interface Gate1JournalEntry {
   readonly sequence: number;
@@ -191,6 +210,18 @@ export class Gate1EvidenceJournal {
 
   recordResetError(value: Readonly<Record<string, unknown>>): void {
     this.record("reset_error", value);
+  }
+
+  recordAutomatedSequenceStarted(value: Readonly<Record<string, unknown>>): void {
+    this.record("automated_sequence_started", value);
+  }
+
+  recordAutomatedSequenceStep(value: Readonly<Record<string, unknown>>): void {
+    this.record("automated_sequence_step", value);
+  }
+
+  recordAutomatedSequenceFinished(value: Readonly<Record<string, unknown>>): void {
+    this.record("automated_sequence_finished", value);
   }
 
   snapshot = (): Gate1JournalSnapshot =>
@@ -1261,7 +1292,8 @@ export async function verifyGate1ProofBundle(
 }
 
 export async function verifyGate1NativeProofSequence(
-  bundle: Gate1ProofBundle
+  bundle: Gate1ProofBundle,
+  options: { readonly allowUnfinishedAutomation?: boolean } = {}
 ): Promise<Gate1NativeProofSequenceVerification> {
   await verifyGate1ProofBundle(bundle);
 
@@ -1642,6 +1674,212 @@ export async function verifyGate1NativeProofSequence(
     ({ source, toolName }) => source === "ui" && toolName !== "fixture_reset"
   );
   requireSequence(!unmodeledUiTrace, "unexpected UI operations are mixed into the native proof");
+
+  const automatedStarts = events.filter(({ kind }) => kind === "automated_sequence_started");
+  const automatedSteps = events.filter(({ kind }) => kind === "automated_sequence_step");
+  const automatedFinishes = events.filter(({ kind }) => kind === "automated_sequence_finished");
+  const hasAutomatedEvidence =
+    automatedStarts.length > 0 || automatedSteps.length > 0 || automatedFinishes.length > 0;
+  if (hasAutomatedEvidence) {
+    requireSequence(
+      automatedStarts.length === 1 &&
+        automatedSteps.length === GATE1_AUTOMATED_PROOF_STEP_NAMES.length &&
+        (automatedFinishes.length === 1 ||
+          (options.allowUnfinishedAutomation === true && automatedFinishes.length === 0)),
+      "automated sequence event counts are invalid"
+    );
+    const startEvent = automatedStarts[0]!;
+    const start = startEvent.payload as {
+      readonly sequenceVersion?: unknown;
+      readonly sequenceId?: unknown;
+      readonly requestedAt?: unknown;
+      readonly startedAt?: unknown;
+      readonly appCommit?: unknown;
+      readonly navigation?: unknown;
+      readonly stepCount?: unknown;
+      readonly minimumStepMs?: unknown;
+      readonly readinessTimeoutMs?: unknown;
+    };
+    const exactKeys = (value: unknown, expected: readonly string[]): boolean =>
+      Boolean(
+        value &&
+        typeof value === "object" &&
+        !Array.isArray(value) &&
+        canonicalJson(Object.keys(value as object).sort()) === canonicalJson([...expected].sort())
+      );
+    requireSequence(
+      exactKeys(start, [
+        "sequenceVersion",
+        "sequenceId",
+        "requestedAt",
+        "startedAt",
+        "appCommit",
+        "navigation",
+        "stepCount",
+        "minimumStepMs",
+        "readinessTimeoutMs"
+      ]) &&
+        start.sequenceVersion === GATE1_AUTOMATED_PROOF_SEQUENCE_VERSION &&
+        typeof start.sequenceId === "string" &&
+        /^sequence_[0-9a-f-]{36}$/iu.test(start.sequenceId) &&
+        start.appCommit === bundle.evidence.provenance.appCommit &&
+        start.navigation === "reload" &&
+        start.stepCount === GATE1_AUTOMATED_PROOF_STEP_NAMES.length &&
+        start.minimumStepMs === GATE1_AUTOMATED_PROOF_MIN_STEP_MS &&
+        start.readinessTimeoutMs === GATE1_AUTOMATED_PROOF_READY_TIMEOUT_MS &&
+        startEvent.sequence < attempts[0]!.startEvent.sequence,
+      "automated sequence start metadata is invalid"
+    );
+    const requestedAt = exactIsoUtc(start.requestedAt, "automation requestedAt");
+    const automatedStartedAt = exactIsoUtc(start.startedAt, "automation startedAt");
+    requireSequence(
+      Date.parse(requestedAt) <= Date.parse(automatedStartedAt) &&
+        Date.parse(automatedStartedAt) <= Date.parse(startEvent.recordedAt),
+      "automated sequence start timestamps are out of order"
+    );
+
+    const expectedBoundIds = [
+      ...attempts.slice(0, 5).map(({ start: attempt }) => attempt.executionId),
+      resetId,
+      ...attempts.slice(5).map(({ start: attempt }) => attempt.executionId)
+    ];
+    const expectedOutcomes = [
+      "ok",
+      "ok",
+      "invalid_operation_id",
+      "updated",
+      "replayed",
+      "verified",
+      "pending_human_approval",
+      "replayed",
+      "already_pending",
+      "checkout_canceled",
+      "execution_canceled"
+    ];
+    const expectedCompletionSequences = [
+      ...attempts.slice(0, 5).map(({ finishEvent }) => finishEvent.sequence),
+      verifiedReset.sequence,
+      ...attempts.slice(5).map(({ finishEvent }) => finishEvent.sequence)
+    ];
+    const expectedStartedAtBounds = [
+      ...attempts.slice(0, 5).map(({ startEvent: attemptStart }) => attemptStart.recordedAt),
+      domainReset.recordedAt,
+      ...attempts.slice(5).map(({ startEvent: attemptStart }) => attemptStart.recordedAt)
+    ];
+    const expectedCompletedAtBounds = [
+      ...attempts.slice(0, 5).map(({ finishEvent: attemptFinish }) => attemptFinish.recordedAt),
+      verifiedReset.recordedAt,
+      ...attempts.slice(5).map(({ finishEvent: attemptFinish }) => attemptFinish.recordedAt)
+    ];
+    let priorStepCompletedAt = automatedStartedAt;
+    let totalStepDurationMs = 0;
+    for (const [index, stepEvent] of automatedSteps.entries()) {
+      const step = stepEvent.payload as {
+        readonly sequenceVersion?: unknown;
+        readonly sequenceId?: unknown;
+        readonly stepIndex?: unknown;
+        readonly stepName?: unknown;
+        readonly startedAt?: unknown;
+        readonly completedAt?: unknown;
+        readonly durationMs?: unknown;
+        readonly status?: unknown;
+        readonly binding?: unknown;
+        readonly boundId?: unknown;
+        readonly outcome?: unknown;
+      };
+      requireSequence(
+        exactKeys(step, [
+          "sequenceVersion",
+          "sequenceId",
+          "stepIndex",
+          "stepName",
+          "startedAt",
+          "completedAt",
+          "durationMs",
+          "status",
+          "binding",
+          "boundId",
+          "outcome"
+        ]) &&
+          step.sequenceVersion === GATE1_AUTOMATED_PROOF_SEQUENCE_VERSION &&
+          step.sequenceId === start.sequenceId &&
+          step.stepIndex === index + 1 &&
+          step.stepName === GATE1_AUTOMATED_PROOF_STEP_NAMES[index] &&
+          step.status === "completed" &&
+          step.binding === (index === 5 ? "resetId" : "executionId") &&
+          step.boundId === expectedBoundIds[index] &&
+          step.outcome === expectedOutcomes[index] &&
+          Number.isSafeInteger(step.durationMs) &&
+          (step.durationMs as number) >= GATE1_AUTOMATED_PROOF_MIN_STEP_MS &&
+          stepEvent.sequence > expectedCompletionSequences[index]!,
+        `automated step ${index + 1} metadata is invalid`
+      );
+      const stepStartedAt = exactIsoUtc(step.startedAt, `automated step ${index + 1} startedAt`);
+      const stepCompletedAt = exactIsoUtc(
+        step.completedAt,
+        `automated step ${index + 1} completedAt`
+      );
+      requireSequence(
+        Date.parse(priorStepCompletedAt) <= Date.parse(stepStartedAt) &&
+          Date.parse(stepStartedAt) <= Date.parse(expectedStartedAtBounds[index]!) &&
+          Date.parse(expectedCompletedAtBounds[index]!) <= Date.parse(stepCompletedAt) &&
+          Date.parse(stepStartedAt) <= Date.parse(stepCompletedAt) &&
+          Date.parse(stepCompletedAt) <= Date.parse(stepEvent.recordedAt),
+        `automated step ${index + 1} timestamps are out of order`
+      );
+      totalStepDurationMs += step.durationMs as number;
+      priorStepCompletedAt = stepCompletedAt;
+    }
+
+    const finishEvent = automatedFinishes[0];
+    if (finishEvent) {
+      const finish = finishEvent.payload as {
+        readonly sequenceVersion?: unknown;
+        readonly sequenceId?: unknown;
+        readonly status?: unknown;
+        readonly completedAt?: unknown;
+        readonly durationMs?: unknown;
+        readonly completedSteps?: unknown;
+        readonly nativeAttemptCount?: unknown;
+        readonly resetId?: unknown;
+        readonly verificationStatus?: unknown;
+        readonly cancellationTraceStatus?: unknown;
+      };
+      requireSequence(
+        exactKeys(finish, [
+          "sequenceVersion",
+          "sequenceId",
+          "status",
+          "completedAt",
+          "durationMs",
+          "completedSteps",
+          "nativeAttemptCount",
+          "resetId",
+          "verificationStatus",
+          "cancellationTraceStatus"
+        ]) &&
+          finish.sequenceVersion === GATE1_AUTOMATED_PROOF_SEQUENCE_VERSION &&
+          finish.sequenceId === start.sequenceId &&
+          finish.status === "verified" &&
+          finish.completedSteps === GATE1_AUTOMATED_PROOF_STEP_NAMES.length &&
+          finish.nativeAttemptCount === 10 &&
+          finish.resetId === resetId &&
+          finish.verificationStatus === "gate1-native-sequence-complete" &&
+          finish.cancellationTraceStatus === cancellationTraceStatus &&
+          Number.isSafeInteger(finish.durationMs) &&
+          (finish.durationMs as number) >= totalStepDurationMs &&
+          finishEvent.sequence > automatedSteps.at(-1)!.sequence,
+        "automated sequence finish metadata is invalid"
+      );
+      const automatedCompletedAt = exactIsoUtc(finish.completedAt, "automation completedAt");
+      requireSequence(
+        Date.parse(priorStepCompletedAt) <= Date.parse(automatedCompletedAt) &&
+          Date.parse(automatedCompletedAt) <= Date.parse(finishEvent.recordedAt) &&
+          Date.parse(automatedCompletedAt) <= Date.parse(bundle.exportedAt),
+        "automated sequence finish timestamps are out of order"
+      );
+    }
+  }
 
   return deepFreeze({
     status: "gate1-native-sequence-complete" as const,

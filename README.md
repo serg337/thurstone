@@ -13,11 +13,10 @@ Status: Gate 0 is complete. The Gate 1 five-tool sandbox, dynamic registry, nati
 1. Open `/lab` in the current ChatGPT built-in browser with Site Tools support, or Chrome 149+ with WebMCP testing enabled.
 2. Confirm the capability matrix reports `registerTool()` independently from `getTools()` and `executeTool()`.
 3. Confirm the initial catalog contains `cart_get`, `order_review`, `cart_update`, and `checkout_request`.
-4. Use the normal UI or the clearly labeled direct native-plumbing controls to read, update, and review the shared deterministic fixture.
-5. Request simulated checkout and confirm `checkout_cancel` appears only while that request is pending; cancel it, verify its native receipt is delivered, and verify the four-tool catalog returns.
-6. Hard reset and inspect the registry-bound reset verification receipt.
-7. Download the Gate 1 proof JSON once to preserve the document&apos;s complete Registry/Readiness timeline, native attempts, reset receipts, and trace ledger. Consumer cancellation and handler completion are recorded separately when they race.
-8. Open `/results` and confirm ToolProof says **No authentic evidence is available** until terminal model-backed runs exist.
+4. Click **Run clean Gate 1 proof and download** once. ToolProof reloads into a fresh document, waits for each exact Registry/Readiness boundary, runs the fixed ten native calls plus one verified reset, records step timing, verifies the strict sequence, and requests one JSON download.
+5. If the browser blocks the automatic download, click **Download verified proof again**; it reissues the identical already-verified bytes without rerunning tools.
+6. Use the normal UI or direct native controls only for diagnostics. A failure stops the automated sequence without a verified download and offers a clean one-click restart.
+7. Open `/results` and confirm ToolProof says **No authentic evidence is available** until terminal model-backed runs exist.
 
 Direct native-plumbing controls are deterministic Gate 1 diagnostics, not model-selection evidence.
 
@@ -65,7 +64,7 @@ npm run verify:publication
 
 ToolProof uses separate `/studio`, `/lab`, and `/results` documents as distinct trust surfaces. A strict TypeScript domain/session layer owns deterministic state, schema validation, replay-safe operation IDs, reset admission, and document-lifetime tombstones. Normal UI controls and native WebMCP handlers share that store. A per-tool registry manager preserves unchanged registrations, drains in-flight handlers before catalog changes, verifies discovery, and fails closed under lifecycle faults. The native adapter freezes one argument mode with a harmless `cart_get` call and binds each later direct call to exactly one canonical handler trace. Server-only Probe controls reserve one immutable challenge-lifetime call/spend slot before any future provider dispatch; public issue/decision routes currently fail closed with inference disabled.
 
-The Lab also owns a document-lifetime proof journal. One local JSON download contains its sanitized Registry/Readiness transitions, native attempt starts/finishes, reset receipts, full trace ledger, state inspection, chained event hashes, and bundle digests. Application payloads are synthetic; the exact public origin and raw browser user agent are disclosed only as required runtime provenance. The export reads no account/browser-history data and performs no upload. Hashes prove internal consistency, not external attestation.
+The Lab also owns a document-lifetime proof journal. One local JSON download contains its sanitized Registry/Readiness transitions, native attempt starts/finishes, reset receipts, automated-step timestamps/durations, full trace ledger, state inspection, chained event hashes, and bundle digests. A bounded build/path/time-bound session marker requests one clean reload and is consumed before execution; it is never exported or treated as attestation. Application payloads are synthetic; the exact public origin and raw browser user agent are disclosed only as required runtime provenance. The export reads no account/browser-history data and performs no upload. Hashes prove internal consistency, not external attestation.
 
 See [architecture](docs/architecture.md), [methodology](docs/methodology.md), [testing](docs/testing.md), [challenge requirements](CHALLENGE.md), and [official-source check](docs/OFFICIAL_SOURCE_CHECK.md).
 
