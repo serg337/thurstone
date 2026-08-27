@@ -48,6 +48,7 @@ interface ActiveRegistration extends DesiredTool {
   accepting: boolean;
   registered: boolean;
   inFlight: number;
+  consumerCallsInFlight: number;
   readonly idleWaiters: Set<() => void>;
 }
 
@@ -238,6 +239,35 @@ export class WebMcpRegistryManager {
   /** Useful to deterministic harnesses; it never changes registry state. */
   async settled(): Promise<void> {
     await this.queue;
+  }
+
+  /**
+   * Keeps registration signals stable until an outer native consumer call has settled.
+   * Handler quiescence alone is insufficient because the browser may still be delivering the
+   * handler result when a state-driven catalog transition begins.
+   */
+  holdConsumerCall(toolName: string, generation: number): () => void {
+    const registration = this.registrations.get(toolName);
+    if (
+      this.transitioning ||
+      generation !== this.generation ||
+      !registration?.accepting ||
+      !registration.registered
+    ) {
+      throw new RegistryAdmissionError(
+        "registry_transition",
+        `${toolName} consumer execution is not admitted for the requested registry generation.`
+      );
+    }
+
+    registration.consumerCallsInFlight += 1;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      registration.consumerCallsInFlight -= 1;
+      this.notifyIfIdle(registration);
+    };
   }
 
   private enqueue(releasedLease?: RegistryLease): void {
@@ -555,6 +585,7 @@ export class WebMcpRegistryManager {
       accepting: false,
       registered: false,
       inFlight: 0,
+      consumerCallsInFlight: 0,
       idleWaiters: new Set<() => void>()
     };
 
@@ -606,16 +637,21 @@ export class WebMcpRegistryManager {
       return await Reflect.apply(registration.handler, undefined, [input, options]);
     } finally {
       registration.inFlight -= 1;
-      if (registration.inFlight === 0) {
-        for (const resolve of registration.idleWaiters) resolve();
-        registration.idleWaiters.clear();
-      }
+      this.notifyIfIdle(registration);
     }
   }
 
   private waitUntilIdle(registration: ActiveRegistration): Promise<void> {
-    if (registration.inFlight === 0) return Promise.resolve();
+    if (registration.inFlight === 0 && registration.consumerCallsInFlight === 0) {
+      return Promise.resolve();
+    }
     return new Promise<void>((resolve) => registration.idleWaiters.add(resolve));
+  }
+
+  private notifyIfIdle(registration: ActiveRegistration): void {
+    if (registration.inFlight !== 0 || registration.consumerCallsInFlight !== 0) return;
+    for (const resolve of registration.idleWaiters) resolve();
+    registration.idleWaiters.clear();
   }
 
   private async registerAll(

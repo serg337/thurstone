@@ -4,7 +4,7 @@ import type {
   CheckoutSessionSnapshot,
   CheckoutTrajectoryArchive
 } from "@/lib/domain/checkout-session";
-import { cartGet, type CheckoutState } from "@/lib/domain/checkout";
+import { cartGet, orderReview, type CheckoutState } from "@/lib/domain/checkout";
 import {
   CHECKOUT_FIXTURE_STATE_HASH,
   type CheckoutResetReceipt as VerifiedResetReceipt
@@ -385,6 +385,15 @@ export interface Gate1ProofVerification {
   readonly nativeAttemptCount: number;
   readonly evidenceDigest: string;
   readonly bundleDigest: string;
+}
+
+export interface Gate1NativeProofSequenceVerification {
+  readonly status: "gate1-native-sequence-complete";
+  readonly attemptCount: 10;
+  readonly resetId: string;
+  readonly initialManifestHash: string;
+  readonly pendingManifestHash: string;
+  readonly cancellationTraceStatus: "not-reached" | "canceled" | "completed";
 }
 
 async function hashJournal(snapshot: Gate1JournalSnapshot): Promise<{
@@ -1248,6 +1257,399 @@ export async function verifyGate1ProofBundle(
     nativeAttemptCount,
     evidenceDigest: bundle.evidenceDigest,
     bundleDigest: bundle.bundleDigest
+  });
+}
+
+export async function verifyGate1NativeProofSequence(
+  bundle: Gate1ProofBundle
+): Promise<Gate1NativeProofSequenceVerification> {
+  await verifyGate1ProofBundle(bundle);
+
+  function fail(message: string): never {
+    throw new Error(`Gate 1 native sequence incomplete: ${message}`);
+  }
+  function requireSequence(condition: unknown, message: string): asserts condition {
+    if (!condition) fail(message);
+  }
+  type SequenceStart = Gate1NativeAttemptStart;
+  type SequenceFinish = Gate1NativeAttemptFinish;
+  const events = bundle.evidence.journal.events as readonly (Gate1JournalEntry & {
+    readonly eventHash: string;
+  })[];
+  if (
+    events.some(({ kind }) =>
+      ["native_control_error", "readiness_error", "reset_error"].includes(kind)
+    )
+  ) {
+    fail("control, readiness, or reset errors are present");
+  }
+  if (
+    events.some(
+      ({ kind, payload }) =>
+        kind === "registry_status" && (payload as { readonly phase?: unknown }).phase === "error"
+    )
+  ) {
+    fail("the Registry entered an error phase");
+  }
+
+  const starts = events
+    .filter(({ kind }) => kind === "native_attempt_started")
+    .map((event) => ({ event, payload: event.payload as SequenceStart }));
+  const finishes = new Map(
+    events
+      .filter(({ kind }) => kind === "native_attempt_finished")
+      .map((event) => {
+        const payload = event.payload as SequenceFinish;
+        return [payload.executionId, { event, payload }] as const;
+      })
+  );
+  requireSequence(starts.length === 10 && finishes.size === 10, "exactly 10 attempts are required");
+  const attempts = starts.map(({ event, payload }) => {
+    const finish = finishes.get(payload.executionId);
+    requireSequence(finish, `attempt ${payload.executionId} has no finish`);
+    return { startEvent: event, start: payload, finishEvent: finish.event, finish: finish.payload };
+  });
+
+  const orderedTraces = traceList(bundle.evidence.traceLedger);
+  const traceById = new Map(orderedTraces.map((trace) => [trace.eventId, trace]));
+  requireSequence(
+    orderedTraces.every(
+      (trace, index) =>
+        index === 0 || trace.stateBefore.sha256 === orderedTraces[index - 1]!.stateAfter.sha256
+    ),
+    "operation state continuity is broken"
+  );
+  const requireReceipt = (index: number, toolName: string) => {
+    const attempt = attempts[index];
+    requireSequence(attempt, `attempt ${index + 1} is absent`);
+    requireSequence(
+      attempt.start.toolName === toolName,
+      `attempt ${index + 1} must be ${toolName}`
+    );
+    requireSequence(
+      attempt.finish.outcome === "receipt",
+      `${toolName} attempt ${index + 1} did not return an adapter receipt`
+    );
+    const receipt = attempt.finish.receipt;
+    const trace = traceById.get(receipt.handlerTraceId);
+    requireSequence(trace, `${toolName} attempt ${index + 1} has no bound trace`);
+    return { ...attempt, receipt, trace };
+  };
+  const unchanged = (trace: OperationTrace): boolean =>
+    !trace.effect.stateChanged && trace.stateBefore.sha256 === trace.stateAfter.sha256;
+  const quantitiesUnchanged = (trace: OperationTrace): boolean =>
+    trace.effect.quantities.every(({ changed }) => !changed);
+  const state = (evidence: CanonicalEvidence): CheckoutState =>
+    evidence.value as unknown as CheckoutState;
+  const mugQuantity = (value: CheckoutState): number | undefined =>
+    value.lines.find(({ itemId }) => itemId === "stoneware-mug")?.quantity;
+
+  const readCart = requireReceipt(0, "cart_get");
+  requireSequence(
+    canonicalJson(readCart.start.input) === canonicalJson({}),
+    "cart_get input drifted"
+  );
+  requireSequence(
+    canonicalJson(readCart.receipt.canonicalResult) ===
+      canonicalJson(cartGet(state(readCart.trace.stateBefore))) &&
+      readCart.trace.stateBefore.sha256 === CHECKOUT_FIXTURE_STATE_HASH &&
+      readCart.trace.status === "completed" &&
+      readCart.trace.commitDisposition === "none" &&
+      unchanged(readCart.trace),
+    "cart_get did not produce the exact harmless read"
+  );
+
+  const review = requireReceipt(1, "order_review");
+  requireSequence(
+    canonicalJson(review.start.input) === canonicalJson({}),
+    "order_review input drifted"
+  );
+  requireSequence(
+    canonicalJson(review.receipt.canonicalResult) ===
+      canonicalJson(orderReview(state(review.trace.stateBefore))) &&
+      review.trace.status === "completed" &&
+      review.trace.commitDisposition === "none" &&
+      unchanged(review.trace),
+    "order_review did not produce the exact no-effect review"
+  );
+
+  const invalidUpdate = requireReceipt(2, "cart_update");
+  const invalidInput = invalidUpdate.start.input as { readonly operationId?: unknown };
+  requireSequence(
+    invalidInput.operationId === "short" &&
+      canonicalJson(invalidUpdate.receipt.canonicalResult) ===
+        canonicalJson({
+          ok: false,
+          code: "invalid_operation_id",
+          message: "operationId must be a 16–64 character URL-safe identifier.",
+          retryable: true,
+          operationId: "short",
+          replayed: false,
+          stateRevision: 0
+        }) &&
+      invalidUpdate.trace.status === "validation_error" &&
+      invalidUpdate.trace.commitDisposition === "none" &&
+      unchanged(invalidUpdate.trace),
+    "the invalid short-ID cart_update row is missing or changed state"
+  );
+
+  const update = requireReceipt(3, "cart_update");
+  const updateInput = update.start.input as {
+    readonly operationId?: unknown;
+    readonly operation?: unknown;
+    readonly itemId?: unknown;
+    readonly quantity?: unknown;
+  };
+  requireSequence(
+    typeof updateInput.operationId === "string" &&
+      updateInput.operation === "set_quantity" &&
+      updateInput.itemId === "stoneware-mug" &&
+      updateInput.quantity === 3 &&
+      canonicalJson(update.receipt.canonicalResult) ===
+        canonicalJson({
+          ok: true,
+          code: "updated",
+          operationId: updateInput.operationId,
+          replayed: false,
+          itemId: "stoneware-mug",
+          previousQuantity: 2,
+          quantity: 3,
+          stateRevision: 1
+        }) &&
+      update.trace.status === "completed" &&
+      update.trace.commitDisposition === "committed" &&
+      update.trace.effect.revision.delta === 1 &&
+      !update.trace.effect.pendingCheckout.changed &&
+      !update.trace.effect.unmodeledStateChanged &&
+      mugQuantity(state(update.trace.stateBefore)) === 2 &&
+      mugQuantity(state(update.trace.stateAfter)) === 3 &&
+      update.trace.effect.quantities.filter(({ changed }) => changed).length === 1,
+    "the valid cart_update did not apply exactly one declared effect"
+  );
+
+  const updateReplay = requireReceipt(4, "cart_update");
+  requireSequence(
+    canonicalJson(updateReplay.start.input) === canonicalJson(update.start.input) &&
+      canonicalJson(updateReplay.receipt.canonicalResult) ===
+        canonicalJson({
+          ok: true,
+          code: "updated",
+          operationId: updateInput.operationId,
+          replayed: true,
+          itemId: "stoneware-mug",
+          previousQuantity: 2,
+          quantity: 3,
+          stateRevision: 1
+        }) &&
+      updateReplay.trace.status === "duplicate" &&
+      updateReplay.trace.commitDisposition === "replayed" &&
+      unchanged(updateReplay.trace),
+    "cart_update replay did not bind the same operation with no second effect"
+  );
+
+  const request = requireReceipt(5, "checkout_request");
+  const requestInput = request.start.input as { readonly operationId?: unknown };
+  const requestedPending = state(request.trace.stateAfter).pendingCheckout;
+  requireSequence(
+    typeof requestInput.operationId === "string" &&
+      requestedPending !== null &&
+      canonicalJson(request.receipt.canonicalResult) ===
+        canonicalJson({
+          ok: true,
+          code: "pending_human_approval",
+          operationId: requestInput.operationId,
+          replayed: false,
+          pendingId: requestedPending.pendingId,
+          requestedFromRevision: requestedPending.requestedFromRevision,
+          orderTotalCents: requestedPending.orderTotalCents,
+          stateRevision: state(request.trace.stateAfter).revision
+        }) &&
+      request.trace.status === "completed" &&
+      request.trace.commitDisposition === "committed" &&
+      request.trace.effect.revision.delta === 1 &&
+      request.trace.effect.pendingCheckout.before === null &&
+      request.trace.effect.pendingCheckout.after !== null &&
+      request.trace.effect.pendingCheckout.changed &&
+      !request.trace.effect.unmodeledStateChanged &&
+      quantitiesUnchanged(request.trace),
+    "checkout_request did not create exactly one pending-only effect"
+  );
+
+  const requestReplay = requireReceipt(6, "checkout_request");
+  requireSequence(
+    canonicalJson(requestReplay.start.input) === canonicalJson(request.start.input) &&
+      canonicalJson(requestReplay.receipt.canonicalResult) ===
+        canonicalJson({
+          ok: true,
+          code: "pending_human_approval",
+          operationId: requestInput.operationId,
+          replayed: true,
+          pendingId: requestedPending.pendingId,
+          requestedFromRevision: requestedPending.requestedFromRevision,
+          orderTotalCents: requestedPending.orderTotalCents,
+          stateRevision: state(request.trace.stateAfter).revision
+        }) &&
+      requestReplay.trace.status === "duplicate" &&
+      requestReplay.trace.commitDisposition === "replayed" &&
+      unchanged(requestReplay.trace),
+    "checkout_request replay did not preserve the pending state"
+  );
+
+  const alreadyPending = requireReceipt(7, "checkout_request");
+  const alreadyPendingInput = alreadyPending.start.input as { readonly operationId?: unknown };
+  requireSequence(
+    typeof alreadyPendingInput.operationId === "string" &&
+      alreadyPendingInput.operationId !== requestInput.operationId &&
+      canonicalJson(alreadyPending.receipt.canonicalResult) ===
+        canonicalJson({
+          ok: false,
+          code: "already_pending",
+          message: "A simulated checkout is already pending human approval.",
+          retryable: false,
+          operationId: alreadyPendingInput.operationId,
+          replayed: false,
+          stateRevision: state(alreadyPending.trace.stateAfter).revision
+        }) &&
+      alreadyPending.trace.status === "expected_error" &&
+      alreadyPending.trace.commitDisposition === "none" &&
+      unchanged(alreadyPending.trace),
+    "the different-ID already_pending row is absent or changed state"
+  );
+
+  const cancel = requireReceipt(8, "checkout_cancel");
+  const canceledPending = state(cancel.trace.stateBefore).pendingCheckout;
+  const cancelInput = cancel.start.input as { readonly operationId?: unknown };
+  requireSequence(
+    typeof cancelInput.operationId === "string" &&
+      canceledPending !== null &&
+      canonicalJson(cancel.receipt.canonicalResult) ===
+        canonicalJson({
+          ok: true,
+          code: "checkout_canceled",
+          operationId: cancelInput.operationId,
+          replayed: false,
+          pendingId: canceledPending.pendingId,
+          stateRevision: state(cancel.trace.stateAfter).revision
+        }) &&
+      cancel.trace.status === "completed" &&
+      cancel.trace.commitDisposition === "committed" &&
+      cancel.trace.effect.revision.delta === 1 &&
+      cancel.trace.effect.pendingCheckout.before !== null &&
+      cancel.trace.effect.pendingCheckout.after === null &&
+      cancel.trace.effect.pendingCheckout.changed &&
+      !cancel.trace.effect.unmodeledStateChanged &&
+      quantitiesUnchanged(cancel.trace),
+    "checkout_cancel did not return a successful adapter receipt for pending removal"
+  );
+
+  const cancellation = attempts[9];
+  requireSequence(cancellation, "the cancellation attempt is absent");
+  requireSequence(
+    cancellation.start.toolName === "cart_get" &&
+      canonicalJson(cancellation.start.input) === canonicalJson({}) &&
+      cancellation.finish.outcome === "error" &&
+      cancellation.finish.error.code === "execution_canceled" &&
+      cancellation.finish.error.nativeCallMade === true,
+    "the final harmless native cancellation row is absent"
+  );
+  const cancellationObservation = cancellation.finish.traceObservation;
+  requireSequence(cancellationObservation, "the cancellation observation is absent");
+  const cancellationTraceDelta =
+    cancellationObservation.handlerTraceCount - cancellation.start.traceCount;
+  requireSequence(
+    cancellationTraceDelta === 0 || cancellationTraceDelta === 1,
+    "the cancellation observation has an invalid trace delta"
+  );
+  let cancellationTraceStatus: Gate1NativeProofSequenceVerification["cancellationTraceStatus"] =
+    "not-reached";
+  if (cancellationTraceDelta === 1) {
+    requireSequence(
+      cancellationObservation.lastTrace,
+      "the reached cancellation trace identity is absent"
+    );
+    const cancellationTrace = traceById.get(cancellationObservation.lastTrace.eventId);
+    requireSequence(
+      cancellationTrace && unchanged(cancellationTrace),
+      "the reached cancellation trace changed state"
+    );
+    requireSequence(
+      cancellationTrace.status === "canceled" || cancellationTrace.status === "completed",
+      "the reached cancellation trace has an invalid terminal status"
+    );
+    cancellationTraceStatus = cancellationTrace.status;
+  }
+
+  const domainResets = events.filter(({ kind }) => kind === "domain_reset_receipt");
+  const verifiedResets = events.filter(({ kind }) => kind === "reset_verification_receipt");
+  requireSequence(
+    domainResets.length === 1 && verifiedResets.length === 1,
+    "exactly one reset is required"
+  );
+  const domainReset = domainResets[0]!;
+  const verifiedReset = verifiedResets[0]!;
+  const resetId = (domainReset.payload as { readonly resetId?: unknown }).resetId;
+  requireSequence(
+    typeof resetId === "string" &&
+      (verifiedReset.payload as { readonly resetId?: unknown }).resetId === resetId &&
+      (verifiedReset.payload as { readonly status?: unknown }).status === "verified" &&
+      domainReset.sequence > updateReplay.finishEvent.sequence &&
+      verifiedReset.sequence > domainReset.sequence &&
+      verifiedReset.sequence < request.startEvent.sequence,
+    "the verified reset is not between mutation replay and checkout_request"
+  );
+
+  const readyEvents = events.filter(
+    ({ kind, payload }) =>
+      kind === "readiness_receipt" &&
+      (payload as { readonly status?: unknown }).status === "consumer-ready"
+  );
+  const readyDetails = readyEvents.map((event) => ({
+    event,
+    payload: event.payload as {
+      readonly manifestHash: string;
+      readonly manifest: { readonly catalogState: "initial" | "pending" };
+      readonly runtimeCatalog: { readonly generation: number } | null;
+    }
+  }));
+  const initialBefore = readyDetails.find(
+    ({ event, payload }) =>
+      payload.manifest.catalogState === "initial" && event.sequence < readCart.startEvent.sequence
+  );
+  const pendingAfterRequest = readyDetails.find(
+    ({ event, payload }) =>
+      payload.manifest.catalogState === "pending" &&
+      event.sequence > request.finishEvent.sequence &&
+      event.sequence < requestReplay.startEvent.sequence
+  );
+  const initialAfterCancel = readyDetails.find(
+    ({ event, payload }) =>
+      payload.manifest.catalogState === "initial" &&
+      event.sequence > cancel.finishEvent.sequence &&
+      event.sequence < cancellation.startEvent.sequence
+  );
+  requireSequence(
+    initialBefore?.payload.runtimeCatalog &&
+      pendingAfterRequest?.payload.runtimeCatalog &&
+      initialAfterCancel?.payload.runtimeCatalog &&
+      initialBefore.payload.runtimeCatalog.generation <
+        pendingAfterRequest.payload.runtimeCatalog.generation &&
+      pendingAfterRequest.payload.runtimeCatalog.generation <
+        initialAfterCancel.payload.runtimeCatalog.generation,
+    "the initial/pending/initial consumer-ready catalog progression is incomplete"
+  );
+
+  const unmodeledUiTrace = traceList(bundle.evidence.traceLedger).find(
+    ({ source, toolName }) => source === "ui" && toolName !== "fixture_reset"
+  );
+  requireSequence(!unmodeledUiTrace, "unexpected UI operations are mixed into the native proof");
+
+  return deepFreeze({
+    status: "gate1-native-sequence-complete" as const,
+    attemptCount: 10 as const,
+    resetId,
+    initialManifestHash: initialBefore.payload.manifestHash,
+    pendingManifestHash: pendingAfterRequest.payload.manifestHash,
+    cancellationTraceStatus
   });
 }
 

@@ -375,6 +375,59 @@ describe("WebMcpRegistryManager", () => {
     await manager.settled();
   });
 
+  it("holds a retiring registration until the outer native consumer has received its result", async () => {
+    const harness = createContext();
+    const { initial, pending } = createCatalog();
+    const manager = new WebMcpRegistryManager();
+    const pendingStatuses: RegistryStatus[] = [];
+    const releasePending = manager.acquire(harness.context, pending, (status) =>
+      pendingStatuses.push(status)
+    );
+    await manager.settled();
+    expect(pendingStatuses.at(-1)).toMatchObject({ phase: "ready", generation: 1 });
+
+    expect(() => manager.holdConsumerCall(CHECKOUT_CANCEL, 0)).toThrow(
+      "not admitted for the requested registry generation"
+    );
+    const releaseConsumerCall = manager.holdConsumerCall(CHECKOUT_CANCEL, 1);
+    const retiringSignal = harness.active.get(CHECKOUT_CANCEL)?.signal;
+    await expect(
+      harness.active
+        .get(CHECKOUT_CANCEL)
+        ?.tool.execute({}, { signal: new AbortController().signal })
+    ).resolves.toEqual({ ok: true, name: CHECKOUT_CANCEL });
+
+    releasePending();
+    const initialStatuses: RegistryStatus[] = [];
+    const releaseInitial = manager.acquire(harness.context, initial, (status) =>
+      initialStatuses.push(status)
+    );
+    await vi.waitFor(() => expect(initialStatuses.at(-1)?.phase).toBe("registering"));
+
+    expect(harness.active.has(CHECKOUT_CANCEL)).toBe(true);
+    expect(retiringSignal?.aborted).toBe(false);
+    expect(() => manager.holdConsumerCall(CART_GET, 1)).toThrow(
+      "not admitted for the requested registry generation"
+    );
+
+    let transitionSettled = false;
+    const transition = manager.settled().then(() => {
+      transitionSettled = true;
+    });
+    await Promise.resolve();
+    expect(transitionSettled).toBe(false);
+
+    releaseConsumerCall();
+    releaseConsumerCall();
+    await transition;
+    expect(retiringSignal?.aborted).toBe(true);
+    expect(harness.active.has(CHECKOUT_CANCEL)).toBe(false);
+    expect(initialStatuses.at(-1)).toMatchObject({ phase: "ready", generation: 2 });
+
+    releaseInitial();
+    await manager.settled();
+  });
+
   it("rolls back every staged registration after a partial failure and never reports mixed readiness", async () => {
     const harness = createContext({
       beforeRegister: async (name) => {

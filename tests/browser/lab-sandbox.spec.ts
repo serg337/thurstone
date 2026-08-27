@@ -4,11 +4,51 @@ import { expect, test, type Download, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { canonicalize } from "json-canonicalize";
 
+import {
+  verifyGate1ProofBundle,
+  verifyGate1NativeProofSequence,
+  type Gate1ProofBundle
+} from "../../lib/evidence/gate1-proof-bundle";
+
 const pageErrors = new WeakMap<Page, string[]>();
 const hydrationWarnings = new WeakMap<Page, string[]>();
 
 function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
+}
+
+function resealDownloadedBundle(bundle: Gate1ProofBundle): void {
+  const mutable = bundle as unknown as {
+    evidenceDigest: string;
+    bundleDigest: string;
+    evidence: {
+      journal: {
+        headHash: string | null;
+        events: Array<{
+          eventHash: string;
+          previousEventHash: string | null;
+          [key: string]: unknown;
+        }>;
+      };
+      [key: string]: unknown;
+    };
+    [key: string]: unknown;
+  };
+  let previousEventHash: string | null = null;
+  for (const event of mutable.evidence.journal.events) {
+    event.previousEventHash = previousEventHash;
+    const content = Object.fromEntries(
+      Object.entries(event).filter(([key]) => key !== "eventHash")
+    );
+    event.eventHash = sha256(`toolproof-gate1-journal-event@1\n${canonicalize(content)}`);
+    previousEventHash = event.eventHash;
+  }
+  mutable.evidence.journal.headHash = previousEventHash;
+  mutable.evidenceDigest = sha256(`toolproof-gate1-evidence@1\n${canonicalize(mutable.evidence)}`);
+  const unsigned = Object.fromEntries(
+    Object.entries(mutable).filter(([key]) => key !== "bundleDigest")
+  );
+  mutable.bundleDigest = sha256(`toolproof-gate1-bundle@1\n${canonicalize(unsigned)}`);
 }
 
 async function downloadText(download: Download): Promise<string> {
@@ -142,7 +182,8 @@ async function installEmulatedConsumer(page: Page, mode: "object" | "json-string
           input: object | string,
           options?: { readonly signal?: AbortSignal }
         ): Promise<string | null> {
-          const active = this.active.get(selected.name)?.tool;
+          const activeRegistration = this.active.get(selected.name);
+          const active = activeRegistration?.tool;
           if (!active) throw new Error(`Emulated tool is not active: ${selected.name}`);
           const inputType = typeof input;
           const semanticInput =
@@ -213,6 +254,9 @@ async function installEmulatedConsumer(page: Page, mode: "object" | "json-string
             throw options.signal.reason ?? new DOMException("Canceled", "AbortError");
           }
           await new Promise((resolve) => setTimeout(resolve, 15));
+          if (activeRegistration.signal?.aborted) {
+            throw new Error("The selected registration retired before consumer result delivery.");
+          }
           return JSON.stringify(result);
         }
       }
@@ -493,6 +537,9 @@ test("JSON-string one download preserves the complete Gate 1 journal and trace h
   });
   await expect(page).toHaveURL(/\/lab\?proof-remount=1$/u);
   await expect(page.getByText("consumer-ready", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Hard reset fixture" }).click();
+  const resetArticle = page.locator("article").filter({ hasText: "Reset verification receipt" });
+  await expect(resetArticle).toContainText('"status": "verified"');
 
   await page.getByLabel("checkout_request operationId").fill("bundle_request_0001");
   await page.getByRole("button", { name: "Native checkout_request" }).click();
@@ -506,6 +553,9 @@ test("JSON-string one download preserves the complete Gate 1 journal and trace h
 
   await page.getByLabel("checkout_cancel operationId").fill("bundle_cancel_0001");
   await page.getByRole("button", { name: "Native checkout_cancel" }).click();
+  await expect(nativeReceipt).toContainText('"toolName": "checkout_cancel"');
+  await expect(nativeReceipt).toContainText('"code": "checkout_canceled"');
+  await expect(nativeReceipt).toContainText('"nativeCallCount": 1');
   await expect(page.getByText(/Simulated checkout pending human approval/iu)).toBeHidden();
   await page.evaluate(() => {
     (
@@ -517,9 +567,6 @@ test("JSON-string one download preserves the complete Gate 1 journal and trace h
   await page.getByRole("button", { name: "Native cart_get cancellation probe" }).click();
   await expect(nativeReceipt).toContainText('"code": "execution_canceled"');
   await expect(nativeReceipt).toContainText('"nativeCallMade": true');
-  await page.getByRole("button", { name: "Hard reset fixture" }).click();
-  const resetArticle = page.locator("article").filter({ hasText: "Reset verification receipt" });
-  await expect(resetArticle).toContainText('"status": "verified"');
 
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download Gate 1 proof JSON" }).click();
@@ -661,6 +708,200 @@ test("JSON-string one download preserves the complete Gate 1 journal and trace h
   expect(bundle.evidence.traceLedger.archives).toHaveLength(1);
   expect(bundle.evidence.traceLedger.resetTraces).toHaveLength(1);
   expect(bundle.evidence.currentReceipts.verifiedReset.status).toBe("verified");
+  await expect(
+    verifyGate1NativeProofSequence(bundle as unknown as Gate1ProofBundle)
+  ).resolves.toMatchObject({
+    status: "gate1-native-sequence-complete",
+    attemptCount: 10,
+    cancellationTraceStatus: "completed"
+  });
+
+  const notReachedCancellation = structuredClone(bundle) as unknown as Gate1ProofBundle;
+  const notReachedMutable = notReachedCancellation as unknown as {
+    evidence: {
+      journal: {
+        events: Array<{
+          kind: string;
+          payload: {
+            executionId?: string;
+            error?: { code?: string };
+            traceCount?: number;
+            stateHash?: string;
+            traceObservation?: {
+              handlerTraceCount: number;
+              stateHash: string;
+              lastTrace: Record<string, unknown> | null;
+            };
+          };
+        }>;
+      };
+      inspection: { currentTraceCount: number };
+      traceLedger: {
+        totalTraceCount: number;
+        archives: Array<{ traces: Array<Record<string, unknown>> }>;
+        resetTraces: Array<Record<string, unknown>>;
+        current: Array<Record<string, unknown>>;
+      };
+    };
+  };
+  const notReachedFinish = notReachedMutable.evidence.journal.events.find(
+    ({ kind, payload }) =>
+      kind === "native_attempt_finished" && payload.error?.code === "execution_canceled"
+  );
+  const notReachedStart = notReachedMutable.evidence.journal.events.find(
+    ({ kind, payload }) =>
+      kind === "native_attempt_started" &&
+      payload.executionId === notReachedFinish?.payload.executionId
+  );
+  const reachedTraceId = notReachedFinish?.payload.traceObservation?.lastTrace?.eventId;
+  const mutableTraceCollections = [
+    ...notReachedMutable.evidence.traceLedger.archives.map(({ traces }) => traces),
+    notReachedMutable.evidence.traceLedger.resetTraces,
+    notReachedMutable.evidence.traceLedger.current
+  ];
+  const allNotReachedTraces = mutableTraceCollections.flat();
+  const reachedTrace = allNotReachedTraces.find(({ eventId }) => eventId === reachedTraceId) as
+    { sequence: number } | undefined;
+  const previousTrace = allNotReachedTraces.find(
+    ({ sequence }) => sequence === (reachedTrace?.sequence ?? 0) - 1
+  ) as
+    | {
+        eventId: string;
+        source: string;
+        toolName: string;
+        status: string;
+        registryHash: string;
+        canonicalResult: { sha256: string } | null;
+        effect: unknown;
+        stateBefore: { sha256: string };
+        stateAfter: { sha256: string };
+      }
+    | undefined;
+  expect(notReachedFinish).toBeDefined();
+  expect(notReachedStart).toBeDefined();
+  expect(reachedTrace).toBeDefined();
+  expect(previousTrace).toBeDefined();
+  if (!notReachedFinish || !notReachedStart || !reachedTrace || !previousTrace) {
+    throw new Error("Synthetic not-reached cancellation fixture is incomplete.");
+  }
+  for (const traces of mutableTraceCollections) {
+    const index = traces.findIndex(({ eventId }) => eventId === reachedTraceId);
+    if (index >= 0) traces.splice(index, 1);
+  }
+  notReachedMutable.evidence.traceLedger.totalTraceCount -= 1;
+  notReachedMutable.evidence.inspection.currentTraceCount -= 1;
+  notReachedFinish.payload.traceObservation = {
+    handlerTraceCount: notReachedStart.payload.traceCount as number,
+    stateHash: notReachedStart.payload.stateHash as string,
+    lastTrace: {
+      eventId: previousTrace.eventId,
+      source: previousTrace.source,
+      toolName: previousTrace.toolName,
+      status: previousTrace.status,
+      registryHash: previousTrace.registryHash,
+      resultDigest: previousTrace.canonicalResult?.sha256 ?? null,
+      effectDigest: sha256(canonicalize(previousTrace.effect)),
+      stateBeforeDigest: previousTrace.stateBefore.sha256,
+      stateAfterDigest: previousTrace.stateAfter.sha256
+    }
+  };
+  resealDownloadedBundle(notReachedCancellation);
+  await expect(verifyGate1ProofBundle(notReachedCancellation)).resolves.toMatchObject({
+    status: "internally-consistent"
+  });
+  await expect(verifyGate1NativeProofSequence(notReachedCancellation)).resolves.toMatchObject({
+    status: "gate1-native-sequence-complete",
+    cancellationTraceStatus: "not-reached"
+  });
+
+  const lostCancelReceipt = structuredClone(bundle) as unknown as Gate1ProofBundle;
+  const lostCancelMutable = lostCancelReceipt as unknown as {
+    evidence: {
+      journal: {
+        events: Array<{
+          kind: string;
+          payload: {
+            executionId?: string;
+            toolName?: string;
+            outcome?: string;
+            receipt?: {
+              handlerTraceId: string;
+              effectDigest: string;
+            };
+          };
+        }>;
+      };
+      traceLedger: {
+        archives: Array<{ traces: Array<Record<string, unknown>> }>;
+        resetTraces: Array<Record<string, unknown>>;
+        current: Array<Record<string, unknown>>;
+      };
+    };
+  };
+  const lostFinish = lostCancelMutable.evidence.journal.events.find(
+    ({ kind, payload }) =>
+      kind === "native_attempt_finished" && payload.toolName === "checkout_cancel"
+  );
+  const lostReceipt = lostFinish?.payload.receipt;
+  const lostTrace = [
+    ...lostCancelMutable.evidence.traceLedger.archives.flatMap(({ traces }) => traces),
+    ...lostCancelMutable.evidence.traceLedger.resetTraces,
+    ...lostCancelMutable.evidence.traceLedger.current
+  ].find(({ eventId }) => eventId === lostReceipt?.handlerTraceId) as
+    | {
+        eventId: string;
+        source: string;
+        toolName: string;
+        status: string;
+        registryHash: string;
+        sequence: number;
+        canonicalResult: { sha256: string };
+        stateBefore: { sha256: string };
+        stateAfter: { sha256: string };
+      }
+    | undefined;
+  expect(lostFinish).toBeDefined();
+  expect(lostReceipt).toBeDefined();
+  expect(lostTrace).toBeDefined();
+  if (!lostFinish || !lostReceipt || !lostTrace) {
+    throw new Error("Synthetic checkout_cancel receipt-loss fixture is incomplete.");
+  }
+  lostFinish.payload = {
+    executionId: lostFinish.payload.executionId,
+    toolName: "checkout_cancel",
+    outcome: "error",
+    error: {
+      name: "WebMcpRuntimeError",
+      message: "Native execution failed.",
+      code: "native_execution_failure",
+      nativeCallMade: true,
+      rawResult: null
+    },
+    traceObservation: {
+      handlerTraceCount: lostTrace.sequence,
+      stateHash: lostTrace.stateAfter.sha256,
+      lastTrace: {
+        eventId: lostTrace.eventId,
+        source: lostTrace.source,
+        toolName: lostTrace.toolName,
+        status: lostTrace.status,
+        registryHash: lostTrace.registryHash,
+        resultDigest: lostTrace.canonicalResult.sha256,
+        effectDigest: lostReceipt.effectDigest,
+        stateBeforeDigest: lostTrace.stateBefore.sha256,
+        stateAfterDigest: lostTrace.stateAfter.sha256
+      }
+    },
+    observationError: null
+  } as unknown as typeof lostFinish.payload;
+  resealDownloadedBundle(lostCancelReceipt);
+  await expect(verifyGate1ProofBundle(lostCancelReceipt)).resolves.toMatchObject({
+    status: "internally-consistent"
+  });
+  await expect(verifyGate1NativeProofSequence(lostCancelReceipt)).rejects.toThrow(
+    "checkout_cancel attempt 9 did not return an adapter receipt"
+  );
+
   expect(text).not.toMatch(/"(?:window|execute|signal|controller|cookie)"\s*:/u);
   expect(text).not.toMatch(/\/Users\/|\/home\/|\/mnt\/|\/Volumes\//u);
   expect(download.suggestedFilename()).toMatch(

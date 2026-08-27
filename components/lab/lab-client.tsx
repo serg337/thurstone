@@ -699,9 +699,21 @@ export function LabClient() {
       setNativeError(error);
       return;
     }
-
     const executionId = operationId("plumbing");
     const traceCountBefore = environment.ledger.snapshot().totalTraceCount;
+    let releaseConsumerCall: () => void;
+    try {
+      releaseConsumerCall = webMcpRegistryManager.holdConsumerCall(
+        toolName,
+        readiness.runtimeCatalog.generation
+      );
+    } catch (error) {
+      const receipt = errorReceipt(error);
+      environment.proofJournal.recordNativeControlError({ toolName, input, error: receipt });
+      setNativeError(receipt);
+      return;
+    }
+
     environment.proofJournal.recordNativeAttemptStarted({
       executionId,
       toolName,
@@ -750,6 +762,7 @@ export function LabClient() {
       );
       setNativeError(receipt);
     } finally {
+      releaseConsumerCall();
       setBusy(false);
     }
   }
@@ -791,11 +804,26 @@ export function LabClient() {
       setNativeError(error);
       return;
     }
-
     const executionId = operationId("cancel_probe");
     const traceCountBefore = environment.ledger.snapshot().totalTraceCount;
     const input = Object.freeze({});
     const controller = new AbortController();
+    let releaseConsumerCall: () => void;
+    try {
+      releaseConsumerCall = webMcpRegistryManager.holdConsumerCall(
+        "cart_get",
+        readiness.runtimeCatalog.generation
+      );
+    } catch (error) {
+      const receipt = errorReceipt(error);
+      environment.proofJournal.recordNativeControlError({
+        action: "cart_get_cancellation_probe",
+        error: receipt
+      });
+      setNativeError(receipt);
+      return;
+    }
+
     environment.proofJournal.recordNativeAttemptStarted({
       executionId,
       toolName: "cart_get",
@@ -837,6 +865,7 @@ export function LabClient() {
       );
       setNativeError(receipt);
     } finally {
+      releaseConsumerCall();
       setBusy(false);
     }
   }
