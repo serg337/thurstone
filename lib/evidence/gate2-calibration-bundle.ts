@@ -1,29 +1,37 @@
 import { canonicalJson, canonicalSha256, sha256Hex } from "@/lib/evidence/digest";
 import { verifyCheckoutReset } from "@/lib/domain/checkout-reset";
 import {
+  GATE2_ATTEMPT_1_KNOWN_ACCOUNTED_NANO_USD,
+  GATE2_ATTEMPT_1_LINEAGE,
+  createGate2PriorAttemptsLineage,
+  verifyGate2PriorAttemptsLineage,
+  type Gate2PriorAttemptsLineage
+} from "@/lib/evidence/gate2-attempt-lineage";
+import {
   verifyProbeTransportBinding,
   type ProbeCalibrationEnvelope
 } from "@/lib/probe/calibration-envelope";
 import {
-  PROBE_POLICY_MIGRATION_ID,
-  PROBE_POLICY_MIGRATION_PRESERVED_STATE,
-  PROBE_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
-  PROBE_POLICY_MIGRATION_PRIOR_APP_COMMIT,
-  PROBE_POLICY_MIGRATION_PRIOR_EVIDENCE_DIGEST,
-  PROBE_POLICY_MIGRATION_PRIOR_RECEIPT_VERSION,
-  PROBE_POLICY_MIGRATION_VERSION,
-  PROBE_PREVIOUS_LEDGER_SCRIPT_HASH,
-  PROBE_PREVIOUS_POLICY_HASH,
-  PROBE_PREVIOUS_POLICY_VERSION,
-  PROBE_PREVIOUS_PURPOSE_CALL_LIMITS,
-  createProbePolicyMigrationManifest,
-  probePolicyMigrationDigest,
-  probePolicyMigrationReceiptHash,
-  type ProbePolicyMigrationPriorReceipt,
-  type ProbePolicyMigrationReceipt,
-  type ProbePolicyMigrationReceiptCore
-} from "@/lib/probe/policy-migration-contract";
+  PROBE_V03_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
+  PROBE_V03_POLICY_MIGRATION_ID,
+  PROBE_V03_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
+  PROBE_V03_POLICY_MIGRATION_PRIOR_APP_COMMIT,
+  PROBE_V03_POLICY_MIGRATION_VERSION,
+  PROBE_V03_PREDECESSOR_MIGRATION_ID,
+  PROBE_V03_PREDECESSOR_MIGRATION_RECEIPT_HASH,
+  PROBE_V03_PREVIOUS_LEDGER_SCRIPT_HASH,
+  PROBE_V03_PREVIOUS_POLICY_HASH,
+  PROBE_V03_PREVIOUS_POLICY_VERSION,
+  PROBE_V03_PREVIOUS_PURPOSE_CALL_LIMITS,
+  probeV03PolicyMigrationDigest,
+  probeV03PolicyMigrationReceiptHash,
+  type ProbeV03PolicyMigrationManifest,
+  type ProbeV03PolicyMigrationReceipt,
+  type ProbeV03PolicyMigrationReceiptCore
+} from "@/lib/probe/policy-v03-migration-contract";
 import {
+  PROBE_GLOBAL_CALL_LIMIT,
+  PROBE_LIFETIME_SPEND_CEILING_NANO_USD,
   PROBE_PER_CALL_RESERVATION_NANO_USD,
   PROBE_POLICY_VERSION,
   PROBE_PURPOSE_CALL_LIMITS
@@ -37,28 +45,24 @@ import {
 } from "@/lib/probe/service-contract";
 
 export const GATE2_CALIBRATION_BUNDLE_VERSION =
-  "toolproof-gate2-calibration-attempt-2-evidence@1.0.0";
-export const GATE2_CALIBRATION_LANE = "custom-probe-calibration-attempt-2" as const;
-export const GATE2_RETAINED_ATTEMPT_LINEAGE_VERSION =
-  "toolproof-gate2-retained-attempt-lineage@1.0.0";
-export const GATE2_ATTEMPT_1_KNOWN_ACCOUNTED_NANO_USD = 11_360_800 as const;
-export const GATE2_ATTEMPT_1_LINEAGE = Object.freeze({
-  version: GATE2_RETAINED_ATTEMPT_LINEAGE_VERSION,
-  attempt: 1 as const,
-  disposition: "retained-authentic-failure" as const,
-  calibrationOnly: true as const,
-  includedInBenchmark: false as const,
-  rawSha256: "4832959832a45379a82c23a8d08712e7cdc78f2a07e621467ca8f3cd76d9756b",
-  evidenceDigest: "016f607f498384bcac2d60474aaa3f3373635cd662bb2eb4d7bb71b0b223b863",
-  appCommit: "64c3095a1098de30ac266ed2344873da6545875a",
-  runId: "run_tOYy-NQLgCCS2YJ8l2DQ4Q",
-  caseCount: 4 as const,
-  passedCount: 0 as const,
-  nativeDispatchCount: 0 as const,
-  knownAccountedNanoUsd: GATE2_ATTEMPT_1_KNOWN_ACCOUNTED_NANO_USD
-});
+  "toolproof-gate2-calibration-attempt-3-evidence@1.0.0";
+export const GATE2_CALIBRATION_LANE = "custom-probe-calibration-attempt-3" as const;
 export const GATE2_ATTEMPT_COST_RECONCILIATION_VERSION =
-  "toolproof-gate2-attempt-cost-reconciliation@1.0.0";
+  "toolproof-gate2-attempt-cost-reconciliation@2.0.0";
+
+export {
+  GATE2_ATTEMPT_1_KNOWN_ACCOUNTED_NANO_USD,
+  GATE2_ATTEMPT_1_LINEAGE,
+  GATE2_ATTEMPT_2_ACTIVATION_HASH,
+  GATE2_ATTEMPT_2_APP_COMMIT,
+  GATE2_ATTEMPT_2_LINEAGE_VERSION,
+  GATE2_PRIOR_ATTEMPTS_LINEAGE_VERSION,
+  GATE2_RETAINED_ATTEMPT_LINEAGE_VERSION,
+  createGate2PriorAttemptsLineage,
+  verifyGate2PriorAttemptsLineage,
+  type Gate2Attempt2Lineage,
+  type Gate2PriorAttemptsLineage
+} from "@/lib/evidence/gate2-attempt-lineage";
 
 export interface VerifiedGate2CalibrationBundle {
   readonly version: typeof GATE2_CALIBRATION_BUNDLE_VERSION;
@@ -71,6 +75,7 @@ export interface VerifiedGate2CalibrationBundle {
   readonly caseCount: typeof PROBE_CALIBRATION_ATTEMPT_CASE_COUNT;
   readonly passedCount: number;
   readonly cases: readonly Record<string, unknown>[];
+  readonly priorAttempts: Gate2PriorAttemptsLineage;
   readonly evidenceDigest: string;
   readonly [key: string]: unknown;
 }
@@ -102,7 +107,19 @@ function exactJson(value: unknown, expected: unknown, code: string): void {
   }
 }
 
-async function verifyPolicyMigration(value: unknown): Promise<ProbePolicyMigrationReceipt> {
+function exactKeys(
+  value: Record<string, unknown>,
+  expected: readonly string[],
+  code: string
+): void {
+  const actual = Object.keys(value).sort();
+  const wanted = [...expected].sort();
+  if (actual.length !== wanted.length || actual.some((key, index) => key !== wanted[index])) {
+    throw new Gate2CalibrationBundleError(code);
+  }
+}
+
+async function verifyPolicyMigration(value: unknown): Promise<ProbeV03PolicyMigrationReceipt> {
   const migration = objectValue(value, "invalid_policy_migration");
   const preserved = objectValue(migration.preserved, "invalid_migration_preserved_state");
   const purposeCounts = objectValue(
@@ -110,15 +127,68 @@ async function verifyPolicyMigration(value: unknown): Promise<ProbePolicyMigrati
     "invalid_migration_preserved_purpose_counts"
   );
   const knownCalls = Array.isArray(migration.knownCalls) ? migration.knownCalls : [];
+  exactKeys(
+    migration,
+    [
+      "version",
+      "migrationId",
+      "priorAppCommit",
+      "priorActivationHash",
+      "predecessorMigrationId",
+      "predecessorMigrationReceiptHash",
+      "guardInstanceId",
+      "initializedCommit",
+      "previousPolicyVersion",
+      "previousPolicyHash",
+      "previousScriptHash",
+      "preserved",
+      "knownCalls",
+      "migrationCommit",
+      "nextPolicyVersion",
+      "nextPolicyHash",
+      "nextScriptHash",
+      "previousPurposeLimits",
+      "nextPurposeLimits",
+      "globalCallLimit",
+      "lifetimeSpendCeilingNanoUsd",
+      "perCallReservationNanoUsd",
+      "migrationDigest",
+      "migratedAtMs",
+      "receiptHash"
+    ],
+    "policy_migration_shape_mismatch"
+  );
+  exactKeys(
+    preserved,
+    [
+      "claimedCalls",
+      "knownCalls",
+      "pendingCalls",
+      "uncertainCalls",
+      "inflightCalls",
+      "committedNanoUsd",
+      "knownActualNanoUsd",
+      "uncertainUpperNanoUsd",
+      "sequence",
+      "purposeCounts"
+    ],
+    "policy_migration_preserved_shape_mismatch"
+  );
+  exactKeys(
+    purposeCounts,
+    ["calibration", "baseline", "repair", "revised", "judge"],
+    "policy_migration_purpose_counts_shape_mismatch"
+  );
   if (
-    migration.version !== PROBE_POLICY_MIGRATION_VERSION ||
-    migration.migrationId !== PROBE_POLICY_MIGRATION_ID ||
-    migration.priorAppCommit !== PROBE_POLICY_MIGRATION_PRIOR_APP_COMMIT ||
-    migration.priorActivationHash !== PROBE_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH ||
-    migration.priorEvidenceDigest !== PROBE_POLICY_MIGRATION_PRIOR_EVIDENCE_DIGEST ||
-    migration.previousPolicyVersion !== PROBE_PREVIOUS_POLICY_VERSION ||
-    migration.previousPolicyHash !== PROBE_PREVIOUS_POLICY_HASH ||
-    migration.previousScriptHash !== PROBE_PREVIOUS_LEDGER_SCRIPT_HASH ||
+    migration.version !== PROBE_V03_POLICY_MIGRATION_VERSION ||
+    migration.migrationId !== PROBE_V03_POLICY_MIGRATION_ID ||
+    migration.priorAppCommit !== PROBE_V03_POLICY_MIGRATION_PRIOR_APP_COMMIT ||
+    migration.priorActivationHash !== PROBE_V03_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH ||
+    migration.predecessorMigrationId !== PROBE_V03_PREDECESSOR_MIGRATION_ID ||
+    migration.predecessorMigrationReceiptHash !== PROBE_V03_PREDECESSOR_MIGRATION_RECEIPT_HASH ||
+    migration.previousPolicyVersion !== PROBE_V03_PREVIOUS_POLICY_VERSION ||
+    migration.previousPolicyHash !== PROBE_V03_PREVIOUS_POLICY_HASH ||
+    migration.previousScriptHash !== PROBE_V03_PREVIOUS_LEDGER_SCRIPT_HASH ||
     migration.nextPolicyVersion !== PROBE_POLICY_VERSION ||
     typeof migration.nextPolicyHash !== "string" ||
     !/^[a-f0-9]{64}$/u.test(migration.nextPolicyHash) ||
@@ -128,6 +198,15 @@ async function verifyPolicyMigration(value: unknown): Promise<ProbePolicyMigrati
     !/^[a-f0-9]{64}$/u.test(migration.migrationDigest) ||
     typeof migration.receiptHash !== "string" ||
     !/^[a-f0-9]{64}$/u.test(migration.receiptHash) ||
+    typeof migration.guardInstanceId !== "string" ||
+    !/^[A-Za-z0-9_-]{16,128}$/u.test(migration.guardInstanceId) ||
+    typeof migration.initializedCommit !== "string" ||
+    !/^[a-f0-9]{40}$/u.test(migration.initializedCommit) ||
+    typeof migration.migrationCommit !== "string" ||
+    !/^[a-f0-9]{40}$/u.test(migration.migrationCommit) ||
+    migration.globalCallLimit !== PROBE_GLOBAL_CALL_LIMIT ||
+    migration.lifetimeSpendCeilingNanoUsd !== PROBE_LIFETIME_SPEND_CEILING_NANO_USD ||
+    migration.perCallReservationNanoUsd !== PROBE_PER_CALL_RESERVATION_NANO_USD ||
     preserved.claimedCalls !== PROBE_CALIBRATION_BASE_CALLS ||
     preserved.knownCalls !== PROBE_CALIBRATION_BASE_CALLS ||
     preserved.pendingCalls !== 0 ||
@@ -135,7 +214,10 @@ async function verifyPolicyMigration(value: unknown): Promise<ProbePolicyMigrati
     preserved.inflightCalls !== 0 ||
     preserved.committedNanoUsd !==
       PROBE_CALIBRATION_BASE_CALLS * PROBE_PER_CALL_RESERVATION_NANO_USD ||
-    preserved.knownActualNanoUsd !== GATE2_ATTEMPT_1_KNOWN_ACCOUNTED_NANO_USD ||
+    !Number.isSafeInteger(preserved.knownActualNanoUsd) ||
+    Number(preserved.knownActualNanoUsd) < GATE2_ATTEMPT_1_KNOWN_ACCOUNTED_NANO_USD ||
+    Number(preserved.knownActualNanoUsd) >
+      PROBE_CALIBRATION_BASE_CALLS * PROBE_PER_CALL_RESERVATION_NANO_USD ||
     preserved.uncertainUpperNanoUsd !== 0 ||
     preserved.sequence !== PROBE_CALIBRATION_BASE_CALLS ||
     knownCalls.length !== PROBE_CALIBRATION_BASE_CALLS ||
@@ -146,22 +228,40 @@ async function verifyPolicyMigration(value: unknown): Promise<ProbePolicyMigrati
   }
   exactJson(
     migration.previousPurposeLimits,
-    PROBE_PREVIOUS_PURPOSE_CALL_LIMITS,
+    PROBE_V03_PREVIOUS_PURPOSE_CALL_LIMITS,
     "policy_migration_mismatch"
   );
   exactJson(migration.nextPurposeLimits, PROBE_PURPOSE_CALL_LIMITS, "policy_migration_mismatch");
-  exactJson(preserved, PROBE_POLICY_MIGRATION_PRESERVED_STATE, "policy_migration_mismatch");
+  exactJson(
+    Object.fromEntries(Object.entries(preserved).filter(([key]) => key !== "knownActualNanoUsd")),
+    PROBE_V03_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
+    "policy_migration_mismatch"
+  );
   const knownJtis = new Set<string>();
   let knownCost = 0;
   for (const [ordinal, value] of knownCalls.entries()) {
     const call = objectValue(value, "invalid_migration_known_call");
+    exactKeys(
+      call,
+      [
+        "ordinal",
+        "jti",
+        "dispatchSequence",
+        "actualNanoUsd",
+        "providerResponseHash",
+        "settlementDigest",
+        "usageHash"
+      ],
+      "policy_migration_known_call_shape_mismatch"
+    );
     if (
       call.ordinal !== ordinal ||
       typeof call.jti !== "string" ||
-      !/^[A-Za-z0-9_-]{16,96}$/u.test(call.jti) ||
+      !/^[A-Za-z0-9_-]{16,128}$/u.test(call.jti) ||
       call.dispatchSequence !== ordinal + 1 ||
       !Number.isSafeInteger(call.actualNanoUsd) ||
       Number(call.actualNanoUsd) < 0 ||
+      Number(call.actualNanoUsd) > PROBE_PER_CALL_RESERVATION_NANO_USD ||
       typeof call.providerResponseHash !== "string" ||
       !/^[a-f0-9]{64}$/u.test(call.providerResponseHash) ||
       typeof call.settlementDigest !== "string" ||
@@ -175,52 +275,33 @@ async function verifyPolicyMigration(value: unknown): Promise<ProbePolicyMigrati
     knownJtis.add(call.jti);
     knownCost += Number(call.actualNanoUsd);
   }
-  if (knownCost !== GATE2_ATTEMPT_1_KNOWN_ACCOUNTED_NANO_USD) {
+  const attempt1KnownCost = knownCalls.slice(0, 4).reduce((total, value) => {
+    return total + Number(objectValue(value, "invalid_migration_known_call").actualNanoUsd);
+  }, 0);
+  if (
+    knownCost !== preserved.knownActualNanoUsd ||
+    attempt1KnownCost !== GATE2_ATTEMPT_1_KNOWN_ACCOUNTED_NANO_USD
+  ) {
     throw new Gate2CalibrationBundleError("policy_migration_cost_mismatch");
   }
   exactJson(
     purposeCounts,
-    PROBE_POLICY_MIGRATION_PRESERVED_STATE.purposeCounts,
+    PROBE_V03_POLICY_MIGRATION_FIXED_PRESERVED_STATE.purposeCounts,
     "policy_migration_mismatch"
   );
-  const priorReceipt: ProbePolicyMigrationPriorReceipt = {
-    version: PROBE_POLICY_MIGRATION_PRIOR_RECEIPT_VERSION,
-    migrationId: PROBE_POLICY_MIGRATION_ID,
-    priorAppCommit: PROBE_POLICY_MIGRATION_PRIOR_APP_COMMIT,
-    priorActivationHash: PROBE_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
-    priorEvidenceDigest: PROBE_POLICY_MIGRATION_PRIOR_EVIDENCE_DIGEST,
-    guardInstanceId: String(migration.guardInstanceId ?? ""),
-    initializedCommit: String(migration.initializedCommit ?? ""),
-    previousPolicyVersion: PROBE_PREVIOUS_POLICY_VERSION,
-    previousPolicyHash: PROBE_PREVIOUS_POLICY_HASH,
-    previousScriptHash: PROBE_PREVIOUS_LEDGER_SCRIPT_HASH,
-    knownCalls: knownCalls as ProbePolicyMigrationPriorReceipt["knownCalls"]
-  };
-  let manifest;
-  try {
-    manifest = createProbePolicyMigrationManifest({
-      priorReceipt,
-      nextPolicyHash: String(migration.nextPolicyHash ?? ""),
-      nextScriptHash: String(migration.nextScriptHash ?? ""),
-      migrationCommit: String(migration.migrationCommit ?? "")
-    });
-  } catch {
-    throw new Gate2CalibrationBundleError("policy_migration_manifest_mismatch");
-  }
   const core = Object.fromEntries(
     Object.entries(migration).filter(([key]) => key !== "receiptHash")
-  ) as unknown as ProbePolicyMigrationReceiptCore;
-  const unsignedCore = Object.fromEntries(
+  ) as unknown as ProbeV03PolicyMigrationReceiptCore;
+  const manifest = Object.fromEntries(
     Object.entries(core).filter(([key]) => !["migrationDigest", "migratedAtMs"].includes(key))
-  );
+  ) as unknown as ProbeV03PolicyMigrationManifest;
   if (
-    canonicalJson(unsignedCore) !== canonicalJson(manifest) ||
-    migration.migrationDigest !== (await probePolicyMigrationDigest(manifest)) ||
-    migration.receiptHash !== (await probePolicyMigrationReceiptHash(core))
+    migration.migrationDigest !== (await probeV03PolicyMigrationDigest(manifest)) ||
+    migration.receiptHash !== (await probeV03PolicyMigrationReceiptHash(core))
   ) {
     throw new Gate2CalibrationBundleError("policy_migration_digest_mismatch");
   }
-  return migration as unknown as ProbePolicyMigrationReceipt;
+  return migration as unknown as ProbeV03PolicyMigrationReceipt;
 }
 
 async function verifyCanonicalEvidence(value: unknown): Promise<void> {
@@ -536,16 +617,16 @@ export async function verifyGate2CalibrationBundle(
   exactJson(
     bundle.attemptScope,
     {
-      designation: "separate-versioned-final-attempt",
+      designation: "separate-versioned-third-final-preferred-attempt",
       baseCalibrationCalls: PROBE_CALIBRATION_BASE_CALLS,
       terminalCalibrationCalls: PROBE_CALIBRATION_TERMINAL_CALLS,
       caseCount: PROBE_CALIBRATION_ATTEMPT_CASE_COUNT,
-      priorAttemptMerged: false
+      priorAttemptsMerged: false
     },
     "attempt_scope_mismatch"
   );
-  exactJson(bundle.priorAttempt, GATE2_ATTEMPT_1_LINEAGE, "prior_attempt_lineage_mismatch");
   const migration = await verifyPolicyMigration(bundle.policyMigration);
+  verifyGate2PriorAttemptsLineage(bundle.priorAttempts, migration);
   if (
     bundle.policyHash !== migration.nextPolicyHash ||
     bundle.ledgerScriptHash !== migration.nextScriptHash ||
@@ -625,6 +706,8 @@ export async function verifyGate2CalibrationBundle(
     throw new Gate2CalibrationBundleError("passed_count_mismatch");
   }
   const terminalGuard = objectValue(bundle.terminalGuard, "invalid_terminal_guard");
+  const priorAttempts = createGate2PriorAttemptsLineage(migration);
+  const priorCumulativeKnownAccountedNanoUsd = priorAttempts.cumulative.knownAccountedNanoUsd;
   const attemptAccountedNanoUsd = bundle.cases.reduce((total, row) => {
     const settlement = objectValue(
       objectValue(row, "invalid_calibration_row").settlement,
@@ -642,7 +725,7 @@ export async function verifyGate2CalibrationBundle(
     terminalGuard.committedNanoUsd !==
       PROBE_CALIBRATION_TERMINAL_CALLS * PROBE_PER_CALL_RESERVATION_NANO_USD ||
     terminalGuard.knownAccountedNanoUsd !==
-      GATE2_ATTEMPT_1_KNOWN_ACCOUNTED_NANO_USD + attemptAccountedNanoUsd
+      priorCumulativeKnownAccountedNanoUsd + attemptAccountedNanoUsd
   ) {
     throw new Gate2CalibrationBundleError("terminal_guard_mismatch");
   }
@@ -655,7 +738,7 @@ export async function verifyGate2CalibrationBundle(
     ![priorCumulativeCost, reportedAttemptCost, terminalCumulativeCost].every(
       (value) => Number.isSafeInteger(value) && value >= 0
     ) ||
-    priorCumulativeCost !== GATE2_ATTEMPT_1_KNOWN_ACCOUNTED_NANO_USD ||
+    priorCumulativeCost !== priorCumulativeKnownAccountedNanoUsd ||
     reportedAttemptCost !== attemptAccountedNanoUsd ||
     terminalCumulativeCost !== terminalGuard.knownAccountedNanoUsd ||
     terminalCumulativeCost - priorCumulativeCost !== reportedAttemptCost

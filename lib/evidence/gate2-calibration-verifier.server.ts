@@ -2,7 +2,7 @@ import "server-only";
 
 import { canonicalJson, canonicalSha256 } from "@/lib/evidence/digest";
 import {
-  GATE2_ATTEMPT_1_LINEAGE,
+  createGate2PriorAttemptsLineage,
   verifyGate2CalibrationBundle,
   type VerifiedGate2CalibrationBundle
 } from "@/lib/evidence/gate2-calibration-bundle";
@@ -37,17 +37,17 @@ export async function verifyGate2CalibrationBundleServer(
   value: unknown
 ): Promise<VerifiedGate2CalibrationBundle> {
   const bundle = await verifyGate2CalibrationBundle(value);
-  if (canonicalJson(bundle.priorAttempt) !== canonicalJson(GATE2_ATTEMPT_1_LINEAGE)) {
-    throw new Error("server_prior_attempt_lineage_mismatch");
-  }
   const migration = objectValue(bundle.policyMigration, "invalid_policy_migration");
+  const expectedPriorAttempts = createGate2PriorAttemptsLineage(
+    migration as unknown as Parameters<typeof createGate2PriorAttemptsLineage>[0]
+  );
   if (
-    migration.priorEvidenceDigest !== GATE2_ATTEMPT_1_LINEAGE.evidenceDigest ||
+    canonicalJson(bundle.priorAttempts) !== canonicalJson(expectedPriorAttempts) ||
     migration.nextPolicyHash !== bundle.policyHash ||
     migration.nextScriptHash !== bundle.ledgerScriptHash ||
     migration.migrationCommit !== bundle.appCommit
   ) {
-    throw new Error("server_policy_migration_mismatch");
+    throw new Error("server_prior_attempt_or_policy_migration_mismatch");
   }
   for (const [ordinal, row] of bundle.cases.entries()) {
     const trial = objectValue(row.trialEvidence, "invalid_trial_evidence");

@@ -23,6 +23,7 @@
     "probe-controls:init": "tsx --tsconfig tsconfig.operator.json scripts/probe-controls.ts init",
     "probe-controls:bootstrap": "tsx --tsconfig tsconfig.operator.json scripts/probe-controls.ts bootstrap",
     "probe-controls:integration": "tsx --tsconfig tsconfig.operator.json scripts/probe-controls.ts integration-test",
+    "probe-controls:preflight-v03": "tsx --tsconfig tsconfig.operator.json scripts/probe-controls.ts preflight-policy-v03",
     "probe-controls:migrate": "tsx --tsconfig tsconfig.operator.json scripts/probe-controls.ts migrate-policy",
     "probe-continuation:integration": "tsx --tsconfig tsconfig.operator.json scripts/probe-continuation-integration.ts",
     "probe-controls:reap": "tsx --tsconfig tsconfig.operator.json scripts/probe-controls.ts reap",

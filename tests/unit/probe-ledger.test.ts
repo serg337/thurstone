@@ -1,14 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { canonicalSha256 } from "@/lib/evidence/digest";
 import {
   PROBE_LEDGER_SCRIPTS,
   ProbeLedgerError,
   beginProbeCall,
+  createProbeLedgerKeyspace,
   initializeProbeGuard,
   issueProbeAuthorization,
   migrateProbeGuardPolicy,
   probeLedgerScriptHash,
+  probeAuthorizationKey,
   readProbeGuardStatus,
   readProbePolicyMigrationReceipt,
   reapExpiredProbeCall,
@@ -18,6 +19,9 @@ import {
   type ProbeRedisClient
 } from "@/lib/probe/ledger";
 import {
+  PROBE_MIGRATED_LEDGER_SCRIPT_HASH,
+  PROBE_MIGRATED_POLICY_HASH,
+  PROBE_MIGRATED_POLICY_VERSION,
   PROBE_POLICY_MIGRATION_ID,
   PROBE_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
   PROBE_POLICY_MIGRATION_PRIOR_APP_COMMIT,
@@ -31,7 +35,6 @@ import {
   probePolicyMigrationDigest,
   type ProbePolicyMigrationPriorReceipt
 } from "@/lib/probe/policy-migration-contract";
-import { PROBE_POLICY_VERSION, probePolicyHash } from "@/lib/probe/policy";
 
 const identity: ProbeGuardIdentity = {
   guardInstanceId: "guard_0123456789abcdef",
@@ -85,8 +88,8 @@ async function migrationReadReply(migratedAtMs = 1_800_000_000_000): Promise<unk
   const manifest = createProbePolicyMigrationManifest({
     priorReceipt: prior,
     migrationCommit: "e".repeat(40),
-    nextPolicyHash: await probePolicyHash(),
-    nextScriptHash: await probeLedgerScriptHash()
+    nextPolicyHash: PROBE_MIGRATED_POLICY_HASH,
+    nextScriptHash: PROBE_MIGRATED_LEDGER_SCRIPT_HASH
   });
   return [
     1,
@@ -130,19 +133,11 @@ function migrationRedis(evalReply: unknown, evalRoReply: unknown) {
 
 describe("durable Probe guard adapter", () => {
   it("freezes the reviewed Lua bundle hash", async () => {
-    await expect(
-      canonicalSha256({
-        init: PROBE_LEDGER_SCRIPTS.init,
-        issue: PROBE_LEDGER_SCRIPTS.issue,
-        begin: PROBE_LEDGER_SCRIPTS.begin,
-        settleKnown: PROBE_LEDGER_SCRIPTS.settleKnown,
-        settleUncertain: PROBE_LEDGER_SCRIPTS.settleUncertain,
-        reap: PROBE_LEDGER_SCRIPTS.reap,
-        status: PROBE_LEDGER_SCRIPTS.status
-      })
-    ).resolves.toBe(PROBE_PREVIOUS_LEDGER_SCRIPT_HASH);
+    expect(PROBE_PREVIOUS_LEDGER_SCRIPT_HASH).toBe(
+      "41d351ad5d1adb81b0c6a90aa930cf1ae932b053d58b097c0283846728b798d2"
+    );
     await expect(probeLedgerScriptHash()).resolves.toBe(
-      "34833e98044cee1472c9104ac70312f03c96e8d2707bee189631e2cf41ae9033"
+      "05c338834e467dbfadbf7fa1789556bc77080d54620dca3fea4db88153f4c067"
     );
   });
 
@@ -207,6 +202,73 @@ describe("durable Probe guard adapter", () => {
     expect(PROBE_LEDGER_SCRIPTS.settleUncertain).toContain('return {0, "COMMIT_MISMATCH"}');
     expect(PROBE_LEDGER_SCRIPTS.reap).toContain('return {0, "COMMIT_MISMATCH"}');
     expect(PROBE_LEDGER_SCRIPTS.begin).toContain('return {0, "CHALLENGE_CLOSED"}');
+  });
+
+  it("binds ISSUE and BEGIN to the exact active run-index document owner", async () => {
+    const activationHash = "a".repeat(64);
+    const base = `tp:{webmcp26}:run-index:test_admission`;
+    const runAdmission = {
+      anchorKey: `${base}:${activationHash}:anchor`,
+      dataKey: `${base}:${activationHash}:data`,
+      activationHash,
+      buildCommit: "b".repeat(40),
+      ownerHash: "c".repeat(64),
+      ownerRevision: 0,
+      ordinal: 0
+    };
+    const issued = fakeRedis([1, "ISSUED_NEW", "jti_0123456789abcdef", 1_000, 1_120]);
+    await issueProbeAuthorization(issued.client, {
+      ...identity,
+      jti: "jti_0123456789abcdef",
+      claimsHash: "c".repeat(64),
+      purpose: "calibration",
+      subjectHash: "d".repeat(64),
+      actorHash: "e".repeat(64),
+      runAdmission
+    });
+    const issueKeys = issued.evalMock.mock.calls[0]?.[1] as string[];
+    const issueArguments = issued.evalMock.mock.calls[0]?.[2] as string[];
+    expect(issueKeys.slice(-2)).toEqual([runAdmission.anchorKey, runAdmission.dataKey]);
+    expect(issueArguments.slice(-6)).toEqual([
+      "1",
+      activationHash,
+      runAdmission.buildCommit,
+      runAdmission.ownerHash,
+      "0",
+      "0"
+    ]);
+
+    const begun = fakeRedis([1, "GRANTED_NEW", 6, 6, 375_000_000, 1_045]);
+    await beginProbeCall(begun.client, {
+      ...identity,
+      jti: "jti_0123456789abcdef",
+      claimsHash: "c".repeat(64),
+      purpose: "calibration",
+      runAdmission
+    });
+    const beginKeys = begun.evalMock.mock.calls[0]?.[1] as string[];
+    const beginArguments = begun.evalMock.mock.calls[0]?.[2] as string[];
+    expect(beginKeys.slice(-2)).toEqual([runAdmission.anchorKey, runAdmission.dataKey]);
+    expect(beginArguments.slice(-6)).toEqual(issueArguments.slice(-6));
+    expect(PROBE_LEDGER_SCRIPTS.issue).toContain('return {0, "RUN_ADMISSION_INVALID"}');
+    expect(PROBE_LEDGER_SCRIPTS.begin).toContain('return {0, "RUN_ADMISSION_INVALID"}');
+    expect(PROBE_LEDGER_SCRIPTS.begin).toContain('"run_owner_hash", ARGV[24]');
+    expect(PROBE_LEDGER_SCRIPTS.begin).toContain('"run_owner_revision", ARGV[25]');
+
+    const keyspace = createProbeLedgerKeyspace();
+    const fixtureJti = ["jti", "0123456789abcdef"].join("_");
+    expect(probeAuthorizationKey(keyspace, fixtureJti)).toBe(
+      ["tp", "{webmcp26}", "auth", fixtureJti].join(":")
+    );
+    await expect(
+      beginProbeCall(begun.client, {
+        ...identity,
+        jti: "jti_0123456789abcdef",
+        claimsHash: "c".repeat(64),
+        purpose: "calibration",
+        runAdmission: { ...runAdmission, dataKey: `${base}:${activationHash}:wrong` }
+      })
+    ).rejects.toMatchObject({ code: "INVALID_RUN_ADMISSION_KEY" });
   });
 
   it("retains the stale JTI needed by the confirmed operator reap path", async () => {
@@ -296,7 +358,7 @@ describe("durable Probe guard adapter", () => {
     expect(result.receipt).toMatchObject({
       migrationId: PROBE_POLICY_MIGRATION_ID,
       previousPolicyVersion: PROBE_PREVIOUS_POLICY_VERSION,
-      nextPolicyVersion: PROBE_POLICY_VERSION,
+      nextPolicyVersion: PROBE_MIGRATED_POLICY_VERSION,
       migratedAtMs,
       preserved: {
         claimedCalls: 4,
@@ -406,8 +468,8 @@ describe("durable Probe guard adapter", () => {
       0,
       0
     ]);
-    const nextPolicyHash = await probePolicyHash();
-    const nextScriptHash = await probeLedgerScriptHash();
+    const nextPolicyHash = PROBE_MIGRATED_POLICY_HASH;
+    const nextScriptHash = PROBE_MIGRATED_LEDGER_SCRIPT_HASH;
     const newStatus = fakeRedis([
       1,
       "open",
@@ -421,7 +483,7 @@ describe("durable Probe guard adapter", () => {
       0,
       11_360_800,
       0,
-      PROBE_POLICY_VERSION,
+      PROBE_MIGRATED_POLICY_VERSION,
       "gpt-5.6-terra",
       160,
       10_000_000_000,
@@ -449,7 +511,7 @@ describe("durable Probe guard adapter", () => {
       purposeLimits: { calibration: 4, judge: 10 }
     });
     await expect(readProbeGuardStatus(newStatus.client)).resolves.toMatchObject({
-      policyVersion: PROBE_POLICY_VERSION,
+      policyVersion: PROBE_MIGRATED_POLICY_VERSION,
       purposeLimits: { calibration: 8, judge: 6 },
       claimedCalls: 4,
       knownCount: 4,

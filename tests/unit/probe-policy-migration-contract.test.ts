@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { canonicalSha256 } from "@/lib/evidence/digest";
 import {
+  PROBE_MIGRATED_LEDGER_SCRIPT_HASH,
+  PROBE_MIGRATED_POLICY_HASH,
   PROBE_POLICY_MIGRATION_ID,
   PROBE_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
   PROBE_POLICY_MIGRATION_PRIOR_APP_COMMIT,
@@ -90,8 +92,8 @@ describe("Probe policy migration contract", () => {
     const manifest = createProbePolicyMigrationManifest({
       priorReceipt: migrationPriorReceiptFixture(),
       migrationCommit: "e".repeat(40),
-      nextPolicyHash: "d".repeat(64),
-      nextScriptHash: "e".repeat(64)
+      nextPolicyHash: PROBE_MIGRATED_POLICY_HASH,
+      nextScriptHash: PROBE_MIGRATED_LEDGER_SCRIPT_HASH
     });
     expect(manifest.previousPurposeLimits).toEqual({
       calibration: 4,
@@ -121,8 +123,8 @@ describe("Probe policy migration contract", () => {
     const manifest = createProbePolicyMigrationManifest({
       priorReceipt: migrationPriorReceiptFixture(),
       migrationCommit: "e".repeat(40),
-      nextPolicyHash: "d".repeat(64),
-      nextScriptHash: "e".repeat(64)
+      nextPolicyHash: PROBE_MIGRATED_POLICY_HASH,
+      nextScriptHash: PROBE_MIGRATED_LEDGER_SCRIPT_HASH
     });
     const digest = await probePolicyMigrationDigest(manifest);
     const receipt = await createProbePolicyMigrationReceipt(manifest, digest, 1_800_000_000_000);
@@ -162,8 +164,8 @@ describe("Probe policy migration contract", () => {
     const manifest = createProbePolicyMigrationManifest({
       priorReceipt: valid,
       migrationCommit: "e".repeat(40),
-      nextPolicyHash: "d".repeat(64),
-      nextScriptHash: "e".repeat(64)
+      nextPolicyHash: PROBE_MIGRATED_POLICY_HASH,
+      nextScriptHash: PROBE_MIGRATED_LEDGER_SCRIPT_HASH
     });
     await expect(
       createProbePolicyMigrationReceipt(manifest, "0".repeat(64), 1_800_000_000_000)

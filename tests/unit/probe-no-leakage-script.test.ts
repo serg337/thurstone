@@ -63,7 +63,7 @@ describe("Probe production client boundary verifier", () => {
       labChunkCount: 2,
       allClientChunkCount: 2,
       forbiddenSentinels: 7,
-      labOnlyForbiddenSentinels: 4,
+      labOnlyForbiddenSentinels: 8,
       sourceMaps: 0
     });
   });
@@ -110,7 +110,7 @@ describe("Probe production client boundary verifier", () => {
     );
     await expect(
       execFileAsync(process.execPath, [verifierPath], { cwd: root })
-    ).resolves.toMatchObject({ stdout: expect.stringContaining('"labOnlyForbiddenSentinels":4') });
+    ).resolves.toMatchObject({ stdout: expect.stringContaining('"labOnlyForbiddenSentinels":8') });
 
     await writeFile(
       `${outputRoot}/${emittedChunkPath("vercel-builder", "app/lab/page.js")}`,

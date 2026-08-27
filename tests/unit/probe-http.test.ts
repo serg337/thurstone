@@ -90,6 +90,36 @@ describe("disabled Probe HTTP boundary", () => {
     ).rejects.toMatchObject({ code: "body_too_large", status: 413 });
   });
 
+  it("allows an explicitly declared recovery method without changing the POST default", async () => {
+    const body = JSON.stringify({ intent: "recover-final-four-case-calibration" });
+    const recovery = new Request("https://toolproof-rust.vercel.app/api/probe/session", {
+      method: "PUT",
+      headers: {
+        origin: "https://toolproof-rust.vercel.app",
+        "sec-fetch-site": "same-origin",
+        "content-type": "application/json"
+      },
+      body
+    });
+    await expect(
+      readBoundedProbeJson(recovery, { maximumBodyBytes: 256, allowedMethod: "PUT" })
+    ).resolves.toEqual({ intent: "recover-final-four-case-calibration" });
+
+    const rejected = new Request("https://toolproof-rust.vercel.app/api/probe/session", {
+      method: "PUT",
+      headers: {
+        origin: "https://toolproof-rust.vercel.app",
+        "sec-fetch-site": "same-origin",
+        "content-type": "application/json"
+      },
+      body
+    });
+    await expect(readBoundedProbeJson(rejected, { maximumBodyBytes: 256 })).rejects.toMatchObject({
+      code: "method_not_allowed",
+      status: 405
+    });
+  });
+
   it("fails closed on CSRF/fetch metadata and redacts unexpected errors", async () => {
     const active = request({
       origin: "https://toolproof-rust.vercel.app",

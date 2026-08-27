@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  PROBE_RECOVERY_TTL_SECONDS,
   PROBE_SESSION_TTL_SECONDS,
   deriveProbeActorHash,
+  issueProbeRecoveryCredential,
+  issueRecoveredProbeSession,
   issueProbeSession,
+  probeRecoveryCookieOptions,
   probeSessionCookieOptions,
+  verifyProbeRecoveryCredential,
   verifyProbeSession
 } from "@/lib/probe/session";
 
@@ -56,6 +61,59 @@ describe("Probe session", () => {
     ).toThrowError(/session_expired/u);
   });
 
+  it("recovers the same run with fresh short sessions for the full fixed recovery window", () => {
+    const nowMs = Date.parse("2026-08-27T12:00:00.000Z");
+    const original = issueProbeSession({ ...binding, nowMs });
+    const recovery = issueProbeRecoveryCredential({
+      session: original.claims,
+      launchHash: "d".repeat(64),
+      signingSecret
+    });
+    expect(recovery.cookieValue).not.toContain(original.claims.runId);
+    expect(recovery.claims.expiresAt - recovery.claims.issuedAt).toBe(PROBE_RECOVERY_TTL_SECONDS);
+    expect(
+      verifyProbeRecoveryCredential({
+        cookieValue: recovery.cookieValue,
+        signingSecret,
+        activationHash: binding.activationHash,
+        buildCommit: binding.buildCommit,
+        actorHash: binding.actorHash,
+        nowMs: nowMs + 30 * 60_000
+      })
+    ).toEqual(recovery.claims);
+
+    const refreshed = issueRecoveredProbeSession({
+      recovery: recovery.claims,
+      signingSecret,
+      nowMs: nowMs + 30 * 60_000
+    });
+    expect(refreshed.claims).toMatchObject({
+      sessionId: original.claims.sessionId,
+      runId: original.claims.runId
+    });
+    expect(refreshed.csrfToken).not.toBe(original.csrfToken);
+
+    const nearExpiryMs = (recovery.claims.expiresAt - 5 * 60) * 1_000;
+    const shortened = issueRecoveredProbeSession({
+      recovery: recovery.claims,
+      signingSecret,
+      nowMs: nearExpiryMs
+    });
+    expect(shortened.claims.expiresAt).toBe(recovery.claims.expiresAt);
+    expect(shortened.claims.expiresAt - shortened.claims.issuedAt).toBe(5 * 60);
+    expect(
+      verifyProbeSession({
+        cookieValue: shortened.cookieValue,
+        signingSecret,
+        activationHash: binding.activationHash,
+        buildCommit: binding.buildCommit,
+        actorHash: binding.actorHash,
+        csrfToken: shortened.csrfToken,
+        nowMs: nearExpiryMs + 1_000
+      })
+    ).toEqual(shortened.claims);
+  });
+
   it("derives a private stable actor hash without retaining network identifiers", () => {
     const request = new Request("https://toolproof-rust.vercel.app/api/probe/session", {
       headers: {
@@ -75,6 +133,13 @@ describe("Probe session", () => {
       secure: true,
       sameSite: "strict",
       path: "/"
+    });
+    expect(probeRecoveryCookieOptions()).toMatchObject({
+      httpOnly: true,
+      secure: true,
+      sameSite: "strict",
+      path: "/",
+      maxAge: PROBE_RECOVERY_TTL_SECONDS
     });
   });
 });

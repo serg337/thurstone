@@ -7,10 +7,12 @@ import { z } from "zod";
 
 import { canonicalJson, canonicalSha256 } from "@/lib/evidence/digest";
 import { openProbeArtifact, sealProbeArtifact } from "@/lib/probe/server-artifact";
+import { PROBE_RUN_INDEX_SCRIPTS } from "@/lib/probe/run-index";
+import { PROBE_RECOVERY_TTL_SECONDS } from "@/lib/probe/session";
 import { decodeProbeSigningSecret } from "@/lib/probe/signing-secret";
 
 export const PROBE_CONTINUATION_VERSION = 1;
-export const PROBE_CONTINUATION_TTL_SECONDS = 20 * 60;
+export const PROBE_CONTINUATION_TTL_SECONDS = PROBE_RECOVERY_TTL_SECONDS;
 export const PROBE_CONTINUATION_STAGES = ["issue", "decision", "native", "completion"] as const;
 
 export type ProbeContinuationStage = (typeof PROBE_CONTINUATION_STAGES)[number];
@@ -45,6 +47,45 @@ const continuationArtifactSchema = z
 
 const PUT_CONTINUATION_SCRIPT = `
 local exists = redis.call("EXISTS", KEYS[1])
+local admission_mode = ARGV[6]
+if admission_mode == "run-owner" then
+  local admission_now = redis.call("TIME")
+  local admission_now_ms = tonumber(admission_now[1]) * 1000 + math.floor(tonumber(admission_now[2]) / 1000)
+  local revision = redis.call("HGET", KEYS[3], "revision")
+  if redis.call("EXISTS", KEYS[2]) ~= 1 or redis.call("EXISTS", KEYS[3]) ~= 1
+    or redis.call("PTTL", KEYS[2]) ~= -1 or redis.call("PTTL", KEYS[3]) <= 0
+    or redis.call("HGET", KEYS[2], "activation_hash") ~= ARGV[7]
+    or redis.call("HGET", KEYS[2], "build_commit") ~= ARGV[8]
+    or redis.call("HGET", KEYS[3], "activation_hash") ~= ARGV[7]
+    or redis.call("HGET", KEYS[3], "build_commit") ~= ARGV[8]
+    or redis.call("HGET", KEYS[3], "status") ~= "active"
+    or revision ~= ARGV[10]
+    or redis.call("HGET", KEYS[3], "owner_revision") ~= revision
+    or redis.call("HGET", KEYS[3], "owner_hash") ~= ARGV[9]
+    or tonumber(redis.call("HGET", KEYS[3], "owner_expires_at_ms") or "0") <= admission_now_ms
+  then
+    return {0, "CONTINUATION_RUN_OWNER_MISMATCH"}
+  end
+elseif admission_mode == "grant-owner" then
+  if redis.call("EXISTS", KEYS[2]) ~= 1
+    or redis.call("PTTL", KEYS[2]) ~= -1
+    or redis.call("HGET", KEYS[2], "state") ~= "IN_FLIGHT"
+    or redis.call("HGET", KEYS[2], "jti") ~= ARGV[7]
+    or redis.call("HGET", KEYS[2], "claims_hash") ~= ARGV[8]
+    or redis.call("HGET", KEYS[2], "guard_instance_id") ~= ARGV[9]
+    or redis.call("HGET", KEYS[2], "policy_hash") ~= ARGV[10]
+    or redis.call("HGET", KEYS[2], "script_hash") ~= ARGV[11]
+    or redis.call("HGET", KEYS[2], "run_activation_hash") ~= ARGV[12]
+    or redis.call("HGET", KEYS[2], "run_build_commit") ~= ARGV[13]
+    or redis.call("HGET", KEYS[2], "run_owner_hash") ~= ARGV[14]
+    or redis.call("HGET", KEYS[2], "run_owner_revision") ~= ARGV[15]
+    or redis.call("HGET", KEYS[2], "run_ordinal") ~= ARGV[15]
+  then
+    return {0, "CONTINUATION_GRANT_OWNER_MISMATCH"}
+  end
+elseif admission_mode ~= "none" then
+  return {0, "INVALID_CONTINUATION_ADMISSION"}
+end
 if exists == 1 then
   local existing_jti = redis.call("HGET", KEYS[1], "jti")
   local existing_stage = redis.call("HGET", KEYS[1], "stage")
@@ -136,6 +177,30 @@ export interface ProbeContinuationReceipt<T> {
   readonly expiresAtMs: number;
   readonly ttlRemainingMs: number;
 }
+
+export type ProbeContinuationAdmission =
+  | {
+      readonly mode: "run-owner";
+      readonly anchorKey: string;
+      readonly dataKey: string;
+      readonly activationHash: string;
+      readonly buildCommit: string;
+      readonly ownerHash: string;
+      readonly revision: number;
+    }
+  | {
+      readonly mode: "grant-owner";
+      readonly authorizationKey: string;
+      readonly jti: string;
+      readonly claimsHash: string;
+      readonly guardInstanceId: string;
+      readonly policyHash: string;
+      readonly scriptHash: string;
+      readonly activationHash: string;
+      readonly buildCommit: string;
+      readonly ownerHash: string;
+      readonly revision: number;
+    };
 
 function assertJti(jti: string): string {
   if (!OPAQUE_ID_PATTERN.test(jti)) throw new ProbeContinuationError("INVALID_JTI");
@@ -280,7 +345,10 @@ function receiptFromReply<T>(input: {
 }
 
 export function probeContinuationScriptHash(): Promise<string> {
-  return canonicalSha256(PROBE_CONTINUATION_SCRIPTS);
+  return canonicalSha256({
+    stageContinuations: PROBE_CONTINUATION_SCRIPTS,
+    runIndex: PROBE_RUN_INDEX_SCRIPTS
+  });
 }
 
 export async function putProbeContinuation<T>(
@@ -290,6 +358,7 @@ export async function putProbeContinuation<T>(
     readonly stage: ProbeContinuationStage;
     readonly payload: T;
     readonly artifactSecret: string;
+    readonly admission?: ProbeContinuationAdmission;
   },
   keyspace: ProbeContinuationKeyspace = PRODUCTION_PROBE_CONTINUATION_KEYSPACE
 ): Promise<ProbeContinuationReceipt<T>> {
@@ -304,11 +373,63 @@ export async function putProbeContinuation<T>(
     payload: input.payload
   });
   const token = sealProbeArtifact(artifactKind(stage), artifact, input.artifactSecret);
+  const admission = input.admission;
+  const admissionKeys: string[] = [];
+  const admissionArguments: string[] = ["none"];
+  if (admission?.mode === "run-owner") {
+    if (
+      !Number.isSafeInteger(admission.revision) ||
+      admission.revision < 0 ||
+      admission.revision > 4
+    ) {
+      throw new ProbeContinuationError("INVALID_RUN_OWNER_ADMISSION");
+    }
+    admissionKeys.push(admission.anchorKey, admission.dataKey);
+    admissionArguments.splice(
+      0,
+      1,
+      "run-owner",
+      admission.activationHash,
+      admission.buildCommit,
+      admission.ownerHash,
+      String(admission.revision)
+    );
+  } else if (admission?.mode === "grant-owner") {
+    if (
+      !Number.isSafeInteger(admission.revision) ||
+      admission.revision < 0 ||
+      admission.revision > 4
+    ) {
+      throw new ProbeContinuationError("INVALID_GRANT_OWNER_ADMISSION");
+    }
+    admissionKeys.push(admission.authorizationKey);
+    admissionArguments.splice(
+      0,
+      1,
+      "grant-owner",
+      admission.jti,
+      admission.claimsHash,
+      admission.guardInstanceId,
+      admission.policyHash,
+      admission.scriptHash,
+      admission.activationHash,
+      admission.buildCommit,
+      admission.ownerHash,
+      String(admission.revision)
+    );
+  }
   const reply = parseReply(
     await redis.eval<string[], unknown>(
       PUT_CONTINUATION_SCRIPT,
-      [probeContinuationKey(keyspace, jti, stage)],
-      [jti, stage, binding, token, String(PROBE_CONTINUATION_TTL_SECONDS * 1_000)]
+      [probeContinuationKey(keyspace, jti, stage), ...admissionKeys],
+      [
+        jti,
+        stage,
+        binding,
+        token,
+        String(PROBE_CONTINUATION_TTL_SECONDS * 1_000),
+        ...admissionArguments
+      ]
     )
   );
   const status = String(reply[1]);

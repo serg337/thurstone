@@ -77,7 +77,11 @@ const labOnlyForbidden = [
   "4832959832a45379a82c23a8d08712e7cdc78f2a07e621467ca8f3cd76d9756b",
   "016f607f498384bcac2d60474aaa3f3373635cd662bb2eb4d7bb71b0b223b863",
   "64c3095a1098de30ac266ed2344873da6545875a",
-  "run_tOYy-NQLgCCS2YJ8l2DQ4Q"
+  "run_tOYy-NQLgCCS2YJ8l2DQ4Q",
+  "191f7885eeb062de4bfe4effd9468ef648aef600",
+  "41f8363c74f7b277c239689194069d80749d3f33342779662009f8c47e5348d6",
+  "4ee25981212e67324bda5ec21a67912eddacec622b20850035ca855574f43b84",
+  "toolproof-gate2-invalid-infrastructure-lineage@1.0.0"
 ];
 
 const allClientSource = (

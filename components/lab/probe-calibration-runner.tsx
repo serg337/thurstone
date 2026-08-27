@@ -13,7 +13,8 @@ import {
   PROBE_CLIENT_LAB_SESSION_KEY,
   PROBE_CLIENT_RESULTS_KEY,
   PROBE_CLIENT_SESSION_VERSION,
-  parseProbeClientSessionMarker,
+  probeDocumentId,
+  recoverProbeClientSession,
   serializeProbeClientSessionMarker,
   type ProbeClientSessionMarker
 } from "@/lib/probe/client-session";
@@ -212,7 +213,8 @@ function liveManifest(readiness: RegistryReadinessReceipt): ProbeLiveManifest {
 async function fetchJson(
   path: string,
   csrfToken: string,
-  body: unknown
+  body: unknown,
+  documentId: string
 ): Promise<{ readonly response: Response; readonly value: unknown }> {
   const response = await fetch(path, {
     method: "POST",
@@ -220,7 +222,8 @@ async function fetchJson(
     cache: "no-store",
     headers: {
       "Content-Type": "application/json",
-      "X-ToolProof-CSRF": csrfToken
+      "X-ToolProof-CSRF": csrfToken,
+      "X-ToolProof-Document": documentId
     },
     body: JSON.stringify(body)
   });
@@ -249,6 +252,7 @@ async function fetchJson(
 }
 
 export function ProbeCalibrationRunner() {
+  const [documentId] = useState(probeDocumentId);
   const [environment] = useState(createEnvironment);
   const session = useSyncExternalStore(
     environment.store.subscribe.bind(environment.store),
@@ -459,49 +463,259 @@ export function ProbeCalibrationRunner() {
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    let marker: ProbeClientSessionMarker;
-    try {
-      const raw = globalThis.sessionStorage.getItem(PROBE_CLIENT_LAB_SESSION_KEY);
-      if (!raw) throw new Error("probe_session_marker_missing");
-      marker = parseProbeClientSessionMarker(raw, "/lab", APP_COMMIT);
+    void (async () => {
+      setPhase("Recovering the same opaque run from durable state…");
+      const marker = await recoverProbeClientSession(APP_COMMIT, documentId);
+      if (marker.path === "/results") {
+        globalThis.location.assign(new URL("/results", globalThis.location.href).href);
+        return;
+      }
       markerRef.current = marker;
-    } catch (failure) {
-      queueMicrotask(() => {
-        setMarkerCleanupEligible(true);
-        setError(failure instanceof Error ? failure.message : "probe_session_marker_invalid");
-      });
-      return;
-    }
 
-    void runProbeClientTrial({
-      waitAndVerifyCleanInitial: ({ stage }) => verifiedResetBoundary(stage),
-      issueOpaqueClaim: async ({ initialBoundary }) => {
-        setPhase("Acquiring an exclusive opaque trial claim…");
-        const activeMarker = markerRef.current;
-        const current = runtimeRef.current;
-        if (!activeMarker || !current.readiness) throw new Error("probe_session_unavailable");
-        const response = probeIssueResultSchema.parse(
-          (
-            await fetchJson("/api/probe/issue", activeMarker.csrfToken, {
-              continuation: activeMarker.continuation,
-              initialBoundary,
-              fixture: createProbeFixtureSynopsis(environment.store.getSnapshot().state),
-              liveManifest: liveManifest(current.readiness)
-            })
-          ).value
-        );
-        if (response.status === "already-sealed") {
+      await runProbeClientTrial({
+        waitAndVerifyCleanInitial: ({ stage }) => verifiedResetBoundary(stage),
+        issueOpaqueClaim: async ({ initialBoundary }) => {
+          setPhase("Acquiring an exclusive opaque trial claim…");
+          const activeMarker = markerRef.current;
+          const current = runtimeRef.current;
+          if (!activeMarker || !current.readiness) throw new Error("probe_session_unavailable");
+          const response = probeIssueResultSchema.parse(
+            (
+              await fetchJson(
+                "/api/probe/issue",
+                activeMarker.csrfToken,
+                {
+                  continuation: activeMarker.continuation,
+                  initialBoundary,
+                  fixture: createProbeFixtureSynopsis(environment.store.getSnapshot().state),
+                  liveManifest: liveManifest(current.readiness)
+                },
+                documentId
+              )
+            ).value
+          );
+          if (response.status === "already-sealed") {
+            const destination = response.terminal ? "/results" : "/lab";
+            const recoveredMarker = serializeProbeClientSessionMarker({
+              version: PROBE_CLIENT_SESSION_VERSION,
+              csrfToken: activeMarker.csrfToken,
+              continuation: response.continuation,
+              buildCommit: activeMarker.buildCommit,
+              expiresAt: activeMarker.expiresAt,
+              path: destination
+            });
+            const key = response.terminal ? PROBE_CLIENT_RESULTS_KEY : PROBE_CLIENT_LAB_SESSION_KEY;
+            globalThis.sessionStorage.setItem(key, recoveredMarker);
+            if (response.terminal) {
+              globalThis.sessionStorage.removeItem(PROBE_CLIENT_LAB_SESSION_KEY);
+            }
+            setTimeout(() => {
+              if (response.terminal) {
+                globalThis.location.assign(new URL("/results", globalThis.location.href).href);
+              } else {
+                globalThis.location.reload();
+              }
+            }, 0);
+            return await new Promise<never>(() => undefined);
+          }
+          initialBoundaryRef.current = initialBoundary;
+          authorizationRef.current = response.authorization;
+          return {
+            runId: response.runId,
+            caseId: response.caseId,
+            trialId: response.trialId,
+            authorization: response.authorization
+          } satisfies ProbeOpaqueClaim<ProbeAuthorization>;
+        },
+        requestFreshDecision: async ({ claim }) => {
+          setPhase("Requesting one fresh stateless model decision…");
+          const marker = markerRef.current;
+          const authorization = claim.authorization;
+          if (!marker) throw new Error("probe_session_unavailable");
+          let rawResponse: unknown;
+          try {
+            rawResponse = (
+              await fetchJson(
+                "/api/probe/decide",
+                marker.csrfToken,
+                {
+                  probeToken: authorization.probeToken,
+                  envelope: authorization.envelope
+                },
+                documentId
+              )
+            ).value;
+          } catch (failure) {
+            if (
+              failure &&
+              typeof failure === "object" &&
+              (failure as { inferencePerformed?: unknown }).inferencePerformed === true
+            ) {
+              inferenceUncertainRef.current = true;
+            }
+            throw failure;
+          }
+          const response = probeFreshDecisionResponseSchema.parse(rawResponse);
+          providerReceiptRef.current = jsonSnapshot(response.providerReceipt);
+          return response;
+        },
+        reverifyLiveInitial: async () => {
+          setPhase("Re-verifying the live registered catalog…");
+          const context = document.modelContext;
+          const current = runtimeRef.current;
+          if (
+            !context ||
+            current.registry.phase !== "ready" ||
+            !current.registry.generation ||
+            !webMcpRuntime.compatibilityReceipt
+          ) {
+            throw new Error("live_registry_unavailable");
+          }
+          const receipt = await createRegistryReadinessReceipt(context, {
+            state: environment.store.getSnapshot().state,
+            appCommit: APP_COMMIT,
+            registrationGeneration: current.registry.generation,
+            compatibilityReceipt: webMcpRuntime.compatibilityReceipt
+          });
+          if (receipt.status !== "consumer-ready" || !receipt.runtimeCatalog) {
+            throw new Error("live_registry_unverified");
+          }
+          webMcpRuntime.verifyRegistry(receipt.runtimeCatalog);
+          environment.setRegistryHash(receipt.manifestHash);
+          const inspection = environment.store.inspect();
+          const traceLedger = environment.ledger.snapshot();
+          if (inspection.currentOperationCount !== 0 || traceLedger.current.length !== 0) {
+            throw new Error("live_trajectory_not_clean");
+          }
+          return {
+            status: "verified" as const,
+            catalogState: "initial" as const,
+            fixtureId: receipt.fixtureId,
+            fixtureSeed: environment.store.getSnapshot().state.seed,
+            stateRevision: 0 as const,
+            stateHash: receipt.stateHash,
+            manifestHash: receipt.manifestHash,
+            registrationGeneration: receipt.runtimeCatalog.generation,
+            operationLedgerCount: inspection.currentOperationCount,
+            currentTrajectoryCount: traceLedger.current.length,
+            tools: receipt.runtimeCatalog.tools
+          };
+        },
+        executeOnce: async ({
+          claim,
+          tool,
+          arguments: input,
+          manifestHash,
+          registrationGeneration
+        }) => {
+          setPhase("Executing the selected action once through native WebMCP…");
+          const marker = markerRef.current;
+          const authorization = authorizationRef.current;
+          if (!marker || !authorization) throw new Error("native_admission_binding_missing");
+          const admission = probeNativeAdmissionResponseSchema.parse(
+            (
+              await fetchJson(
+                "/api/probe/native",
+                marker.csrfToken,
+                {
+                  probeToken: authorization.probeToken,
+                  envelope: authorization.envelope,
+                  initialBoundary: initialBoundaryRef.current
+                },
+                documentId
+              )
+            ).value
+          );
+          if (admission.status !== "admitted") {
+            const recoveryError = new Error(
+              "The native allowance was already consumed in an earlier document."
+            ) as Error & { code: string };
+            recoveryError.code = "native_allowance_already_consumed";
+            throw recoveryError;
+          }
+          const release = webMcpRegistryManager.holdConsumerCall(tool.name, registrationGeneration);
+          try {
+            const receipt = await webMcpRuntime.executeOnce({
+              executionId: `probe_${claim.trialId}_${globalThis.crypto.randomUUID()}`,
+              manifestHash,
+              tool,
+              input,
+              observe: () => observeTrace(environment)
+            });
+            const trace = latestTrace(environment);
+            if (!trace || trace.eventId !== receipt.handlerTraceId) {
+              throw new Error("handler_trace_binding_failed");
+            }
+            return Object.freeze({ receipt, trace });
+          } finally {
+            release();
+          }
+        },
+        captureCurrentTrialEvidence: async (
+          capture: ProbeClientTrialCapture<ProbeResetEvidence, ProbeExecutionResult>
+        ): Promise<ProbeTrialEvidence> => {
+          setPhase("Capturing this trial’s raw and canonical evidence…");
+          const { rawDecisionEnvelope, rawModelResponse, providerReceipt, ...captureCore } =
+            capture;
+          const captured = jsonSnapshot({
+            ...captureCore,
+            rawDecisionEnvelopeHash: await canonicalSha256(rawDecisionEnvelope),
+            rawModelResponseHash:
+              rawModelResponse === null ? null : await sha256Hex(rawModelResponse),
+            providerReceiptHash: await canonicalSha256(providerReceipt)
+          });
+          const currentTraces = jsonSnapshot(environment.ledger.snapshot().current);
+          return Object.freeze({
+            version: "toolproof-probe-trial-evidence@1.0.0",
+            appCommit: APP_COMMIT,
+            origin: globalThis.location.origin,
+            userAgent: globalThis.navigator.userAgent,
+            capturedAt: new Date().toISOString(),
+            capture: captured,
+            currentTraces,
+            captureDigest: await canonicalSha256(captured)
+          });
+        },
+        completeAndSeal: async (
+          completion: ProbeClientCompletionInput<ProbeResetEvidence, ProbeTrialEvidence>
+        ): Promise<ProbeCompleteResponse> => {
+          setPhase("Scoring outside the model context and sealing the terminal row…");
+          const marker = markerRef.current;
+          const authorization = authorizationRef.current;
+          const providerReceipt = providerReceiptRef.current;
+          if (!marker || !authorization || !providerReceipt) {
+            throw new Error("probe_completion_binding_missing");
+          }
+          const response = probeCompleteResponseSchema.parse(
+            (
+              await fetchJson(
+                "/api/probe/complete",
+                marker.csrfToken,
+                {
+                  probeToken: authorization.probeToken,
+                  envelope: authorization.envelope,
+                  providerReceipt,
+                  continuation: marker.continuation,
+                  completion
+                },
+                documentId
+              )
+            ).value
+          );
           const destination = response.terminal ? "/results" : "/lab";
-          const recoveredMarker = serializeProbeClientSessionMarker({
+          const nextMarker = serializeProbeClientSessionMarker({
             version: PROBE_CLIENT_SESSION_VERSION,
-            csrfToken: activeMarker.csrfToken,
+            csrfToken: marker.csrfToken,
             continuation: response.continuation,
-            buildCommit: activeMarker.buildCommit,
-            expiresAt: activeMarker.expiresAt,
+            buildCommit: marker.buildCommit,
+            expiresAt: marker.expiresAt,
             path: destination
           });
           const key = response.terminal ? PROBE_CLIENT_RESULTS_KEY : PROBE_CLIENT_LAB_SESSION_KEY;
-          globalThis.sessionStorage.setItem(key, recoveredMarker);
+          globalThis.sessionStorage.setItem(key, nextMarker);
+          if (globalThis.sessionStorage.getItem(key) !== nextMarker) {
+            throw new Error("probe_continuation_write_failed");
+          }
           if (response.terminal) {
             globalThis.sessionStorage.removeItem(PROBE_CLIENT_LAB_SESSION_KEY);
           }
@@ -512,222 +726,27 @@ export function ProbeCalibrationRunner() {
               globalThis.location.reload();
             }
           }, 0);
-          return await new Promise<never>(() => undefined);
+          return response;
+        },
+        discardTransientReferences: () => {
+          authorizationRef.current = undefined;
+          providerReceiptRef.current = undefined;
+          initialBoundaryRef.current = undefined;
         }
-        initialBoundaryRef.current = initialBoundary;
-        authorizationRef.current = response.authorization;
-        return {
-          runId: response.runId,
-          caseId: response.caseId,
-          trialId: response.trialId,
-          authorization: response.authorization
-        } satisfies ProbeOpaqueClaim<ProbeAuthorization>;
-      },
-      requestFreshDecision: async ({ claim }) => {
-        setPhase("Requesting one fresh stateless model decision…");
-        const marker = markerRef.current;
-        const authorization = claim.authorization;
-        if (!marker) throw new Error("probe_session_unavailable");
-        let rawResponse: unknown;
-        try {
-          rawResponse = (
-            await fetchJson("/api/probe/decide", marker.csrfToken, {
-              probeToken: authorization.probeToken,
-              envelope: authorization.envelope
-            })
-          ).value;
-        } catch (failure) {
-          if (
-            failure &&
-            typeof failure === "object" &&
-            (failure as { inferencePerformed?: unknown }).inferencePerformed === true
-          ) {
-            inferenceUncertainRef.current = true;
-          }
-          throw failure;
-        }
-        const response = probeFreshDecisionResponseSchema.parse(rawResponse);
-        providerReceiptRef.current = jsonSnapshot(response.providerReceipt);
-        return response;
-      },
-      reverifyLiveInitial: async () => {
-        setPhase("Re-verifying the live registered catalog…");
-        const context = document.modelContext;
-        const current = runtimeRef.current;
-        if (
-          !context ||
-          current.registry.phase !== "ready" ||
-          !current.registry.generation ||
-          !webMcpRuntime.compatibilityReceipt
-        ) {
-          throw new Error("live_registry_unavailable");
-        }
-        const receipt = await createRegistryReadinessReceipt(context, {
-          state: environment.store.getSnapshot().state,
-          appCommit: APP_COMMIT,
-          registrationGeneration: current.registry.generation,
-          compatibilityReceipt: webMcpRuntime.compatibilityReceipt
-        });
-        if (receipt.status !== "consumer-ready" || !receipt.runtimeCatalog) {
-          throw new Error("live_registry_unverified");
-        }
-        webMcpRuntime.verifyRegistry(receipt.runtimeCatalog);
-        environment.setRegistryHash(receipt.manifestHash);
-        const inspection = environment.store.inspect();
-        const traceLedger = environment.ledger.snapshot();
-        if (inspection.currentOperationCount !== 0 || traceLedger.current.length !== 0) {
-          throw new Error("live_trajectory_not_clean");
-        }
-        return {
-          status: "verified" as const,
-          catalogState: "initial" as const,
-          fixtureId: receipt.fixtureId,
-          fixtureSeed: environment.store.getSnapshot().state.seed,
-          stateRevision: 0 as const,
-          stateHash: receipt.stateHash,
-          manifestHash: receipt.manifestHash,
-          registrationGeneration: receipt.runtimeCatalog.generation,
-          operationLedgerCount: inspection.currentOperationCount,
-          currentTrajectoryCount: traceLedger.current.length,
-          tools: receipt.runtimeCatalog.tools
-        };
-      },
-      executeOnce: async ({
-        claim,
-        tool,
-        arguments: input,
-        manifestHash,
-        registrationGeneration
-      }) => {
-        setPhase("Executing the selected action once through native WebMCP…");
-        const marker = markerRef.current;
-        const authorization = authorizationRef.current;
-        if (!marker || !authorization) throw new Error("native_admission_binding_missing");
-        const admission = probeNativeAdmissionResponseSchema.parse(
-          (
-            await fetchJson("/api/probe/native", marker.csrfToken, {
-              probeToken: authorization.probeToken,
-              envelope: authorization.envelope,
-              initialBoundary: initialBoundaryRef.current
-            })
-          ).value
-        );
-        if (admission.status !== "admitted") {
-          const recoveryError = new Error(
-            "The native allowance was already consumed in an earlier document."
-          ) as Error & { code: string };
-          recoveryError.code = "native_allowance_already_consumed";
-          throw recoveryError;
-        }
-        const release = webMcpRegistryManager.holdConsumerCall(tool.name, registrationGeneration);
-        try {
-          const receipt = await webMcpRuntime.executeOnce({
-            executionId: `probe_${claim.trialId}_${globalThis.crypto.randomUUID()}`,
-            manifestHash,
-            tool,
-            input,
-            observe: () => observeTrace(environment)
-          });
-          const trace = latestTrace(environment);
-          if (!trace || trace.eventId !== receipt.handlerTraceId) {
-            throw new Error("handler_trace_binding_failed");
-          }
-          return Object.freeze({ receipt, trace });
-        } finally {
-          release();
-        }
-      },
-      captureCurrentTrialEvidence: async (
-        capture: ProbeClientTrialCapture<ProbeResetEvidence, ProbeExecutionResult>
-      ): Promise<ProbeTrialEvidence> => {
-        setPhase("Capturing this trial’s raw and canonical evidence…");
-        const { rawDecisionEnvelope, rawModelResponse, providerReceipt, ...captureCore } = capture;
-        const captured = jsonSnapshot({
-          ...captureCore,
-          rawDecisionEnvelopeHash: await canonicalSha256(rawDecisionEnvelope),
-          rawModelResponseHash:
-            rawModelResponse === null ? null : await sha256Hex(rawModelResponse),
-          providerReceiptHash: await canonicalSha256(providerReceipt)
-        });
-        const currentTraces = jsonSnapshot(environment.ledger.snapshot().current);
-        return Object.freeze({
-          version: "toolproof-probe-trial-evidence@1.0.0",
-          appCommit: APP_COMMIT,
-          origin: globalThis.location.origin,
-          userAgent: globalThis.navigator.userAgent,
-          capturedAt: new Date().toISOString(),
-          capture: captured,
-          currentTraces,
-          captureDigest: await canonicalSha256(captured)
-        });
-      },
-      completeAndSeal: async (
-        completion: ProbeClientCompletionInput<ProbeResetEvidence, ProbeTrialEvidence>
-      ): Promise<ProbeCompleteResponse> => {
-        setPhase("Scoring outside the model context and sealing the terminal row…");
-        const marker = markerRef.current;
-        const authorization = authorizationRef.current;
-        const providerReceipt = providerReceiptRef.current;
-        if (!marker || !authorization || !providerReceipt) {
-          throw new Error("probe_completion_binding_missing");
-        }
-        const response = probeCompleteResponseSchema.parse(
-          (
-            await fetchJson("/api/probe/complete", marker.csrfToken, {
-              probeToken: authorization.probeToken,
-              envelope: authorization.envelope,
-              providerReceipt,
-              continuation: marker.continuation,
-              completion
-            })
-          ).value
-        );
-        const destination = response.terminal ? "/results" : "/lab";
-        const nextMarker = serializeProbeClientSessionMarker({
-          version: PROBE_CLIENT_SESSION_VERSION,
-          csrfToken: marker.csrfToken,
-          continuation: response.continuation,
-          buildCommit: marker.buildCommit,
-          expiresAt: marker.expiresAt,
-          path: destination
-        });
-        const key = response.terminal ? PROBE_CLIENT_RESULTS_KEY : PROBE_CLIENT_LAB_SESSION_KEY;
-        globalThis.sessionStorage.setItem(key, nextMarker);
-        if (globalThis.sessionStorage.getItem(key) !== nextMarker) {
-          throw new Error("probe_continuation_write_failed");
-        }
-        if (response.terminal) {
-          globalThis.sessionStorage.removeItem(PROBE_CLIENT_LAB_SESSION_KEY);
-        }
-        setTimeout(() => {
-          if (response.terminal) {
-            globalThis.location.assign(new URL("/results", globalThis.location.href).href);
-          } else {
-            globalThis.location.reload();
-          }
-        }, 0);
-        return response;
-      },
-      discardTransientReferences: () => {
-        authorizationRef.current = undefined;
-        providerReceiptRef.current = undefined;
-        initialBoundaryRef.current = undefined;
-      }
-    })
-      .then(() => {
-        setPhase("Trial sealed. Opening the next fresh document…");
-      })
-      .catch((failure: unknown) => {
-        environment.store.abandonResetAdmission();
-        setUncertain(inferenceUncertainRef.current);
-        setError(
-          inferenceUncertainRef.current
-            ? "provider_uncertain_stop_and_preserve"
-            : failure instanceof Error
-              ? failure.message
-              : "probe_trial_failed"
-        );
       });
+      setPhase("Trial sealed. Opening the next fresh document…");
+    })().catch((failure: unknown) => {
+      environment.store.abandonResetAdmission();
+      setMarkerCleanupEligible(true);
+      setUncertain(inferenceUncertainRef.current);
+      setError(
+        inferenceUncertainRef.current
+          ? "provider_uncertain_stop_and_preserve"
+          : failure instanceof Error
+            ? failure.message
+            : "probe_trial_failed"
+      );
+    });
     // The document-owned runner is deliberately claimed once. Dynamic runtime state is read from
     // runtimeRef so re-renders cannot start another trial.
     // eslint-disable-next-line react-hooks/exhaustive-deps

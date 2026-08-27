@@ -1,10 +1,16 @@
 "use client";
 
-import { PROBE_CLIENT_LAB_SESSION_KEY, PROBE_CLIENT_RESULTS_KEY } from "@/lib/probe/client-session";
+import {
+  PROBE_CLIENT_LAB_SESSION_KEY,
+  PROBE_CLIENT_LAUNCH_KEY,
+  PROBE_CLIENT_RESULTS_KEY
+} from "@/lib/probe/client-session";
 
 export const RETIRED_PROBE_CLIENT_MARKER_KEYS = Object.freeze([
   "toolproof:probe-calibration-session@1",
-  "toolproof:probe-calibration-results@1"
+  "toolproof:probe-calibration-results@1",
+  "toolproof:probe-final-calibration-session@2",
+  "toolproof:probe-final-calibration-results@2"
 ]);
 
 const ALL_PROBE_CLIENT_MARKER_KEYS = Object.freeze([
@@ -20,6 +26,7 @@ export type ProbeSessionCleanupResult =
 
 export function clearProbeClientMarkers(): void {
   for (const key of ALL_PROBE_CLIENT_MARKER_KEYS) globalThis.sessionStorage.removeItem(key);
+  globalThis.localStorage.removeItem(PROBE_CLIENT_LAUNCH_KEY);
 }
 
 function responseCode(value: unknown, fallback: string): string {

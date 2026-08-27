@@ -6,11 +6,13 @@ import {
   GATE2_ATTEMPT_1_LINEAGE,
   GATE2_CALIBRATION_BUNDLE_VERSION,
   GATE2_CALIBRATION_LANE,
-  verifyGate2CalibrationBundle
+  verifyGate2CalibrationBundle,
+  type Gate2PriorAttemptsLineage
 } from "@/lib/evidence/gate2-calibration-bundle";
 import {
   PROBE_CLIENT_RESULTS_KEY,
-  parseProbeClientSessionMarker,
+  probeDocumentId,
+  recoverProbeClientSession,
   type ProbeClientSessionMarker
 } from "@/lib/probe/client-session";
 import {
@@ -40,9 +42,10 @@ interface CalibrationBundle {
   readonly caseCount: number;
   readonly passedCount: number;
   readonly cases: readonly CalibrationCaseRow[];
-  readonly priorAttempt: typeof GATE2_ATTEMPT_1_LINEAGE;
+  readonly priorAttempts: Gate2PriorAttemptsLineage;
   readonly policyMigration: {
     readonly migrationId: string;
+    readonly predecessorMigrationReceiptHash: string;
     readonly previousPolicyHash: string;
     readonly nextPolicyHash: string;
     readonly receiptHash: string;
@@ -71,13 +74,25 @@ async function parseBundle(value: unknown): Promise<CalibrationBundle> {
     bundle.caseCount !== 4 ||
     !Array.isArray(bundle.cases) ||
     bundle.cases.length !== 4 ||
-    !bundle.priorAttempt ||
+    !bundle.priorAttempts ||
     !bundle.policyMigration ||
     !bundle.attemptCost ||
-    bundle.priorAttempt.rawSha256 !== GATE2_ATTEMPT_1_LINEAGE.rawSha256 ||
-    bundle.priorAttempt.evidenceDigest !== GATE2_ATTEMPT_1_LINEAGE.evidenceDigest ||
-    bundle.priorAttempt.appCommit !== GATE2_ATTEMPT_1_LINEAGE.appCommit ||
-    bundle.priorAttempt.runId !== GATE2_ATTEMPT_1_LINEAGE.runId ||
+    bundle.priorAttempts.mergedIntoCurrentAttempt !== false ||
+    bundle.priorAttempts.attempt1.rawSha256 !== GATE2_ATTEMPT_1_LINEAGE.rawSha256 ||
+    bundle.priorAttempts.attempt1.evidenceDigest !== GATE2_ATTEMPT_1_LINEAGE.evidenceDigest ||
+    bundle.priorAttempts.attempt1.appCommit !== GATE2_ATTEMPT_1_LINEAGE.appCommit ||
+    bundle.priorAttempts.attempt1.runId !== GATE2_ATTEMPT_1_LINEAGE.runId ||
+    bundle.priorAttempts.attempt2.disposition !== "terminal-invalid-infrastructure" ||
+    bundle.priorAttempts.attempt2.knownProviderCallCount !== 1 ||
+    bundle.priorAttempts.attempt2.retainedSemanticRowCount !== 0 ||
+    bundle.priorAttempts.attempt2.runId !== null ||
+    bundle.priorAttempts.attempt2.rawSha256 !== null ||
+    bundle.priorAttempts.attempt2.evidenceDigest !== null ||
+    bundle.priorAttempts.attempt2.score !== null ||
+    bundle.priorAttempts.attempt2.failure.semanticOutcomeInspected !== false ||
+    bundle.priorAttempts.attempt2.failure.reconstructionPermitted !== false ||
+    typeof bundle.policyMigration.predecessorMigrationReceiptHash !== "string" ||
+    !/^[a-f0-9]{64}$/u.test(bundle.policyMigration.predecessorMigrationReceiptHash) ||
     typeof bundle.policyMigration.receiptHash !== "string" ||
     !/^[a-f0-9]{64}$/u.test(bundle.policyMigration.receiptHash) ||
     typeof bundle.passedCount !== "number" ||
@@ -93,7 +108,7 @@ async function parseBundle(value: unknown): Promise<CalibrationBundle> {
 }
 
 function filename(): string {
-  return `toolproof-gate2-calibration-attempt2-${APP_COMMIT.slice(0, 12)}-${new Date()
+  return `toolproof-gate2-calibration-attempt3-${APP_COMMIT.slice(0, 12)}-${new Date()
     .toISOString()
     .replaceAll(/[-:.]/gu, "")}.json`;
 }
@@ -113,19 +128,27 @@ function downloadBundle(bundle: CalibrationBundle): string {
   return name;
 }
 
-export function ProbeCalibrationResults() {
+export function ProbeCalibrationResults({
+  recoveryAvailable
+}: {
+  readonly recoveryAvailable: boolean;
+}) {
+  const [documentId] = useState(probeDocumentId);
   const [bundle, setBundle] = useState<CalibrationBundle>();
   const [downloaded, setDownloaded] = useState<string>();
   const [error, setError] = useState<string>();
   const [marker, setMarker] = useState<ProbeClientSessionMarker>();
 
   useEffect(() => {
+    if (!recoveryAvailable) return;
     let disposed = false;
     void (async () => {
       try {
-        const raw = globalThis.sessionStorage.getItem(PROBE_CLIENT_RESULTS_KEY);
-        if (!raw) return;
-        const marker = parseProbeClientSessionMarker(raw, "/results", APP_COMMIT);
+        const marker = await recoverProbeClientSession(APP_COMMIT, documentId);
+        if (marker.path !== "/results") {
+          globalThis.location.assign(new URL("/lab", globalThis.location.href).href);
+          return;
+        }
         if (!disposed) setMarker(marker);
         const response = await fetch("/api/probe/reveal", {
           method: "POST",
@@ -133,7 +156,8 @@ export function ProbeCalibrationResults() {
           cache: "no-store",
           headers: {
             "Content-Type": "application/json",
-            "X-ToolProof-CSRF": marker.csrfToken
+            "X-ToolProof-CSRF": marker.csrfToken,
+            "X-ToolProof-Document": documentId
           },
           body: JSON.stringify({ continuation: marker.continuation })
         });
@@ -160,7 +184,7 @@ export function ProbeCalibrationResults() {
     return () => {
       disposed = true;
     };
-  }, []);
+  }, [documentId, recoveryAvailable]);
 
   async function finishSecureRun(): Promise<void> {
     if (!marker) return;
@@ -168,7 +192,12 @@ export function ProbeCalibrationResults() {
       method: "DELETE",
       credentials: "same-origin",
       cache: "no-store",
-      headers: { "X-ToolProof-CSRF": marker.csrfToken }
+      headers: {
+        "Content-Type": "application/json",
+        "X-ToolProof-CSRF": marker.csrfToken,
+        "X-ToolProof-Document": documentId
+      },
+      body: JSON.stringify({ continuation: marker.continuation })
     });
     if (!response.ok) {
       setError("calibration_acknowledgement_failed");
@@ -183,44 +212,54 @@ export function ProbeCalibrationResults() {
       <section className="panel calibration-results" aria-labelledby="calibration-results-title">
         <div className="panel-heading">
           <div>
-            <span className="eyebrow">Gate 2 · final attempt terminal evidence</span>
-            <h2 id="calibration-results-title">Final four fresh-context trials sealed</h2>
+            <span className="eyebrow">Gate 2 · third/final preferred attempt evidence</span>
+            <h2 id="calibration-results-title">Four fresh-context trials sealed</h2>
           </div>
           <span className="status-pill status-ready">
             {bundle.passedCount}/{bundle.caseCount} verified
           </span>
         </div>
         <p>
-          This final four-case attempt is calibration-only and permanently excluded from the scored
-          benchmark. It has its own denominator; the retained first attempt remains separate rather
-          than being merged or relabeled.
+          This third and final preferred four-case attempt is calibration-only and permanently
+          excluded from the scored benchmark. It has its own denominator; both earlier attempts
+          remain separate and are never merged or relabeled.
         </p>
         <ul className="result-list" aria-label="Calibration case results">
           {bundle.cases.map((row, index) => (
             <li key={row.ordinal ?? index}>
-              <strong>Final-attempt trial {index + 1}</strong>
+              <strong>Attempt-3 trial {index + 1}</strong>
               <span>{row.evaluation?.passed ? "Verified" : "Failed"}</span>
               <small>Observed action: {row.evaluation?.observedTool ?? "no native call"}</small>
             </li>
           ))}
         </ul>
         <div className="runtime-receipt">
-          <span>Retained first attempt · separate evidence</span>
+          <span>Attempt 1 · retained authentic semantic failure</span>
           <strong>
-            {bundle.priorAttempt.passedCount}/{bundle.priorAttempt.caseCount} verified · no native
-            dispatch
+            {bundle.priorAttempts.attempt1.passedCount}/{bundle.priorAttempts.attempt1.caseCount}{" "}
+            verified · no native dispatch
           </strong>
           <small>
-            Raw SHA-256 {bundle.priorAttempt.rawSha256} · evidence digest{" "}
-            {bundle.priorAttempt.evidenceDigest}
+            Raw SHA-256 {bundle.priorAttempts.attempt1.rawSha256} · evidence digest{" "}
+            {bundle.priorAttempts.attempt1.evidenceDigest}
+          </small>
+        </div>
+        <div className="runtime-receipt">
+          <span>Attempt 2 · terminal-invalid infrastructure evidence</span>
+          <strong>1 provider call settled · no semantic score claimed</strong>
+          <small>
+            The client marker was missing and its recovery artifact expired. No semantic row
+            survived, no outcome was inspected, and reconstruction is prohibited. Accounted cost{" "}
+            {bundle.priorAttempts.attempt2.knownAccountedNanoUsd} nano-USD.
           </small>
         </div>
         <div className="runtime-receipt">
           <span>Bound policy migration</span>
           <strong>{bundle.policyMigration.receiptHash}</strong>
           <small>
-            Four previously unused reference grants were reallocated without changing the 160-call
-            or USD $10 lifetime ceilings.
+            One previously unused reference grant was reallocated without changing the 160-call or
+            USD $10 lifetime ceilings. Predecessor v0.2 receipt{" "}
+            {bundle.policyMigration.predecessorMigrationReceiptHash}.
           </small>
         </div>
         <div className="runtime-receipt">
@@ -228,7 +267,7 @@ export function ProbeCalibrationResults() {
           <strong>{bundle.attemptCost.attemptAccountedNanoUsd} nano-USD</strong>
           <small>
             Cumulative known cost {bundle.attemptCost.terminalCumulativeKnownAccountedNanoUsd}
-            nano-USD, less retained prior cost{" "}
+            nano-USD, less the exact cumulative cost of attempts 1 and 2{" "}
             {bundle.attemptCost.priorCumulativeKnownAccountedNanoUsd} nano-USD.
           </small>
         </div>
@@ -271,7 +310,7 @@ export function ProbeCalibrationResults() {
         <p>
           {error
             ? `The sealed result remains unrevealed (${error}). Return to the Lab only after preserving this state.`
-            : "Complete the isolated final four-case calibration in the Lab. Scored benchmark results remain locked until the later freeze gate."}
+            : "Complete the isolated third/final preferred four-case calibration in the Lab. Scored benchmark results remain locked until the later freeze gate."}
         </p>
       </div>
     </section>

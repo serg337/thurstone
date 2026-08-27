@@ -1,13 +1,14 @@
 import { expect, test, type BrowserContext, type Download, type Page } from "@playwright/test";
 import {
-  GATE2_ATTEMPT_1_LINEAGE,
   GATE2_CALIBRATION_BUNDLE_VERSION,
-  GATE2_CALIBRATION_LANE
+  GATE2_CALIBRATION_LANE,
+  createGate2PriorAttemptsLineage
 } from "@/lib/evidence/gate2-calibration-bundle";
 import { createProbeTransportBinding } from "@/lib/probe/calibration-envelope";
 import {
   PROBE_CALIBRATION_ATTEMPT,
   PROBE_CALIBRATION_PROTOCOL_VERSION,
+  PROBE_SESSION_RESPONSE_VERSION,
   PROBE_SERVICE_VERSION
 } from "@/lib/probe/service-contract";
 
@@ -19,6 +20,23 @@ const REQUESTS = [
   "I am ready to continue. Open the simulated checkout for this cart so it can remain pending for my approval."
 ] as const;
 const TOOLS = ["cart_get", "order_review", "cart_update", "checkout_request"] as const;
+const PRIOR_KNOWN_COSTS = [2_752_200, 2_745_600, 2_862_200, 3_000_800, 2_500_000] as const;
+const PRIOR_SETTLEMENT_HASHES = ["6", "7", "8", "9", "a"] as const;
+const PRIOR_USAGE_HASHES = ["b", "c", "d", "e", "f"] as const;
+const PRIOR_KNOWN_CALLS = PRIOR_KNOWN_COSTS.map((actualNanoUsd, ordinal) => ({
+  ordinal,
+  jti: `jti_browser_prior_${String(ordinal).padStart(2, "0")}`,
+  dispatchSequence: ordinal + 1,
+  actualNanoUsd,
+  providerResponseHash: String(ordinal + 1).repeat(64),
+  settlementDigest: PRIOR_SETTLEMENT_HASHES[ordinal]!.repeat(64),
+  usageHash: PRIOR_USAGE_HASHES[ordinal]!.repeat(64)
+}));
+const PRIOR_KNOWN_ACCOUNTED_NANO_USD = PRIOR_KNOWN_COSTS.reduce((total, value) => total + value, 0);
+const PRIOR_ATTEMPTS = createGate2PriorAttemptsLineage({
+  preserved: { knownActualNanoUsd: PRIOR_KNOWN_ACCOUNTED_NANO_USD },
+  knownCalls: PRIOR_KNOWN_CALLS
+});
 function argumentsFor(ordinal: number, operationId: string) {
   if (ordinal === 2) {
     return {
@@ -121,7 +139,9 @@ async function seedEvaluationSession(
   page: Page,
   context: BrowserContext,
   firstContinuation: string
-): Promise<void> {
+): Promise<{ setContinuation(value: string, terminal: boolean): void }> {
+  let currentContinuation = firstContinuation;
+  let terminal = false;
   await context.addCookies([
     {
       name: "toolproof_probe_session",
@@ -135,11 +155,11 @@ async function seedEvaluationSession(
   await page.addInitScript(
     ({ buildCommit, continuationToken }) => {
       if (location.pathname !== "/lab") return;
-      if (sessionStorage.getItem("toolproof:probe-final-calibration-session@2")) return;
+      if (sessionStorage.getItem("toolproof:probe-final-calibration-session@3")) return;
       sessionStorage.setItem(
-        "toolproof:probe-final-calibration-session@2",
+        "toolproof:probe-final-calibration-session@3",
         JSON.stringify({
-          version: 2,
+          version: 3,
           csrfToken: "browser_fixture_csrf_token_00000001",
           continuation: continuationToken,
           buildCommit,
@@ -150,6 +170,35 @@ async function seedEvaluationSession(
     },
     { buildCommit: BUILD_COMMIT, continuationToken: firstContinuation }
   );
+  await page.route("**/api/probe/session", async (route) => {
+    if (route.request().method() !== "PUT") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        version: 3,
+        protocolVersion: PROBE_CALIBRATION_PROTOCOL_VERSION,
+        attempt: PROBE_CALIBRATION_ATTEMPT,
+        status: "recovered",
+        csrfToken: "browser_fixture_csrf_token_00000001",
+        continuation: currentContinuation,
+        buildCommit: BUILD_COMMIT,
+        expiresAt: Math.floor(Date.now() / 1_000) + 600,
+        recoveryExpiresAt: Math.floor(Date.now() / 1_000) + 3_600,
+        path: terminal ? "/results" : "/lab",
+        inferencePerformed: false
+      })
+    });
+  });
+  return {
+    setContinuation(value, isTerminal) {
+      currentContinuation = value;
+      terminal = isTerminal;
+    }
+  };
 }
 
 test("four-case fake-provider harness reloads fresh documents and reveals only terminal evidence", async ({
@@ -158,7 +207,7 @@ test("four-case fake-provider harness reloads fresh documents and reveals only t
 }) => {
   test.skip(Boolean(process.env.TOOLPROOF_BASE_URL), "The fake-provider harness is local-only.");
   await installConsumer(page);
-  await seedEvaluationSession(page, context, continuation(0));
+  const recovery = await seedEvaluationSession(page, context, continuation(0));
 
   let ordinal = 0;
   const completedBodies: unknown[] = [];
@@ -301,7 +350,7 @@ test("four-case fake-provider harness reloads fresh documents and reveals only t
     expect(browserSurface.text).not.toMatch(/expectedTool|internalTruthId|calibration_truth_/u);
     for (const requestText of REQUESTS) expect(browserSurface.text).not.toContain(requestText);
     expect(Object.keys(browserSurface.storage)).toEqual([
-      "toolproof:probe-final-calibration-session@2"
+      "toolproof:probe-final-calibration-session@3"
     ]);
     expect(Object.values(browserSurface.storage).join("\n")).not.toMatch(
       /expectedTool|internalTruthId|calibration_truth_/u
@@ -325,6 +374,7 @@ test("four-case fake-provider harness reloads fresh documents and reveals only t
     const completed = ordinal + 1;
     const terminal = ordinal === 3;
     ordinal = completed;
+    recovery.setContinuation(continuation(completed), terminal);
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -362,17 +412,18 @@ test("four-case fake-provider harness reloads fresh documents and reveals only t
         calibrationOnly: true,
         includedInBenchmark: false,
         appCommit: BUILD_COMMIT,
-        priorAttempt: GATE2_ATTEMPT_1_LINEAGE,
+        priorAttempts: PRIOR_ATTEMPTS,
         policyMigration: {
-          migrationId: "migration_gate2_calibration_attempt_2",
+          migrationId: "migration_gate2_calibration_attempt_3",
+          predecessorMigrationReceiptHash: "9".repeat(64),
           previousPolicyHash: "a".repeat(64),
           nextPolicyHash: "b".repeat(64),
           receiptHash: "c".repeat(64)
         },
         attemptCost: {
-          priorCumulativeKnownAccountedNanoUsd: 11_360_800,
+          priorCumulativeKnownAccountedNanoUsd: PRIOR_KNOWN_ACCOUNTED_NANO_USD,
           attemptAccountedNanoUsd: 1_760_000,
-          terminalCumulativeKnownAccountedNanoUsd: 13_120_800
+          terminalCumulativeKnownAccountedNanoUsd: PRIOR_KNOWN_ACCOUNTED_NANO_USD + 1_760_000
         },
         caseCount: 4,
         passedCount: 4,
@@ -407,7 +458,7 @@ test("four-case fake-provider harness reloads fresh documents and reveals only t
   await expect(page).toHaveURL(/\/results$/u);
   await expect(page.getByText("Final evidence ready", { exact: true })).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Final four fresh-context trials sealed" })
+    page.getByRole("heading", { name: "Four fresh-context trials sealed" })
   ).toBeVisible();
   await expect(page.getByText("4/4 verified", { exact: true })).toBeVisible();
   expect(completedBodies).toHaveLength(4);
@@ -420,7 +471,7 @@ test("an already-admitted recovered trial never dispatches the target again", as
 }) => {
   test.skip(Boolean(process.env.TOOLPROOF_BASE_URL), "The fake-provider harness is local-only.");
   await installConsumer(page);
-  await seedEvaluationSession(page, context, continuation(0));
+  const recovery = await seedEvaluationSession(page, context, continuation(0));
   const runId = `run_${"r".repeat(22)}`;
   const caseId = `case_${"2".repeat(22)}`;
   const trialId = `trial_${"2".repeat(22)}`;
@@ -538,6 +589,7 @@ test("an already-admitted recovered trial never dispatches the target again", as
         currentTraces: []
       }
     });
+    recovery.setContinuation(continuation(4), true);
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -567,17 +619,18 @@ test("an already-admitted recovered trial never dispatches the target again", as
         calibrationOnly: true,
         includedInBenchmark: false,
         appCommit: BUILD_COMMIT,
-        priorAttempt: GATE2_ATTEMPT_1_LINEAGE,
+        priorAttempts: PRIOR_ATTEMPTS,
         policyMigration: {
-          migrationId: "migration_gate2_calibration_attempt_2",
+          migrationId: "migration_gate2_calibration_attempt_3",
+          predecessorMigrationReceiptHash: "9".repeat(64),
           previousPolicyHash: "a".repeat(64),
           nextPolicyHash: "b".repeat(64),
           receiptHash: "c".repeat(64)
         },
         attemptCost: {
-          priorCumulativeKnownAccountedNanoUsd: 11_360_800,
+          priorCumulativeKnownAccountedNanoUsd: PRIOR_KNOWN_ACCOUNTED_NANO_USD,
           attemptAccountedNanoUsd: 1_760_000,
-          terminalCumulativeKnownAccountedNanoUsd: 13_120_800
+          terminalCumulativeKnownAccountedNanoUsd: PRIOR_KNOWN_ACCOUNTED_NANO_USD + 1_760_000
         },
         caseCount: 4,
         passedCount: 0,
@@ -615,12 +668,23 @@ test("a duplicate tab without the opaque marker stays locked and cannot open Res
       sameSite: "Strict"
     }
   ]);
+  await page.route("**/api/probe/session", async (route) => {
+    expect(route.request().method()).toBe("PUT");
+    await route.fulfill({
+      status: 409,
+      contentType: "application/json",
+      body: JSON.stringify({
+        error: "probe_document_not_owner",
+        inferencePerformed: false
+      })
+    });
+  });
   await page.goto("/results");
   await expect(page).toHaveURL(/\/lab$/u);
   await expect(
     page.getByRole("heading", { name: "One fresh decision. No prior evidence." })
   ).toBeVisible();
-  await expect(page.getByText(/probe_session_marker_missing/u)).toBeVisible();
+  await expect(page.getByText(/probe_document_not_owner/u)).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Primary navigation" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Native cart_get", exact: true })).toHaveCount(0);
 });
@@ -642,7 +706,17 @@ test("a missing active-tab marker clears only after the migrated-base server adm
     }
   ]);
   let cleanupCalls = 0;
+  let recoveryCalls = 0;
   await page.route("**/api/probe/session", async (route) => {
+    if (route.request().method() === "PUT") {
+      recoveryCalls += 1;
+      await route.fulfill({
+        status: 403,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "invalid_probe_recovery", inferencePerformed: false })
+      });
+      return;
+    }
     expect(route.request().method()).toBe("DELETE");
     cleanupCalls += 1;
     await route.fulfill({
@@ -656,12 +730,13 @@ test("a missing active-tab marker clears only after the migrated-base server adm
   });
 
   await page.goto("/lab");
-  await expect(page.getByText(/probe_session_marker_missing/u)).toBeVisible();
+  await expect(page.getByText(/invalid_probe_recovery/u)).toBeVisible();
   await page.getByRole("button", { name: "Clear unstarted session" }).click();
   await expect(
     page.getByRole("heading", { name: "One live tool catalog. No expected answers." })
   ).toBeVisible();
   expect(cleanupCalls).toBe(1);
+  expect(recoveryCalls).toBe(1);
   expect((await context.cookies()).some(({ name }) => name === "toolproof_probe_session")).toBe(
     false
   );
@@ -704,7 +779,7 @@ test("an unverifiable stale cookie clears only after the migrated-base server ad
   await page.evaluate(() => {
     sessionStorage.setItem("toolproof:probe-calibration-session@1", "retired-session-marker");
     sessionStorage.setItem("toolproof:probe-calibration-results@1", "retired-results-marker");
-    sessionStorage.setItem("toolproof:probe-final-calibration-session@2", "stale-v2-marker");
+    sessionStorage.setItem("toolproof:probe-final-calibration-session@3", "stale-v3-marker");
   });
   await page.getByRole("button", { name: "Clear unstarted session" }).click();
   await expect(
@@ -717,16 +792,16 @@ test("an unverifiable stale cookie clears only after the migrated-base server ad
         [
           "toolproof:probe-calibration-session@1",
           "toolproof:probe-calibration-results@1",
-          "toolproof:probe-final-calibration-session@2",
-          "toolproof:probe-final-calibration-results@2"
+          "toolproof:probe-final-calibration-session@3",
+          "toolproof:probe-final-calibration-results@3"
         ].map((key) => [key, sessionStorage.getItem(key)])
       )
     )
   ).toEqual({
     "toolproof:probe-calibration-session@1": null,
     "toolproof:probe-calibration-results@1": null,
-    "toolproof:probe-final-calibration-session@2": null,
-    "toolproof:probe-final-calibration-results@2": null
+    "toolproof:probe-final-calibration-session@3": null,
+    "toolproof:probe-final-calibration-results@3": null
   });
   expect((await context.cookies()).some(({ name }) => name === "toolproof_probe_session")).toBe(
     false
@@ -752,14 +827,27 @@ test("a post-grant cleanup rejection preserves the cookie and every marker", asy
   const markerValues = {
     "toolproof:probe-calibration-session@1": "retired-session-marker",
     "toolproof:probe-calibration-results@1": "retired-results-marker",
-    "toolproof:probe-final-calibration-session@2": JSON.stringify({ version: 2 }),
-    "toolproof:probe-final-calibration-results@2": "retained-results-marker"
+    "toolproof:probe-final-calibration-session@3": JSON.stringify({ version: 3 }),
+    "toolproof:probe-final-calibration-results@3": "retained-results-marker"
   };
   await page.addInitScript((values) => {
     for (const [key, value] of Object.entries(values)) sessionStorage.setItem(key, value);
   }, markerValues);
   let cleanupCalls = 0;
+  let recoveryCalls = 0;
   await page.route("**/api/probe/session", async (route) => {
+    if (route.request().method() === "PUT") {
+      recoveryCalls += 1;
+      await route.fulfill({
+        status: 409,
+        contentType: "application/json",
+        body: JSON.stringify({
+          error: "probe_document_not_owner",
+          inferencePerformed: false
+        })
+      });
+      return;
+    }
     expect(route.request().method()).toBe("DELETE");
     cleanupCalls += 1;
     await route.fulfill({
@@ -776,6 +864,7 @@ test("a post-grant cleanup rejection preserves the cookie and every marker", asy
   await page.getByRole("button", { name: "Clear unstarted session" }).click();
   await expect(page.getByText(/Recovery is required \(session_recovery_required\)/u)).toBeVisible();
   expect(cleanupCalls).toBe(1);
+  expect(recoveryCalls).toBe(1);
   expect(
     await page.evaluate(
       (keys) => Object.fromEntries(keys.map((key) => [key, sessionStorage.getItem(key)])),
@@ -787,7 +876,7 @@ test("a post-grant cleanup rejection preserves the cookie and every marker", asy
   );
 });
 
-test("one final-calibration button writes only the v2 opaque marker before one reload", async ({
+test("one final-calibration button writes only the v3 opaque marker before one reload", async ({
   page
 }) => {
   test.skip(Boolean(process.env.TOOLPROOF_BASE_URL), "The fake-provider harness is local-only.");
@@ -807,20 +896,22 @@ test("one final-calibration button writes only the v2 opaque marker before one r
   });
   await page.route("**/api/probe/session", async (route) => {
     sessionStarts += 1;
-    expect(route.request().postDataJSON()).toEqual({
-      intent: "start-final-four-case-calibration"
+    expect(route.request().postDataJSON()).toMatchObject({
+      intent: "start-final-four-case-calibration",
+      launchId: expect.stringMatching(/^launch_[A-Za-z0-9_-]{22,64}$/u)
     });
     await route.fulfill({
       status: 201,
       contentType: "application/json",
       body: JSON.stringify({
-        version: 2,
+        version: PROBE_SESSION_RESPONSE_VERSION,
         protocolVersion: PROBE_CALIBRATION_PROTOCOL_VERSION,
         attempt: PROBE_CALIBRATION_ATTEMPT,
         csrfToken: "final_calibration_csrf_token_000001",
         continuation: continuation(0),
         buildCommit: BUILD_COMMIT,
         expiresAt: Math.floor(Date.now() / 1_000) + 600,
+        recoveryExpiresAt: Math.floor(Date.now() / 1_000) + 3_600,
         inferencePerformed: false
       })
     });
@@ -832,30 +923,33 @@ test("one final-calibration button writes only the v2 opaque marker before one r
     sessionStorage.setItem("toolproof:probe-calibration-results@1", "retired-results-marker");
   });
   await page.getByRole("button", { name: "Run final four-case calibration" }).click();
+  let rawMarker: string | null = null;
   await expect
-    .poll(() =>
-      page
-        .evaluate(() => sessionStorage.getItem("toolproof:probe-final-calibration-session@2"))
-        .catch(() => null)
-    )
+    .poll(async () => {
+      rawMarker = await page
+        .evaluate(() => sessionStorage.getItem("toolproof:probe-final-calibration-session@3"))
+        .catch(() => null);
+      return rawMarker;
+    })
     .not.toBeNull();
-  const rawMarker = await page.evaluate(() =>
-    sessionStorage.getItem("toolproof:probe-final-calibration-session@2")
-  );
   expect(JSON.parse(rawMarker ?? "null")).toMatchObject({
-    version: 2,
+    version: 3,
     buildCommit: BUILD_COMMIT,
     path: "/lab"
   });
-  expect(rawMarker).not.toContain(GATE2_ATTEMPT_1_LINEAGE.rawSha256);
-  expect(rawMarker).not.toContain(GATE2_ATTEMPT_1_LINEAGE.evidenceDigest);
-  expect(rawMarker).not.toContain(GATE2_ATTEMPT_1_LINEAGE.runId);
-  expect(
-    await page.evaluate(() => ({
-      retiredSession: sessionStorage.getItem("toolproof:probe-calibration-session@1"),
-      retiredResults: sessionStorage.getItem("toolproof:probe-calibration-results@1")
-    }))
-  ).toEqual({ retiredSession: null, retiredResults: null });
+  expect(rawMarker).not.toContain(PRIOR_ATTEMPTS.attempt1.rawSha256);
+  expect(rawMarker).not.toContain(PRIOR_ATTEMPTS.attempt1.evidenceDigest);
+  expect(rawMarker).not.toContain(PRIOR_ATTEMPTS.attempt1.runId);
+  await expect
+    .poll(() =>
+      page
+        .evaluate(() => ({
+          retiredSession: sessionStorage.getItem("toolproof:probe-calibration-session@1"),
+          retiredResults: sessionStorage.getItem("toolproof:probe-calibration-results@1")
+        }))
+        .catch(() => null)
+    )
+    .toEqual({ retiredSession: null, retiredResults: null });
   expect(sessionStarts).toBe(1);
 });
 

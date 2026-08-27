@@ -5,12 +5,14 @@ import { useEffect, useState } from "react";
 import {
   PROBE_CLIENT_LAB_SESSION_KEY,
   PROBE_CLIENT_SESSION_VERSION,
+  getOrCreateProbeLaunchId,
   serializeProbeClientSessionMarker
 } from "@/lib/probe/client-session";
 import { clearProbeClientMarkers } from "@/lib/probe/client-session-cleanup";
 import {
   PROBE_CALIBRATION_ATTEMPT,
-  PROBE_CALIBRATION_PROTOCOL_VERSION
+  PROBE_CALIBRATION_PROTOCOL_VERSION,
+  PROBE_SESSION_RESPONSE_VERSION
 } from "@/lib/probe/service-contract";
 
 const APP_COMMIT = process.env.NEXT_PUBLIC_TOOLPROOF_COMMIT_SHA?.trim() || "unversioned";
@@ -24,13 +26,14 @@ interface PublicProbeStatus {
 }
 
 interface StartReceipt {
-  readonly version: 2;
+  readonly version: typeof PROBE_SESSION_RESPONSE_VERSION;
   readonly protocolVersion: typeof PROBE_CALIBRATION_PROTOCOL_VERSION;
   readonly attempt: typeof PROBE_CALIBRATION_ATTEMPT;
   readonly csrfToken: string;
   readonly continuation: string;
   readonly buildCommit: string;
   readonly expiresAt: number;
+  readonly recoveryExpiresAt: number;
   readonly inferencePerformed: false;
 }
 
@@ -64,18 +67,19 @@ export function ProbeLaunchPanel() {
     setStarting(true);
     setStartError(undefined);
     try {
+      const launchId = getOrCreateProbeLaunchId(APP_COMMIT);
       const response = await fetch("/api/probe/session", {
         method: "POST",
         credentials: "same-origin",
         cache: "no-store",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ intent: "start-final-four-case-calibration" })
+        body: JSON.stringify({ intent: "start-final-four-case-calibration", launchId })
       });
       const body = (await response.json()) as StartReceipt | { error?: unknown };
       if (
         !response.ok ||
         !("version" in body) ||
-        body.version !== 2 ||
+        body.version !== PROBE_SESSION_RESPONSE_VERSION ||
         body.protocolVersion !== PROBE_CALIBRATION_PROTOCOL_VERSION ||
         body.attempt !== PROBE_CALIBRATION_ATTEMPT
       ) {

@@ -6,27 +6,39 @@ import {
   deriveProbeTrialOpaqueIds,
   openProbeRunContinuation
 } from "@/lib/probe/run-continuation.server";
-import { issueProbeSession } from "@/lib/probe/session";
+import {
+  issueProbeRecoveryCredential,
+  issueProbeSession,
+  issueRecoveredProbeSession
+} from "@/lib/probe/session";
 
 const signingSecret = Buffer.alloc(32, 9).toString("base64url");
 const activationSecret = Buffer.alloc(32, 10).toString("base64url");
 const nowMs = Date.parse("2026-08-27T12:00:00.000Z");
 
 function session() {
-  return issueProbeSession({
+  const issued = issueProbeSession({
     activationHash: "a".repeat(64),
     buildCommit: "b".repeat(40),
     actorHash: "c".repeat(64),
     signingSecret,
     nowMs
-  }).claims;
+  });
+  return {
+    session: issued.claims,
+    recovery: issueProbeRecoveryCredential({
+      session: issued.claims,
+      launchHash: "d".repeat(64),
+      signingSecret
+    }).claims
+  };
 }
 
 describe("opaque Probe run continuation", () => {
   it("creates a sealed empty run and advances an exact contiguous prefix", async () => {
-    const claims = session();
+    const { session: claims, recovery } = session();
     const initialToken = await createInitialProbeRunContinuation({
-      session: claims,
+      recovery,
       signingSecret
     });
     expect(initialToken).not.toContain(claims.runId);
@@ -34,6 +46,7 @@ describe("opaque Probe run continuation", () => {
       token: initialToken,
       signingSecret,
       session: claims,
+      recovery,
       activationHash: claims.activationHash,
       buildCommit: claims.buildCommit,
       nowMs: nowMs + 1_000
@@ -64,13 +77,14 @@ describe("opaque Probe run continuation", () => {
   });
 
   it("rejects tampering, cross-session use, expiry, skips, and duplicate identities", async () => {
-    const claims = session();
-    const token = await createInitialProbeRunContinuation({ session: claims, signingSecret });
+    const { session: claims, recovery } = session();
+    const token = await createInitialProbeRunContinuation({ recovery, signingSecret });
     await expect(
       openProbeRunContinuation({
         token: `${token}x`,
         signingSecret,
         session: claims,
+        recovery,
         activationHash: claims.activationHash,
         buildCommit: claims.buildCommit,
         nowMs
@@ -82,7 +96,8 @@ describe("opaque Probe run continuation", () => {
       openProbeRunContinuation({
         token,
         signingSecret,
-        session: { ...other, runId: `run_${"z".repeat(22)}` },
+        session: { ...other.session, runId: `run_${"z".repeat(22)}` },
+        recovery,
         activationHash: claims.activationHash,
         buildCommit: claims.buildCommit,
         nowMs
@@ -94,9 +109,10 @@ describe("opaque Probe run continuation", () => {
         token,
         signingSecret,
         session: claims,
+        recovery,
         activationHash: claims.activationHash,
         buildCommit: claims.buildCommit,
-        nowMs: claims.expiresAt * 1_000
+        nowMs: recovery.expiresAt * 1_000
       })
     ).rejects.toThrowError(/continuation_expired/u);
 
@@ -104,6 +120,7 @@ describe("opaque Probe run continuation", () => {
       token,
       signingSecret,
       session: claims,
+      recovery,
       activationHash: claims.activationHash,
       buildCommit: claims.buildCommit,
       nowMs
@@ -123,8 +140,29 @@ describe("opaque Probe run continuation", () => {
     ).rejects.toThrowError(/invalid_continuation_advance/u);
   });
 
+  it("opens the same run after a short session expires by using a recovered session", async () => {
+    const { session: original, recovery } = session();
+    const token = await createInitialProbeRunContinuation({ recovery, signingSecret });
+    const recovered = issueRecoveredProbeSession({
+      recovery,
+      signingSecret,
+      nowMs: nowMs + 30 * 60_000
+    });
+    await expect(
+      openProbeRunContinuation({
+        token,
+        signingSecret,
+        session: recovered.claims,
+        recovery,
+        activationHash: original.activationHash,
+        buildCommit: original.buildCommit,
+        nowMs: nowMs + 30 * 60_000
+      })
+    ).resolves.toMatchObject({ nextOrdinal: 0, runId: original.runId });
+  });
+
   it("derives stable opaque case/trial/JTI values without semantic labels", () => {
-    const claims = session();
+    const { session: claims } = session();
     const first = deriveProbeTrialOpaqueIds({
       runId: claims.runId,
       ordinal: 2,

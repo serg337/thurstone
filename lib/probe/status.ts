@@ -20,6 +20,7 @@ import {
   type ProbeGuardStatus
 } from "@/lib/probe/ledger";
 import { requireProbeActivation } from "@/lib/probe/activation";
+import { isProbeV03PolicyMigrationSourceStatus } from "@/lib/probe/policy-v03-migration-contract";
 import {
   PROBE_CALIBRATION_BASE_CALLS,
   PROBE_CALIBRATION_TERMINAL_CALLS
@@ -131,10 +132,10 @@ export async function readPublicProbeControlStatus(environment: EnvironmentLike 
           calibrationStartable,
           policy,
           reason: calibrationStartable
-            ? "The separately versioned final four-case calibration is ready for this exact build."
+            ? "The separately versioned third and final four-case calibration is ready for this exact build."
             : calibrationTerminal
-              ? "The final four-case calibration is terminal; another run is not admitted."
-              : "The final calibration session is active or requires exact recovery.",
+              ? "The third and final four-case calibration is terminal; another run is not admitted."
+              : "The third and final calibration session is active or requires exact recovery.",
           commit,
           guard: {
             phase: activation.guard.phase,
@@ -156,8 +157,12 @@ export async function readPublicProbeControlStatus(environment: EnvironmentLike 
       }
     }
     const internallyConsistent = isProbeGuardStatusConsistent(guard, expectedIdentity);
+    const migrationRequired = isProbeV03PolicyMigrationSourceStatus(guard, {
+      guardInstanceId: expectedIdentity.guardInstanceId,
+      initializedCommit: expectedIdentity.initializedCommit
+    });
 
-    if (!internallyConsistent) {
+    if (!internallyConsistent && !migrationRequired) {
       return {
         status: "controls-unavailable" as const,
         enabled: false,
@@ -173,7 +178,10 @@ export async function readPublicProbeControlStatus(environment: EnvironmentLike 
       enabled: false,
       activation: "disabled" as const,
       policy,
-      reason: "The lifetime guard is verified; the Probe lane remains disabled until Gate 2.",
+      reason: migrationRequired
+        ? "The exact five-call v0.2 guard is verified and awaits the approved atomic v0.3 migration."
+        : "The lifetime guard is verified; the Probe lane remains disabled until Gate 2.",
+      ...(migrationRequired ? { migration: "required" as const } : {}),
       commit
     };
   } catch {

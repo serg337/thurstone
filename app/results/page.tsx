@@ -4,7 +4,11 @@ import { redirect } from "next/navigation";
 
 import { ProbeCalibrationResults } from "@/components/results/probe-calibration-results";
 import { StatusPill } from "@/components/status-pill";
-import { PROBE_RESULTS_COOKIE, PROBE_SESSION_COOKIE } from "@/lib/probe/session";
+import {
+  PROBE_RECOVERY_COOKIE,
+  PROBE_RESULTS_COOKIE,
+  PROBE_SESSION_COOKIE
+} from "@/lib/probe/session";
 
 export const metadata: Metadata = { title: "Results" };
 
@@ -30,7 +34,9 @@ export default async function ResultsPage() {
         </StatusPill>
       </header>
 
-      <ProbeCalibrationResults />
+      <ProbeCalibrationResults
+        recoveryAvailable={terminalEvidence || cookieStore.has(PROBE_RECOVERY_COOKIE)}
+      />
     </div>
   );
 }

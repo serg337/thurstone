@@ -6,13 +6,14 @@ import {
 import { PROBE_CLIENT_RUNNER_VERSION } from "@/lib/probe/client-runner";
 import { z } from "zod";
 
-export const PROBE_SERVICE_VERSION = "toolproof-probe-service-attempt-2@1.0.0";
-export const PROBE_CALIBRATION_PROTOCOL_VERSION = "toolproof-probe-calibration-attempt-2@1.0.0";
-export const PROBE_CALIBRATION_ATTEMPT = 2 as const;
-export const PROBE_CALIBRATION_BASE_CALLS = 4 as const;
+export const PROBE_SERVICE_VERSION = "toolproof-probe-service-attempt-3@1.0.0";
+export const PROBE_CALIBRATION_PROTOCOL_VERSION = "toolproof-probe-calibration-attempt-3@1.0.0";
+export const PROBE_CALIBRATION_ATTEMPT = 3 as const;
+export const PROBE_CALIBRATION_BASE_CALLS = 5 as const;
 export const PROBE_CALIBRATION_ATTEMPT_CASE_COUNT = 4 as const;
-export const PROBE_CALIBRATION_TERMINAL_CALLS = 8 as const;
+export const PROBE_CALIBRATION_TERMINAL_CALLS = 9 as const;
 export const PROBE_MAX_CONTINUATION_CHARACTERS = 1_800_000;
+export const PROBE_SESSION_RESPONSE_VERSION = 3 as const;
 
 const opaqueId = z.string().regex(/^[A-Za-z0-9_-]{16,96}$/u);
 const sha256 = z.string().regex(/^[a-f0-9]{64}$/u);
@@ -21,6 +22,10 @@ const registeredToolNames = z
   .array(z.string().regex(/^[A-Za-z0-9_.-]{1,128}$/u))
   .min(1)
   .max(5);
+
+export const probeOperatorArmBodySchema = z
+  .object({ capability: z.string().regex(/^[A-Za-z0-9_-]{43}$/u) })
+  .strict();
 
 export const probeResetEvidenceSchema = z
   .object({
@@ -51,7 +56,33 @@ export const probeBoundaryEvidenceSchema = z
   .strict();
 
 export const probeSessionStartBodySchema = z
-  .object({ intent: z.literal("start-final-four-case-calibration") })
+  .object({
+    intent: z.literal("start-final-four-case-calibration"),
+    launchId: z.string().regex(/^launch_[A-Za-z0-9_-]{22,64}$/u)
+  })
+  .strict();
+
+export const probeSessionRecoverBodySchema = z
+  .object({
+    intent: z.literal("recover-final-four-case-calibration"),
+    documentId: z.string().regex(/^document_[A-Za-z0-9_-]{22,64}$/u)
+  })
+  .strict();
+
+export const probeSessionRecoveryResponseSchema = z
+  .object({
+    version: z.literal(PROBE_SESSION_RESPONSE_VERSION),
+    protocolVersion: z.literal(PROBE_CALIBRATION_PROTOCOL_VERSION),
+    attempt: z.literal(PROBE_CALIBRATION_ATTEMPT),
+    status: z.literal("recovered"),
+    csrfToken: z.string().regex(/^[A-Za-z0-9_-]{32,128}$/u),
+    continuation,
+    buildCommit: z.string().regex(/^[a-f0-9]{40}$/u),
+    expiresAt: z.number().int().positive(),
+    recoveryExpiresAt: z.number().int().positive(),
+    path: z.enum(["/lab", "/results"]),
+    inferencePerformed: z.literal(false)
+  })
   .strict();
 
 export const probeIssueBodySchema = z
@@ -178,6 +209,7 @@ export const probeCompleteBodySchema = z
   .strict();
 
 export const probeRevealBodySchema = z.object({ continuation }).strict();
+export const probeAcknowledgeBodySchema = z.object({ continuation }).strict();
 
 export const probeCompleteResponseSchema = z
   .object({
@@ -200,3 +232,4 @@ export type ProbeDecideBody = z.infer<typeof probeDecideBodySchema>;
 export type ProbeFreshDecisionResponse = z.infer<typeof probeFreshDecisionResponseSchema>;
 export type ProbeCompleteBody = z.infer<typeof probeCompleteBodySchema>;
 export type ProbeCompleteResponse = z.infer<typeof probeCompleteResponseSchema>;
+export type ProbeSessionRecoveryResponse = z.infer<typeof probeSessionRecoveryResponseSchema>;

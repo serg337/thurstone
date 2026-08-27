@@ -1,13 +1,14 @@
 import "server-only";
 
+import { timingSafeEqual } from "node:crypto";
+
 import { canonicalJson, canonicalSha256, sha256Hex } from "@/lib/evidence/digest";
 import { verifyGate2CalibrationBundleServer } from "@/lib/evidence/gate2-calibration-verifier.server";
 import {
-  GATE2_ATTEMPT_1_KNOWN_ACCOUNTED_NANO_USD,
-  GATE2_ATTEMPT_1_LINEAGE,
   GATE2_ATTEMPT_COST_RECONCILIATION_VERSION,
   GATE2_CALIBRATION_BUNDLE_VERSION,
-  GATE2_CALIBRATION_LANE
+  GATE2_CALIBRATION_LANE,
+  createGate2PriorAttemptsLineage
 } from "@/lib/evidence/gate2-calibration-bundle";
 import {
   PROBE_CALIBRATION_CASE_COUNT,
@@ -39,9 +40,11 @@ import { probeDecisionJsonSchemaHash } from "@/lib/probe/decision";
 import { PROBE_CLIENT_RUNNER_VERSION } from "@/lib/probe/client-runner";
 import {
   ProbeLedgerError,
+  PRODUCTION_PROBE_KEYSPACE,
   beginProbeCall,
   createProbeRedis,
   issueProbeAuthorization,
+  probeAuthorizationKey,
   settleProbeCallKnown,
   settleProbeCallUncertain,
   type ProbeRedisClient
@@ -53,11 +56,12 @@ import {
 } from "@/lib/probe/openai";
 import { PROBE_PER_CALL_RESERVATION_NANO_USD, probePolicyHash } from "@/lib/probe/policy";
 import {
-  PROBE_POLICY_MIGRATION_PRESERVED_STATE,
-  PROBE_POLICY_MIGRATION_PRIOR_EVIDENCE_DIGEST,
-  PROBE_POLICY_MIGRATION_VERSION,
-  type ProbePolicyMigrationReceipt
-} from "@/lib/probe/policy-migration-contract";
+  PROBE_V03_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
+  PROBE_V03_POLICY_MIGRATION_ID,
+  PROBE_V03_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
+  PROBE_V03_POLICY_MIGRATION_VERSION,
+  type ProbeV03PolicyMigrationReceipt
+} from "@/lib/probe/policy-v03-migration-contract";
 import {
   advanceProbeRunContinuation,
   createInitialProbeRunContinuation,
@@ -66,6 +70,24 @@ import {
   probeCompletedCalibrationRowSchema,
   type ProbeCompletedCalibrationRow
 } from "@/lib/probe/run-continuation.server";
+import {
+  advanceProbeRunIndex,
+  acknowledgeProbeRunIndex,
+  armProbeOperator,
+  assertProbeRunDocumentOwner,
+  assertProbeOperatorArmed,
+  claimProbeRunDocument,
+  deleteUnstartedProbeRunIndex,
+  deriveProbeDocumentHash,
+  getProbeRunIndex,
+  getProbeRunIndexByLaunch,
+  probeRunIndexKeys,
+  putProbeRunIndex,
+  terminalProbeRunIndexPayloadBinding,
+  PRODUCTION_PROBE_RUN_INDEX_KEYSPACE,
+  type ProbeRunIndexReceipt,
+  type ProbeRunIndexRedisClient
+} from "@/lib/probe/run-index";
 import {
   PROBE_RUNNER_PROMPT_VERSION,
   PROBE_RUNNER_SETTINGS_VERSION,
@@ -99,9 +121,22 @@ import {
 } from "@/lib/probe/service-contract";
 import {
   PROBE_SESSION_COOKIE,
+  PROBE_RECOVERY_COOKIE,
+  PROBE_RECOVERY_TTL_SECONDS,
+  PROBE_OPERATOR_COOKIE,
+  PROBE_OPERATOR_LAUNCH_RETRY_MARGIN_SECONDS,
+  deriveProbeLaunchHash,
   deriveProbeActorHash,
+  issueProbeRecoveryCredential,
+  issueProbeOperatorCredential,
+  issueRecoveredProbeSession,
   issueProbeSession,
+  verifyProbeRecoveryCredential,
+  signExistingProbeRecoveryCredential,
+  verifyProbeOperatorCredential,
   verifyProbeSession,
+  type ProbeRecoveryClaims,
+  type ProbeOperatorClaims,
   type ProbeSessionClaims
 } from "@/lib/probe/session";
 import { createCheckoutFixture, CHECKOUT_DOMAIN_VERSION } from "@/lib/domain/checkout";
@@ -126,7 +161,7 @@ interface EnvironmentLike {
   readonly [key: string]: string | undefined;
 }
 
-type ServiceRedis = ProbeRedisClient & ProbeContinuationRedisClient;
+type ServiceRedis = ProbeRedisClient & ProbeContinuationRedisClient & ProbeRunIndexRedisClient;
 
 export interface ProbeServiceDependencies {
   readonly environment?: EnvironmentLike;
@@ -247,6 +282,12 @@ function requiredEnvironment(environment: EnvironmentLike, key: string): string 
   return value;
 }
 
+function safeTextEqual(left: string, right: string): boolean {
+  const leftBytes = Buffer.from(left, "utf8");
+  const rightBytes = Buffer.from(right, "utf8");
+  return leftBytes.byteLength === rightBytes.byteLength && timingSafeEqual(leftBytes, rightBytes);
+}
+
 function redisOf(
   dependencies: ProbeServiceDependencies,
   environment: EnvironmentLike
@@ -268,38 +309,124 @@ async function activationOf(
   }
 }
 
-function migrationOf(activation: ProbeActivationContext): ProbePolicyMigrationReceipt {
+function migrationOf(activation: ProbeActivationContext): ProbeV03PolicyMigrationReceipt {
   const migration = activation.migration;
+  const preserved = migration?.preserved;
   if (
     !migration ||
-    migration.version !== PROBE_POLICY_MIGRATION_VERSION ||
-    migration.priorEvidenceDigest !== PROBE_POLICY_MIGRATION_PRIOR_EVIDENCE_DIGEST ||
+    migration.version !== PROBE_V03_POLICY_MIGRATION_VERSION ||
+    migration.migrationId !== PROBE_V03_POLICY_MIGRATION_ID ||
+    migration.priorActivationHash !== PROBE_V03_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH ||
+    migration.predecessorMigrationReceiptHash !==
+      activation.manifest.predecessorPolicyMigrationReceiptHash ||
     migration.nextPolicyHash !== activation.manifest.policyHash ||
     migration.nextScriptHash !== activation.manifest.scriptHash ||
     migration.migrationCommit !== activation.manifest.activeCommit ||
     migration.receiptHash !== activation.manifest.policyMigrationReceiptHash ||
     migration.guardInstanceId !== activation.manifest.guardInstanceId ||
     migration.initializedCommit !== activation.manifest.guardInitializedCommit ||
-    canonicalJson(migration.preserved) !== canonicalJson(PROBE_POLICY_MIGRATION_PRESERVED_STATE)
+    !preserved ||
+    preserved.claimedCalls !== PROBE_V03_POLICY_MIGRATION_FIXED_PRESERVED_STATE.claimedCalls ||
+    preserved.knownCalls !== PROBE_V03_POLICY_MIGRATION_FIXED_PRESERVED_STATE.knownCalls ||
+    preserved.pendingCalls !== 0 ||
+    preserved.uncertainCalls !== 0 ||
+    preserved.inflightCalls !== 0 ||
+    preserved.committedNanoUsd !==
+      PROBE_V03_POLICY_MIGRATION_FIXED_PRESERVED_STATE.committedNanoUsd ||
+    preserved.uncertainUpperNanoUsd !== 0 ||
+    preserved.sequence !== PROBE_V03_POLICY_MIGRATION_FIXED_PRESERVED_STATE.sequence ||
+    canonicalJson(preserved.purposeCounts) !==
+      canonicalJson(PROBE_V03_POLICY_MIGRATION_FIXED_PRESERVED_STATE.purposeCounts) ||
+    migration.knownCalls.length !== preserved.knownCalls ||
+    migration.knownCalls.reduce((sum, call) => sum + call.actualNanoUsd, 0) !==
+      preserved.knownActualNanoUsd
   ) {
     throw new ProbeServiceError("probe_policy_migration_unavailable", 503);
   }
   return migration;
 }
 
-function cookieFromRequest(request: Request): string {
+function namedCookieFromRequest(request: Request, name: string): string {
   const cookie = request.headers.get("cookie") ?? "";
   for (const segment of cookie.split(";")) {
     const [rawName, ...rawValue] = segment.trim().split("=");
-    if (rawName === PROBE_SESSION_COOKIE) return rawValue.join("=");
+    if (rawName === name) return rawValue.join("=");
   }
   throw new ProbeServiceError("invalid_probe_session", 403);
+}
+
+function cookieFromRequest(request: Request): string {
+  return namedCookieFromRequest(request, PROBE_SESSION_COOKIE);
 }
 
 function csrfFromRequest(request: Request): string {
   const csrf = request.headers.get("x-toolproof-csrf");
   if (!csrf) throw new ProbeServiceError("invalid_probe_session", 403);
   return csrf;
+}
+
+function documentIdFromRequest(request: Request): string {
+  const documentId = request.headers.get("x-toolproof-document") ?? "";
+  if (!/^document_[A-Za-z0-9_-]{22,64}$/u.test(documentId)) {
+    throw new ProbeServiceError("invalid_probe_document", 403);
+  }
+  return documentId;
+}
+
+async function assertDocumentOwner(input: {
+  readonly request: Request;
+  readonly redis: ServiceRedis;
+  readonly recovery: ProbeRecoveryClaims;
+  readonly signingSecret: string;
+}): Promise<void> {
+  try {
+    await assertProbeRunDocumentOwner(input.redis, {
+      recovery: input.recovery,
+      documentId: documentIdFromRequest(input.request),
+      artifactSecret: input.signingSecret
+    });
+  } catch {
+    throw new ProbeServiceError("probe_document_not_owner", 409);
+  }
+}
+
+function runAdmission(input: {
+  readonly request: Request;
+  readonly recovery: ProbeRecoveryClaims;
+  readonly signingSecret: string;
+  readonly ordinal: number;
+}) {
+  const [anchorKey, dataKey] = probeRunIndexKeys(
+    PRODUCTION_PROBE_RUN_INDEX_KEYSPACE,
+    input.recovery.activationHash
+  );
+  return Object.freeze({
+    anchorKey,
+    dataKey,
+    activationHash: input.recovery.activationHash,
+    buildCommit: input.recovery.buildCommit,
+    ownerHash: deriveProbeDocumentHash(documentIdFromRequest(input.request), input.signingSecret),
+    ownerRevision: input.ordinal,
+    ordinal: input.ordinal
+  });
+}
+
+function runOwnerContinuationAdmission(input: {
+  readonly request: Request;
+  readonly recovery: ProbeRecoveryClaims;
+  readonly signingSecret: string;
+  readonly ordinal: number;
+}) {
+  const admission = runAdmission(input);
+  return Object.freeze({
+    mode: "run-owner" as const,
+    anchorKey: admission.anchorKey,
+    dataKey: admission.dataKey,
+    activationHash: admission.activationHash,
+    buildCommit: admission.buildCommit,
+    ownerHash: admission.ownerHash,
+    revision: admission.ownerRevision
+  });
 }
 
 function authenticateSession(input: {
@@ -324,6 +451,41 @@ function authenticateSession(input: {
   } catch {
     throw new ProbeServiceError("invalid_probe_session", 403);
   }
+}
+
+function authenticateRecovery(input: {
+  readonly request: Request;
+  readonly activation: ProbeActivationContext;
+  readonly environment: EnvironmentLike;
+  readonly nowMs: number;
+  readonly session?: ProbeSessionClaims;
+}): ProbeRecoveryClaims {
+  const signingSecret = requiredEnvironment(input.environment, "TOOLPROOF_SIGNING_SECRET");
+  const actorHash = deriveProbeActorHash(input.request, signingSecret);
+  let recovery: ProbeRecoveryClaims;
+  try {
+    recovery = verifyProbeRecoveryCredential({
+      cookieValue: namedCookieFromRequest(input.request, PROBE_RECOVERY_COOKIE),
+      signingSecret,
+      activationHash: input.activation.activationHash,
+      buildCommit: input.activation.manifest.activeCommit,
+      actorHash,
+      nowMs: input.nowMs
+    });
+  } catch {
+    throw new ProbeServiceError("invalid_probe_recovery", 403);
+  }
+  if (
+    input.session &&
+    (recovery.activationHash !== input.session.activationHash ||
+      recovery.buildCommit !== input.session.buildCommit ||
+      recovery.sessionId !== input.session.sessionId ||
+      recovery.runId !== input.session.runId ||
+      recovery.actorHash !== input.session.actorHash)
+  ) {
+    throw new ProbeServiceError("probe_recovery_binding_mismatch", 403);
+  }
+  return recovery;
 }
 
 async function expectedLiveManifest(buildCommit: string): Promise<ProbeLiveManifest> {
@@ -509,13 +671,81 @@ async function validateFrozenEnvelope(
   }
 }
 
+export async function armProbeCalibrationOperator(
+  request: Request,
+  capability: string,
+  dependencies: ProbeServiceDependencies = {}
+) {
+  if (!/^[A-Za-z0-9_-]{43}$/u.test(capability)) {
+    throw new ProbeServiceError("invalid_operator_capability", 403);
+  }
+  const environment = environmentOf(dependencies);
+  const configuredCapabilityHash = requiredEnvironment(
+    environment,
+    "TOOLPROOF_PROBE_OPERATOR_CAPABILITY_HASH"
+  );
+  const observedHash = await sha256Hex(capability);
+  if (!safeTextEqual(observedHash, configuredCapabilityHash)) {
+    throw new ProbeServiceError("invalid_operator_capability", 403);
+  }
+  const activation = await activationOf(dependencies);
+  migrationOf(activation);
+  if (!safeTextEqual(configuredCapabilityHash, activation.manifest.operatorCapabilityHash)) {
+    throw new ProbeServiceError("invalid_operator_capability", 403);
+  }
+  const signingSecret = requiredEnvironment(environment, "TOOLPROOF_SIGNING_SECRET");
+  const actorHash = deriveProbeActorHash(request, signingSecret);
+  const armed = await armProbeOperator(redisOf(dependencies, environment), {
+    activationHash: activation.activationHash,
+    buildCommit: activation.manifest.activeCommit,
+    actorHash
+  });
+  const credential = issueProbeOperatorCredential({
+    activationHash: activation.activationHash,
+    buildCommit: activation.manifest.activeCommit,
+    actorHash,
+    signingSecret,
+    nowMs: armed.armedAtMs
+  });
+  if (credential.claims.expiresAt * 1_000 !== armed.expiresAtMs) {
+    throw new ProbeServiceError("operator_arm_expiry_mismatch", 503);
+  }
+  return Object.freeze({
+    disposition: armed.disposition,
+    cookieValue: credential.cookieValue,
+    expiresAt: credential.claims.expiresAt
+  });
+}
+
 export async function startProbeCalibrationSession(
   request: Request,
+  launchId: string,
   dependencies: ProbeServiceDependencies = {}
 ) {
   const environment = environmentOf(dependencies);
+  const nowMs = nowOf(dependencies);
+  const signingSecret = requiredEnvironment(environment, "TOOLPROOF_SIGNING_SECRET");
+  const actorHash = deriveProbeActorHash(request, signingSecret);
+  const configuredActivationHash = requiredEnvironment(
+    environment,
+    "TOOLPROOF_PROBE_ACTIVATION_HASH"
+  );
+  const configuredCommit = requiredEnvironment(environment, "TOOLPROOF_PROBE_ACTIVE_COMMIT");
+  let operatorClaims: ProbeOperatorClaims;
+  try {
+    operatorClaims = verifyProbeOperatorCredential({
+      cookieValue: namedCookieFromRequest(request, PROBE_OPERATOR_COOKIE),
+      signingSecret,
+      activationHash: configuredActivationHash,
+      buildCommit: configuredCommit,
+      actorHash,
+      nowMs
+    });
+  } catch {
+    throw new ProbeServiceError("probe_operator_not_armed", 403);
+  }
   const activation = await activationOf(dependencies);
-  migrationOf(activation);
+  const migration = migrationOf(activation);
   if (
     activation.guard.phase !== "idle" ||
     activation.guard.claimedCalls !== PROBE_CALIBRATION_BASE_CALLS ||
@@ -525,29 +755,261 @@ export async function startProbeCalibrationSession(
     activation.guard.uncertainCalls !== 0 ||
     activation.guard.committedNanoUsd !==
       PROBE_CALIBRATION_BASE_CALLS * PROBE_PER_CALL_RESERVATION_NANO_USD ||
-    activation.guard.knownAccountedNanoUsd !== GATE2_ATTEMPT_1_KNOWN_ACCOUNTED_NANO_USD
+    activation.guard.knownAccountedNanoUsd !== migration.preserved.knownActualNanoUsd
   ) {
     throw new ProbeServiceError("calibration_session_unavailable", 409);
   }
-  const signingSecret = requiredEnvironment(environment, "TOOLPROOF_SIGNING_SECRET");
+  const launchHash = deriveProbeLaunchHash(launchId, signingSecret);
+  const redis = redisOf(dependencies, environment);
+  try {
+    await assertProbeOperatorArmed(redis, {
+      activationHash: activation.activationHash,
+      buildCommit: activation.manifest.activeCommit,
+      actorHash
+    });
+  } catch {
+    throw new ProbeServiceError("probe_operator_not_armed", 403);
+  }
+  const existing = await getProbeRunIndexByLaunch(redis, {
+    activationHash: activation.activationHash,
+    buildCommit: activation.manifest.activeCommit,
+    actorHash,
+    launchHash,
+    artifactSecret: signingSecret
+  });
+  if (existing) {
+    if (existing.index.nextOrdinal !== 0 || existing.index.payload.terminal) {
+      throw new ProbeServiceError("calibration_session_unavailable", 409);
+    }
+    const refreshed = issueRecoveredProbeSession({
+      recovery: existing.recovery,
+      signingSecret,
+      nowMs: nowOf(dependencies)
+    });
+    return Object.freeze({
+      cookieValue: refreshed.cookieValue,
+      recoveryCookieValue: signExistingProbeRecoveryCredential(existing.recovery, signingSecret),
+      csrfToken: refreshed.csrfToken,
+      continuation: existing.index.payload.continuation,
+      buildCommit: activation.manifest.activeCommit,
+      expiresAt: refreshed.claims.expiresAt,
+      recoveryExpiresAt: existing.recovery.expiresAt
+    });
+  }
+  if (
+    operatorClaims.expiresAt - Math.floor(nowMs / 1_000) <
+    PROBE_RECOVERY_TTL_SECONDS + PROBE_OPERATOR_LAUNCH_RETRY_MARGIN_SECONDS
+  ) {
+    throw new ProbeServiceError("operator_launch_window_expired", 409);
+  }
   const issued = issueProbeSession({
     activationHash: activation.activationHash,
     buildCommit: activation.manifest.activeCommit,
-    actorHash: deriveProbeActorHash(request, signingSecret),
+    actorHash,
     signingSecret,
-    nowMs: nowOf(dependencies)
+    nowMs
   });
-  const continuation = await createInitialProbeRunContinuation({
+  const recovery = issueProbeRecoveryCredential({
     session: issued.claims,
+    launchHash,
     signingSecret
   });
+  const continuation = await createInitialProbeRunContinuation({
+    recovery: recovery.claims,
+    signingSecret
+  });
+  let runIndex: ProbeRunIndexReceipt;
+  try {
+    runIndex = await putProbeRunIndex(redis, {
+      recovery: recovery.claims,
+      continuation,
+      artifactSecret: signingSecret
+    });
+  } catch {
+    const raced = await getProbeRunIndexByLaunch(redis, {
+      activationHash: activation.activationHash,
+      buildCommit: activation.manifest.activeCommit,
+      actorHash,
+      launchHash,
+      artifactSecret: signingSecret
+    });
+    if (!raced || raced.index.nextOrdinal !== 0 || raced.index.payload.terminal) {
+      throw new ProbeServiceError("calibration_run_index_unavailable", 409);
+    }
+    const refreshed = issueRecoveredProbeSession({
+      recovery: raced.recovery,
+      signingSecret,
+      nowMs: nowOf(dependencies)
+    });
+    return Object.freeze({
+      cookieValue: refreshed.cookieValue,
+      recoveryCookieValue: signExistingProbeRecoveryCredential(raced.recovery, signingSecret),
+      csrfToken: refreshed.csrfToken,
+      continuation: raced.index.payload.continuation,
+      buildCommit: activation.manifest.activeCommit,
+      expiresAt: refreshed.claims.expiresAt,
+      recoveryExpiresAt: raced.recovery.expiresAt
+    });
+  }
+  if (runIndex.nextOrdinal !== 0 || runIndex.payload.continuation !== continuation) {
+    throw new ProbeServiceError("calibration_run_index_unavailable", 503);
+  }
   return Object.freeze({
     cookieValue: issued.cookieValue,
+    recoveryCookieValue: recovery.cookieValue,
     csrfToken: issued.csrfToken,
     continuation,
     buildCommit: activation.manifest.activeCommit,
-    expiresAt: issued.claims.expiresAt
+    expiresAt: issued.claims.expiresAt,
+    recoveryExpiresAt: recovery.claims.expiresAt
   });
+}
+
+async function reconcileRecoveredRunIndex(input: {
+  readonly redis: ServiceRedis;
+  readonly activation: ProbeActivationContext;
+  readonly recovery: ProbeRecoveryClaims;
+  readonly signingSecret: string;
+  readonly activationSecret: string;
+  readonly documentId: string;
+}): Promise<ProbeRunIndexReceipt> {
+  let index = await getProbeRunIndex(input.redis, {
+    recovery: input.recovery,
+    artifactSecret: input.signingSecret
+  });
+  if (!index) throw new ProbeServiceError("probe_run_index_missing", 409);
+
+  const claimed = input.activation.guard.calibrationCalls;
+  const expectedSettled = PROBE_CALIBRATION_BASE_CALLS + index.nextOrdinal;
+  if (
+    input.activation.guard.phase === "single-inflight" &&
+    claimed === expectedSettled + 1 &&
+    !index.payload.terminal
+  ) {
+    return index;
+  }
+  if (input.activation.guard.phase !== "idle") {
+    throw new ProbeServiceError("probe_run_index_guard_mismatch", 409);
+  }
+  if (claimed === expectedSettled) return index;
+  if (claimed !== expectedSettled + 1 || index.payload.terminal) {
+    throw new ProbeServiceError("probe_run_index_guard_mismatch", 409);
+  }
+
+  const ids = deriveProbeTrialOpaqueIds({
+    runId: input.recovery.runId,
+    ordinal: index.nextOrdinal,
+    activationSecret: input.activationSecret
+  });
+  const completion = await getProbeContinuation<z.infer<typeof completionCacheSchema>>(
+    input.redis,
+    {
+      jti: ids.jti,
+      stage: "completion",
+      artifactSecret: input.signingSecret
+    }
+  );
+  if (!completion) throw new ProbeServiceError("probe_completion_recovery_missing", 409);
+  const cached = completionCacheSchema.parse(completion.payload);
+  try {
+    await settleProbeCallKnown(input.redis, {
+      ...input.activation.guardIdentity,
+      jti: ids.jti,
+      ...cached.settlement
+    });
+  } catch {
+    throw new ProbeServiceError("known_settlement_failed", 503, true);
+  }
+  index = await advanceProbeRunIndex(input.redis, {
+    recovery: input.recovery,
+    current: index,
+    continuation: cached.response.continuation,
+    documentId: input.documentId,
+    artifactSecret: input.signingSecret
+  });
+  return index;
+}
+
+export async function recoverProbeCalibrationSession(
+  request: Request,
+  documentId: string,
+  dependencies: ProbeServiceDependencies = {}
+) {
+  const environment = environmentOf(dependencies);
+  const activation = await activationOf(dependencies);
+  migrationOf(activation);
+  const nowMs = nowOf(dependencies);
+  const signingSecret = requiredEnvironment(environment, "TOOLPROOF_SIGNING_SECRET");
+  const recovery = authenticateRecovery({
+    request,
+    activation,
+    environment,
+    nowMs
+  });
+  const redis = redisOf(dependencies, environment);
+  await claimProbeRunDocument(redis, {
+    recovery,
+    documentId,
+    artifactSecret: signingSecret
+  });
+  const index = await reconcileRecoveredRunIndex({
+    redis,
+    activation,
+    recovery,
+    signingSecret,
+    activationSecret: requiredEnvironment(environment, "TOOLPROOF_PROBE_ACTIVATION_SECRET"),
+    documentId
+  });
+  const session = issueRecoveredProbeSession({ recovery, signingSecret, nowMs });
+  return Object.freeze({
+    cookieValue: session.cookieValue,
+    csrfToken: session.csrfToken,
+    continuation: index.payload.continuation,
+    buildCommit: recovery.buildCommit,
+    expiresAt: session.claims.expiresAt,
+    recoveryExpiresAt: recovery.expiresAt,
+    path: index.payload.terminal ? ("/results" as const) : ("/lab" as const)
+  });
+}
+
+export async function clearUnstartedProbeCalibrationSession(
+  request: Request,
+  dependencies: ProbeServiceDependencies = {}
+): Promise<{ readonly disposition: "deleted" | "missing" }> {
+  const environment = environmentOf(dependencies);
+  const activation = await activationOf(dependencies);
+  migrationOf(activation);
+  const nowMs = nowOf(dependencies);
+  const signingSecret = requiredEnvironment(environment, "TOOLPROOF_SIGNING_SECRET");
+  const recovery = authenticateRecovery({
+    request,
+    activation,
+    environment,
+    nowMs
+  });
+  const initialIds = deriveProbeTrialOpaqueIds({
+    runId: recovery.runId,
+    ordinal: 0,
+    activationSecret: requiredEnvironment(environment, "TOOLPROOF_PROBE_ACTIVATION_SECRET")
+  });
+  const disposition = await deleteUnstartedProbeRunIndex(redisOf(dependencies, environment), {
+    recovery,
+    artifactSecret: signingSecret,
+    guard: {
+      configKey: PRODUCTION_PROBE_KEYSPACE.config,
+      totalsKey: PRODUCTION_PROBE_KEYSPACE.totals,
+      purposeCountsKey: PRODUCTION_PROBE_KEYSPACE.purposeCounts,
+      inflightKey: PRODUCTION_PROBE_KEYSPACE.inflight,
+      guardInstanceId: activation.guardIdentity.guardInstanceId,
+      policyHash: activation.guardIdentity.policyHash,
+      scriptHash: activation.guardIdentity.scriptHash,
+      initializedCommit: activation.guardIdentity.initializedCommit,
+      baseCalibrationCalls: PROBE_CALIBRATION_BASE_CALLS,
+      authorizationKey: probeAuthorizationKey(PRODUCTION_PROBE_KEYSPACE, initialIds.jti),
+      jti: initialIds.jti
+    }
+  });
+  return Object.freeze({ disposition });
 }
 
 export async function issueProbeCalibrationTrial(
@@ -565,6 +1027,13 @@ export async function issueProbeCalibrationTrial(
     requireCsrf: true,
     nowMs
   });
+  const recovery = authenticateRecovery({
+    request,
+    activation,
+    environment,
+    nowMs,
+    session
+  });
   const signingSecret = requiredEnvironment(environment, "TOOLPROOF_SIGNING_SECRET");
   const activationSecret = requiredEnvironment(environment, "TOOLPROOF_PROBE_ACTIVATION_SECRET");
   const body = probeIssueBodySchema.parse(value);
@@ -572,6 +1041,7 @@ export async function issueProbeCalibrationTrial(
     token: body.continuation,
     signingSecret,
     session,
+    recovery,
     activationHash: activation.activationHash,
     buildCommit: activation.manifest.activeCommit,
     nowMs
@@ -608,6 +1078,7 @@ export async function issueProbeCalibrationTrial(
     }
   };
   const redis = redisOf(dependencies, environment);
+  await assertDocumentOwner({ request, redis, recovery, signingSecret });
   const recoveredCompletion = await getProbeContinuation<z.infer<typeof completionCacheSchema>>(
     redis,
     {
@@ -731,7 +1202,8 @@ export async function issueProbeCalibrationTrial(
       claimsHash: payload.claimsHash,
       purpose: "calibration",
       subjectHash: payload.subjectHash,
-      actorHash: session.actorHash
+      actorHash: session.actorHash,
+      runAdmission: runAdmission({ request, recovery, signingSecret, ordinal })
     });
   }
   return payload.response;
@@ -751,6 +1223,13 @@ export async function decideProbeCalibrationTrial(
     environment,
     requireCsrf: true,
     nowMs
+  });
+  const recovery = authenticateRecovery({
+    request,
+    activation,
+    environment,
+    nowMs,
+    session
   });
   const signingSecret = requiredEnvironment(environment, "TOOLPROOF_SIGNING_SECRET");
   const activationSecret = requiredEnvironment(environment, "TOOLPROOF_PROBE_ACTIVATION_SECRET");
@@ -774,6 +1253,7 @@ export async function decideProbeCalibrationTrial(
   await validateFrozenEnvelope(verified.envelope, ordinal, activation);
   const requestBinding = await canonicalSha256(body);
   const redis = redisOf(dependencies, environment);
+  await assertDocumentOwner({ request, redis, recovery, signingSecret });
   const recovered = await getProbeContinuation<z.infer<typeof decisionCacheSchema>>(redis, {
     jti: verified.claims.jti,
     stage: "decision",
@@ -814,7 +1294,8 @@ export async function decideProbeCalibrationTrial(
             ...activation.guardIdentity,
             jti: verified.claims.jti,
             claimsHash: verified.claimsHash,
-            purpose: "calibration"
+            purpose: "calibration",
+            runAdmission: runAdmission({ request, recovery, signingSecret, ordinal })
           });
           grantSucceeded = true;
         } catch (error) {
@@ -881,7 +1362,20 @@ export async function decideProbeCalibrationTrial(
       jti: verified.claims.jti,
       stage: "decision",
       payload: decisionCacheSchema.parse({ requestBinding, response }),
-      artifactSecret: signingSecret
+      artifactSecret: signingSecret,
+      admission: {
+        mode: "grant-owner",
+        authorizationKey: probeAuthorizationKey(PRODUCTION_PROBE_KEYSPACE, verified.claims.jti),
+        jti: verified.claims.jti,
+        claimsHash: verified.claimsHash,
+        guardInstanceId: activation.guardIdentity.guardInstanceId,
+        policyHash: activation.guardIdentity.policyHash,
+        scriptHash: activation.guardIdentity.scriptHash,
+        activationHash: recovery.activationHash,
+        buildCommit: recovery.buildCommit,
+        ownerHash: deriveProbeDocumentHash(documentIdFromRequest(request), signingSecret),
+        revision: ordinal
+      }
     });
     return decisionCacheSchema.parse(cached.payload).response;
   } catch {
@@ -920,6 +1414,13 @@ export async function admitProbeNativeDispatch(
     requireCsrf: true,
     nowMs
   });
+  const recovery = authenticateRecovery({
+    request,
+    activation,
+    environment,
+    nowMs,
+    session
+  });
   const signingSecret = requiredEnvironment(environment, "TOOLPROOF_SIGNING_SECRET");
   const activationSecret = requiredEnvironment(environment, "TOOLPROOF_PROBE_ACTIVATION_SECRET");
   const body = probeNativeAdmissionBodySchema.parse(value);
@@ -942,6 +1443,7 @@ export async function admitProbeNativeDispatch(
   await validateFrozenEnvelope(verified.envelope, ordinal, activation);
   await validateCompletionBoundary(body.initialBoundary, activation.manifest.activeCommit);
   const redis = redisOf(dependencies, environment);
+  await assertDocumentOwner({ request, redis, recovery, signingSecret });
   if (
     activation.guard.phase !== "single-inflight" ||
     activation.guard.calibrationCalls !== PROBE_CALIBRATION_BASE_CALLS + ordinal + 1
@@ -978,6 +1480,7 @@ export async function admitProbeNativeDispatch(
     stage: "native",
     artifactSecret: signingSecret
   });
+  let admittedPayload = payload;
   if (existing) {
     const existingPayload = objectValue(existing.payload, "invalid_native_admission");
     if (
@@ -988,17 +1491,25 @@ export async function admitProbeNativeDispatch(
     ) {
       throw new ProbeServiceError("native_admission_mismatch", 409);
     }
-    return probeNativeAdmissionResponseSchema.parse({
-      status: "already-admitted",
-      jti: verified.claims.jti,
-      inferencePerformed: false
-    });
+    admittedPayload = existing.payload as typeof payload;
+  } else {
+    try {
+      verifyProbeToken(body.probeToken, signingSecret, nowMs);
+    } catch {
+      throw new ProbeServiceError("expired_native_authorization", 403);
+    }
   }
   const stored = await putProbeContinuation(redis, {
     jti: verified.claims.jti,
     stage: "native",
-    payload,
-    artifactSecret: signingSecret
+    payload: admittedPayload,
+    artifactSecret: signingSecret,
+    admission: runOwnerContinuationAdmission({
+      request,
+      recovery,
+      signingSecret,
+      ordinal
+    })
   });
   return probeNativeAdmissionResponseSchema.parse({
     status: stored.disposition === "new" ? "admitted" : "already-admitted",
@@ -1476,6 +1987,13 @@ export async function completeProbeCalibrationTrial(
     requireCsrf: true,
     nowMs
   });
+  const recovery = authenticateRecovery({
+    request,
+    activation,
+    environment,
+    nowMs,
+    session
+  });
   const signingSecret = requiredEnvironment(environment, "TOOLPROOF_SIGNING_SECRET");
   const activationSecret = requiredEnvironment(environment, "TOOLPROOF_PROBE_ACTIVATION_SECRET");
   const body = probeCompleteBodySchema.parse(value);
@@ -1500,6 +2018,7 @@ export async function completeProbeCalibrationTrial(
     token: body.continuation,
     signingSecret,
     session,
+    recovery,
     activationHash: activation.activationHash,
     buildCommit: activation.manifest.activeCommit,
     nowMs
@@ -1517,16 +2036,41 @@ export async function completeProbeCalibrationTrial(
   }
   const requestBinding = await canonicalSha256(body);
   const redis = redisOf(dependencies, environment);
+  await assertDocumentOwner({ request, redis, recovery, signingSecret });
+  const runIndex = await getProbeRunIndex(redis, {
+    recovery,
+    artifactSecret: signingSecret
+  });
+  if (
+    !runIndex ||
+    runIndex.nextOrdinal !== ordinal ||
+    runIndex.payload.continuation !== body.continuation
+  ) {
+    throw new ProbeServiceError("probe_run_index_sequence_mismatch", 409);
+  }
   const recovered = await getProbeContinuation<z.infer<typeof completionCacheSchema>>(redis, {
     jti: verified.claims.jti,
     stage: "completion",
     artifactSecret: signingSecret
   });
   if (recovered) {
-    const cached = completionCacheSchema.parse(recovered.payload);
+    let cached = completionCacheSchema.parse(recovered.payload);
     if (cached.requestBinding !== requestBinding) {
       throw new ProbeServiceError("completion_replay_mismatch", 409);
     }
+    const admitted = await putProbeContinuation(redis, {
+      jti: verified.claims.jti,
+      stage: "completion",
+      payload: cached,
+      artifactSecret: signingSecret,
+      admission: runOwnerContinuationAdmission({
+        request,
+        recovery,
+        signingSecret,
+        ordinal
+      })
+    });
+    cached = completionCacheSchema.parse(admitted.payload);
     try {
       await settleProbeCallKnown(redis, {
         ...activation.guardIdentity,
@@ -1536,6 +2080,13 @@ export async function completeProbeCalibrationTrial(
     } catch {
       throw new ProbeServiceError("known_settlement_failed", 503, true);
     }
+    await advanceProbeRunIndex(redis, {
+      recovery,
+      current: runIndex,
+      continuation: cached.response.continuation,
+      documentId: documentIdFromRequest(request),
+      artifactSecret: signingSecret
+    });
     return cached.response;
   }
   if (
@@ -1701,7 +2252,13 @@ export async function completeProbeCalibrationTrial(
     jti: verified.claims.jti,
     stage: "completion",
     payload: completionCacheSchema.parse({ requestBinding, response, settlement }),
-    artifactSecret: signingSecret
+    artifactSecret: signingSecret,
+    admission: runOwnerContinuationAdmission({
+      request,
+      recovery,
+      signingSecret,
+      ordinal
+    })
   });
   const cachedPayload = completionCacheSchema.parse(cached.payload);
   try {
@@ -1713,6 +2270,13 @@ export async function completeProbeCalibrationTrial(
   } catch {
     throw new ProbeServiceError("known_settlement_failed", 503, true);
   }
+  await advanceProbeRunIndex(redis, {
+    recovery,
+    current: runIndex,
+    continuation: cachedPayload.response.continuation,
+    documentId: documentIdFromRequest(request),
+    artifactSecret: signingSecret
+  });
   return cachedPayload.response;
 }
 
@@ -1732,6 +2296,13 @@ export async function revealProbeCalibrationRun(
     requireCsrf: true,
     nowMs
   });
+  const recovery = authenticateRecovery({
+    request,
+    activation,
+    environment,
+    nowMs,
+    session
+  });
   if (
     activation.guard.phase !== "idle" ||
     activation.guard.claimedCalls !== PROBE_CALIBRATION_TERMINAL_CALLS ||
@@ -1745,10 +2316,17 @@ export async function revealProbeCalibrationRun(
     throw new ProbeServiceError("calibration_not_complete", 409);
   }
   const signingSecret = requiredEnvironment(environment, "TOOLPROOF_SIGNING_SECRET");
+  await assertDocumentOwner({
+    request,
+    redis: redisOf(dependencies, environment),
+    recovery,
+    signingSecret
+  });
   const continuation = await openProbeRunContinuation({
     token: continuationToken,
     signingSecret,
     session,
+    recovery,
     activationHash: activation.activationHash,
     buildCommit: activation.manifest.activeCommit,
     nowMs
@@ -1766,7 +2344,7 @@ export async function revealProbeCalibrationRun(
   if (
     !Number.isSafeInteger(attemptAccountedNanoUsd) ||
     attemptAccountedNanoUsd < 0 ||
-    activation.guard.knownAccountedNanoUsd - GATE2_ATTEMPT_1_KNOWN_ACCOUNTED_NANO_USD !==
+    activation.guard.knownAccountedNanoUsd - migration.preserved.knownActualNanoUsd !==
       attemptAccountedNanoUsd
   ) {
     throw new ProbeServiceError("terminal_guard_cost_mismatch", 409);
@@ -1779,13 +2357,13 @@ export async function revealProbeCalibrationRun(
     calibrationOnly: true,
     includedInBenchmark: false,
     attemptScope: {
-      designation: "separate-versioned-final-attempt",
+      designation: "separate-versioned-third-final-preferred-attempt",
       baseCalibrationCalls: PROBE_CALIBRATION_BASE_CALLS,
       terminalCalibrationCalls: PROBE_CALIBRATION_TERMINAL_CALLS,
       caseCount: PROBE_CALIBRATION_ATTEMPT_CASE_COUNT,
-      priorAttemptMerged: false
+      priorAttemptsMerged: false
     },
-    priorAttempt: GATE2_ATTEMPT_1_LINEAGE,
+    priorAttempts: createGate2PriorAttemptsLineage(migration),
     policyMigration: migration,
     provider: "OpenAI",
     model: "gpt-5.6-terra",
@@ -1811,7 +2389,7 @@ export async function revealProbeCalibrationRun(
     },
     attemptCost: {
       version: GATE2_ATTEMPT_COST_RECONCILIATION_VERSION,
-      priorCumulativeKnownAccountedNanoUsd: GATE2_ATTEMPT_1_KNOWN_ACCOUNTED_NANO_USD,
+      priorCumulativeKnownAccountedNanoUsd: migration.preserved.knownActualNanoUsd,
       attemptAccountedNanoUsd,
       terminalCumulativeKnownAccountedNanoUsd: activation.guard.knownAccountedNanoUsd
     },
@@ -1825,4 +2403,68 @@ export async function revealProbeCalibrationRun(
   });
   await verifyGate2CalibrationBundleServer(receipt);
   return receipt;
+}
+
+export async function acknowledgeProbeCalibrationRun(
+  request: Request,
+  continuationToken: string,
+  dependencies: ProbeServiceDependencies = {}
+): Promise<{ readonly disposition: "new" | "existing" }> {
+  const environment = environmentOf(dependencies);
+  const activation = await activationOf(dependencies);
+  migrationOf(activation);
+  const nowMs = nowOf(dependencies);
+  const session = authenticateSession({
+    request,
+    activation,
+    environment,
+    requireCsrf: true,
+    nowMs
+  });
+  const recovery = authenticateRecovery({
+    request,
+    activation,
+    environment,
+    nowMs,
+    session
+  });
+  const signingSecret = requiredEnvironment(environment, "TOOLPROOF_SIGNING_SECRET");
+  const redis = redisOf(dependencies, environment);
+  let index: ProbeRunIndexReceipt | null = null;
+  try {
+    index = await getProbeRunIndex(redis, { recovery, artifactSecret: signingSecret });
+  } catch {
+    // An exact idempotent acknowledgement is validated against the permanent anchor below.
+  }
+  if (
+    index &&
+    (!index.payload.terminal ||
+      index.nextOrdinal !== PROBE_CALIBRATION_ATTEMPT_CASE_COUNT ||
+      index.payload.continuation !== continuationToken)
+  ) {
+    throw new ProbeServiceError("terminal_run_index_mismatch", 409);
+  }
+  const payloadBinding = terminalProbeRunIndexPayloadBinding({
+    recovery,
+    continuation: continuationToken,
+    artifactSecret: signingSecret
+  });
+  const disposition = await acknowledgeProbeRunIndex(redis, {
+    recovery,
+    documentId: documentIdFromRequest(request),
+    payloadBinding,
+    artifactSecret: signingSecret,
+    guard: {
+      configKey: PRODUCTION_PROBE_KEYSPACE.config,
+      totalsKey: PRODUCTION_PROBE_KEYSPACE.totals,
+      purposeCountsKey: PRODUCTION_PROBE_KEYSPACE.purposeCounts,
+      inflightKey: PRODUCTION_PROBE_KEYSPACE.inflight,
+      guardInstanceId: activation.guardIdentity.guardInstanceId,
+      policyHash: activation.guardIdentity.policyHash,
+      scriptHash: activation.guardIdentity.scriptHash,
+      initializedCommit: activation.guardIdentity.initializedCommit,
+      terminalCalibrationCalls: PROBE_CALIBRATION_TERMINAL_CALLS
+    }
+  });
+  return Object.freeze({ disposition });
 }

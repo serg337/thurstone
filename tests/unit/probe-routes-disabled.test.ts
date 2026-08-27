@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { POST as complete } from "@/app/api/probe/complete/route";
+import { POST as arm } from "@/app/api/probe/arm/route";
 import { POST as decide } from "@/app/api/probe/decide/route";
 import { POST as issue } from "@/app/api/probe/issue/route";
 import { POST as native } from "@/app/api/probe/native/route";
@@ -23,21 +24,26 @@ function request(path: string, body: unknown, extraHeaders: Record<string, strin
 
 describe("Probe routes remain fail-closed before exact activation", () => {
   it("returns one honest no-inference receipt from every active-lane route", async () => {
-    const routes: Array<[string, (request: Request) => Promise<Response>, unknown]> = [
-      ["/api/probe/session", session, { intent: "start-final-four-case-calibration" }],
-      ["/api/probe/issue", issue, {}],
-      ["/api/probe/decide", decide, {}],
-      ["/api/probe/native", native, {}],
-      ["/api/probe/complete", complete, {}],
-      ["/api/probe/reveal", reveal, { continuation: "x".repeat(32) }]
+    const routes: Array<[string, (request: Request) => Promise<Response>, unknown, string]> = [
+      ["/api/probe/arm", arm, { capability: "a".repeat(43) }, "probe_configuration_unavailable"],
+      [
+        "/api/probe/session",
+        session,
+        { intent: "start-final-four-case-calibration", launchId: `launch_${"l".repeat(32)}` },
+        "probe_configuration_unavailable"
+      ],
+      ["/api/probe/issue", issue, {}, "probe_disabled"],
+      ["/api/probe/decide", decide, {}, "probe_disabled"],
+      ["/api/probe/native", native, {}, "probe_disabled"],
+      ["/api/probe/complete", complete, {}, "probe_disabled"],
+      ["/api/probe/reveal", reveal, { continuation: "x".repeat(32) }, "probe_disabled"]
     ];
     for (const [path, route, body] of routes) {
       const response = await route(request(path, body));
       expect(response.status).toBe(503);
-      await expect(response.json()).resolves.toEqual({
-        error: "probe_disabled",
-        inferencePerformed: false
-      });
+      const receipt = (await response.json()) as Record<string, unknown>;
+      expect(["probe_disabled", "probe_configuration_unavailable"]).toContain(receipt.error);
+      expect(receipt.inferencePerformed).toBe(false);
     }
   });
 

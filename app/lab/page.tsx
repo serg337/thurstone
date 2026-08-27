@@ -7,15 +7,22 @@ import { ProbeLaunchPanel } from "@/components/lab/probe-launch-panel";
 import { ProbeSessionBlocked } from "@/components/lab/probe-session-blocked";
 import { StatusPill } from "@/components/status-pill";
 import { requireProbeActivation } from "@/lib/probe/activation";
-import { PROBE_SESSION_COOKIE, verifyProbeSession } from "@/lib/probe/session";
+import {
+  PROBE_RECOVERY_COOKIE,
+  PROBE_SESSION_COOKIE,
+  verifyProbeRecoveryCredential,
+  verifyProbeSession
+} from "@/lib/probe/session";
 
 export const metadata: Metadata = { title: "Lab" };
 
 type EvaluationSessionState = "inactive" | "active" | "blocked";
 
 async function evaluationSessionState(): Promise<EvaluationSessionState> {
-  const cookie = (await cookies()).get(PROBE_SESSION_COOKIE)?.value;
-  if (!cookie) return "inactive";
+  const cookieStore = await cookies();
+  const cookie = cookieStore.get(PROBE_SESSION_COOKIE)?.value;
+  const recoveryCookie = cookieStore.get(PROBE_RECOVERY_COOKIE)?.value;
+  if (!cookie && !recoveryCookie) return "inactive";
   if (
     process.env.NODE_ENV !== "production" &&
     process.env.TOOLPROOF_BROWSER_FAKE_PROBE === "1" &&
@@ -25,13 +32,30 @@ async function evaluationSessionState(): Promise<EvaluationSessionState> {
   }
   try {
     const activation = await requireProbeActivation();
-    verifyProbeSession({
-      cookieValue: cookie,
-      signingSecret: process.env.TOOLPROOF_SIGNING_SECRET ?? "",
-      activationHash: activation.activationHash,
-      buildCommit: activation.manifest.activeCommit
-    });
-    return "active";
+    const signingSecret = process.env.TOOLPROOF_SIGNING_SECRET ?? "";
+    if (cookie) {
+      try {
+        verifyProbeSession({
+          cookieValue: cookie,
+          signingSecret,
+          activationHash: activation.activationHash,
+          buildCommit: activation.manifest.activeCommit
+        });
+        return "active";
+      } catch {
+        // A short API session may expire while its fixed recovery credential remains valid.
+      }
+    }
+    if (recoveryCookie) {
+      verifyProbeRecoveryCredential({
+        cookieValue: recoveryCookie,
+        signingSecret,
+        activationHash: activation.activationHash,
+        buildCommit: activation.manifest.activeCommit
+      });
+      return "active";
+    }
+    return "blocked";
   } catch {
     return "blocked";
   }

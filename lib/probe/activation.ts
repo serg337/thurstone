@@ -9,17 +9,23 @@ import {
   createProbeRedis,
   probeLedgerScriptHash,
   readProbePolicyMigrationReceipt,
+  readProbeV03PolicyMigrationReceipt,
   readProbeGuardStatus,
   type ProbeGuardIdentity,
   type ProbeGuardStatus
 } from "@/lib/probe/ledger";
 import {
-  PROBE_POLICY_MIGRATION_ID,
-  PROBE_POLICY_MIGRATION_PRESERVED_STATE,
-  PROBE_POLICY_MIGRATION_PRIOR_EVIDENCE_DIGEST,
   probePolicyMigrationReceiptHash,
   type ProbePolicyMigrationReceipt
 } from "@/lib/probe/policy-migration-contract";
+import {
+  PROBE_V03_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
+  PROBE_V03_POLICY_MIGRATION_ID,
+  PROBE_V03_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
+  PROBE_V03_PREDECESSOR_MIGRATION_RECEIPT_HASH,
+  probeV03PolicyMigrationReceiptHash,
+  type ProbeV03PolicyMigrationReceipt
+} from "@/lib/probe/policy-v03-migration-contract";
 import {
   PROBE_CHALLENGE_CLOSES_AT,
   PROBE_GLOBAL_CALL_LIMIT,
@@ -35,7 +41,7 @@ import {
 import { probeRunnerContractHash } from "@/lib/probe/runner-contract";
 import { decodeProbeSigningSecret } from "@/lib/probe/signing-secret";
 
-export const PROBE_ACTIVATION_VERSION = "toolproof-probe-activation@2.0.0";
+export const PROBE_ACTIVATION_VERSION = "toolproof-probe-activation@3.0.0";
 export const PROBE_ACTIVATION_MODE = "calibration";
 
 const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
@@ -66,7 +72,9 @@ export interface ProbeActivationManifest {
   readonly scriptHash: string;
   readonly runnerContractHash: string;
   readonly continuationScriptHash: string;
+  readonly predecessorPolicyMigrationReceiptHash: string;
   readonly policyMigrationReceiptHash: string;
+  readonly operatorCapabilityHash: string;
 }
 
 export type ProbeActivationGuardPhase = "idle" | "single-inflight";
@@ -89,7 +97,8 @@ export interface ProbeActivationContext {
   readonly manifest: ProbeActivationManifest;
   readonly guard: ProbeActivationGuardReceipt;
   readonly guardIdentity: ProbeGuardIdentity;
-  readonly migration: ProbePolicyMigrationReceipt;
+  readonly predecessorMigration: ProbePolicyMigrationReceipt;
+  readonly migration: ProbeV03PolicyMigrationReceipt;
 }
 
 export class ProbeActivationError extends Error {
@@ -150,7 +159,8 @@ export async function probeActivationFrozenHashes(): Promise<ProbeActivationFroz
 
 export async function createProbeActivationManifest(
   environment: EnvironmentLike,
-  suppliedHashes?: ProbeActivationFrozenHashes
+  suppliedHashes?: ProbeActivationFrozenHashes,
+  predecessorMigrationReceiptHash: string = PROBE_V03_PREDECESSOR_MIGRATION_RECEIPT_HASH
 ): Promise<ProbeActivationManifest> {
   const hashes = suppliedHashes ?? (await probeActivationFrozenHashes());
   if (environment.TOOLPROOF_PROBE_ACTIVATION_MODE !== PROBE_ACTIVATION_MODE) {
@@ -201,6 +211,13 @@ export async function createProbeActivationManifest(
   if (!policyMigrationReceiptHash || !SHA256_PATTERN.test(policyMigrationReceiptHash)) {
     throw new ProbeActivationError("activation_migration_receipt_hash_invalid");
   }
+  const operatorCapabilityHash = environment.TOOLPROOF_PROBE_OPERATOR_CAPABILITY_HASH;
+  if (!operatorCapabilityHash || !SHA256_PATTERN.test(operatorCapabilityHash)) {
+    throw new ProbeActivationError("activation_operator_capability_hash_invalid");
+  }
+  if (!SHA256_PATTERN.test(predecessorMigrationReceiptHash)) {
+    throw new ProbeActivationError("activation_predecessor_migration_receipt_hash_invalid");
+  }
 
   return freezeManifest({
     version: PROBE_ACTIVATION_VERSION,
@@ -214,7 +231,9 @@ export async function createProbeActivationManifest(
     scriptHash: hashes.scriptHash,
     runnerContractHash: hashes.runnerContractHash,
     continuationScriptHash: hashes.continuationScriptHash,
-    policyMigrationReceiptHash
+    predecessorPolicyMigrationReceiptHash: predecessorMigrationReceiptHash,
+    policyMigrationReceiptHash,
+    operatorCapabilityHash
   });
 }
 
@@ -223,7 +242,7 @@ export function computeProbeActivationHash(
   activationSecret: string
 ): string {
   return createHmac("sha256", decodeActivationSecret(activationSecret))
-    .update(`toolproof.probe.activation.v1.${canonicalJson(manifest)}`)
+    .update(`toolproof.probe.activation.v3.${canonicalJson(manifest)}`)
     .digest("hex");
 }
 
@@ -284,6 +303,7 @@ export function validateProbeActivationGuard(
     guard.claimedCalls === purposeCountSum &&
     guard.purposeCounts.calibration === guard.claimedCalls &&
     nonCalibrationCount === 0 &&
+    guard.claimedCalls >= PROBE_V03_POLICY_MIGRATION_FIXED_PRESERVED_STATE.claimedCalls &&
     guard.claimedCalls <= PROBE_PURPOSE_CALL_LIMITS.calibration &&
     guard.committedNanoUsd === guard.claimedCalls * PROBE_PER_CALL_RESERVATION_NANO_USD &&
     guard.committedNanoUsd <= PROBE_LIFETIME_SPEND_CEILING_NANO_USD &&
@@ -311,8 +331,12 @@ export async function requireProbeActivation(
     readonly environment?: EnvironmentLike;
     readonly guard?: ProbeGuardStatus;
     readonly readGuard?: () => Promise<ProbeGuardStatus>;
-    readonly migration?: ProbePolicyMigrationReceipt;
-    readonly readMigration?: () => Promise<ProbePolicyMigrationReceipt>;
+    readonly predecessorMigration?: ProbePolicyMigrationReceipt;
+    readonly readPredecessorMigration?: () => Promise<ProbePolicyMigrationReceipt>;
+    readonly migration?: ProbeV03PolicyMigrationReceipt;
+    readonly readMigration?: () => Promise<ProbeV03PolicyMigrationReceipt>;
+    /** Unit/isolated-store dependency only; Production always uses the frozen default. */
+    readonly expectedPredecessorMigrationReceiptHash?: string;
     readonly nowMs?: number;
   } = {}
 ): Promise<ProbeActivationContext> {
@@ -323,11 +347,18 @@ export async function requireProbeActivation(
   if (options.migration && options.readMigration) {
     throw new ProbeActivationError("activation_migration_source_ambiguous");
   }
+  if (options.predecessorMigration && options.readPredecessorMigration) {
+    throw new ProbeActivationError("activation_predecessor_migration_source_ambiguous");
+  }
   if (environment.TOOLPROOF_PROBE_ACTIVATION_MODE !== PROBE_ACTIVATION_MODE) {
     throw new ProbeActivationError("activation_disabled");
   }
   const hashes = await probeActivationFrozenHashes();
-  const manifest = await createProbeActivationManifest(environment, hashes);
+  const manifest = await createProbeActivationManifest(
+    environment,
+    hashes,
+    options.expectedPredecessorMigrationReceiptHash
+  );
   if (!getProbeConfigurationStatus(environment).operationalControlsConfigured) {
     throw new ProbeActivationError("activation_controls_unavailable");
   }
@@ -359,7 +390,9 @@ export async function requireProbeActivation(
     initializedCommit: manifest.guardInitializedCommit
   });
   const redis =
-    (!options.guard && !options.readGuard) || (!options.migration && !options.readMigration)
+    (!options.guard && !options.readGuard) ||
+    (!options.migration && !options.readMigration) ||
+    (!options.predecessorMigration && !options.readPredecessorMigration)
       ? createProbeRedis(environment as NodeJS.ProcessEnv)
       : undefined;
   const guard =
@@ -370,36 +403,60 @@ export async function requireProbeActivation(
     guardIdentity,
     options.nowMs ?? Date.now()
   );
-  let migration: ProbePolicyMigrationReceipt;
+  let predecessorMigration: ProbePolicyMigrationReceipt;
+  let migration: ProbeV03PolicyMigrationReceipt;
   try {
+    predecessorMigration =
+      options.predecessorMigration ??
+      (options.readPredecessorMigration
+        ? await options.readPredecessorMigration()
+        : await readProbePolicyMigrationReceipt(redis!, {
+            expectedReceiptHash: manifest.predecessorPolicyMigrationReceiptHash
+          }));
     migration =
       options.migration ??
       (options.readMigration
         ? await options.readMigration()
-        : await readProbePolicyMigrationReceipt(redis!, {
-            expectedReceiptHash: manifest.policyMigrationReceiptHash
+        : await readProbeV03PolicyMigrationReceipt(redis!, {
+            expectedReceiptHash: manifest.policyMigrationReceiptHash,
+            expectedPredecessorReceiptHash: manifest.predecessorPolicyMigrationReceiptHash
           }));
     if (
+      predecessorMigration.receiptHash !== manifest.predecessorPolicyMigrationReceiptHash ||
+      predecessorMigration.receiptHash !==
+        (await probePolicyMigrationReceiptHash(predecessorMigration)) ||
       migration.receiptHash !== manifest.policyMigrationReceiptHash ||
-      migration.receiptHash !== (await probePolicyMigrationReceiptHash(migration)) ||
-      migration.migrationId !== PROBE_POLICY_MIGRATION_ID ||
+      migration.receiptHash !== (await probeV03PolicyMigrationReceiptHash(migration)) ||
+      migration.migrationId !== PROBE_V03_POLICY_MIGRATION_ID ||
       migration.migrationCommit !== manifest.activeCommit ||
-      migration.priorEvidenceDigest !== PROBE_POLICY_MIGRATION_PRIOR_EVIDENCE_DIGEST ||
+      migration.priorActivationHash !== PROBE_V03_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH ||
+      migration.predecessorMigrationReceiptHash !== predecessorMigration.receiptHash ||
       migration.guardInstanceId !== manifest.guardInstanceId ||
       migration.initializedCommit !== manifest.guardInitializedCommit ||
       migration.nextPolicyVersion !== PROBE_POLICY_VERSION ||
       migration.nextPolicyHash !== manifest.policyHash ||
       migration.nextScriptHash !== manifest.scriptHash ||
       canonicalJson(migration.nextPurposeLimits) !== canonicalJson(PROBE_PURPOSE_CALL_LIMITS) ||
-      canonicalJson(migration.preserved) !==
-        canonicalJson(PROBE_POLICY_MIGRATION_PRESERVED_STATE) ||
-      guard.claimedCalls < PROBE_POLICY_MIGRATION_PRESERVED_STATE.claimedCalls ||
-      guard.knownCount < PROBE_POLICY_MIGRATION_PRESERVED_STATE.knownCalls ||
-      guard.committedNanoUsd < PROBE_POLICY_MIGRATION_PRESERVED_STATE.committedNanoUsd ||
-      guard.knownActualNanoUsd < PROBE_POLICY_MIGRATION_PRESERVED_STATE.knownActualNanoUsd ||
-      guard.sequence < PROBE_POLICY_MIGRATION_PRESERVED_STATE.sequence ||
-      guard.purposeCounts.calibration <
-        PROBE_POLICY_MIGRATION_PRESERVED_STATE.purposeCounts.calibration
+      migration.preserved.claimedCalls !==
+        PROBE_V03_POLICY_MIGRATION_FIXED_PRESERVED_STATE.claimedCalls ||
+      migration.preserved.knownCalls !==
+        PROBE_V03_POLICY_MIGRATION_FIXED_PRESERVED_STATE.knownCalls ||
+      migration.preserved.pendingCalls !== 0 ||
+      migration.preserved.uncertainCalls !== 0 ||
+      migration.preserved.inflightCalls !== 0 ||
+      migration.preserved.committedNanoUsd !==
+        PROBE_V03_POLICY_MIGRATION_FIXED_PRESERVED_STATE.committedNanoUsd ||
+      migration.preserved.uncertainUpperNanoUsd !== 0 ||
+      migration.preserved.sequence !== PROBE_V03_POLICY_MIGRATION_FIXED_PRESERVED_STATE.sequence ||
+      canonicalJson(migration.preserved.purposeCounts) !==
+        canonicalJson(PROBE_V03_POLICY_MIGRATION_FIXED_PRESERVED_STATE.purposeCounts) ||
+      migration.knownCalls.length !== 5 ||
+      guard.claimedCalls < migration.preserved.claimedCalls ||
+      guard.knownCount < migration.preserved.knownCalls ||
+      guard.committedNanoUsd < migration.preserved.committedNanoUsd ||
+      guard.knownActualNanoUsd < migration.preserved.knownActualNanoUsd ||
+      guard.sequence < migration.preserved.sequence ||
+      guard.purposeCounts.calibration < migration.preserved.purposeCounts.calibration
     ) {
       throw new ProbeActivationError("activation_migration_invalid");
     }
@@ -414,6 +471,9 @@ export async function requireProbeActivation(
     manifest,
     guard: guardReceipt,
     guardIdentity,
-    migration: deepFreeze(JSON.parse(canonicalJson(migration)) as ProbePolicyMigrationReceipt)
+    predecessorMigration: deepFreeze(
+      JSON.parse(canonicalJson(predecessorMigration)) as ProbePolicyMigrationReceipt
+    ),
+    migration: deepFreeze(JSON.parse(canonicalJson(migration)) as ProbeV03PolicyMigrationReceipt)
   });
 }

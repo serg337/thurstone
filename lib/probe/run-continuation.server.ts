@@ -5,7 +5,7 @@ import { createHmac } from "node:crypto";
 import { canonicalSha256 } from "@/lib/evidence/digest";
 import { PROBE_CALIBRATION_CASE_COUNT } from "@/lib/probe/calibration-catalog.server";
 import { openProbeArtifact, sealProbeArtifact } from "@/lib/probe/server-artifact";
-import type { ProbeSessionClaims } from "@/lib/probe/session";
+import type { ProbeRecoveryClaims, ProbeSessionClaims } from "@/lib/probe/session";
 import { z } from "zod";
 
 export const PROBE_RUN_CONTINUATION_VERSION = 1;
@@ -98,6 +98,7 @@ async function lineageHash(rows: readonly ProbeCompletedCalibrationRow[]): Promi
 function assertSessionBinding(
   continuation: ProbeRunContinuation,
   session: ProbeSessionClaims,
+  recovery: ProbeRecoveryClaims,
   activationHash: string,
   buildCommit: string,
   nowMs: number
@@ -107,13 +108,17 @@ function assertSessionBinding(
     continuation.activationHash !== activationHash ||
     continuation.buildCommit !== buildCommit ||
     continuation.sessionId !== session.sessionId ||
-    continuation.runId !== session.runId
+    continuation.runId !== session.runId ||
+    continuation.sessionId !== recovery.sessionId ||
+    continuation.runId !== recovery.runId ||
+    continuation.activationHash !== recovery.activationHash ||
+    continuation.buildCommit !== recovery.buildCommit
   ) {
     throw new ProbeRunContinuationError("continuation_binding_mismatch");
   }
   if (
-    continuation.issuedAt !== session.issuedAt ||
-    continuation.expiresAt !== session.expiresAt ||
+    continuation.issuedAt !== recovery.issuedAt ||
+    continuation.expiresAt !== recovery.expiresAt ||
     continuation.expiresAt <= now
   ) {
     throw new ProbeRunContinuationError("continuation_expired");
@@ -121,21 +126,21 @@ function assertSessionBinding(
 }
 
 export async function createInitialProbeRunContinuation(input: {
-  readonly session: ProbeSessionClaims;
+  readonly recovery: ProbeRecoveryClaims;
   readonly signingSecret: string;
 }): Promise<string> {
   const rows: readonly ProbeCompletedCalibrationRow[] = Object.freeze([]);
   const continuation = probeRunContinuationSchema.parse({
     version: PROBE_RUN_CONTINUATION_VERSION,
-    activationHash: input.session.activationHash,
-    buildCommit: input.session.buildCommit,
-    sessionId: input.session.sessionId,
-    runId: input.session.runId,
+    activationHash: input.recovery.activationHash,
+    buildCommit: input.recovery.buildCommit,
+    sessionId: input.recovery.sessionId,
+    runId: input.recovery.runId,
     nextOrdinal: 0,
     rows,
     lineageHash: await lineageHash(rows),
-    issuedAt: input.session.issuedAt,
-    expiresAt: input.session.expiresAt,
+    issuedAt: input.recovery.issuedAt,
+    expiresAt: input.recovery.expiresAt,
     completedAt: null
   });
   return sealProbeArtifact(PROBE_RUN_CONTINUATION_KIND, continuation, input.signingSecret);
@@ -145,6 +150,7 @@ export async function openProbeRunContinuation(input: {
   readonly token: string;
   readonly signingSecret: string;
   readonly session: ProbeSessionClaims;
+  readonly recovery: ProbeRecoveryClaims;
   readonly activationHash: string;
   readonly buildCommit: string;
   readonly nowMs?: number;
@@ -160,6 +166,7 @@ export async function openProbeRunContinuation(input: {
   assertSessionBinding(
     continuation,
     input.session,
+    input.recovery,
     input.activationHash,
     input.buildCommit,
     input.nowMs ?? Date.now()

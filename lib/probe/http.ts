@@ -19,6 +19,7 @@ export class ProbeHttpError extends Error {
 export interface ProbeRequestBoundaryOptions {
   readonly maximumBodyBytes: number;
   readonly requireCsrfHeader?: boolean;
+  readonly allowedMethod?: "POST" | "PUT" | "DELETE";
 }
 
 function declaredBodyLength(request: Request, maximumBodyBytes: number): void {
@@ -38,7 +39,9 @@ export function assertProbeRequestBoundary(
   if (!Number.isSafeInteger(options.maximumBodyBytes) || options.maximumBodyBytes < 2) {
     throw new RangeError("maximumBodyBytes must be a safe integer of at least two bytes.");
   }
-  if (request.method !== "POST") throw new ProbeHttpError("method_not_allowed", 405);
+  if (request.method !== (options.allowedMethod ?? "POST")) {
+    throw new ProbeHttpError("method_not_allowed", 405);
+  }
   if (request.headers.get("origin") !== PROBE_PRODUCTION_ORIGIN) {
     throw new ProbeHttpError("request_rejected", 403);
   }
