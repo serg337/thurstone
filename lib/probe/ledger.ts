@@ -806,11 +806,12 @@ local predecessor_exists = redis.call("EXISTS", KEYS[6])
 local receipt_exists = redis.call("EXISTS", KEYS[7])
 
 local function core_state_matches()
+  local inflight_ttl = redis.call("PTTL", KEYS[5])
   if redis.call("PTTL", KEYS[1]) ~= -1
     or redis.call("PTTL", KEYS[2]) ~= -1
     or redis.call("PTTL", KEYS[3]) ~= -1
     or redis.call("PTTL", KEYS[4]) ~= -1
-    or redis.call("PTTL", KEYS[5]) ~= -1
+    or (inflight_ttl ~= -1 and inflight_ttl ~= -2)
     or redis.call("HGET", KEYS[1], "schema_version") ~= "1"
     or redis.call("HGET", KEYS[1], "status") ~= "open"
     or redis.call("HGET", KEYS[1], "guard_instance_id") ~= ARGV[8]

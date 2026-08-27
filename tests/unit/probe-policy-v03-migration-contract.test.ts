@@ -351,6 +351,7 @@ describe("Probe v0.2 -> v0.3 policy migration contract", () => {
     expect(script).toContain(
       'redis.call("HSET", KEYS[3], "calibration", ARGV[27], "judge", ARGV[31])'
     );
+    expect(script).toContain("(inflight_ttl ~= -1 and inflight_ttl ~= -2)");
     expect(script).not.toContain('redis.call("DEL"');
     expect(script).not.toContain('redis.call("UNLINK"');
     expect(script).not.toContain('redis.call("EXPIRE"');

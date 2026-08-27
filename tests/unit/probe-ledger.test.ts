@@ -137,7 +137,7 @@ describe("durable Probe guard adapter", () => {
       "41d351ad5d1adb81b0c6a90aa930cf1ae932b053d58b097c0283846728b798d2"
     );
     await expect(probeLedgerScriptHash()).resolves.toBe(
-      "05c338834e467dbfadbf7fa1789556bc77080d54620dca3fea4db88153f4c067"
+      "c25d90f7e060662867925e83c6d33dc7636f22b18cbcd94c3ffc6880eb907779"
     );
   });
 

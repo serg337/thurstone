@@ -273,7 +273,7 @@ describe("encrypted Probe continuation store", () => {
       "8293eaee17e979eee1ca915a967ca3110f0d20068e4eda573554ae682dc563b0"
     );
     await expect(probeLedgerScriptHash()).resolves.toBe(
-      "05c338834e467dbfadbf7fa1789556bc77080d54620dca3fea4db88153f4c067"
+      "c25d90f7e060662867925e83c6d33dc7636f22b18cbcd94c3ffc6880eb907779"
     );
   });
 });
