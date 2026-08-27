@@ -1,7 +1,12 @@
-import { cartGet, type CheckoutState } from "@/lib/domain/checkout";
+import type { CartGetResult, CheckoutErrorResult } from "@/lib/domain/checkout";
+import {
+  nativeToolCallContext,
+  type NativeToolCallContext,
+  type ToolExecutionContext
+} from "@/lib/webmcp/tool-execution";
 
 export const CART_GET_TOOL_NAME = "cart_get";
-export const CART_GET_HANDLER_VERSION = "cart_get@0.1.1";
+export const CART_GET_HANDLER_VERSION = "cart_get@1.0.0";
 
 export const CART_GET_METADATA = {
   name: CART_GET_TOOL_NAME,
@@ -16,31 +21,25 @@ export const CART_GET_METADATA = {
   annotations: { readOnlyHint: true }
 } as const;
 
-interface CreateCartGetToolOptions {
-  readonly getState: () => CheckoutState;
-  readonly onExecuted?: (result: ReturnType<typeof cartGet>) => void;
-}
+export type CartGetToolResult = CartGetResult | CheckoutErrorResult;
 
-interface CartGetExecutionContext {
-  readonly signal?: AbortSignal;
+interface CreateCartGetToolOptions {
+  readonly execute: (input: unknown, context: NativeToolCallContext) => Promise<CartGetToolResult>;
+  readonly onExecuted?: (result: CartGetToolResult) => void;
 }
 
 export type CartGetTool = Omit<WebMCP.ModelContextTool, "execute"> & {
   execute: (
     input: Record<string, unknown>,
-    context?: CartGetExecutionContext
-  ) => Promise<ReturnType<typeof cartGet>>;
+    context?: ToolExecutionContext
+  ) => Promise<CartGetToolResult>;
 };
 
-export function createCartGetTool({ getState, onExecuted }: CreateCartGetToolOptions): CartGetTool {
+export function createCartGetTool({ execute, onExecuted }: CreateCartGetToolOptions): CartGetTool {
   return {
     ...CART_GET_METADATA,
-    execute: async (_input, { signal } = {}) => {
-      if (signal?.aborted) {
-        throw signal.reason ?? new DOMException("Tool execution canceled.", "AbortError");
-      }
-
-      const result = cartGet(getState());
+    execute: async (input, { signal } = {}) => {
+      const result = await execute(input, nativeToolCallContext(signal));
       onExecuted?.(result);
       return result;
     }

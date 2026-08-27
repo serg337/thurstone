@@ -25,7 +25,7 @@ export default function HomePage() {
     <div className="page-shell home-page">
       <section className="hero">
         <div className="hero-copy">
-          <StatusPill state="pending">Gate 0 · native proof in progress</StatusPill>
+          <StatusPill state="pending">Gate 1 · deterministic native sandbox</StatusPill>
           <p className="eyebrow">Semantic regression for agent-callable sites</p>
           <h1>
             Unit tests for <span>meaning.</span>

@@ -10,15 +10,23 @@ ToolProof separates authoring, execution, and results into three top-level docum
 
 ## Shared deterministic domain
 
-The checkout fixture and domain functions are strict TypeScript modules. Normal UI controls and native WebMCP handlers call the same functions. `cart_get` returns only line-item identity and quantity; totals and final-order framing belong to the future non-overlapping `order_review` tool.
+The checkout fixture and domain functions are strict TypeScript modules behind one serialized session store. Normal UI controls and native WebMCP handlers call that same store. `cart_get` returns only line-item identity and quantity; the non-overlapping `order_review` tool owns prices, totals, shipping, and delivery framing.
 
-Every mutation added in Gate 1 will require a stable operation ID and either apply exactly once or return an explicit duplicate receipt. Checkout can only become a simulated pending-human-approval state.
+Every mutation requires a bounded operation ID. The same ID and canonical command replay the original terminal receipt without another effect; conflicting reuse fails. Document-lifetime tombstones survive fixture reset so a late retry cannot mutate a fresh fixture. Checkout can only enter or leave a simulated pending-human-approval state.
 
 ## Native WebMCP
 
-The Lab feature-detects provider registration separately from in-page discovery and execution. A central registry manager owns registration promises and `AbortController` lifecycles. Registration is serialized so React StrictMode cannot leave duplicate tools.
+The Lab feature-detects provider registration separately from in-page discovery and execution. A central per-tool registry manager owns registration promises and `AbortController` lifecycles. It preserves unchanged tool identities, blocks new admission while transitioning, drains in-flight handlers, and verifies the exact discovered catalog. The document-scoped Lab environment preserves handler identities across same-document route remounts.
 
-The official ambient type package currently lacks `executeTool()`, while the draft and Chrome guide differ on object versus JSON-string arguments. ToolProof keeps this difference behind one narrow adapter. It will detect one mode with a harmless read-only compatibility tool, freeze the mode in a readiness receipt, and never try a second representation during a scored or mutating call.
+The official ambient type package currently lacks `executeTool()`, while the draft and Chrome guide differ on object versus JSON-string arguments. ToolProof keeps this difference behind one narrow adapter. It detects one mode with exactly one harmless read-only `cart_get` call, freezes that mode for the document, owns a data-only snapshot of every later input, consumes each execution ID before asynchronous work, and never retries with another representation.
+
+Readiness keeps the active tool-registry hash separate from the fixture state hash. The registry hash covers the state-appropriate metadata, annotations, handler/domain/toolset versions, and application commit; ordinary quantity changes therefore do not masquerade as registry changes. Each direct native adapter receipt binds raw/canonical result, trace ID, before/after state, effect digest, and the registry used at dispatch.
+
+## Reset and trace boundary
+
+Reset temporarily closes session admission, drains prior work through the serialized store, archives the old trajectory, restores exact fixture bytes, reconciles the initial catalog, and verifies both session summaries and full canonical trace-ledger evidence before releasing admission. An invalid or interrupted verification cannot start a trial.
+
+Raw input is captured at public method entry before queueing or validation. Descriptor-safe normalization does not invoke ordinary getters and retains otherwise non-JSON structure as tagged evidence. Canonical arguments remain separate. Cancellation is latched through asynchronous trace finalization; post-result cancellation and post-state-commit cancellation are recorded separately.
 
 ## Probe and evaluator boundary
 

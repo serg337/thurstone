@@ -24,7 +24,14 @@ import {
 } from "../lib/probe/policy";
 import { isProbeGuardStatusConsistent } from "../lib/probe/status";
 
-const VERCEL_PROJECT_ID = "prj_giQhynM5Q7QjJ1ZzjrS3Zv8H3M1r";
+function hasExpectedVercelProjectIdentity(): boolean {
+  const expectedProjectId = process.env.TOOLPROOF_EXPECTED_VERCEL_PROJECT_ID;
+  return (
+    typeof expectedProjectId === "string" &&
+    /^prj_[A-Za-z0-9]{20,}$/u.test(expectedProjectId) &&
+    process.env.VERCEL_PROJECT_ID === expectedProjectId
+  );
+}
 
 function safeReceipt(value: unknown): void {
   process.stdout.write(`${JSON.stringify(value)}\n`);
@@ -66,7 +73,6 @@ async function productionStatus(): Promise<void> {
     ok: true,
     mode: "status",
     status: status.status,
-    guardInstanceId: status.guardInstanceId,
     policyHash: status.policyHash,
     scriptHash: status.scriptHash,
     claimedCalls: status.claimedCalls,
@@ -95,7 +101,7 @@ async function initializeProduction(): Promise<void> {
   if (
     process.env.VERCEL !== "1" ||
     process.env.VERCEL_ENV !== "production" ||
-    process.env.VERCEL_PROJECT_ID !== VERCEL_PROJECT_ID
+    !hasExpectedVercelProjectIdentity()
   ) {
     throw new ProbeLedgerError("PRODUCTION_INIT_CONTEXT_REQUIRED");
   }
@@ -116,7 +122,6 @@ async function initializeProduction(): Promise<void> {
     ok: true,
     mode: "init",
     disposition,
-    guardInstanceId: status.guardInstanceId,
     policyHash: status.policyHash,
     scriptHash: status.scriptHash,
     claimedCalls: status.claimedCalls,
@@ -140,7 +145,7 @@ async function reapProduction(): Promise<void> {
     process.env.TOOLPROOF_PROBE_APPROVED_COMMIT !== sourceCommit ||
     process.env.VERCEL !== "1" ||
     process.env.VERCEL_ENV !== "production" ||
-    process.env.VERCEL_PROJECT_ID !== VERCEL_PROJECT_ID
+    !hasExpectedVercelProjectIdentity()
   ) {
     throw new ProbeLedgerError("PRODUCTION_REAP_CONTEXT_REQUIRED");
   }
@@ -168,8 +173,6 @@ async function reapProduction(): Promise<void> {
     mode: "reap",
     disposition: result.disposition,
     status: status.status,
-    jti,
-    settlementDigest,
     claimedCalls: status.claimedCalls,
     committedNanoUsd: status.committedNanoUsd,
     uncertainCount: status.uncertainCount

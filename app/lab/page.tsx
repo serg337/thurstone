@@ -13,11 +13,11 @@ export default function LabPage() {
           <p className="eyebrow">Lab · execution trust surface</p>
           <h1>One live tool catalog. No expected answers.</h1>
           <p>
-            The initial Gate 0 slice registers one harmless read-only tool. Source, mocks, and
-            ordinary function calls remain explicitly separate from supported-runtime proof.
+            Five deterministic checkout tools share one replay-safe store. Four are exposed at the
+            initial fixture; cancellation appears only while simulated checkout is pending.
           </p>
         </div>
-        <StatusPill state="pending">Native observation pending</StatusPill>
+        <StatusPill state="pending">Gate 1 · native plumbing proof</StatusPill>
       </header>
       <LabClient />
     </div>

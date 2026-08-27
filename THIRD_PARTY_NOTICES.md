@@ -51,4 +51,4 @@ Checked for the initial Gate 0 dependency set on 26 August 2026. The release pro
 
 ## Assets
 
-The initial application uses project-authored CSS, text, and interface shapes with system fonts. It contains no third-party image, icon, music, video, sound, dataset, or adapted runner sou
+The initial application uses project-authored CSS, text, and interface shapes with system fonts. It contains no third-party image, icon, music, video, sound, dataset, or adapted runner source.

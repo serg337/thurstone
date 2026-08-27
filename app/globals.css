@@ -318,6 +318,18 @@ nav a:hover {
   transform: translateY(-1px);
 }
 
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+  transform: none;
+}
+
+.button-compact {
+  min-height: 36px;
+  padding: 0.46rem 0.7rem;
+  font-size: 0.72rem;
+}
+
 .button-primary {
   color: #07110f;
   background: var(--cyan);
@@ -685,6 +697,16 @@ nav a:hover {
   list-style: none;
 }
 
+.pending-notice {
+  margin: 0 0 0.85rem;
+  padding: 0.75rem 0.9rem;
+  color: #ffe3ad;
+  font-size: 0.78rem;
+  background: var(--amber-soft);
+  border: 1px solid rgba(245, 195, 92, 0.28);
+  border-radius: 11px;
+}
+
 .cart-lines li {
   display: flex;
   align-items: center;
@@ -720,6 +742,41 @@ nav a:hover {
   font-size: 0.8rem;
 }
 
+.quantity-editor {
+  display: grid;
+  gap: 0.2rem;
+  text-align: left;
+}
+
+.quantity-editor span,
+.native-fields span {
+  color: var(--ink-faint);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.quantity-editor input,
+.native-fields input {
+  min-height: 36px;
+  color: var(--ink);
+  background: rgba(8, 13, 24, 0.82);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+}
+
+.quantity-editor input {
+  width: 68px;
+  padding: 0.35rem 0.5rem;
+}
+
+.quantity-editor input:disabled,
+.native-fields input:disabled {
+  color: var(--ink-faint);
+  opacity: 0.65;
+}
+
 .cart-summary {
   display: flex;
   align-items: baseline;
@@ -749,6 +806,16 @@ nav a:hover {
   margin: 1rem 0 0;
   color: var(--ink-faint);
   font-size: 0.64rem;
+}
+
+.receipt-line > span,
+.receipt-line > small {
+  display: block;
+  margin-bottom: 0.45rem;
+}
+
+.receipt-line pre {
+  max-height: 220px;
 }
 
 .capability-list dd {
@@ -789,6 +856,34 @@ nav a:hover {
 
 .runtime-receipt .error-text {
   color: var(--coral);
+}
+
+.native-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.native-fields label {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.native-fields input {
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.7rem;
+}
+
+.native-actions {
+  margin: 1rem 0;
+}
+
+pre.error-text {
+  margin-top: 0.65rem;
+  color: #ffc1b2;
+  border-color: rgba(255, 143, 114, 0.3);
 }
 
 .receipt-grid {
@@ -1008,6 +1103,10 @@ pre {
 
   .studio-grid,
   .receipt-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .native-fields {
     grid-template-columns: 1fr;
   }
 

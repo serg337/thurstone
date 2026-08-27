@@ -2,16 +2,19 @@
 
 ## Challenge safety boundary
 
-ToolProof is a deterministic simulated checkout/review sandbox. It has no real purchase, payment, account, inventory, email, messaging, or external mutation path. A checkout request will eventually create only a local simulated pending-human-approval state; no WebMCP approval tool exists.
+ToolProof is a deterministic simulated checkout/review sandbox. It has no real purchase, payment, account, inventory, email, messaging, or external mutation path. A checkout request creates only a local simulated pending-human-approval state; no WebMCP approval tool exists.
 
 ## WebMCP boundary
 
 - Tools are top-level and same-origin only; no `exposedTo` cross-origin grant is used.
 - `Permissions-Policy: tools=(self)` and origin isolation are preserved.
 - Tool metadata is static, reviewed, concise, and treated as untrusted agent context.
-- Inputs are bounded and validated in handlers; schemas are not authorization.
+- Inputs are captured into owned descriptor-safe snapshots before queueing, then bounded and validated in handlers; schemas are not authorization.
 - Read-only annotations must match actual behavior.
-- Cancellation, duplicate operations, partial mutations, and unexpected failures must remain trace-visible.
+- Mutation operation IDs are document-lifetime replay tombstones; reset cannot make an old ID reusable against a new fixture.
+- Cancellation is latched through asynchronous evidence finalization. Duplicate operations, blocked admission, partial mutations, and unexpected failures remain explicitly distinguishable.
+- Registry transitions stop new admission, preserve in-flight calls, verify exact discovery, and fail closed or quarantine on bounded lifecycle failure.
+- Reset holds operation admission until state, registry, session-summary, archive, and full trace evidence agree.
 - Unsupported clients receive an honest explanation and never a polyfilled native result.
 
 ## Model-backed lane

@@ -11,7 +11,7 @@ test("judge shell is honest, navigable, and permanently marks the simulation", a
   await page.getByRole("link", { name: "Open checkout lab" }).click();
   await expect(page).toHaveURL(/\/lab$/);
   await expect(page.getByRole("heading", { name: "Seeded checkout sandbox" })).toBeVisible();
-  await expect(page.getByText("No native invocation yet.")).toBeVisible();
+  await expect(page.getByText(/No operator-triggered executeOnce call yet/iu)).toBeVisible();
 
   await page.getByRole("link", { name: "Results" }).click();
   await expect(page).toHaveURL(/\/results$/);
