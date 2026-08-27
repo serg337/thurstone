@@ -834,7 +834,9 @@ test("one final-calibration button writes only the v2 opaque marker before one r
   await page.getByRole("button", { name: "Run final four-case calibration" }).click();
   await expect
     .poll(() =>
-      page.evaluate(() => sessionStorage.getItem("toolproof:probe-final-calibration-session@2"))
+      page
+        .evaluate(() => sessionStorage.getItem("toolproof:probe-final-calibration-session@2"))
+        .catch(() => null)
     )
     .not.toBeNull();
   const rawMarker = await page.evaluate(() =>

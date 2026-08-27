@@ -28,6 +28,7 @@ import {
   PROBE_PREVIOUS_POLICY_VERSION,
   PROBE_PREVIOUS_PURPOSE_CALL_LIMITS,
   createProbePolicyMigrationManifest,
+  isExactProbePolicyMigrationSourceStatus,
   parseProbePolicyMigrationPriorReceipt,
   probePolicyMigrationDigest,
   type ProbePolicyMigrationPriorReceipt
@@ -87,12 +88,16 @@ async function productionStatus(): Promise<void> {
   }
   const expected = await identity(guardInstanceId, initializedCommit);
   const status = await readProbeGuardStatus(createProbeRedis());
-  if (!isProbeGuardStatusConsistent(status, expected)) {
+  const current = isProbeGuardStatusConsistent(status, expected);
+  const migrationRequired =
+    !process.env.TOOLPROOF_PROBE_ACTIVATION_MODE &&
+    isExactProbePolicyMigrationSourceStatus(status, { guardInstanceId, initializedCommit });
+  if (!current && !migrationRequired) {
     throw new ProbeLedgerError("GUARD_IDENTITY_MISMATCH");
   }
   safeReceipt({
     ok: true,
-    mode: "status",
+    mode: migrationRequired ? "migration-required" : "status",
     status: status.status,
     policyHash: status.policyHash,
     scriptHash: status.scriptHash,

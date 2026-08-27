@@ -152,6 +152,34 @@ export interface ProbePolicyMigrationResult {
   readonly receipt: ProbePolicyMigrationReceipt;
 }
 
+export interface ProbePolicyMigrationSourceStatus {
+  readonly status: string;
+  readonly guardInstanceId: string;
+  readonly initializedCommit: string;
+  readonly policyVersion: string;
+  readonly policyHash: string;
+  readonly scriptHash: string;
+  readonly model: string;
+  readonly globalCallLimit: number;
+  readonly spendCeilingNanoUsd: number;
+  readonly perCallReservationNanoUsd: number;
+  readonly maxConcurrency: number;
+  readonly challengeClosesAtMs: number;
+  readonly claimedCalls: number;
+  readonly committedNanoUsd: number;
+  readonly pendingCount: number;
+  readonly knownCount: number;
+  readonly uncertainCount: number;
+  readonly knownActualNanoUsd: number;
+  readonly uncertainUpperNanoUsd: number;
+  readonly purposeLimits: Readonly<Record<ProbePurpose, number>>;
+  readonly purposeCounts: Readonly<Record<ProbePurpose, number>>;
+  readonly inflightCount: number;
+  readonly sequence: number;
+  readonly haltMarkerPresent: boolean;
+  readonly uncertainMarkerPresent: boolean;
+}
+
 export class ProbePolicyMigrationContractError extends Error {
   constructor(readonly code: string) {
     super(code);
@@ -221,6 +249,47 @@ function deepFreeze<T>(value: T): T {
     for (const nested of Object.values(value as Record<string, unknown>)) deepFreeze(nested);
   }
   return value;
+}
+
+/**
+ * Allows a disabled successor build to report that the one approved migration is still required.
+ * This is deliberately narrower than ordinary status validation and never authorizes a call or a
+ * mutation.
+ */
+export function isExactProbePolicyMigrationSourceStatus(
+  status: ProbePolicyMigrationSourceStatus,
+  expected: { readonly guardInstanceId: string; readonly initializedCommit: string },
+  nowMs: number = Date.now()
+): boolean {
+  const preserved = PROBE_POLICY_MIGRATION_PRESERVED_STATE;
+  return (
+    status.status === "open" &&
+    status.guardInstanceId === expected.guardInstanceId &&
+    status.initializedCommit === expected.initializedCommit &&
+    status.policyVersion === PROBE_PREVIOUS_POLICY_VERSION &&
+    status.policyHash === PROBE_PREVIOUS_POLICY_HASH &&
+    status.scriptHash === PROBE_PREVIOUS_LEDGER_SCRIPT_HASH &&
+    status.model === PROBE_MODEL &&
+    status.globalCallLimit === PROBE_GLOBAL_CALL_LIMIT &&
+    status.spendCeilingNanoUsd === PROBE_LIFETIME_SPEND_CEILING_NANO_USD &&
+    status.perCallReservationNanoUsd === PROBE_PER_CALL_RESERVATION_NANO_USD &&
+    status.maxConcurrency === PROBE_MAX_CONCURRENCY &&
+    status.challengeClosesAtMs === Date.parse(PROBE_CHALLENGE_CLOSES_AT) &&
+    nowMs < status.challengeClosesAtMs &&
+    status.claimedCalls === preserved.claimedCalls &&
+    status.committedNanoUsd === preserved.committedNanoUsd &&
+    status.pendingCount === preserved.pendingCalls &&
+    status.knownCount === preserved.knownCalls &&
+    status.uncertainCount === preserved.uncertainCalls &&
+    status.knownActualNanoUsd === preserved.knownActualNanoUsd &&
+    status.uncertainUpperNanoUsd === preserved.uncertainUpperNanoUsd &&
+    status.inflightCount === preserved.inflightCalls &&
+    status.sequence === preserved.sequence &&
+    canonicalJson(status.purposeLimits) === canonicalJson(PROBE_PREVIOUS_PURPOSE_CALL_LIMITS) &&
+    canonicalJson(status.purposeCounts) === canonicalJson(preserved.purposeCounts) &&
+    !status.haltMarkerPresent &&
+    !status.uncertainMarkerPresent
+  );
 }
 
 function parseKnownCalls(value: unknown): readonly ProbePolicyMigrationKnownCall[] {
