@@ -14,6 +14,7 @@ import {
   type CheckoutToolName,
   type SerializableToolMetadata
 } from "@/lib/webmcp/catalog";
+import { canonicalInputSchema } from "@/lib/webmcp/manifest-normalization";
 import type {
   ExecuteArgumentMode,
   RuntimeCatalogSnapshot,
@@ -184,7 +185,7 @@ function descriptorMismatches(
   if (actual.description !== expected.description) {
     mismatches.push(mismatch("stale_descriptor", expected.name, "description"));
   }
-  if (canonicalJson(actual.inputSchema ?? null) !== canonicalJson(expected.inputSchema)) {
+  if (canonicalInputSchema(actual.inputSchema) !== canonicalInputSchema(expected.inputSchema)) {
     mismatches.push(mismatch("stale_descriptor", expected.name, "inputSchema"));
   }
   if (

@@ -80,7 +80,14 @@ async function installEmulatedConsumer(page: Page, mode: "object" | "json-string
             name: tool.name,
             title: tool.title ?? tool.name,
             description: tool.description,
-            ...(tool.inputSchema ? { inputSchema: structuredClone(tool.inputSchema) } : {}),
+            ...(tool.inputSchema
+              ? {
+                  inputSchema:
+                    mode === "json-string"
+                      ? (JSON.stringify(tool.inputSchema) as unknown as object)
+                      : structuredClone(tool.inputSchema)
+                }
+              : {}),
             window,
             origin: window.location.origin,
             ...(tool.annotations ? { annotations: structuredClone(tool.annotations) } : {})
@@ -234,6 +241,57 @@ test("normal UI shares deterministic state, pending policy, and verified reset",
   await page.reload();
   await expect(page.getByText("checkout-seed-v1 · r0", { exact: true })).toBeVisible();
   await expect(page.getByText("consumer-ready", { exact: true })).toBeVisible();
+});
+
+test("quantity editor resynchronizes from persistent state after a route remount", async ({
+  page
+}) => {
+  const mug = page.getByRole("listitem").filter({ hasText: "Stoneware mug" });
+  const quantityEditor = mug.getByLabel("Stoneware mug quantity");
+
+  await quantityEditor.fill("3");
+  await mug.getByRole("button", { name: "Set" }).click();
+  await expect(page.getByText("checkout-seed-v1 · r1", { exact: true })).toBeVisible();
+  await expect(quantityEditor).toHaveValue("3");
+
+  await page.getByRole("link", { name: "Results" }).click();
+  await expect(page).toHaveURL(/\/results$/u);
+  await expect(quantityEditor).toHaveCount(0);
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const owner = window as typeof window & {
+          __toolProofLabEnvironment?: {
+            readonly store: {
+              getSnapshot(): {
+                readonly state: {
+                  readonly lines: readonly {
+                    readonly itemId: string;
+                    readonly quantity: number;
+                  }[];
+                };
+              };
+            };
+          };
+        };
+        return owner.__toolProofLabEnvironment?.store
+          .getSnapshot()
+          .state.lines.find(({ itemId }) => itemId === "stoneware-mug")?.quantity;
+      })
+    )
+    .toBe(3);
+
+  await page.evaluate(() => {
+    const owner = window as typeof window & {
+      next?: { readonly router?: { push(href: string): void } };
+    };
+    if (!owner.next?.router) throw new Error("Next.js app router is unavailable.");
+    owner.next.router.push("/lab?remount=1");
+  });
+  await expect(page).toHaveURL(/\/lab\?remount=1$/u);
+  await expect(page.getByText("consumer-ready", { exact: true })).toBeVisible();
+  await expect(mug.getByText("Current × 3", { exact: true })).toBeVisible();
+  await expect(quantityEditor).toHaveValue("3");
 });
 
 test("emulated consumer exercises the exact native boundary and observes state before resolution", async ({

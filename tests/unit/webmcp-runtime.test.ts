@@ -208,6 +208,39 @@ describe("WebMcpRuntime compatibility calibration", () => {
     expect(fixture.executeTool).toHaveBeenCalledOnce();
   });
 
+  it("accepts Chrome JSON-string inputSchema discovery for calibration", async () => {
+    const fixture = harness({ mode: "json-string" });
+    fixture.tool.inputSchema = JSON.stringify(fixture.tool.inputSchema) as unknown as object;
+    const runtime = new WebMcpRuntime();
+
+    await expect(runtime.initializeWithCartGet(fixture.request)).resolves.toMatchObject({
+      status: "compatibility-verified",
+      argumentMode: "json-string"
+    });
+    expect(fixture.executeTool).toHaveBeenCalledOnce();
+  });
+
+  it("rejects schema representation mutation after catalog binding", async () => {
+    const fixture = harness({ mode: "json-string" });
+    const objectSchema = fixture.tool.inputSchema;
+    if (!objectSchema) throw new Error("Fixture schema is required.");
+    fixture.tool.inputSchema = JSON.stringify(objectSchema) as unknown as object;
+    const runtime = new WebMcpRuntime();
+    await runtime.initializeWithCartGet(fixture.request);
+
+    fixture.tool.inputSchema = objectSchema;
+    await expect(
+      runtime.executeOnce({
+        executionId: "representation-drift",
+        manifestHash: "manifest-hash",
+        tool: fixture.tool,
+        input: {},
+        observe: fixture.executionObserve("manifest-hash")
+      })
+    ).rejects.toSatisfy((error: unknown) => expectRuntimeCode(error, "stale_manifest"));
+    expect(fixture.executeTool).toHaveBeenCalledOnce();
+  });
+
   it("coalesces concurrent initialization into one native call", async () => {
     let release: (result: string) => void = () => undefined;
     let handlerCount = 0;

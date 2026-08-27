@@ -1,4 +1,5 @@
 import { canonicalJson } from "@/lib/evidence/digest";
+import { canonicalInputSchema, normalizeInputSchema } from "@/lib/webmcp/manifest-normalization";
 
 export type RegistryPhase = "idle" | "registering" | "ready" | "error";
 
@@ -96,14 +97,15 @@ function manifestProjection(tool: {
   readonly name: string;
   readonly title?: string;
   readonly description: string;
-  readonly inputSchema?: object;
+  readonly inputSchema?: unknown;
   readonly annotations?: WebMCP.ToolAnnotations;
 }): object {
+  const inputSchema = normalizeInputSchema(tool.inputSchema);
   return {
     name: tool.name,
     ...(tool.title === undefined ? {} : { title: tool.title }),
     description: tool.description,
-    ...(tool.inputSchema === undefined ? {} : { inputSchema: tool.inputSchema }),
+    ...(inputSchema === null ? {} : { inputSchema }),
     annotations: {
       readOnlyHint: tool.annotations?.readOnlyHint ?? false,
       untrustedContentHint: tool.annotations?.untrustedContentHint ?? false
@@ -111,20 +113,41 @@ function manifestProjection(tool: {
   };
 }
 
-function manifestDigest(
-  tools: readonly {
-    readonly name: string;
-    readonly title?: string;
-    readonly description: string;
-    readonly inputSchema?: object;
-    readonly annotations?: WebMCP.ToolAnnotations;
-  }[]
-): string {
-  return canonicalJson(
-    [...tools]
-      .sort((left, right) => left.name.localeCompare(right.name))
-      .map((entry) => manifestProjection(entry))
-  );
+function descriptorMismatchDetails(
+  expected: readonly WebMCP.ModelContextTool[],
+  actual: readonly WebMCP.RegisteredTool[]
+): readonly string[] {
+  const actualByName = new Map(actual.map((tool) => [tool.name, tool]));
+  const fields: string[] = [];
+  for (const expectedTool of expected) {
+    const actualTool = actualByName.get(expectedTool.name);
+    if (!actualTool) continue;
+    if (actualTool.title !== expectedTool.title) {
+      fields.push(`${expectedTool.name}.title`);
+    }
+    if (actualTool.description !== expectedTool.description) {
+      fields.push(`${expectedTool.name}.description`);
+    }
+    if (
+      canonicalInputSchema(actualTool.inputSchema) !==
+      canonicalInputSchema(expectedTool.inputSchema)
+    ) {
+      fields.push(`${expectedTool.name}.inputSchema`);
+    }
+    const expectedAnnotations = manifestProjection(expectedTool) as {
+      readonly annotations: object;
+    };
+    const actualAnnotations = manifestProjection(actualTool) as {
+      readonly annotations: object;
+    };
+    if (
+      canonicalJson(actualAnnotations.annotations) !==
+      canonicalJson(expectedAnnotations.annotations)
+    ) {
+      fields.push(`${expectedTool.name}.annotations`);
+    }
+  }
+  return Object.freeze(fields);
 }
 
 function errorMessage(error: unknown): string {
@@ -724,9 +747,10 @@ export class WebMcpRegistryManager {
     };
     if (typeof compatibility.getTools !== "function") return;
 
-    const expectedDigest = manifestDigest(expected);
+    const expectedNames = new Set(expected.map(({ name }) => name));
     const deadline = Date.now() + DISCOVERY_TIMEOUT_MS;
     let lastNames: readonly string[] = Object.freeze([]);
+    let lastDescriptorMismatches: readonly string[] = Object.freeze([]);
     let lastError: unknown;
 
     while (Date.now() < deadline) {
@@ -738,10 +762,14 @@ export class WebMcpRegistryManager {
           remaining,
           "WebMCP getTools() timed out."
         );
+        lastError = undefined;
         lastNames = frozenNames(discovered.map(({ name }) => name));
+        lastDescriptorMismatches = descriptorMismatchDetails(expected, discovered);
         if (
           new Set(lastNames).size === lastNames.length &&
-          manifestDigest(discovered) === expectedDigest
+          lastNames.length === expectedNames.size &&
+          lastNames.every((name) => expectedNames.has(name)) &&
+          lastDescriptorMismatches.length === 0
         ) {
           return;
         }
@@ -758,7 +786,11 @@ export class WebMcpRegistryManager {
 
     const detail = lastError
       ? ` Last discovery error: ${errorMessage(lastError)}`
-      : ` Last discovered names: ${lastNames.join(", ") || "<none>"}.`;
+      : ` Last discovered names: ${lastNames.join(", ") || "<none>"}.${
+          lastDescriptorMismatches.length > 0
+            ? ` Descriptor mismatches: ${lastDescriptorMismatches.join(", ")}.`
+            : ""
+        }`;
     throw new Error(
       `WebMCP discovery did not converge to the exact desired catalog within ${DISCOVERY_TIMEOUT_MS}ms.${detail}`
     );

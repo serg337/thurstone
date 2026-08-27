@@ -20,6 +20,8 @@ The Lab feature-detects provider registration separately from in-page discovery 
 
 The official ambient type package currently lacks `executeTool()`, while the draft and Chrome guide differ on object versus JSON-string arguments. ToolProof keeps this difference behind one narrow adapter. It detects one mode with exactly one harmless read-only `cart_get` call, freezes that mode for the document, owns a data-only snapshot of every later input, consumes each execution ID before asynchronous work, and never retries with another representation.
 
+Chrome 151's `getTools()` descriptor serializes `inputSchema`. Discovery parses that representation once and then requires the schema content, title, description, and annotations to match the provider declaration exactly.
+
 Readiness keeps the active tool-registry hash separate from the fixture state hash. The registry hash covers the state-appropriate metadata, annotations, handler/domain/toolset versions, and application commit; ordinary quantity changes therefore do not masquerade as registry changes. Each direct native adapter receipt binds raw/canonical result, trace ID, before/after state, effect digest, and the registry used at dispatch.
 
 ## Reset and trace boundary

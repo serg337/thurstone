@@ -1,5 +1,6 @@
 import { canonicalJson, canonicalSha256 } from "@/lib/evidence/digest";
 import type { ModelContextConsumerCompatibility } from "@/lib/webmcp/capabilities";
+import { canonicalInputSchema, normalizeInputSchema } from "@/lib/webmcp/manifest-normalization";
 
 export type ExecuteArgumentMode = "object" | "json-string";
 
@@ -158,7 +159,13 @@ function toolFingerprint(tool: WebMCP.RegisteredTool): string {
     name: tool.name,
     title: tool.title,
     description: tool.description,
-    inputSchema: tool.inputSchema ?? null,
+    inputSchemaRepresentation:
+      tool.inputSchema === undefined || tool.inputSchema === null
+        ? "absent"
+        : typeof tool.inputSchema === "string"
+          ? "json-string"
+          : "object",
+    inputSchema: normalizeInputSchema(tool.inputSchema),
     annotations: {
       readOnlyHint: tool.annotations?.readOnlyHint ?? false,
       untrustedContentHint: tool.annotations?.untrustedContentHint ?? false
@@ -270,7 +277,7 @@ function assertCompatibilityTool(
   if (
     tool.name !== "cart_get" ||
     tool.annotations?.readOnlyHint !== true ||
-    canonicalJson(tool.inputSchema ?? null) !== EMPTY_INPUT_SCHEMA
+    canonicalInputSchema(tool.inputSchema) !== EMPTY_INPUT_SCHEMA
   ) {
     throw new WebMcpRuntimeError(
       "invalid_compatibility_tool",

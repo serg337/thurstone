@@ -75,6 +75,19 @@ interface LastNativeMutation {
   readonly input: Readonly<Record<string, unknown>>;
 }
 
+type CheckoutSessionSnapshot = ReturnType<CheckoutSessionStore["getSnapshot"]>;
+
+export function subscribeToCurrentCheckoutSnapshot(
+  store: CheckoutSessionStore,
+  onSnapshot: (snapshot: CheckoutSessionSnapshot) => void
+): () => void {
+  const unsubscribe = store.subscribe((_commit, snapshot) => {
+    onSnapshot(snapshot);
+  });
+  onSnapshot(store.getSnapshot());
+  return unsubscribe;
+}
+
 function createEnvironment(): LabEnvironment {
   let registryHash = "registry-unverified";
   const binding: EvidenceBinding = Object.freeze({
@@ -229,17 +242,18 @@ export function LabClient() {
     [environment]
   );
 
-  useEffect(
-    () =>
-      environment.store.subscribe((_commit, snapshot) => {
-        setQuantities(
-          Object.fromEntries(
-            snapshot.state.lines.map(({ itemId, quantity }) => [itemId, String(quantity)])
-          )
-        );
-      }),
-    [environment]
-  );
+  useEffect(() => {
+    // A same-document route remount can restore the server-rendered seed draft after the
+    // document-owned store has already advanced. Subscriptions only observe future commits, so
+    // synchronize the current snapshot after subscribing as part of mount admission.
+    return subscribeToCurrentCheckoutSnapshot(environment.store, (snapshot) => {
+      setQuantities(
+        Object.fromEntries(
+          snapshot.state.lines.map(({ itemId, quantity }) => [itemId, String(quantity)])
+        )
+      );
+    });
+  }, [environment]);
 
   useEffect(() => {
     const context = document.modelContext;

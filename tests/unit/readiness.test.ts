@@ -154,6 +154,60 @@ describe("registry readiness receipt", () => {
     }
   });
 
+  it("normalizes Chrome JSON-string schemas before exact descriptor comparison", async () => {
+    const tools = discoveredTools().map((tool) => ({
+      ...tool,
+      inputSchema: JSON.stringify(tool.inputSchema) as unknown as object
+    }));
+
+    const receipt = await readiness(tools);
+
+    expect(receipt).toMatchObject({
+      status: "consumer-discovered",
+      consumerDiscovery: "verified",
+      mismatches: []
+    });
+    expect(receipt.runtimeCatalog?.tools).toEqual(tools);
+    expect(receipt.manifest.tools.every(({ title }) => title.length > 0)).toBe(true);
+  });
+
+  it("rejects empty discovered titles and semantically drifted serialized schemas", async () => {
+    const emptyTitle = await readiness(
+      discoveredTools(createCheckoutFixture(), { cart_get: { title: "" } })
+    );
+    const driftedSchema = await readiness(
+      discoveredTools(createCheckoutFixture(), {
+        cart_get: { inputSchema: JSON.stringify({ type: "object" }) as unknown as object }
+      })
+    );
+
+    expect(emptyTitle.mismatches).toContainEqual({
+      code: "stale_descriptor",
+      toolName: "cart_get",
+      field: "title"
+    });
+    expect(driftedSchema.mismatches).toContainEqual({
+      code: "stale_descriptor",
+      toolName: "cart_get",
+      field: "inputSchema"
+    });
+  });
+
+  it("rejects malformed serialized discovered schemas", async () => {
+    const tools = discoveredTools(createCheckoutFixture(), {
+      cart_get: { inputSchema: "{" as unknown as object }
+    });
+
+    const receipt = await readiness(tools);
+
+    expect(receipt).toMatchObject({
+      status: "consumer-mismatch",
+      consumerDiscovery: "mismatch",
+      runtimeCatalog: null,
+      mismatches: [{ code: "discovery_failed" }]
+    });
+  });
+
   it("switches to the exact pending five-tool catalog", async () => {
     const initial = createCheckoutFixture();
     const state = checkoutRequest(

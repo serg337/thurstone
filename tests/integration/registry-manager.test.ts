@@ -464,10 +464,120 @@ describe("WebMcpRegistryManager", () => {
       generation: 0
     });
     expect(mismatchStatuses.at(-1)?.error).toContain("exact desired catalog");
+    expect(mismatchStatuses.at(-1)?.error).toContain("cart_get.description");
     expect(mismatchHarness.active.size).toBe(0);
 
     releaseMismatch();
     await mismatchManager.settled();
+  });
+
+  it("accepts Chrome JSON-string discovered schemas without weakening their content", async () => {
+    const harness = createContext({
+      discover: (active) =>
+        [...active.values()].map(({ tool }) => ({
+          ...registeredTool(tool),
+          inputSchema: JSON.stringify(tool.inputSchema) as unknown as object
+        }))
+    });
+    const manager = new WebMcpRegistryManager();
+    const statuses: RegistryStatus[] = [];
+    const release = manager.acquire(harness.context, [createTool(CART_GET)], (status) =>
+      statuses.push(status)
+    );
+
+    await manager.settled();
+    expect(statuses.at(-1)).toMatchObject({ phase: "ready", toolNames: [CART_GET] });
+
+    release();
+    await manager.settled();
+  });
+
+  it("rejects a wrong non-empty discovered title", async () => {
+    const harness = createContext({
+      discover: (active) =>
+        [...active.values()].map(({ tool }) => ({
+          ...registeredTool(tool),
+          title: "Wrong native title"
+        }))
+    });
+    const manager = new WebMcpRegistryManager();
+    const statuses: RegistryStatus[] = [];
+    const release = manager.acquire(harness.context, [createTool(CART_GET)], (status) =>
+      statuses.push(status)
+    );
+
+    await manager.settled();
+    expect(statuses.at(-1)?.phase).toBe("error");
+    expect(statuses.at(-1)?.error).toContain("cart_get.title");
+
+    release();
+    await manager.settled();
+  });
+
+  it("rejects an empty discovered title when registration supplied one", async () => {
+    const harness = createContext({
+      discover: (active) =>
+        [...active.values()].map(({ tool }) => ({
+          ...registeredTool(tool),
+          title: ""
+        }))
+    });
+    const manager = new WebMcpRegistryManager();
+    const statuses: RegistryStatus[] = [];
+    const release = manager.acquire(harness.context, [createTool(CART_GET)], (status) =>
+      statuses.push(status)
+    );
+
+    await manager.settled();
+    expect(statuses.at(-1)?.phase).toBe("error");
+    expect(statuses.at(-1)?.error).toContain("cart_get.title");
+
+    release();
+    await manager.settled();
+  });
+
+  it("rejects semantically drifted serialized discovered schemas", async () => {
+    const harness = createContext({
+      discover: (active) =>
+        [...active.values()].map(({ tool }) => ({
+          ...registeredTool(tool),
+          inputSchema: JSON.stringify({ type: "object" }) as unknown as object
+        }))
+    });
+    const manager = new WebMcpRegistryManager();
+    const statuses: RegistryStatus[] = [];
+    const release = manager.acquire(harness.context, [createTool(CART_GET)], (status) =>
+      statuses.push(status)
+    );
+
+    await manager.settled();
+    expect(statuses.at(-1)?.phase).toBe("error");
+    expect(statuses.at(-1)?.error).toContain("cart_get.inputSchema");
+
+    release();
+    await manager.settled();
+  });
+
+  it("rejects malformed serialized discovered schemas", async () => {
+    const harness = createContext({
+      discover: (active) =>
+        [...active.values()].map(({ tool }) => ({
+          ...registeredTool(tool),
+          inputSchema: "{" as unknown as object
+        }))
+    });
+    const manager = new WebMcpRegistryManager();
+    const statuses: RegistryStatus[] = [];
+    const release = manager.acquire(harness.context, [createTool(CART_GET)], (status) =>
+      statuses.push(status)
+    );
+
+    await manager.settled();
+    expect(statuses.at(-1)?.phase).toBe("error");
+    expect(statuses.at(-1)?.error).toContain("not valid JSON");
+
+    release();
+    await manager.settled();
   });
 
   it("rejects same-document schema or handler replacement without disturbing the verified tool", async () => {

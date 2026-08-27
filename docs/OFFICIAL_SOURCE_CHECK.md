@@ -1,6 +1,6 @@
 # Official source check
 
-Checked: **2026-08-26**
+Checked: **2026-08-26**; Chrome 151 runtime clarification: **2026-08-27**
 Scope: current primary official WebMCP Challenge, OpenAI Site Tools, WebMCP draft, and Chrome implementation guidance only.
 
 The authenticated Devpost draft form was also inventoried read-only on 2026-08-26. Required fields cover project name/elevator pitch, public project story and technology tags, try-it links/media/video, entrant/status/country, live URL and optional private testing instructions, public licensed repository, tested WebMCP clients, AI development tools, and learning/career-value questions. No final submission or certification was performed; dynamic choices and final acknowledgments require release-time recheck.
@@ -29,6 +29,17 @@ Every URL below returned HTTP 200 at retrieval. Material requirements are mapped
 | Chrome tool security   | https://developer.chrome.com/docs/ai/webmcp/secure-tools      | Prompt injection warning; annotation hints; least origin exposure; character budgets                                                                                                                          | T-013, T-026, T-029–T-030              |
 | Chrome evals           | https://developer.chrome.com/docs/ai/webmcp/evals             | Model touchpoints; failure modes; isolated/state-complete tool tests; deterministic and probabilistic tests; end-to-end order; mid-chain failure                                                              | T-031–T-038                            |
 | Chrome DevTools WebMCP | https://developer.chrome.com/docs/devtools/application/webmcp | Available/Invoked tools; status/input/output; manual execution; schema/rejection troubleshooting; automation flag                                                                                             | T-039–T-042                            |
+
+### Chrome 151 consumer descriptor clarification
+
+The exact Chrome 151 source family used for ToolProof's supported path stores a registered `inputSchema` as serialized JSON and returns that string from `getTools()`, while preserving any supplied title. The matching official browser tests require both behaviors:
+
+- [Chrome 151 registration and discovery implementation](https://chromium.googlesource.com/chromium/src/+/refs/tags/151.0.7922.82/third_party/blink/renderer/core/script_tools/model_context.cc#333)
+- [Chrome 151 discovered-tool string schema IDL](https://chromium.googlesource.com/chromium/src/+/refs/tags/151.0.7922.82/third_party/blink/renderer/core/script_tools/model_context_testing.idl#5)
+- [Chrome 151 serialized-schema browser test](https://chromium.googlesource.com/chromium/src/+/refs/tags/151.0.7922.82/third_party/blink/web_tests/external/wpt/webmcp/imperative/exposedTo-defaults-same-origin.https.html#23)
+- [Chrome 151 title-preservation browser test](https://chromium.googlesource.com/chromium/src/+/refs/tags/151.0.7922.82/third_party/blink/web_tests/external/wpt/webmcp/imperative/register-tool-title.https.html#14)
+
+ToolProof therefore normalizes only object-versus-serialized-JSON schema representation at discovery. Parsed schema content, supplied title, description, annotations, owner, origin, and exact catalog names remain fail-closed comparisons.
 
 ## FAQ completeness check
 
@@ -82,3 +93,4 @@ Do not remove an older check. Append a dated change record so the public audit t
 | Date       | Result                                       | Material change                                                                                                                                                                                       |
 | ---------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 2026-08-26 | Initial primary-source verification complete | Established the full challenge matrix, all 15 FAQ rows, the controlling 11:00 a.m. start, mandatory-video decision, current no-update state, and technical implementation/security/eval requirements. |
+| 2026-08-27 | Chrome 151 runtime clarification recorded    | Verified serialized discovered schemas and supplied-title preservation in the M151 implementation and official browser tests; narrowed ToolProof normalization to schema transport only.              |
