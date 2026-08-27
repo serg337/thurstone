@@ -4,19 +4,20 @@ import { resolve } from "node:path";
 const root = process.cwd();
 const manifestPath = resolve(root, ".next/server/app/lab/page_client-reference-manifest.js");
 const manifest = await readFile(manifestPath, "utf8");
-const chunks = [
-  ...new Set(
-    [...manifest.matchAll(/\/_next\/(static\/chunks\/[A-Za-z0-9._-]+\.js)/gu)].map(
-      (match) => match[1]
-    )
-  )
-];
+const chunkRoot = resolve(root, ".next/static/chunks");
+const staticFiles = await readdir(chunkRoot, { recursive: true });
+const everyClientChunk = staticFiles
+  .map((file) => String(file))
+  .filter((file) => file.endsWith(".js"));
+const chunks = everyClientChunk.filter((file) =>
+  manifest.includes(`static/chunks/${file.replaceAll("\\", "/")}`)
+);
 
 if (chunks.length === 0)
   throw new Error("No Lab client chunks were found in the production build.");
 
 const labSource = (
-  await Promise.all(chunks.map((chunk) => readFile(resolve(root, ".next", chunk), "utf8")))
+  await Promise.all(chunks.map((chunk) => readFile(resolve(chunkRoot, chunk), "utf8")))
 ).join("\n");
 
 const forbidden = [
@@ -29,14 +30,8 @@ const forbidden = [
   "Open the simulated checkout for this cart so it can remain pending"
 ];
 
-const staticFiles = await readdir(resolve(root, ".next/static/chunks"), { recursive: true });
-const everyClientChunk = staticFiles.filter((file) => String(file).endsWith(".js"));
 const allClientSource = (
-  await Promise.all(
-    everyClientChunk.map((file) =>
-      readFile(resolve(root, ".next/static/chunks", String(file)), "utf8")
-    )
-  )
+  await Promise.all(everyClientChunk.map((file) => readFile(resolve(chunkRoot, file), "utf8")))
 ).join("\n");
 for (const value of forbidden) {
   if (labSource.includes(value) || allClientSource.includes(value)) {
