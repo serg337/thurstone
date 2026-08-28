@@ -4,7 +4,7 @@
 
 **ToolProof by Invarra — created by Sergio Valencia.**
 
-Status: Gates 0 and 1 are complete with an authentic Chrome native-proof bundle. Gate 2 attempt 1 is retained as an authentic 0/4 semantic failure; attempt 2 is retained separately as a terminal-invalid one-call recovery-infrastructure failure with no reconstructed semantic row. Sergio approved one same-cap v0.3 migration, bounded durable session recovery, and exactly one third/final preferred four-case attempt. That disabled successor is locally verified; deployment, migration, activation, and the authentic run remain pending. No scored request, public repository release, or video exists yet.
+Status: Gates 0 and 1 are complete with an authentic Chrome native-proof bundle. Gate 2 is not complete. Preferred attempt 1 is retained as an authentic 0/4 semantic failure; attempt 2 is retained separately as a terminal-invalid one-call recovery-infrastructure failure with no reconstructed semantic row; and the third/final preferred attempt is sealed as authentic 0/4 evidence. Sealing preserved the result—it did not make Gate 2 pass. The preferred path is exhausted. A private exact-pinned GoogleChromeLabs fallback and unexecuted `13/72/2/72/1` same-cap migration candidate are implemented for review. Its non-provider Chrome 151 native smoke is authentic, but no fallback calibration, live migration, activation, deployment, or Gate 2 pass is claimed. No scored request, public repository release, or video exists yet.
 
 **Simulated checkout — no purchase occurs.** ToolProof contains no payment, account, inventory, messaging, or external transaction path. When enabled later, model-backed evaluation may send synthetic prompts to the disclosed provider.
 
@@ -22,14 +22,14 @@ Direct native-plumbing controls are deterministic Gate 1 diagnostics, not model-
 
 ## Supported-path status
 
-| Capability                                                     | Current status                                                                                     |
-| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Site Tools provider via `document.modelContext.registerTool()` | Implemented and authentically observed on the deployed Chrome 151 path                             |
-| In-page discovery via `getTools()`                             | Authentically verified across exact initial/pending/reset catalogs in Chrome 152                   |
-| In-page execution via `executeTool()`                          | Authentically verified for every active tool, replay/error/reset/cancellation boundaries           |
-| Direct ChatGPT observations                                    | Not collected                                                                                      |
-| Judge-accessible model-backed lane                             | v0.3 third/final custom-Probe successor locally green; exact disabled deployment/migration pending |
-| Authentic baseline/revised results                             | No run yet                                                                                         |
+| Capability                                                     | Current status                                                                           |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Site Tools provider via `document.modelContext.registerTool()` | Implemented and authentically observed on the deployed Chrome 151 path                   |
+| In-page discovery via `getTools()`                             | Authentically verified across exact initial/pending/reset catalogs in Chrome 152         |
+| In-page execution via `executeTool()`                          | Authentically verified for every active tool, replay/error/reset/cancellation boundaries |
+| Direct ChatGPT observations                                    | Not collected                                                                            |
+| Judge-accessible model-backed lane                             | Preferred path terminal at sealed 0/4; reviewed fallback candidate remains inactive      |
+| Authentic baseline/revised results                             | No run yet                                                                               |
 
 Mocks, direct domain calls, unit tests, and Playwright's ordinary browser build are never counted as native WebMCP or model-selection evidence.
 
@@ -58,11 +58,13 @@ npm run verify:publication
 
 `npm run durable-store:check`, `npm run probe-controls:integration`, and the operator-only Probe guard commands require a dedicated Redis environment. They perform no provider inference. Missing durable configuration fails closed.
 
+`npm run fallback:smoke:native` uses the exact local Chrome-for-Testing pin for native plumbing only and makes zero provider calls. `npm run fallback:calibrate` is a human-gated paid operator command: it refuses to start without the exact frozen runner-hash confirmation and then reads the one-time capability through a hidden TTY prompt. Do not run it unless the v0.4 migration, activation/deployment, and four provider calls have been separately approved.
+
 `npm run verify:evidence` deliberately fails closed until an authentic frozen-run manifest exists.
 
 ## Architecture
 
-ToolProof uses separate `/studio`, `/lab`, and `/results` documents as distinct trust surfaces. A strict TypeScript domain/session layer owns deterministic state, schema validation, replay-safe operation IDs, reset admission, and document-lifetime tombstones. Normal UI controls and native WebMCP handlers share that store. A per-tool registry manager preserves unchanged registrations, drains in-flight handlers before catalog changes, verifies discovery, and fails closed under lifecycle faults. The native adapter freezes one argument mode with a harmless `cart_get` call and binds each later direct call to exactly one canonical handler trace. Server-only Probe controls reserve one versioned challenge-lifetime call/spend slot before provider dispatch. The third/final calibration can start only from the chained v0.3 receipt and exact five-known-call base, uses runner-owned trial-bound operation IDs, and reveals its four rows separately from both retained prior attempts.
+ToolProof uses separate `/studio`, `/lab`, and `/results` documents as distinct trust surfaces. A strict TypeScript domain/session layer owns deterministic state, schema validation, replay-safe operation IDs, reset admission, and document-lifetime tombstones. Normal UI controls and native WebMCP handlers share that store. A per-tool registry manager preserves unchanged registrations, drains in-flight handlers before catalog changes, verifies discovery, and fails closed under lifecycle faults. The native adapter freezes one argument mode with a harmless `cart_get` call and binds each later direct call to exactly one canonical handler trace. Server-only Probe controls reserve one versioned challenge-lifetime call/spend slot before provider dispatch. The now-terminal third/final preferred calibration started from the chained v0.3 receipt and exact five-known-call base, used runner-owned trial-bound operation IDs, and sealed four authentic rows separately from both retained prior attempts. Its score is 0/4, so Gate 2 remains incomplete.
 
 The calibration browser carries only opaque ciphertext. A one-time server-verified operator capability prevents the public Internet from claiming the sole calibration run; the raw capability is never stored server-side or shipped in public JavaScript. A short-lived signed session is recoverable through a separate fixed-expiry HttpOnly credential and a monotonic encrypted server-side run index. Losing browser storage, crossing the ordinary session TTL, receiving a duplicated tab, or losing an HTTP response cannot create another provider decision or native allowance. Per-document ownership is enforced in the same Redis transitions that issue authorization, begin provider dispatch, admit native execution, seal completion, and advance the index. Recovery never exposes prior requests, decisions, scores, or evidence to the active Lab.
 

@@ -139,9 +139,13 @@ async function seedEvaluationSession(
   page: Page,
   context: BrowserContext,
   firstContinuation: string
-): Promise<{ setContinuation(value: string, terminal: boolean): void }> {
+): Promise<{
+  readonly events: string[];
+  setContinuation(value: string, terminal: boolean): void;
+}> {
   let currentContinuation = firstContinuation;
   let terminal = false;
+  const events: string[] = [];
   await context.addCookies([
     {
       name: "toolproof_probe_session",
@@ -175,6 +179,7 @@ async function seedEvaluationSession(
       await route.fallback();
       return;
     }
+    events.push("recover");
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -194,6 +199,7 @@ async function seedEvaluationSession(
     });
   });
   return {
+    events,
     setContinuation(value, isTerminal) {
       currentContinuation = value;
       terminal = isTerminal;
@@ -398,6 +404,19 @@ test("four-case fake-provider harness reloads fresh documents and reveals only t
   });
 
   await page.route("**/api/probe/reveal", async (route) => {
+    if (route.request().method() === "DELETE") {
+      recovery.events.push("acknowledge");
+      expect((route.request().postDataJSON() as { continuation: string }).continuation).toBe(
+        continuation(4)
+      );
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true, inferencePerformed: false })
+      });
+      return;
+    }
+    expect(route.request().method()).toBe("POST");
     expect((route.request().postDataJSON() as { continuation: string }).continuation).toBe(
       continuation(4)
     );
@@ -460,9 +479,20 @@ test("four-case fake-provider harness reloads fresh documents and reveals only t
   await expect(
     page.getByRole("heading", { name: "Four fresh-context trials sealed" })
   ).toBeVisible();
-  await expect(page.getByText("4/4 verified", { exact: true })).toBeVisible();
+  await expect(page.getByText("4/4 passed · evidence sealed", { exact: true })).toBeVisible();
   expect(completedBodies).toHaveLength(4);
   expect(ordinal).toBe(4);
+  const recoveryCountBeforeAcknowledgement = recovery.events.filter(
+    (event) => event === "recover"
+  ).length;
+  await page.getByRole("button", { name: "Evidence saved — finish secure run" }).click();
+  await expect(
+    page.getByRole("button", { name: "Evidence saved — finish secure run" })
+  ).toBeDisabled();
+  expect(recovery.events.filter((event) => event === "recover")).toHaveLength(
+    recoveryCountBeforeAcknowledgement + 1
+  );
+  expect(recovery.events.slice(-2)).toEqual(["recover", "acknowledge"]);
 });
 
 test("an already-admitted recovered trial never dispatches the target again", async ({
@@ -647,6 +677,13 @@ test("an already-admitted recovered trial never dispatches the target again", as
   await page.goto("/lab");
   await downloadPromise;
   await expect(page).toHaveURL(/\/results$/u);
+  await expect(page.getByText("0/4 passed · evidence sealed", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText(/Incomplete · 0\/4 preferred calibration cases passed/u)
+  ).toBeVisible();
+  await expect(
+    page.getByText(/authorized local preparation of the pinned fallback only/u)
+  ).toBeVisible();
   expect(decisionRequests).toBe(1);
   expect(nativeAdmissions).toBe(1);
   expect(completions).toBe(1);

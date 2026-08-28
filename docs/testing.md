@@ -14,8 +14,10 @@ npm run test:browser:safe
 npm run build
 npm run durable-store:check
 npm run probe-controls:integration
-npm run probe-controls:migrate
+npm run probe-controls:preflight-v04
+npm run probe-controls:migrate-v04
 npm run probe-continuation:integration
+npm run fallback:smoke:native
 npm run verify:probe-no-leakage
 npm run verify:publication
 npm run verify:evidence
@@ -27,7 +29,9 @@ npm run verify:evidence
 
 `npm run provider:check` performs only the official read-only model-metadata retrieval for the pinned Probe model. Vercel runs it before production builds with the Sensitive provider key; it never prints or stores that key and performs no inference.
 
-`durable-store:check` verifies a configured Redis `PING` and non-mutating Lua execution without printing credentials. `probe-controls:integration` creates random isolated namespaces, executes the real atomic scripts through all 160 slots, proves concurrent replay and the 161st-call boundary, exercises new/replayed/conflicting/tampered policy migrations, then removes only those isolated test namespaces. It never calls the model provider. The Production v0.3 migration uses two separate builds: an explicit read-only preflight emits only source/migration/policy/script digests plus a 64-hex confirmation; a later Sensitive confirmation authorizes the one atomic transition. Neither path prints the private source receipt, JTI, guard identity, or call record. The production guard is never reinitialized or reset.
+`durable-store:check` verifies a configured Redis `PING` and non-mutating Lua execution without printing credentials. `probe-controls:integration` creates random isolated namespaces, executes the real atomic scripts through all 160 slots, proves concurrent replay and the 161st-call boundary, exercises new/replayed/conflicting/tampered policy migrations through v0.4, then removes only those isolated test namespaces. It never calls the model provider. The Production v0.4 candidate has separate commands: an explicit read-only preflight emits only source/migration/policy/script/runner/program digests plus a 64-hex confirmation; a later Sensitive confirmation authorizes the one atomic transition. Neither path prints the private source receipt, JTI, guard identity, call record, or prior evidence. Generic and v0.3 migration commands are retired. The production guard is never reinitialized or reset.
+
+`fallback:smoke:native` verifies the exact Chrome for Testing archive/executable pin, isolated CDP process/profile, native four-tool catalog, one harmless `cart_get`, raw result, and reset-before/reset-after with `providerCallCount: 0`. The separately gated `fallback:calibrate` command is never part of CI or deployment: it requires the exact runner hash, a hidden interactive operator capability, the activated v0.4 service, and explicit post-save acknowledgement before encrypted recovery deletion.
 
 `probe-continuation:integration` creates random isolated Redis namespaces, exercises encrypted idempotent issue/decision/native/completion recovery plus fixed-expiry monotonic run-index create/advance/recovery through the real Lua scripts, and deletes and verifies deletion of only those temporary keys. It never touches the immutable production guard namespace and never calls the model provider.
 

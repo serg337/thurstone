@@ -26,6 +26,9 @@ import {
   PROBE_V03_POLICY_MIGRATION_SOURCE_VERSION,
   PROBE_V03_POLICY_MIGRATION_VERSION,
   PROBE_V03_PREDECESSOR_MIGRATION_ID,
+  PROBE_V03_MIGRATED_LEDGER_SCRIPT_HASH,
+  PROBE_V03_MIGRATED_POLICY_HASH,
+  PROBE_V03_MIGRATED_POLICY_VERSION,
   PROBE_V03_PREVIOUS_LEDGER_SCRIPT_HASH,
   PROBE_V03_PREVIOUS_POLICY_HASH,
   PROBE_V03_PREVIOUS_POLICY_VERSION,
@@ -43,15 +46,12 @@ import {
   PROBE_LIFETIME_SPEND_CEILING_NANO_USD,
   PROBE_MAX_CONCURRENCY,
   PROBE_MODEL,
-  PROBE_PER_CALL_RESERVATION_NANO_USD,
-  PROBE_POLICY_VERSION,
-  probePolicyHash
+  PROBE_PER_CALL_RESERVATION_NANO_USD
 } from "@/lib/probe/policy";
 import {
   PROBE_LEDGER_SCRIPTS,
   discoverProbeV03PolicyMigrationSource,
   migrateProbeGuardPolicyV03,
-  probeLedgerScriptHash,
   type ProbeRedisDiscoveryClient,
   type ProbeRedisClient
 } from "@/lib/probe/ledger";
@@ -144,12 +144,12 @@ describe("Probe v0.2 -> v0.3 policy migration contract", () => {
       sourceReceipt: fixture.source,
       predecessorReceipt: fixture.predecessor,
       migrationCommit: "d".repeat(40),
-      nextPolicyHash: await probePolicyHash(),
-      nextScriptHash: "9".repeat(64)
+      nextPolicyHash: PROBE_V03_MIGRATED_POLICY_HASH,
+      nextScriptHash: PROBE_V03_MIGRATED_LEDGER_SCRIPT_HASH
     });
     expect(manifest).toMatchObject({
       version: PROBE_V03_POLICY_MIGRATION_VERSION,
-      nextPolicyVersion: PROBE_POLICY_VERSION,
+      nextPolicyVersion: PROBE_V03_MIGRATED_POLICY_VERSION,
       predecessorMigrationReceiptHash: fixture.predecessor.receiptHash,
       previousPurposeLimits: { calibration: 8, judge: 6 },
       nextPurposeLimits: { calibration: 9, judge: 5 },
@@ -254,8 +254,8 @@ describe("Probe v0.2 -> v0.3 policy migration contract", () => {
   it("passes the exact atomic key/argument set and reconstructs the chained durable receipt", async () => {
     const fixture = await sourceFixture();
     const migratedAtMs = 1_800_000_001_000;
-    const nextPolicyHash = await probePolicyHash();
-    const nextScriptHash = await probeLedgerScriptHash();
+    const nextPolicyHash = PROBE_V03_MIGRATED_POLICY_HASH;
+    const nextScriptHash = PROBE_V03_MIGRATED_LEDGER_SCRIPT_HASH;
     const manifest = await createProbeV03PolicyMigrationManifest({
       sourceReceipt: fixture.source,
       predecessorReceipt: fixture.predecessor,

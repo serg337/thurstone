@@ -4,8 +4,10 @@ import {
   PROBE_DECISION_JSON_SCHEMA_NAME,
   ProbeDecisionError,
   createProbeDecisionJsonSchema,
+  createProbeFunctionToolDefinitions,
   parseProbeDecision,
   parseProbeDecisionOutput,
+  probeFunctionToolDefinitionsHash,
   probeDecisionJsonSchemaHash,
   probeDecisionSchema
 } from "@/lib/probe/decision";
@@ -183,6 +185,45 @@ describe("Probe strict decision union", () => {
 });
 
 describe("live-manifest-derived decision JSON Schema", () => {
+  it("maps the live catalog to strict Responses function tools with the same transport binding", async () => {
+    const definitions = createProbeFunctionToolDefinitions(manifest(), transport);
+    expect(definitions.map(({ name }) => name)).toEqual(["cart_update", "order_review"]);
+    expect(definitions).toEqual([
+      {
+        type: "function",
+        name: "cart_update",
+        description: "Set one current cart line to the quantity the user requests.",
+        parameters: {
+          ...manifest().tools[1]!.inputSchema,
+          properties: {
+            ...((manifest().tools[1]!.inputSchema.properties ?? {}) as Record<string, unknown>),
+            operationId: {
+              type: "string",
+              pattern: "^[A-Za-z0-9][A-Za-z0-9_-]{15,63}$",
+              enum: [transport.operationId]
+            }
+          }
+        },
+        strict: true
+      },
+      {
+        type: "function",
+        name: "order_review",
+        description: "Return the current final read-only order summary.",
+        parameters: manifest().tools[0]!.inputSchema,
+        strict: true
+      }
+    ]);
+    expect(Object.isFrozen(definitions)).toBe(true);
+    expect(Object.isFrozen(definitions[0]!.parameters)).toBe(true);
+    expect(JSON.stringify(definitions)).not.toMatch(
+      /expectedTool|internalTruthId|calibration_truth_/u
+    );
+    await expect(
+      probeFunctionToolDefinitionsHash(structuredClone(manifest()), transport)
+    ).resolves.toBe(await probeFunctionToolDefinitionsHash(manifest(), transport));
+  });
+
   it("uses the required provider root object and exact inner anyOf branches", () => {
     const format = createProbeDecisionJsonSchema(manifest(), transport);
     expect(format.name).toBe(PROBE_DECISION_JSON_SCHEMA_NAME);

@@ -12,6 +12,7 @@ const serviceMocks = vi.hoisted(() => ({
   settleKnown: vi.fn(async () => ({ disposition: "new", actualNanoUsd: 1 })),
   settleUncertain: vi.fn(async () => ({ disposition: "new", upperBoundNanoUsd: 62_500_000 })),
   provider: vi.fn(),
+  fallbackProvider: vi.fn(),
   index: undefined as unknown
 }));
 
@@ -120,6 +121,12 @@ vi.mock("@/lib/probe/openai", async (importOriginal) => {
   return { ...actual, decideWithOpenAi: serviceMocks.provider };
 });
 
+vi.mock("@/lib/fallback/openai-tool-provider.server", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/lib/fallback/openai-tool-provider.server")>();
+  return { ...actual, decideWithFallbackOpenAi: serviceMocks.fallbackProvider };
+});
+
 vi.mock("@/lib/evidence/gate2-calibration-verifier.server", () => ({
   verifyGate2CalibrationBundleServer: vi.fn(async (value: unknown) => value)
 }));
@@ -129,6 +136,9 @@ import { CheckoutSessionStore } from "@/lib/domain/checkout-session";
 import { CHECKOUT_FIXTURE_STATE_HASH, verifyCheckoutReset } from "@/lib/domain/checkout-reset";
 import { CheckoutTraceLedger } from "@/lib/evidence/checkout-trace-ledger";
 import { canonicalJson, canonicalSha256, sha256Hex } from "@/lib/evidence/digest";
+import type { FallbackCalibrationEnvelope } from "@/lib/fallback/calibration-envelope";
+import type { FallbackProviderKnownReceipt } from "@/lib/fallback/openai-tool-provider.server";
+import { FALLBACK_UPSTREAM_PIN } from "@/lib/fallback/runner-contract";
 import {
   PROBE_LIVE_MANIFEST_VERSION,
   createProbeFixtureSynopsis,
@@ -154,10 +164,11 @@ import {
   createProbePolicyMigrationManifest,
   createProbePolicyMigrationReceipt,
   probePolicyMigrationDigest,
-  type ProbePolicyMigrationPriorReceipt,
-  type ProbePolicyMigrationReceipt
+  type ProbePolicyMigrationPriorReceipt
 } from "@/lib/probe/policy-migration-contract";
 import {
+  PROBE_V03_MIGRATED_LEDGER_SCRIPT_HASH,
+  PROBE_V03_MIGRATED_POLICY_HASH,
   PROBE_V03_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
   PROBE_V03_POLICY_MIGRATION_ID,
   PROBE_V03_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
@@ -172,9 +183,43 @@ import {
   parseProbeV03PolicyMigrationSourceReceipt,
   probeV03PolicyMigrationDigest
 } from "@/lib/probe/policy-v03-migration-contract";
-import { probePolicyHash } from "@/lib/probe/policy";
+import {
+  PROBE_V04_MIGRATED_POLICY_VERSION,
+  PROBE_V04_MIGRATED_RUNNER_CONTRACT_HASH,
+  PROBE_V04_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
+  PROBE_V04_POLICY_MIGRATION_ID,
+  PROBE_V04_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
+  PROBE_V04_POLICY_MIGRATION_PRIOR_APP_COMMIT,
+  PROBE_V04_POLICY_MIGRATION_VERSION,
+  PROBE_V04_PREDECESSOR_MIGRATION_ID,
+  PROBE_V04_PREDECESSOR_MIGRATION_RECEIPT_HASH,
+  PROBE_V04_PREVIOUS_LEDGER_SCRIPT_HASH,
+  PROBE_V04_PREVIOUS_POLICY_HASH,
+  PROBE_V04_PREVIOUS_POLICY_VERSION,
+  PROBE_V04_PREVIOUS_PURPOSE_CALL_LIMITS,
+  PROBE_V04_PREVIOUS_RUNNER_CONTRACT_HASH,
+  PROBE_V04_PRIOR_ATTEMPT3_EVIDENCE_DIGEST,
+  PROBE_V04_PRIOR_ATTEMPT3_RAW_SHA256
+} from "@/lib/probe/policy-v04-migration-contract";
+import {
+  PROBE_GLOBAL_CALL_LIMIT,
+  PROBE_LIFETIME_SPEND_CEILING_NANO_USD,
+  PROBE_PURPOSE_CALL_LIMITS,
+  probePolicyHash
+} from "@/lib/probe/policy";
+import {
+  FALLBACK_PROBE_CALIBRATION_BASE_CALLS,
+  FALLBACK_PROBE_CALIBRATION_CASE_COUNT,
+  FALLBACK_PROBE_CALIBRATION_TERMINAL_CALLS
+} from "@/lib/probe/service-contract";
 import { deriveProbeActorHash, issueProbeOperatorCredential } from "@/lib/probe/session";
 import {
+  admitFallbackProbeNativeDispatch,
+  completeFallbackProbeCalibrationTrial,
+  decideFallbackProbeCalibrationTrial,
+  issueFallbackProbeCalibrationTrial,
+  revealFallbackProbeCalibrationRun,
+  startFallbackProbeCalibrationSession,
   completeProbeCalibrationTrial,
   admitProbeNativeDispatch,
   decideProbeCalibrationTrial,
@@ -196,7 +241,7 @@ const nowMs = Date.parse("2026-08-27T12:00:00.000Z");
 let policyHash = "";
 let scriptHash = "";
 let policyMigration: ProbeActivationContext["migration"];
-let predecessorMigration: ProbePolicyMigrationReceipt;
+let predecessorMigration: ProbeActivationContext["predecessorMigration"];
 const environment = {
   TOOLPROOF_SIGNING_SECRET: signingSecret,
   TOOLPROOF_PROBE_ACTIVATION_SECRET: activationSecret,
@@ -235,7 +280,7 @@ function activation(input: {
     mode: "calibration",
     activationHash: "b".repeat(64),
     manifest: {
-      version: "toolproof-probe-activation@3.0.0",
+      version: "toolproof-probe-activation@4.0.0",
       mode: "calibration",
       origin: "https://toolproof-rust.vercel.app",
       activeCommit: buildCommit,
@@ -244,9 +289,9 @@ function activation(input: {
       guardInitializedCommit: "d".repeat(40),
       policyHash,
       scriptHash,
-      runnerContractHash: "1".repeat(64),
+      runnerContractHash: policyMigration.nextRunnerHash,
       continuationScriptHash: "3".repeat(64),
-      predecessorPolicyMigrationReceiptHash: policyMigration.predecessorMigrationReceiptHash,
+      predecessorPolicyMigrationReceiptHash: predecessorMigration.receiptHash,
       operatorCapabilityHash: "4".repeat(64),
       policyMigrationReceiptHash: policyMigration.receiptHash
     },
@@ -268,6 +313,33 @@ function activation(input: {
     },
     predecessorMigration,
     migration: policyMigration
+  };
+}
+
+function fallbackActivation(input: {
+  claimed: number;
+  known: number;
+  pending: 0 | 1;
+}): ProbeActivationContext {
+  const value = activation(input);
+  const cumulativeClaimed = 9 + input.claimed;
+  const cumulativeKnown = 9 + input.known;
+  return {
+    ...value,
+    manifest: {
+      ...value.manifest,
+      predecessorPolicyMigrationReceiptHash: PROBE_V04_PREDECESSOR_MIGRATION_RECEIPT_HASH,
+      policyMigrationReceiptHash: policyMigration.receiptHash,
+      runnerContractHash: policyMigration.nextRunnerHash
+    },
+    guard: {
+      ...value.guard,
+      claimedCalls: cumulativeClaimed,
+      knownCalls: cumulativeKnown,
+      calibrationCalls: cumulativeClaimed,
+      committedNanoUsd: cumulativeClaimed * 62_500_000,
+      knownAccountedNanoUsd: 27_992_800 + input.known * 440_000
+    }
   };
 }
 
@@ -512,6 +584,60 @@ async function providerReceipt(
   };
 }
 
+async function fallbackProviderReceipt(
+  envelope: FallbackCalibrationEnvelope,
+  ordinal: number
+): Promise<FallbackProviderKnownReceipt> {
+  const tool = getProbeCalibrationCase(ordinal).expectedTool;
+  const toolInput = inputForTool(tool, envelope.runner.transport.operationId);
+  const rawResponseBytes = JSON.stringify({ id: `fallback_resp_fixture_${ordinal}`, tool });
+  const usage = {
+    inputTokens: 100,
+    outputTokens: 20,
+    totalTokens: 120,
+    accountedNanoUsd: 440_000,
+    costBasis: "frozen-list-price-plus-10pct-uplift" as const
+  };
+  return {
+    version: "toolproof-fallback-provider@1.0.0",
+    provider: "OpenAI",
+    endpoint: "https://api.openai.com/v1/responses",
+    model: "gpt-5.6-terra",
+    requestId: `fallback_req_fixture_${ordinal}`,
+    responseId: `fallback_resp_fixture_${ordinal}`,
+    responseStatus: "completed",
+    requestBodyBytes: "{}",
+    requestBodyHash: await sha256Hex("{}"),
+    rawResponseBytes,
+    rawResponseHash: await sha256Hex(rawResponseBytes),
+    rawResponse: { id: `fallback_resp_fixture_${ordinal}`, tool },
+    outputText: null,
+    decision: { kind: "call", tool, arguments: toolInput },
+    decisionError: null,
+    refusal: null,
+    toolCallId: `fallback_call_fixture_${ordinal}`,
+    rawArgumentsBytes: canonicalJson(toolInput),
+    toolCallCount: 1,
+    usage,
+    usageHash: await canonicalSha256(usage),
+    promptHash: envelope.runner.promptHash,
+    settingsHash: envelope.runner.settingsHash,
+    runnerContractHash: policyMigration.nextRunnerHash,
+    browserRuntimeHash: envelope.runner.browserRuntimeHash,
+    toolDefinitionsHash: envelope.runner.toolDefinitionsHash,
+    noCallSchemaHash: envelope.runner.noCallSchemaHash,
+    transportBindingHash: envelope.runner.transport.bindingHash,
+    modelInputHash: "2".repeat(64),
+    dispatchedAt: "2026-08-27T12:00:00.000Z",
+    completedAt: "2026-08-27T12:00:00.100Z",
+    durationMs: 100,
+    providerCallCount: 1,
+    store: false,
+    previousResponseId: null,
+    conversationId: null
+  };
+}
+
 async function migrationFixture(): Promise<ProbeActivationContext["migration"]> {
   const actualCosts = [2_840_200, 2_840_200, 2_840_200, 2_840_200] as const;
   const priorReceipt: ProbePolicyMigrationPriorReceipt = {
@@ -545,7 +671,7 @@ async function migrationFixture(): Promise<ProbeActivationContext["migration"]> 
     nextScriptHash: PROBE_MIGRATED_LEDGER_SCRIPT_HASH,
     migrationCommit: buildCommit
   });
-  predecessorMigration = await createProbePolicyMigrationReceipt(
+  const initialMigration = await createProbePolicyMigrationReceipt(
     manifest,
     await probePolicyMigrationDigest(manifest),
     nowMs - 2_000
@@ -566,7 +692,7 @@ async function migrationFixture(): Promise<ProbeActivationContext["migration"]> 
       priorAppCommit: PROBE_V03_POLICY_MIGRATION_PRIOR_APP_COMMIT,
       priorActivationHash: PROBE_V03_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
       predecessorMigrationId: PROBE_V03_PREDECESSOR_MIGRATION_ID,
-      predecessorMigrationReceiptHash: predecessorMigration.receiptHash,
+      predecessorMigrationReceiptHash: initialMigration.receiptHash,
       guardInstanceId: priorReceipt.guardInstanceId,
       initializedCommit: priorReceipt.initializedCommit,
       previousPolicyVersion: PROBE_V03_PREVIOUS_POLICY_VERSION,
@@ -576,22 +702,69 @@ async function migrationFixture(): Promise<ProbeActivationContext["migration"]> 
         ...PROBE_V03_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
         knownActualNanoUsd: 11_800_800
       },
-      knownCalls: [...predecessorMigration.knownCalls, fifthCall]
+      knownCalls: [...initialMigration.knownCalls, fifthCall]
     },
-    predecessorMigration
+    initialMigration
   );
   const v03Manifest = await createProbeV03PolicyMigrationManifest({
     sourceReceipt: source,
-    predecessorReceipt: predecessorMigration,
+    predecessorReceipt: initialMigration,
     migrationCommit: buildCommit,
-    nextPolicyHash: policyHash,
-    nextScriptHash: scriptHash
+    nextPolicyHash: PROBE_V03_MIGRATED_POLICY_HASH,
+    nextScriptHash: PROBE_V03_MIGRATED_LEDGER_SCRIPT_HASH
   });
-  return createProbeV03PolicyMigrationReceipt(
+  predecessorMigration = await createProbeV03PolicyMigrationReceipt(
     v03Manifest,
     await probeV03PolicyMigrationDigest(v03Manifest),
     nowMs - 1_000
   );
+  const appendedCalls = [0, 1, 2, 3].map((index) => ({
+    ordinal: index + 5,
+    jti: `attempt3_fixture_jti_${index}`,
+    dispatchSequence: index + 6,
+    actualNanoUsd: 4_048_000,
+    providerResponseHash: String(index + 1)
+      .repeat(32)
+      .padEnd(64, String(index + 5)),
+    settlementDigest: String(index + 2)
+      .repeat(32)
+      .padEnd(64, String(index + 6)),
+    usageHash: String(index + 3)
+      .repeat(32)
+      .padEnd(64, String(index + 7))
+  }));
+  return {
+    version: PROBE_V04_POLICY_MIGRATION_VERSION,
+    migrationId: PROBE_V04_POLICY_MIGRATION_ID,
+    priorAppCommit: PROBE_V04_POLICY_MIGRATION_PRIOR_APP_COMMIT,
+    priorActivationHash: PROBE_V04_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
+    priorEvidenceRawSha256: PROBE_V04_PRIOR_ATTEMPT3_RAW_SHA256,
+    priorEvidenceDigest: PROBE_V04_PRIOR_ATTEMPT3_EVIDENCE_DIGEST,
+    predecessorMigrationId: PROBE_V04_PREDECESSOR_MIGRATION_ID,
+    predecessorMigrationReceiptHash: PROBE_V04_PREDECESSOR_MIGRATION_RECEIPT_HASH,
+    guardInstanceId: "guard_fixture_service_001",
+    initializedCommit: "d".repeat(40),
+    previousPolicyVersion: PROBE_V04_PREVIOUS_POLICY_VERSION,
+    previousPolicyHash: PROBE_V04_PREVIOUS_POLICY_HASH,
+    previousScriptHash: PROBE_V04_PREVIOUS_LEDGER_SCRIPT_HASH,
+    previousRunnerHash: PROBE_V04_PREVIOUS_RUNNER_CONTRACT_HASH,
+    preserved: PROBE_V04_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
+    knownCalls: [...predecessorMigration.knownCalls, ...appendedCalls],
+    migrationCommit: buildCommit,
+    nextPolicyVersion: PROBE_V04_MIGRATED_POLICY_VERSION,
+    nextPolicyHash: policyHash,
+    nextScriptHash: scriptHash,
+    nextRunnerHash: PROBE_V04_MIGRATED_RUNNER_CONTRACT_HASH,
+    migrationProgramHash: "e".repeat(64),
+    previousPurposeLimits: PROBE_V04_PREVIOUS_PURPOSE_CALL_LIMITS,
+    nextPurposeLimits: { calibration: 13, baseline: 72, repair: 2, revised: 72, judge: 1 },
+    globalCallLimit: 160,
+    lifetimeSpendCeilingNanoUsd: 10_000_000_000,
+    perCallReservationNanoUsd: 62_500_000,
+    migrationDigest: "f".repeat(64),
+    migratedAtMs: nowMs,
+    receiptHash: "6".repeat(64)
+  };
 }
 
 describe("Probe service four-case lifecycle", () => {
@@ -946,7 +1119,7 @@ describe("Probe service four-case lifecycle", () => {
         attempt1: { passedCount: 0, caseCount: 4 },
         attempt2: { disposition: "terminal-invalid-infrastructure" }
       },
-      policyMigration: { receiptHash: policyMigration.receiptHash },
+      policyMigration: { receiptHash: predecessorMigration.receiptHash },
       terminalGuard: { claimedCalls: 9, knownCalls: 9, calibrationCalls: 9 },
       attemptCost: {
         priorCumulativeKnownAccountedNanoUsd: 11_800_800,
@@ -1309,6 +1482,498 @@ describe("Probe service four-case lifecycle", () => {
     );
     expect(completion).toMatchObject({ status: "sealed", completedCount: 1 });
     expect(serviceMocks.provider).toHaveBeenCalledTimes(1);
+    expect(serviceMocks.settleKnown).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Dormant pinned fallback service lane", () => {
+  beforeEach(async () => {
+    serviceMocks.cache.clear();
+    serviceMocks.index = undefined;
+    activeRecoveryCookie = "";
+    vi.clearAllMocks();
+    [policyHash, scriptHash] = await Promise.all([probePolicyHash(), probeLedgerScriptHash()]);
+    policyMigration = await migrationFixture();
+  });
+
+  it("freezes the reviewed 9 + 4 = 13 allocation under the unchanged lifetime caps", () => {
+    expect(FALLBACK_PROBE_CALIBRATION_BASE_CALLS).toBe(9);
+    expect(FALLBACK_PROBE_CALIBRATION_CASE_COUNT).toBe(4);
+    expect(FALLBACK_PROBE_CALIBRATION_TERMINAL_CALLS).toBe(13);
+    expect(PROBE_PURPOSE_CALL_LIMITS).toEqual({
+      calibration: 13,
+      baseline: 72,
+      repair: 2,
+      revised: 72,
+      judge: 1
+    });
+    expect(PROBE_GLOBAL_CALL_LIMIT).toBe(160);
+    expect(PROBE_LIFETIME_SPEND_CEILING_NANO_USD).toBe(10_000_000_000);
+  });
+
+  it("starts only at preserved call 9 and seals one exact native fallback trial", async () => {
+    for (const state of [
+      { claimed: -1, known: -1, pending: 0 as const },
+      { claimed: 1, known: 1, pending: 0 as const },
+      { claimed: 1, known: 0, pending: 1 as const }
+    ]) {
+      await expect(
+        startFallbackProbeCalibrationSession(request(), `launch_${"x".repeat(31)}y`, {
+          environment,
+          redis: {} as never,
+          activation: fallbackActivation(state),
+          now: () => nowMs
+        })
+      ).rejects.toThrowError(/fallback_calibration_session_unavailable/u);
+    }
+
+    const started = await startFallbackProbeCalibrationSession(
+      request(),
+      `launch_${"f".repeat(32)}`,
+      {
+        environment,
+        redis: {} as never,
+        activation: fallbackActivation({ claimed: 0, known: 0, pending: 0 }),
+        now: () => nowMs
+      }
+    );
+    activeRecoveryCookie = started.recoveryCookieValue;
+    const manifest = await liveManifest();
+    const fixture = createProbeFixtureSynopsis(createCheckoutFixture());
+    const trial = trialEnvironment(manifest.manifestHash, 20);
+    await trial.store.cartGet({}, { source: "native" });
+    const initialBoundary = await boundary(trial, manifest);
+    const issued = await issueFallbackProbeCalibrationTrial(
+      request(started.cookieValue, started.csrfToken),
+      {
+        continuation: started.continuation,
+        initialBoundary,
+        fixture,
+        liveManifest: manifest
+      },
+      {
+        environment,
+        redis: {} as never,
+        activation: fallbackActivation({ claimed: 0, known: 0, pending: 0 }),
+        now: () => nowMs + 10
+      }
+    );
+    if (issued.status !== "issued") throw new Error("Fallback issue fixture failed.");
+    serviceMocks.fallbackProvider.mockImplementation(
+      async ({
+        envelope,
+        beforeDispatch
+      }: {
+        envelope: FallbackCalibrationEnvelope;
+        beforeDispatch?: () => Promise<void>;
+      }) => {
+        await beforeDispatch?.();
+        return fallbackProviderReceipt(envelope, 0);
+      }
+    );
+    const decision = await decideFallbackProbeCalibrationTrial(
+      request(started.cookieValue, started.csrfToken),
+      {
+        probeToken: issued.authorization.probeToken,
+        envelope: issued.authorization.envelope
+      },
+      {
+        environment,
+        redis: {} as never,
+        activation: fallbackActivation({ claimed: 0, known: 0, pending: 0 }),
+        now: () => nowMs + 20
+      }
+    );
+    expect(serviceMocks.begin).toHaveBeenCalledTimes(1);
+    expect(decision.decision).toMatchObject({ kind: "call", tool: "cart_get" });
+    await expect(
+      admitFallbackProbeNativeDispatch(
+        request(started.cookieValue, started.csrfToken),
+        {
+          probeToken: issued.authorization.probeToken,
+          envelope: issued.authorization.envelope,
+          initialBoundary
+        },
+        {
+          environment,
+          redis: {} as never,
+          activation: fallbackActivation({ claimed: 1, known: 0, pending: 1 }),
+          now: () => nowMs + 30
+        }
+      )
+    ).resolves.toMatchObject({ status: "admitted", inferencePerformed: false });
+
+    const native = await nativeExecution(trial, "cart_get", manifest.manifestHash, {});
+    const capturedState = trial.store.getSnapshot().state;
+    const capturedInspection = trial.store.inspect();
+    const postResetBoundary = await boundary(trial, manifest);
+    const nativeId = "fallback_native_result_fixture_0001";
+    const nativeCall = { id: nativeId, toolName: "cart_get", input: {} };
+    const fallbackRawResult = {
+      id: nativeId,
+      status: "Completed",
+      call: nativeCall,
+      outputPresent: true,
+      output: native.result.trace.canonicalResult?.value,
+      errorText: null,
+      exception: null
+    };
+    const fallbackNativeReceipt = {
+      version: "toolproof-fallback-native-bridge@1.0.0",
+      toolName: "cart_get",
+      manifestHash: manifest.manifestHash,
+      registrationGeneration: 1,
+      allowanceConsumed: true,
+      nativeCallCount: 1,
+      arguments: {
+        value: {},
+        bytes: "{}",
+        sha256: await sha256Hex("{}")
+      },
+      outcome: "Completed",
+      rawResult: fallbackRawResult,
+      invokedEvents: [nativeCall],
+      respondedEvents: [fallbackRawResult],
+      error: null,
+      startedAt: "2026-08-27T12:00:00.040Z",
+      completedAt: "2026-08-27T12:00:00.050Z",
+      durationMs: 10
+    };
+    const capture = {
+      runnerVersion: "toolproof-probe-client-runner@2.0.0",
+      claim: { runId: issued.runId, caseId: issued.caseId, trialId: issued.trialId },
+      initialBoundary,
+      liveBoundary: { ...initialBoundary, registeredToolNames: INITIAL_CHECKOUT_TOOL_NAMES },
+      decisionRequestCount: 1,
+      rawDecisionEnvelopeHash: await canonicalSha256(decision),
+      rawModelResponseHash: await sha256Hex(decision.rawModelResponse),
+      providerReceiptHash: await canonicalSha256(decision.providerReceipt),
+      decision: decision.decision,
+      selectedToolName: "cart_get",
+      rawArguments: {},
+      nativeAllowanceConsumed: true,
+      nativeDispatchCount: 1,
+      executionResult: fallbackNativeReceipt,
+      terminalStatus: "call_completed",
+      errors: { provider: null, decision: null, liveBoundary: null, execution: null },
+      timings: {
+        startedAtMs: nowMs,
+        initialBoundaryVerifiedAtMs: nowMs + 10,
+        claimIssuedAtMs: nowMs + 20,
+        decisionCompletedAtMs: nowMs + 30,
+        liveReverifiedAtMs: nowMs + 40,
+        nativeCompletedAtMs: nowMs + 50,
+        captureStartedAtMs: nowMs + 60
+      }
+    };
+    const evidence = {
+      version: "toolproof-fallback-trial-evidence@1.0.0",
+      adapterVersion: "toolproof-fallback-lab-page-adapter@1.0.0",
+      appCommit: buildCommit,
+      origin: "https://toolproof-rust.vercel.app",
+      userAgent: "Fixture Browser",
+      capturedAt: new Date(nowMs + 60).toISOString(),
+      capture,
+      captureDigest: await canonicalSha256(capture),
+      currentState: capturedState,
+      currentInspection: capturedInspection,
+      currentTraces: [native.result.trace],
+      fallback: {
+        catalog: {
+          version: "toolproof-fallback-native-bridge@1.0.0",
+          targetOrigin: "https://toolproof-rust.vercel.app",
+          pageUrl: "https://toolproof-rust.vercel.app/lab",
+          manifestHash: manifest.manifestHash,
+          registrationGeneration: 1,
+          toolNames: INITIAL_CHECKOUT_TOOL_NAMES,
+          catalogDigest: await canonicalSha256({
+            manifest,
+            targetOrigin: "https://toolproof-rust.vercel.app",
+            pageUrl: "https://toolproof-rust.vercel.app/lab",
+            registrationGeneration: 1
+          }),
+          upstreamCommit: FALLBACK_UPSTREAM_PIN.commit,
+          puppeteerCore: FALLBACK_UPSTREAM_PIN.puppeteerCore
+        },
+        runtime: {
+          version: "toolproof-fallback-browser-runtime@1.0.0",
+          planHash: "8".repeat(64),
+          runtimeContractHash: issued.authorization.envelope.runner.browserRuntimeHash,
+          executableSha256: FALLBACK_UPSTREAM_PIN.chromeExecutableSha256,
+          browserVersion: `Chrome/${FALLBACK_UPSTREAM_PIN.chromeForTesting}`,
+          puppeteerCore: FALLBACK_UPSTREAM_PIN.puppeteerCore,
+          chromeForTesting: FALLBACK_UPSTREAM_PIN.chromeForTesting,
+          protocol: FALLBACK_UPSTREAM_PIN.protocol,
+          targetOrigin: "https://toolproof-rust.vercel.app",
+          targetUrl: "https://toolproof-rust.vercel.app/lab",
+          isolatedProcess: true,
+          foreignRequestObserved: false,
+          unexpectedTargetObserved: false,
+          additionalTargetCount: 0
+        },
+        nativeReceipt: fallbackNativeReceipt
+      }
+    };
+    const completeWithEvidence = (candidateEvidence: unknown) =>
+      completeFallbackProbeCalibrationTrial(
+        request(started.cookieValue, started.csrfToken),
+        {
+          probeToken: issued.authorization.probeToken,
+          envelope: issued.authorization.envelope,
+          providerReceipt: decision.providerReceipt,
+          continuation: started.continuation,
+          completion: {
+            runnerVersion: "toolproof-probe-client-runner@2.0.0",
+            claim: capture.claim,
+            terminalStatus: "call_completed",
+            nativeDispatchCount: 1,
+            evidence: candidateEvidence,
+            postResetBoundary
+          }
+        },
+        {
+          environment,
+          redis: {} as never,
+          activation: fallbackActivation({ claimed: 1, known: 0, pending: 1 }),
+          now: () => nowMs + 100
+        }
+      );
+    await expect(
+      completeWithEvidence({
+        ...evidence,
+        currentState: { ...capturedState, revision: 99 }
+      })
+    ).rejects.toThrowError(/fallback_current_state_or_inspection_mismatch/u);
+    await expect(
+      completeWithEvidence({
+        ...evidence,
+        currentInspection: { ...capturedInspection, currentTraceCount: 0 }
+      })
+    ).rejects.toThrowError(/fallback_current_state_or_inspection_mismatch/u);
+    const completion = await completeWithEvidence(evidence);
+    expect(completion).toMatchObject({
+      lane: "pinned-googlechromelabs-webmcp-fallback-calibration",
+      status: "sealed",
+      completedCount: 1,
+      terminal: false
+    });
+    expect(serviceMocks.settleKnown).toHaveBeenCalledTimes(1);
+    await expect(
+      revealFallbackProbeCalibrationRun(
+        request(started.cookieValue, started.csrfToken),
+        completion.continuation,
+        {
+          environment,
+          redis: {} as never,
+          activation: fallbackActivation({ claimed: 1, known: 1, pending: 0 }),
+          now: () => nowMs + 110
+        }
+      )
+    ).rejects.toThrowError(/fallback_calibration_not_complete/u);
+  });
+
+  it("seals a failed fallback row without redispatch after a recovered native admission", async () => {
+    const started = await startFallbackProbeCalibrationSession(
+      request(),
+      `launch_${"g".repeat(32)}`,
+      {
+        environment,
+        redis: {} as never,
+        activation: fallbackActivation({ claimed: 0, known: 0, pending: 0 }),
+        now: () => nowMs
+      }
+    );
+    activeRecoveryCookie = started.recoveryCookieValue;
+    const manifest = await liveManifest();
+    const fixture = createProbeFixtureSynopsis(createCheckoutFixture());
+    const firstDocument = trialEnvironment(manifest.manifestHash, 60);
+    const firstBoundary = await boundary(firstDocument, manifest);
+    const issued = await issueFallbackProbeCalibrationTrial(
+      request(started.cookieValue, started.csrfToken),
+      {
+        continuation: started.continuation,
+        initialBoundary: firstBoundary,
+        fixture,
+        liveManifest: manifest
+      },
+      {
+        environment,
+        redis: {} as never,
+        activation: fallbackActivation({ claimed: 0, known: 0, pending: 0 }),
+        now: () => nowMs + 10
+      }
+    );
+    if (issued.status !== "issued") throw new Error("Fallback issue fixture failed.");
+    serviceMocks.fallbackProvider.mockImplementation(
+      async ({
+        envelope,
+        beforeDispatch
+      }: {
+        envelope: FallbackCalibrationEnvelope;
+        beforeDispatch?: () => Promise<void>;
+      }) => {
+        await beforeDispatch?.();
+        return fallbackProviderReceipt(envelope, 0);
+      }
+    );
+    const decision = await decideFallbackProbeCalibrationTrial(
+      request(started.cookieValue, started.csrfToken),
+      {
+        probeToken: issued.authorization.probeToken,
+        envelope: issued.authorization.envelope
+      },
+      {
+        environment,
+        redis: {} as never,
+        activation: fallbackActivation({ claimed: 0, known: 0, pending: 0 }),
+        now: () => nowMs + 20
+      }
+    );
+    await admitFallbackProbeNativeDispatch(
+      request(started.cookieValue, started.csrfToken),
+      {
+        probeToken: issued.authorization.probeToken,
+        envelope: issued.authorization.envelope,
+        initialBoundary: firstBoundary
+      },
+      {
+        environment,
+        redis: {} as never,
+        activation: fallbackActivation({ claimed: 1, known: 0, pending: 1 }),
+        now: () => nowMs + 30
+      }
+    );
+
+    const recoveredDocument = trialEnvironment(manifest.manifestHash, 61);
+    const recoveredBoundary = await boundary(recoveredDocument, manifest);
+    await expect(
+      admitFallbackProbeNativeDispatch(
+        request(started.cookieValue, started.csrfToken),
+        {
+          probeToken: issued.authorization.probeToken,
+          envelope: issued.authorization.envelope,
+          initialBoundary: recoveredBoundary
+        },
+        {
+          environment,
+          redis: {} as never,
+          activation: fallbackActivation({ claimed: 1, known: 0, pending: 1 }),
+          now: () => nowMs + 40
+        }
+      )
+    ).rejects.toThrowError(/fallback_native_allowance_already_consumed/u);
+    const recoveredState = recoveredDocument.store.getSnapshot().state;
+    const recoveredInspection = recoveredDocument.store.inspect();
+    const postResetBoundary = await boundary(recoveredDocument, manifest);
+    const capture = {
+      runnerVersion: "toolproof-probe-client-runner@2.0.0",
+      claim: { runId: issued.runId, caseId: issued.caseId, trialId: issued.trialId },
+      initialBoundary: recoveredBoundary,
+      liveBoundary: { ...recoveredBoundary, registeredToolNames: INITIAL_CHECKOUT_TOOL_NAMES },
+      decisionRequestCount: 1,
+      rawDecisionEnvelopeHash: await canonicalSha256(decision),
+      rawModelResponseHash: await sha256Hex(decision.rawModelResponse),
+      providerReceiptHash: await canonicalSha256(decision.providerReceipt),
+      decision: decision.decision,
+      selectedToolName: "cart_get",
+      rawArguments: {},
+      nativeAllowanceConsumed: true,
+      nativeDispatchCount: 1,
+      executionResult: null,
+      terminalStatus: "call_failed",
+      errors: {
+        provider: null,
+        decision: null,
+        liveBoundary: null,
+        execution: {
+          name: "FallbackNativeRecoveryError",
+          message: "Native allowance was consumed in an earlier isolated browser.",
+          code: "fallback_native_allowance_already_consumed"
+        }
+      },
+      timings: {
+        startedAtMs: nowMs,
+        initialBoundaryVerifiedAtMs: nowMs + 10,
+        claimIssuedAtMs: nowMs + 20,
+        decisionCompletedAtMs: nowMs + 30,
+        liveReverifiedAtMs: nowMs + 40,
+        nativeCompletedAtMs: nowMs + 50,
+        captureStartedAtMs: nowMs + 60
+      }
+    };
+    const catalogDigest = await canonicalSha256({
+      manifest,
+      targetOrigin: "https://toolproof-rust.vercel.app",
+      pageUrl: "https://toolproof-rust.vercel.app/lab",
+      registrationGeneration: 1
+    });
+    const completion = await completeFallbackProbeCalibrationTrial(
+      request(started.cookieValue, started.csrfToken),
+      {
+        probeToken: issued.authorization.probeToken,
+        envelope: issued.authorization.envelope,
+        providerReceipt: decision.providerReceipt,
+        continuation: started.continuation,
+        completion: {
+          runnerVersion: "toolproof-probe-client-runner@2.0.0",
+          claim: capture.claim,
+          terminalStatus: "call_failed",
+          nativeDispatchCount: 1,
+          evidence: {
+            version: "toolproof-fallback-trial-evidence@1.0.0",
+            adapterVersion: "toolproof-fallback-lab-page-adapter@1.0.0",
+            appCommit: buildCommit,
+            origin: "https://toolproof-rust.vercel.app",
+            userAgent: "Fixture Browser",
+            capturedAt: new Date(nowMs + 60).toISOString(),
+            capture,
+            captureDigest: await canonicalSha256(capture),
+            currentState: recoveredState,
+            currentInspection: recoveredInspection,
+            currentTraces: [],
+            fallback: {
+              catalog: {
+                version: "toolproof-fallback-native-bridge@1.0.0",
+                targetOrigin: "https://toolproof-rust.vercel.app",
+                pageUrl: "https://toolproof-rust.vercel.app/lab",
+                manifestHash: manifest.manifestHash,
+                registrationGeneration: 1,
+                toolNames: INITIAL_CHECKOUT_TOOL_NAMES,
+                catalogDigest,
+                upstreamCommit: FALLBACK_UPSTREAM_PIN.commit,
+                puppeteerCore: FALLBACK_UPSTREAM_PIN.puppeteerCore
+              },
+              runtime: {
+                version: "toolproof-fallback-browser-runtime@1.0.0",
+                planHash: "8".repeat(64),
+                runtimeContractHash: issued.authorization.envelope.runner.browserRuntimeHash,
+                executableSha256: FALLBACK_UPSTREAM_PIN.chromeExecutableSha256,
+                browserVersion: `Chrome/${FALLBACK_UPSTREAM_PIN.chromeForTesting}`,
+                puppeteerCore: FALLBACK_UPSTREAM_PIN.puppeteerCore,
+                chromeForTesting: FALLBACK_UPSTREAM_PIN.chromeForTesting,
+                protocol: FALLBACK_UPSTREAM_PIN.protocol,
+                targetOrigin: "https://toolproof-rust.vercel.app",
+                targetUrl: "https://toolproof-rust.vercel.app/lab",
+                isolatedProcess: true,
+                foreignRequestObserved: false,
+                unexpectedTargetObserved: false,
+                additionalTargetCount: 0
+              },
+              nativeReceipt: null
+            }
+          },
+          postResetBoundary
+        }
+      },
+      {
+        environment,
+        redis: {} as never,
+        activation: fallbackActivation({ claimed: 1, known: 0, pending: 1 }),
+        now: () => nowMs + 100
+      }
+    );
+    expect(completion).toMatchObject({ status: "sealed", completedCount: 1, terminal: false });
+    expect(serviceMocks.fallbackProvider).toHaveBeenCalledTimes(1);
     expect(serviceMocks.settleKnown).toHaveBeenCalledTimes(1);
   });
 });

@@ -14,11 +14,11 @@ import {
 describe("Probe challenge-lifetime policy", () => {
   it("allocates exactly 160 calls without borrowing or an extra judge quota", () => {
     expect(PROBE_PURPOSE_CALL_LIMITS).toEqual({
-      calibration: 9,
+      calibration: 13,
       baseline: 72,
       repair: 2,
       revised: 72,
-      judge: 5
+      judge: 1
     });
     expect(Object.values(PROBE_PURPOSE_CALL_LIMITS).reduce((sum, limit) => sum + limit, 0)).toBe(
       PROBE_GLOBAL_CALL_LIMIT
@@ -42,7 +42,7 @@ describe("Probe challenge-lifetime policy", () => {
 
   it("uses a deterministic canonical policy hash and rejects invalid usage", async () => {
     await expect(probePolicyHash()).resolves.toBe(
-      "8293eaee17e979eee1ca915a967ca3110f0d20068e4eda573554ae682dc563b0"
+      "4c70f123b0e3bc9b31477e976e51604e570e1475ef1d315a21615553e0be2b77"
     );
     await expect(Promise.all([probePolicyHash(), probePolicyHash()])).resolves.toSatisfy(
       ([first, second]) => first === second

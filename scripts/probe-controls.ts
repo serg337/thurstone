@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 
 import { canonicalJson, canonicalSha256, sha256Hex } from "../lib/evidence/digest";
+import { fallbackRunnerContractHash } from "../lib/fallback/runner-contract";
 import {
   PROBE_LEDGER_SCRIPTS,
   ProbeLedgerError,
@@ -24,6 +25,7 @@ import {
   PROBE_MIGRATED_LEDGER_SCRIPT_HASH,
   PROBE_MIGRATED_POLICY_HASH,
   PROBE_MIGRATED_POLICY_VERSION,
+  PROBE_MIGRATED_PURPOSE_CALL_LIMITS,
   PROBE_POLICY_MIGRATION_ID,
   PROBE_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
   PROBE_POLICY_MIGRATION_PRIOR_APP_COMMIT,
@@ -34,15 +36,50 @@ import {
   PROBE_PREVIOUS_POLICY_VERSION,
   PROBE_PREVIOUS_PURPOSE_CALL_LIMITS,
   parseProbePolicyMigrationPriorReceipt,
+  type ProbePolicyMigrationKnownCall,
   type ProbePolicyMigrationPriorReceipt
 } from "../lib/probe/policy-migration-contract";
 import {
+  PROBE_V03_MIGRATED_LEDGER_SCRIPT_HASH,
+  PROBE_V03_MIGRATED_POLICY_HASH,
+  PROBE_V03_MIGRATED_POLICY_VERSION,
+  PROBE_V03_MIGRATED_PURPOSE_CALL_LIMITS,
   PROBE_V03_POLICY_MIGRATION_ID,
-  PROBE_V03_PREDECESSOR_MIGRATION_RECEIPT_HASH,
-  createProbeV03PolicyMigrationManifest,
-  isProbeV03PolicyMigrationSourceStatus,
-  probeV03PolicyMigrationDigest
+  PROBE_V03_POLICY_MIGRATION_VERSION,
+  type ProbeV03PolicyMigrationReceipt
 } from "../lib/probe/policy-v03-migration-contract";
+import {
+  PROBE_V04_MIGRATED_LEDGER_SCRIPT_HASH,
+  PROBE_V04_MIGRATED_POLICY_HASH,
+  PROBE_V04_MIGRATED_POLICY_VERSION,
+  PROBE_V04_MIGRATED_PURPOSE_CALL_LIMITS,
+  PROBE_V04_MIGRATED_RUNNER_CONTRACT_HASH,
+  PROBE_V04_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
+  PROBE_V04_POLICY_MIGRATION_ID,
+  PROBE_V04_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
+  PROBE_V04_POLICY_MIGRATION_PRIOR_APP_COMMIT,
+  PROBE_V04_POLICY_MIGRATION_VERSION,
+  PROBE_V04_PRIOR_ATTEMPT3_EVIDENCE_DIGEST,
+  PROBE_V04_PRIOR_ATTEMPT3_RAW_SHA256,
+  PROBE_V04_PREDECESSOR_MIGRATION_RECEIPT_HASH,
+  PROBE_V04_PREVIOUS_LEDGER_SCRIPT_HASH,
+  PROBE_V04_PREVIOUS_POLICY_HASH,
+  PROBE_V04_PREVIOUS_POLICY_VERSION,
+  PROBE_V04_PREVIOUS_PURPOSE_CALL_LIMITS,
+  PROBE_V04_PREVIOUS_RUNNER_CONTRACT_HASH,
+  createProbeV04PolicyMigrationManifest,
+  isProbeV04PolicyMigrationSourceStatus,
+  probeV04PolicyMigrationDigest,
+  type ProbeV04PolicyMigrationManifest
+} from "../lib/probe/policy-v04-migration-contract";
+import {
+  PROBE_V04_POLICY_MIGRATION_PROGRAM_HASH,
+  PROBE_V04_POLICY_MIGRATION_SCRIPTS,
+  buildProbeV04PolicyMigrationArguments,
+  discoverProbeV04PolicyMigrationSource,
+  migrateProbeGuardPolicyV04,
+  probeV04PolicyMigrationProgramHash
+} from "../lib/probe/policy-v04-migration.server";
 import {
   PROBE_CHALLENGE_CLOSES_AT,
   PROBE_GLOBAL_CALL_LIMIT,
@@ -56,7 +93,6 @@ import {
 } from "../lib/probe/policy";
 import { isProbeGuardStatusConsistent } from "../lib/probe/status";
 import { probeContinuationScriptHash } from "../lib/probe/continuation-store";
-import { probeRunnerContractHash } from "../lib/probe/runner-contract";
 
 function hasExpectedVercelProjectIdentity(): boolean {
   const expectedProjectId = process.env.TOOLPROOF_EXPECTED_VERCEL_PROJECT_ID;
@@ -84,19 +120,22 @@ async function identity(
 }
 
 async function printHashes(): Promise<void> {
-  const [policyHash, scriptHash, runnerHash, continuationHash] = await Promise.all([
-    probePolicyHash(),
-    probeLedgerScriptHash(),
-    probeRunnerContractHash(),
-    probeContinuationScriptHash()
-  ]);
+  const [policyHash, scriptHash, runnerHash, continuationHash, migrationProgramHash] =
+    await Promise.all([
+      probePolicyHash(),
+      probeLedgerScriptHash(),
+      fallbackRunnerContractHash(),
+      probeContinuationScriptHash(),
+      probeV04PolicyMigrationProgramHash()
+    ]);
   safeReceipt({
     ok: true,
     mode: "hashes",
     policyHash,
     scriptHash,
     runnerHash,
-    continuationHash
+    continuationHash,
+    migrationProgramHash
   });
 }
 
@@ -111,7 +150,7 @@ async function productionStatus(): Promise<void> {
   const current = isProbeGuardStatusConsistent(status, expected);
   const migrationRequired =
     !process.env.TOOLPROOF_PROBE_ACTIVATION_MODE &&
-    isProbeV03PolicyMigrationSourceStatus(status, { guardInstanceId, initializedCommit });
+    isProbeV04PolicyMigrationSourceStatus(status, { guardInstanceId, initializedCommit });
   if (!current && !migrationRequired) {
     throw new ProbeLedgerError("GUARD_IDENTITY_MISMATCH");
   }
@@ -225,7 +264,7 @@ async function reapProduction(): Promise<void> {
   });
 }
 
-function productionV03MigrationContext(): {
+function productionV04MigrationContext(): {
   readonly sourceCommit: string;
   readonly guardInstanceId: string;
   readonly initializedCommit: string;
@@ -245,43 +284,51 @@ function productionV03MigrationContext(): {
     process.env.VERCEL_ENV !== "production" ||
     !hasExpectedVercelProjectIdentity()
   ) {
-    throw new ProbeLedgerError("PRODUCTION_V03_MIGRATION_CONTEXT_REQUIRED");
+    throw new ProbeLedgerError("PRODUCTION_V04_MIGRATION_CONTEXT_REQUIRED");
   }
   return { sourceCommit, guardInstanceId, initializedCommit };
 }
 
-async function prepareProductionPolicyV03() {
-  const { sourceCommit, guardInstanceId, initializedCommit } = productionV03MigrationContext();
-  // The only discovery pass is read-only, bounded, and kept entirely in process memory.
+async function prepareProductionPolicyV04() {
+  const { sourceCommit, guardInstanceId, initializedCommit } = productionV04MigrationContext();
+  // Bounded read-only discovery retains opaque call records only in this process.
   const redis = createProbeRedis();
-  const discovered = await discoverProbeV03PolicyMigrationSource(redis, {
+  const discovered = await discoverProbeV04PolicyMigrationSource(redis, {
     guardInstanceId,
     initializedCommit
   });
-  const nextPolicyHash = await probePolicyHash();
-  const nextScriptHash = await probeLedgerScriptHash();
-  const manifest = await createProbeV03PolicyMigrationManifest({
+  const [nextPolicyHash, nextScriptHash, nextRunnerHash, migrationProgramHash] = await Promise.all([
+    probePolicyHash(),
+    probeLedgerScriptHash(),
+    fallbackRunnerContractHash(),
+    probeV04PolicyMigrationProgramHash()
+  ]);
+  const manifest = await createProbeV04PolicyMigrationManifest({
     sourceReceipt: discovered.sourceReceipt,
     predecessorReceipt: discovered.predecessorReceipt,
     migrationCommit: sourceCommit,
     nextPolicyHash,
-    nextScriptHash
+    nextScriptHash,
+    nextRunnerHash,
+    migrationProgramHash
   });
   const [sourceDigest, migrationDigest] = await Promise.all([
     canonicalSha256(discovered.sourceReceipt),
-    probeV03PolicyMigrationDigest(manifest)
+    probeV04PolicyMigrationDigest(manifest)
   ]);
   const expectedConfirmation = await canonicalSha256({
-    version: "toolproof-probe-policy-v03-confirmation@1.0.0",
+    version: "toolproof-probe-policy-v04-confirmation@1.0.0",
     sourceCommit,
     guardInstanceId,
     initializedCommit,
-    migrationId: PROBE_V03_POLICY_MIGRATION_ID,
-    predecessorReceiptHash: PROBE_V03_PREDECESSOR_MIGRATION_RECEIPT_HASH,
+    migrationId: PROBE_V04_POLICY_MIGRATION_ID,
+    predecessorReceiptHash: PROBE_V04_PREDECESSOR_MIGRATION_RECEIPT_HASH,
     sourceDigest,
     migrationDigest,
     nextPolicyHash,
-    nextScriptHash
+    nextScriptHash,
+    nextRunnerHash,
+    migrationProgramHash
   });
   return {
     redis,
@@ -291,61 +338,54 @@ async function prepareProductionPolicyV03() {
     initializedCommit,
     nextPolicyHash,
     nextScriptHash,
+    nextRunnerHash,
+    migrationProgramHash,
     sourceDigest,
     migrationDigest,
     expectedConfirmation
   };
 }
 
-async function preflightProductionPolicyV03(): Promise<void> {
-  const prepared = await prepareProductionPolicyV03();
+async function preflightProductionPolicyV04(): Promise<void> {
+  const prepared = await prepareProductionPolicyV04();
   safeReceipt({
     ok: true,
-    mode: "preflight-policy-v03",
-    migrationId: PROBE_V03_POLICY_MIGRATION_ID,
-    predecessorReceiptHash: PROBE_V03_PREDECESSOR_MIGRATION_RECEIPT_HASH,
+    mode: "preflight-policy-v04",
+    migrationId: PROBE_V04_POLICY_MIGRATION_ID,
+    predecessorReceiptHash: PROBE_V04_PREDECESSOR_MIGRATION_RECEIPT_HASH,
     sourceDigest: prepared.sourceDigest,
     migrationDigest: prepared.migrationDigest,
     policyHash: prepared.nextPolicyHash,
     scriptHash: prepared.nextScriptHash,
+    runnerHash: prepared.nextRunnerHash,
+    migrationProgramHash: prepared.migrationProgramHash,
     confirmation: prepared.expectedConfirmation
   });
 }
 
-async function migrateProductionPolicyV03(): Promise<void> {
-  productionV03MigrationContext();
-  const suppliedConfirmation = process.env.TOOLPROOF_PROBE_POLICY_V03_MIGRATION_CONFIRM;
-  if (!suppliedConfirmation || suppliedConfirmation.length !== 64) {
-    throw new ProbeLedgerError("PRODUCTION_V03_MIGRATION_CONFIRMATION_REQUIRED");
+async function migrateProductionPolicyV04(): Promise<void> {
+  productionV04MigrationContext();
+  const suppliedConfirmation = process.env.TOOLPROOF_PROBE_POLICY_V04_MIGRATION_CONFIRM;
+  if (!suppliedConfirmation || !/^[a-f0-9]{64}$/u.test(suppliedConfirmation)) {
+    throw new ProbeLedgerError("PRODUCTION_V04_MIGRATION_CONFIRMATION_REQUIRED");
   }
-  const prepared = await prepareProductionPolicyV03();
-  const {
-    redis,
-    discovered,
-    sourceCommit,
-    guardInstanceId,
-    initializedCommit,
-    nextPolicyHash,
-    nextScriptHash,
-    expectedConfirmation
-  } = prepared;
-  if (suppliedConfirmation !== expectedConfirmation) {
-    throw new ProbeLedgerError("PRODUCTION_V03_MIGRATION_CONFIRMATION_REQUIRED");
+  const prepared = await prepareProductionPolicyV04();
+  if (suppliedConfirmation !== prepared.expectedConfirmation) {
+    throw new ProbeLedgerError("PRODUCTION_V04_MIGRATION_CONFIRMATION_REQUIRED");
   }
-
-  const result = await migrateProbeGuardPolicyV03(redis, {
-    sourceReceipt: discovered.sourceReceipt,
-    predecessorReceipt: discovered.predecessorReceipt,
-    migrationCommit: sourceCommit
+  const result = await migrateProbeGuardPolicyV04(prepared.redis, {
+    sourceReceipt: prepared.discovered.sourceReceipt,
+    predecessorReceipt: prepared.discovered.predecessorReceipt,
+    migrationCommit: prepared.sourceCommit
   });
-  const status = await readProbeGuardStatus(redis);
+  const status = await readProbeGuardStatus(prepared.redis);
   const expected: ProbeGuardIdentity = {
-    guardInstanceId,
-    initializedCommit,
-    policyHash: nextPolicyHash,
-    scriptHash: nextScriptHash
+    guardInstanceId: prepared.guardInstanceId,
+    initializedCommit: prepared.initializedCommit,
+    policyHash: prepared.nextPolicyHash,
+    scriptHash: prepared.nextScriptHash
   };
-  const preserved = discovered.sourceReceipt.preserved;
+  const preserved = prepared.discovered.sourceReceipt.preserved;
   if (
     !isProbeGuardStatusConsistent(status, expected) ||
     status.claimedCalls !== preserved.claimedCalls ||
@@ -357,13 +397,23 @@ async function migrateProductionPolicyV03(): Promise<void> {
     status.knownActualNanoUsd !== preserved.knownActualNanoUsd ||
     status.uncertainUpperNanoUsd !== preserved.uncertainUpperNanoUsd ||
     status.sequence !== preserved.sequence ||
-    canonicalJson(status.purposeCounts) !== canonicalJson(preserved.purposeCounts)
+    canonicalJson(status.purposeCounts) !== canonicalJson(preserved.purposeCounts) ||
+    result.receipt.predecessorMigrationReceiptHash !==
+      PROBE_V04_PREDECESSOR_MIGRATION_RECEIPT_HASH ||
+    result.receipt.nextRunnerHash !== prepared.nextRunnerHash ||
+    result.receipt.nextRunnerHash !== PROBE_V04_MIGRATED_RUNNER_CONTRACT_HASH ||
+    result.receipt.migrationProgramHash !== prepared.migrationProgramHash ||
+    result.receipt.migrationProgramHash !== PROBE_V04_POLICY_MIGRATION_PROGRAM_HASH ||
+    result.receipt.globalCallLimit !== PROBE_GLOBAL_CALL_LIMIT ||
+    result.receipt.lifetimeSpendCeilingNanoUsd !== PROBE_LIFETIME_SPEND_CEILING_NANO_USD ||
+    result.receipt.perCallReservationNanoUsd !== PROBE_PER_CALL_RESERVATION_NANO_USD ||
+    result.receipt.knownCalls.length !== PROBE_V04_POLICY_MIGRATION_FIXED_PRESERVED_STATE.knownCalls
   ) {
-    throw new ProbeLedgerError("V03_MIGRATION_RECEIPT_MISMATCH");
+    throw new ProbeLedgerError("V04_MIGRATION_RECEIPT_MISMATCH");
   }
   safeReceipt({
     ok: true,
-    mode: "migrate-policy-v03",
+    mode: "migrate-policy-v04",
     disposition: result.disposition,
     migrationId: result.receipt.migrationId,
     migrationDigest: result.receipt.migrationDigest,
@@ -371,6 +421,8 @@ async function migrateProductionPolicyV03(): Promise<void> {
     predecessorReceiptHash: result.receipt.predecessorMigrationReceiptHash,
     policyHash: status.policyHash,
     scriptHash: status.scriptHash,
+    runnerHash: result.receipt.nextRunnerHash,
+    migrationProgramHash: result.receipt.migrationProgramHash,
     claimedCalls: status.claimedCalls,
     knownCalls: status.knownCount,
     committedNanoUsd: status.committedNanoUsd,
@@ -544,6 +596,205 @@ async function seedIntegrationV03FifthCall(
   return call;
 }
 
+async function integrationV04Fixture(testId: string): Promise<{
+  readonly predecessor: ProbeV03PolicyMigrationReceipt;
+  readonly manifest: ProbeV04PolicyMigrationManifest;
+  readonly migrationDigest: string;
+}> {
+  const costs = [
+    2_752_200, 2_745_600, 2_862_200, 3_000_800, 3_216_400, 3_322_000, 3_280_200, 3_489_200,
+    3_324_200
+  ] as const;
+  const knownCalls: readonly ProbePolicyMigrationKnownCall[] = Object.freeze(
+    await Promise.all(
+      costs.map(async (actualNanoUsd, ordinal) => ({
+        ordinal,
+        jti: `jti_v04_${testId}_${ordinal}`,
+        dispatchSequence: ordinal + 1,
+        actualNanoUsd,
+        providerResponseHash: await sha256Hex(`v04-response:${testId}:${ordinal}`),
+        settlementDigest: await sha256Hex(`v04-settlement:${testId}:${ordinal}`),
+        usageHash: await sha256Hex(`v04-usage:${testId}:${ordinal}`)
+      }))
+    )
+  );
+  const guardInstanceId = `guard_v04_${testId}`;
+  const initializedCommit = "f".repeat(40);
+  const predecessorCore = {
+    version: PROBE_V03_POLICY_MIGRATION_VERSION,
+    migrationId: PROBE_V03_POLICY_MIGRATION_ID,
+    priorAppCommit: "a".repeat(40),
+    priorActivationHash: "1".repeat(64),
+    predecessorMigrationId: PROBE_POLICY_MIGRATION_ID,
+    predecessorMigrationReceiptHash: "2".repeat(64),
+    guardInstanceId,
+    initializedCommit,
+    previousPolicyVersion: PROBE_MIGRATED_POLICY_VERSION,
+    previousPolicyHash: PROBE_MIGRATED_POLICY_HASH,
+    previousScriptHash: PROBE_MIGRATED_LEDGER_SCRIPT_HASH,
+    preserved: {
+      claimedCalls: 5,
+      knownCalls: 5,
+      pendingCalls: 0,
+      uncertainCalls: 0,
+      inflightCalls: 0,
+      committedNanoUsd: 312_500_000,
+      knownActualNanoUsd: 14_577_200,
+      uncertainUpperNanoUsd: 0,
+      sequence: 5,
+      purposeCounts: { calibration: 5, baseline: 0, repair: 0, revised: 0, judge: 0 }
+    },
+    knownCalls: knownCalls.slice(0, 5),
+    migrationCommit: "d".repeat(40),
+    nextPolicyVersion: PROBE_V03_MIGRATED_POLICY_VERSION,
+    nextPolicyHash: PROBE_V03_MIGRATED_POLICY_HASH,
+    nextScriptHash: PROBE_V03_MIGRATED_LEDGER_SCRIPT_HASH,
+    previousPurposeLimits: PROBE_MIGRATED_PURPOSE_CALL_LIMITS,
+    nextPurposeLimits: PROBE_V03_MIGRATED_PURPOSE_CALL_LIMITS,
+    globalCallLimit: PROBE_GLOBAL_CALL_LIMIT,
+    lifetimeSpendCeilingNanoUsd: PROBE_LIFETIME_SPEND_CEILING_NANO_USD,
+    perCallReservationNanoUsd: PROBE_PER_CALL_RESERVATION_NANO_USD,
+    migrationDigest: await sha256Hex(`v04-predecessor-migration:${testId}`),
+    migratedAtMs: 1_800_000_000_000
+  };
+  const predecessor = Object.freeze({
+    ...predecessorCore,
+    receiptHash: await canonicalSha256(predecessorCore)
+  }) as unknown as ProbeV03PolicyMigrationReceipt;
+  const manifest = Object.freeze({
+    version: PROBE_V04_POLICY_MIGRATION_VERSION,
+    migrationId: PROBE_V04_POLICY_MIGRATION_ID,
+    priorAppCommit: PROBE_V04_POLICY_MIGRATION_PRIOR_APP_COMMIT,
+    priorActivationHash: PROBE_V04_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
+    priorEvidenceRawSha256: PROBE_V04_PRIOR_ATTEMPT3_RAW_SHA256,
+    priorEvidenceDigest: PROBE_V04_PRIOR_ATTEMPT3_EVIDENCE_DIGEST,
+    predecessorMigrationId: predecessor.migrationId,
+    predecessorMigrationReceiptHash: predecessor.receiptHash,
+    guardInstanceId,
+    initializedCommit,
+    previousPolicyVersion: PROBE_V04_PREVIOUS_POLICY_VERSION,
+    previousPolicyHash: PROBE_V04_PREVIOUS_POLICY_HASH,
+    previousScriptHash: PROBE_V04_PREVIOUS_LEDGER_SCRIPT_HASH,
+    previousRunnerHash: PROBE_V04_PREVIOUS_RUNNER_CONTRACT_HASH,
+    preserved: PROBE_V04_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
+    knownCalls,
+    migrationCommit: "c".repeat(40),
+    nextPolicyVersion: PROBE_V04_MIGRATED_POLICY_VERSION,
+    nextPolicyHash: PROBE_V04_MIGRATED_POLICY_HASH,
+    nextScriptHash: PROBE_V04_MIGRATED_LEDGER_SCRIPT_HASH,
+    nextRunnerHash: PROBE_V04_MIGRATED_RUNNER_CONTRACT_HASH,
+    migrationProgramHash: PROBE_V04_POLICY_MIGRATION_PROGRAM_HASH,
+    previousPurposeLimits: PROBE_V04_PREVIOUS_PURPOSE_CALL_LIMITS,
+    nextPurposeLimits: PROBE_V04_MIGRATED_PURPOSE_CALL_LIMITS,
+    globalCallLimit: PROBE_GLOBAL_CALL_LIMIT,
+    lifetimeSpendCeilingNanoUsd: PROBE_LIFETIME_SPEND_CEILING_NANO_USD,
+    perCallReservationNanoUsd: PROBE_PER_CALL_RESERVATION_NANO_USD
+  }) as ProbeV04PolicyMigrationManifest;
+  return {
+    predecessor,
+    manifest,
+    migrationDigest: await canonicalSha256(manifest)
+  };
+}
+
+async function seedIntegrationV04Source(
+  redis: ReturnType<typeof createProbeRedis>,
+  keyspace: ReturnType<typeof createProbeLedgerKeyspace>,
+  fixture: Awaited<ReturnType<typeof integrationV04Fixture>>
+): Promise<void> {
+  const { manifest, predecessor } = fixture;
+  await redis.hset(keyspace.config, {
+    schema_version: 1,
+    status: "open",
+    guard_instance_id: manifest.guardInstanceId,
+    initialized_commit: manifest.initializedCommit,
+    policy_version: manifest.previousPolicyVersion,
+    policy_hash: manifest.previousPolicyHash,
+    script_hash: manifest.previousScriptHash,
+    global_call_limit: manifest.globalCallLimit,
+    spend_ceiling_nusd: manifest.lifetimeSpendCeilingNanoUsd,
+    per_call_reservation_nusd: manifest.perCallReservationNanoUsd,
+    model: PROBE_MODEL,
+    max_concurrency: PROBE_MAX_CONCURRENCY,
+    challenge_closes_at_ms: Date.parse(PROBE_CHALLENGE_CLOSES_AT)
+  });
+  await redis.hset(keyspace.totals, {
+    claimed_calls: manifest.preserved.claimedCalls,
+    committed_nusd: manifest.preserved.committedNanoUsd,
+    pending_count: 0,
+    known_count: manifest.preserved.knownCalls,
+    uncertain_count: 0,
+    known_actual_nusd: manifest.preserved.knownActualNanoUsd,
+    uncertain_upper_nusd: 0,
+    sequence: manifest.preserved.sequence
+  });
+  await redis.hset(keyspace.purposeLimits, manifest.previousPurposeLimits);
+  await redis.hset(keyspace.purposeCounts, manifest.preserved.purposeCounts);
+  const predecessorKey = `${keyspace.namespace}:policy-migration:${predecessor.migrationId}`;
+  await redis.hset(predecessorKey, {
+    version: predecessor.version,
+    migration_id: predecessor.migrationId,
+    migration_digest: predecessor.migrationDigest,
+    prior_app_commit: predecessor.priorAppCommit,
+    prior_activation_hash: predecessor.priorActivationHash,
+    predecessor_migration_id: predecessor.predecessorMigrationId,
+    predecessor_receipt_hash: predecessor.predecessorMigrationReceiptHash,
+    guard_instance_id: predecessor.guardInstanceId,
+    initialized_commit: predecessor.initializedCommit,
+    previous_policy_version: predecessor.previousPolicyVersion,
+    previous_policy_hash: predecessor.previousPolicyHash,
+    previous_script_hash: predecessor.previousScriptHash,
+    next_policy_version: predecessor.nextPolicyVersion,
+    next_policy_hash: predecessor.nextPolicyHash,
+    next_script_hash: predecessor.nextScriptHash,
+    known_actual_nusd: predecessor.preserved.knownActualNanoUsd,
+    migration_commit: predecessor.migrationCommit,
+    migrated_at_ms: predecessor.migratedAtMs
+  });
+  for (const call of predecessor.knownCalls) {
+    const prefix = `call_${call.ordinal}_`;
+    await redis.hset(predecessorKey, {
+      [`${prefix}ordinal`]: call.ordinal,
+      [`${prefix}jti`]: call.jti,
+      [`${prefix}dispatch_sequence`]: call.dispatchSequence,
+      [`${prefix}actual_nusd`]: call.actualNanoUsd,
+      [`${prefix}provider_response_hash`]: call.providerResponseHash,
+      [`${prefix}settlement_digest`]: call.settlementDigest,
+      [`${prefix}usage_hash`]: call.usageHash
+    });
+  }
+  for (const call of manifest.knownCalls) {
+    const historical =
+      call.ordinal < 4
+        ? { policyHash: PROBE_PREVIOUS_POLICY_HASH, scriptHash: PROBE_PREVIOUS_LEDGER_SCRIPT_HASH }
+        : call.ordinal === 4
+          ? {
+              policyHash: PROBE_MIGRATED_POLICY_HASH,
+              scriptHash: PROBE_MIGRATED_LEDGER_SCRIPT_HASH
+            }
+          : {
+              policyHash: PROBE_V03_MIGRATED_POLICY_HASH,
+              scriptHash: PROBE_V03_MIGRATED_LEDGER_SCRIPT_HASH
+            };
+    await redis.hset(`${keyspace.namespace}:auth:${call.jti}`, {
+      state: "KNOWN",
+      jti: call.jti,
+      purpose: "calibration",
+      guard_instance_id: manifest.guardInstanceId,
+      policy_hash: historical.policyHash,
+      script_hash: historical.scriptHash,
+      reservation_nusd: PROBE_PER_CALL_RESERVATION_NANO_USD,
+      dispatch_sequence: call.dispatchSequence,
+      actual_nusd: call.actualNanoUsd,
+      provider_response_hash: call.providerResponseHash,
+      settlement_digest: call.settlementDigest,
+      usage_hash: call.usageHash,
+      settled_at_ms: 3
+    });
+    await redis.set(`${keyspace.namespace}:provider:${call.providerResponseHash}`, call.jti);
+  }
+}
+
 function schedule(): ProbePurpose[] {
   return Object.entries(PROBE_PURPOSE_CALL_LIMITS).flatMap(([purpose, count]) =>
     Array.from({ length: count }, () => purpose as ProbePurpose)
@@ -575,8 +826,14 @@ async function integrationTest(): Promise<void> {
   const admissionKeyspace = createProbeLedgerKeyspace(`tp:{webmcp26}:admission_${testId}`);
   const migrationKeyspace = createProbeLedgerKeyspace(`tp:{webmcp26}:migration_${testId}`);
   const tamperKeyspace = createProbeLedgerKeyspace(`tp:{webmcp26}:migration_tamper_${testId}`);
+  const v04MigrationKeyspace = createProbeLedgerKeyspace(`tp:{webmcp26}:migration_v04_${testId}`);
+  const v04TamperKeyspace = createProbeLedgerKeyspace(
+    `tp:{webmcp26}:migration_v04_tamper_${testId}`
+  );
   const migrationPrior = await integrationMigrationPriorReceipt(testId);
   const tamperPrior = await integrationMigrationPriorReceipt(`${testId}_tamper`);
+  const v04Fixture = await integrationV04Fixture(testId);
+  const v04TamperFixture = await integrationV04Fixture(`${testId}_tamper`);
   const guard = await identity(`guard_integration_${testId}`, "f".repeat(40));
   const concurrencyGuard: ProbeGuardIdentity = {
     ...guard,
@@ -623,6 +880,20 @@ async function integrationTest(): Promise<void> {
     tamperKeyspace.purposeCounts,
     tamperKeyspace.inflight,
     probePolicyMigrationKey(tamperKeyspace),
+    v04MigrationKeyspace.config,
+    v04MigrationKeyspace.totals,
+    v04MigrationKeyspace.purposeLimits,
+    v04MigrationKeyspace.purposeCounts,
+    v04MigrationKeyspace.inflight,
+    `${v04MigrationKeyspace.namespace}:policy-migration:${v04Fixture.predecessor.migrationId}`,
+    `${v04MigrationKeyspace.namespace}:policy-migration:${v04Fixture.manifest.migrationId}`,
+    v04TamperKeyspace.config,
+    v04TamperKeyspace.totals,
+    v04TamperKeyspace.purposeLimits,
+    v04TamperKeyspace.purposeCounts,
+    v04TamperKeyspace.inflight,
+    `${v04TamperKeyspace.namespace}:policy-migration:${v04TamperFixture.predecessor.migrationId}`,
+    `${v04TamperKeyspace.namespace}:policy-migration:${v04TamperFixture.manifest.migrationId}`,
     `${concurrencyKeyspace.namespace}:issue-rate:calibration:${actorHash}`,
     ...Object.keys(PROBE_PURPOSE_CALL_LIMITS).map(
       (purpose) => `${keyspace.namespace}:issue-rate:${purpose}:${actorHash}`
@@ -634,6 +905,14 @@ async function integrationTest(): Promise<void> {
     ...tamperPrior.knownCalls.flatMap((call) => [
       `${tamperKeyspace.namespace}:auth:${call.jti}`,
       `${tamperKeyspace.namespace}:provider:${call.providerResponseHash}`
+    ]),
+    ...v04Fixture.manifest.knownCalls.flatMap((call) => [
+      `${v04MigrationKeyspace.namespace}:auth:${call.jti}`,
+      `${v04MigrationKeyspace.namespace}:provider:${call.providerResponseHash}`
+    ]),
+    ...v04TamperFixture.manifest.knownCalls.flatMap((call) => [
+      `${v04TamperKeyspace.namespace}:auth:${call.jti}`,
+      `${v04TamperKeyspace.namespace}:provider:${call.providerResponseHash}`
     ])
   ]);
   let terminalReceipt: Record<string, unknown> | undefined;
@@ -727,8 +1006,8 @@ async function integrationTest(): Promise<void> {
       !isProbeGuardStatusConsistent(v03Status, {
         guardInstanceId: migrationPrior.guardInstanceId,
         initializedCommit: migrationPrior.initializedCommit,
-        policyHash: await probePolicyHash(),
-        scriptHash: await probeLedgerScriptHash()
+        policyHash: PROBE_V03_MIGRATED_POLICY_HASH,
+        scriptHash: PROBE_V03_MIGRATED_LEDGER_SCRIPT_HASH
       }) ||
       v03Status.claimedCalls !== 5 ||
       v03Status.knownCount !== 5 ||
@@ -815,6 +1094,121 @@ async function integrationTest(): Promise<void> {
       (await redis.exists(probePolicyMigrationKey(tamperKeyspace))) !== 0
     ) {
       throw new ProbeLedgerError("MIGRATION_TEST_TAMPER_MUTATED_STATE");
+    }
+
+    const v04Keys = [
+      v04MigrationKeyspace.config,
+      v04MigrationKeyspace.totals,
+      v04MigrationKeyspace.purposeLimits,
+      v04MigrationKeyspace.purposeCounts,
+      v04MigrationKeyspace.inflight,
+      `${v04MigrationKeyspace.namespace}:policy-migration:${v04Fixture.predecessor.migrationId}`,
+      `${v04MigrationKeyspace.namespace}:policy-migration:${v04Fixture.manifest.migrationId}`,
+      ...v04Fixture.manifest.knownCalls.flatMap((call) => [
+        `${v04MigrationKeyspace.namespace}:auth:${call.jti}`,
+        `${v04MigrationKeyspace.namespace}:provider:${call.providerResponseHash}`
+      ])
+    ];
+    const v04Arguments = buildProbeV04PolicyMigrationArguments(
+      v04Fixture.manifest,
+      v04Fixture.predecessor,
+      v04Fixture.migrationDigest
+    );
+    await seedIntegrationV04Source(redis, v04MigrationKeyspace, v04Fixture);
+    const v04NewReply = await redis.eval<string[], unknown>(
+      PROBE_V04_POLICY_MIGRATION_SCRIPTS.migrate,
+      v04Keys,
+      v04Arguments
+    );
+    const v04ReplayReply = await redis.eval<string[], unknown>(
+      PROBE_V04_POLICY_MIGRATION_SCRIPTS.migrate,
+      v04Keys,
+      v04Arguments
+    );
+    if (
+      !Array.isArray(v04NewReply) ||
+      Number(v04NewReply[0]) !== 1 ||
+      v04NewReply[1] !== "V04_MIGRATED_NEW" ||
+      !Array.isArray(v04ReplayReply) ||
+      Number(v04ReplayReply[0]) !== 2 ||
+      v04ReplayReply[1] !== "V04_MIGRATED_EXISTING"
+    ) {
+      throw new ProbeLedgerError("V04_MIGRATION_TEST_DISPOSITION_MISMATCH");
+    }
+    const v04Status = await readProbeGuardStatus(redis, v04MigrationKeyspace);
+    if (
+      !isProbeGuardStatusConsistent(v04Status, {
+        guardInstanceId: v04Fixture.manifest.guardInstanceId,
+        initializedCommit: v04Fixture.manifest.initializedCommit,
+        policyHash: PROBE_V04_MIGRATED_POLICY_HASH,
+        scriptHash: PROBE_V04_MIGRATED_LEDGER_SCRIPT_HASH
+      }) ||
+      v04Status.claimedCalls !== 9 ||
+      v04Status.knownCount !== 9 ||
+      v04Status.committedNanoUsd !== 562_500_000 ||
+      v04Status.knownActualNanoUsd !== 27_992_800 ||
+      v04Status.sequence !== 9 ||
+      v04Status.purposeLimits.calibration !== 13 ||
+      v04Status.purposeLimits.judge !== 1 ||
+      (await redis.exists(v04Keys[6]!)) !== 1
+    ) {
+      throw new ProbeLedgerError("V04_MIGRATION_TEST_NEW_STATUS_MISMATCH");
+    }
+    const v04ConflictArguments = [...v04Arguments];
+    v04ConflictArguments[2] = "0".repeat(64);
+    const v04ConflictReply = await redis.eval<string[], unknown>(
+      PROBE_V04_POLICY_MIGRATION_SCRIPTS.migrate,
+      v04Keys,
+      v04ConflictArguments
+    );
+    if (
+      !Array.isArray(v04ConflictReply) ||
+      Number(v04ConflictReply[0]) !== 0 ||
+      v04ConflictReply[1] !== "V04_MIGRATION_RECEIPT_CONFLICT"
+    ) {
+      throw new ProbeLedgerError("V04_MIGRATION_TEST_CONFLICT_ACCEPTED");
+    }
+
+    const v04TamperKeys = [
+      v04TamperKeyspace.config,
+      v04TamperKeyspace.totals,
+      v04TamperKeyspace.purposeLimits,
+      v04TamperKeyspace.purposeCounts,
+      v04TamperKeyspace.inflight,
+      `${v04TamperKeyspace.namespace}:policy-migration:${v04TamperFixture.predecessor.migrationId}`,
+      `${v04TamperKeyspace.namespace}:policy-migration:${v04TamperFixture.manifest.migrationId}`,
+      ...v04TamperFixture.manifest.knownCalls.flatMap((call) => [
+        `${v04TamperKeyspace.namespace}:auth:${call.jti}`,
+        `${v04TamperKeyspace.namespace}:provider:${call.providerResponseHash}`
+      ])
+    ];
+    await seedIntegrationV04Source(redis, v04TamperKeyspace, v04TamperFixture);
+    const v04TamperedCall = v04TamperFixture.manifest.knownCalls[8];
+    if (!v04TamperedCall) throw new ProbeLedgerError("V04_MIGRATION_TEST_CALL_MISSING");
+    await redis.hset(`${v04TamperKeyspace.namespace}:auth:${v04TamperedCall.jti}`, {
+      actual_nusd: v04TamperedCall.actualNanoUsd + 1
+    });
+    const v04TamperReply = await redis.eval<string[], unknown>(
+      PROBE_V04_POLICY_MIGRATION_SCRIPTS.migrate,
+      v04TamperKeys,
+      buildProbeV04PolicyMigrationArguments(
+        v04TamperFixture.manifest,
+        v04TamperFixture.predecessor,
+        v04TamperFixture.migrationDigest
+      )
+    );
+    const v04TamperedStatus = await readProbeGuardStatus(redis, v04TamperKeyspace);
+    if (
+      !Array.isArray(v04TamperReply) ||
+      Number(v04TamperReply[0]) !== 0 ||
+      v04TamperReply[1] !== "V04_MIGRATION_KNOWN_CALL_MISMATCH" ||
+      v04TamperedStatus.policyHash !== PROBE_V04_PREVIOUS_POLICY_HASH ||
+      v04TamperedStatus.scriptHash !== PROBE_V04_PREVIOUS_LEDGER_SCRIPT_HASH ||
+      v04TamperedStatus.purposeLimits.calibration !== 9 ||
+      v04TamperedStatus.purposeLimits.judge !== 5 ||
+      (await redis.exists(v04TamperKeys[6]!)) !== 0
+    ) {
+      throw new ProbeLedgerError("V04_MIGRATION_TEST_TAMPER_MUTATED_STATE");
     }
 
     await initializeProbeGuard(redis, concurrencyGuard, Date.now(), concurrencyKeyspace);
@@ -1086,7 +1480,11 @@ async function integrationTest(): Promise<void> {
       policyMigrationTamperRejected: true,
       policyV03MigrationVerified: true,
       policyV03MigrationReplayVerified: true,
-      policyV03MigrationConflictRejected: true
+      policyV03MigrationConflictRejected: true,
+      policyV04MigrationVerified: true,
+      policyV04MigrationReplayVerified: true,
+      policyV04MigrationConflictRejected: true,
+      policyV04MigrationTamperRejected: true
     };
   } finally {
     await cleanup(redis, keys);
@@ -1102,11 +1500,18 @@ try {
   else if (mode === "status") await productionStatus();
   else if (mode === "init") await initializeProduction();
   else if (mode === "reap") await reapProduction();
-  else if (mode === "preflight-policy-v03") await preflightProductionPolicyV03();
-  else if (mode === "migrate-policy" || mode === "migrate-policy-v03")
-    await migrateProductionPolicyV03();
+  else if (mode === "preflight-policy-v04") await preflightProductionPolicyV04();
+  else if (mode === "migrate-policy-v04") await migrateProductionPolicyV04();
+  else if (
+    mode === "preflight-policy-v03" ||
+    mode === "migrate-policy" ||
+    mode === "migrate-policy-v03"
+  )
+    throw new ProbeLedgerError("RETIRED_V03_MIGRATION_INTENT_REJECTED");
   else if (mode === "bootstrap") {
     const operatorIntentCount = [
+      process.env.TOOLPROOF_PROBE_POLICY_V04_MIGRATION_CONFIRM,
+      process.env.TOOLPROOF_PROBE_POLICY_V04_MIGRATION_PREFLIGHT,
       process.env.TOOLPROOF_PROBE_POLICY_V03_MIGRATION_CONFIRM,
       process.env.TOOLPROOF_PROBE_POLICY_V03_MIGRATION_PREFLIGHT,
       process.env.TOOLPROOF_PROBE_POLICY_MIGRATION_CONFIRM,
@@ -1114,23 +1519,27 @@ try {
       process.env.TOOLPROOF_PROBE_INIT_CONFIRM
     ].filter(Boolean).length;
     if (operatorIntentCount > 1) throw new ProbeLedgerError("AMBIGUOUS_OPERATOR_INTENT");
-    if (process.env.TOOLPROOF_PROBE_POLICY_MIGRATION_CONFIRM) {
-      throw new ProbeLedgerError("LEGACY_MIGRATION_INTENT_REJECTED");
+    if (
+      process.env.TOOLPROOF_PROBE_POLICY_MIGRATION_CONFIRM ||
+      process.env.TOOLPROOF_PROBE_POLICY_V03_MIGRATION_CONFIRM ||
+      process.env.TOOLPROOF_PROBE_POLICY_V03_MIGRATION_PREFLIGHT
+    ) {
+      throw new ProbeLedgerError("RETIRED_V03_MIGRATION_INTENT_REJECTED");
     }
-    if (process.env.TOOLPROOF_PROBE_POLICY_V03_MIGRATION_PREFLIGHT) {
-      if (process.env.TOOLPROOF_PROBE_POLICY_V03_MIGRATION_PREFLIGHT !== "1") {
-        throw new ProbeLedgerError("INVALID_V03_MIGRATION_PREFLIGHT_INTENT");
+    if (process.env.TOOLPROOF_PROBE_POLICY_V04_MIGRATION_PREFLIGHT) {
+      if (process.env.TOOLPROOF_PROBE_POLICY_V04_MIGRATION_PREFLIGHT !== "1") {
+        throw new ProbeLedgerError("INVALID_V04_MIGRATION_PREFLIGHT_INTENT");
       }
-      await preflightProductionPolicyV03();
-    } else if (process.env.TOOLPROOF_PROBE_POLICY_V03_MIGRATION_CONFIRM)
-      await migrateProductionPolicyV03();
+      await preflightProductionPolicyV04();
+    } else if (process.env.TOOLPROOF_PROBE_POLICY_V04_MIGRATION_CONFIRM)
+      await migrateProductionPolicyV04();
     else if (process.env.TOOLPROOF_PROBE_REAP_CONFIRM) await reapProduction();
     else if (process.env.TOOLPROOF_PROBE_INIT_CONFIRM) await initializeProduction();
     else await productionStatus();
   } else if (mode === "integration-test") await integrationTest();
   else
     throw new Error(
-      "usage: probe-controls.ts <hashes|status|init|reap|preflight-policy-v03|migrate-policy-v03|bootstrap|integration-test>"
+      "usage: probe-controls.ts <hashes|status|init|reap|preflight-policy-v04|migrate-policy-v04|bootstrap|integration-test>"
     );
 } catch (error) {
   const code =

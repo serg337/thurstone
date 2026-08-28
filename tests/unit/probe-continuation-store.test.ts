@@ -270,7 +270,7 @@ describe("encrypted Probe continuation store", () => {
     expect(PROBE_CONTINUATION_SCRIPTS.put).toContain('redis.call("PEXPIRE"');
     expect(PROBE_CONTINUATION_SCRIPTS.get).toContain('redis.call("PTTL"');
     await expect(probePolicyHash()).resolves.toBe(
-      "8293eaee17e979eee1ca915a967ca3110f0d20068e4eda573554ae682dc563b0"
+      "4c70f123b0e3bc9b31477e976e51604e570e1475ef1d315a21615553e0be2b77"
     );
     await expect(probeLedgerScriptHash()).resolves.toBe(
       "c25d90f7e060662867925e83c6d33dc7636f22b18cbcd94c3ffc6880eb907779"

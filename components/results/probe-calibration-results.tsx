@@ -188,16 +188,27 @@ export function ProbeCalibrationResults({
 
   async function finishSecureRun(): Promise<void> {
     if (!marker) return;
+    let acknowledgementMarker: ProbeClientSessionMarker;
+    try {
+      acknowledgementMarker = await recoverProbeClientSession(APP_COMMIT, documentId);
+      if (acknowledgementMarker.path !== "/results") {
+        throw new Error("calibration_acknowledgement_path_mismatch");
+      }
+      setMarker(acknowledgementMarker);
+    } catch {
+      setError("calibration_acknowledgement_recovery_failed");
+      return;
+    }
     const response = await fetch("/api/probe/reveal", {
       method: "DELETE",
       credentials: "same-origin",
       cache: "no-store",
       headers: {
         "Content-Type": "application/json",
-        "X-ToolProof-CSRF": marker.csrfToken,
+        "X-ToolProof-CSRF": acknowledgementMarker.csrfToken,
         "X-ToolProof-Document": documentId
       },
-      body: JSON.stringify({ continuation: marker.continuation })
+      body: JSON.stringify({ continuation: acknowledgementMarker.continuation })
     });
     if (!response.ok) {
       setError("calibration_acknowledgement_failed");
@@ -212,23 +223,41 @@ export function ProbeCalibrationResults({
       <section className="panel calibration-results" aria-labelledby="calibration-results-title">
         <div className="panel-heading">
           <div>
-            <span className="eyebrow">Gate 2 · third/final preferred attempt evidence</span>
+            <span className="eyebrow">Gate 2 · sealed preferred-attempt evidence</span>
             <h2 id="calibration-results-title">Four fresh-context trials sealed</h2>
           </div>
-          <span className="status-pill status-ready">
-            {bundle.passedCount}/{bundle.caseCount} verified
+          <span
+            className={`status-pill ${
+              bundle.passedCount === bundle.caseCount ? "status-ready" : "status-blocked"
+            }`}
+          >
+            {bundle.passedCount}/{bundle.caseCount} passed · evidence sealed
           </span>
         </div>
         <p>
           This third and final preferred four-case attempt is calibration-only and permanently
           excluded from the scored benchmark. It has its own denominator; both earlier attempts
-          remain separate and are never merged or relabeled.
+          remain separate and are never merged or relabeled. Sealing proves that the authentic
+          result is retained; it does not by itself make Gate 2 pass.
         </p>
+        {bundle.passedCount !== bundle.caseCount ? (
+          <div className="runtime-receipt" role="status">
+            <span>Gate 2 status</span>
+            <strong>
+              Incomplete · {bundle.passedCount}/{bundle.caseCount} preferred calibration cases
+              passed
+            </strong>
+            <small>
+              The preferred path is exhausted. Sergio authorized local preparation of the pinned
+              fallback only; this receipt does not claim a fallback run, migration, or Gate 2 pass.
+            </small>
+          </div>
+        ) : null}
         <ul className="result-list" aria-label="Calibration case results">
           {bundle.cases.map((row, index) => (
             <li key={row.ordinal ?? index}>
               <strong>Attempt-3 trial {index + 1}</strong>
-              <span>{row.evaluation?.passed ? "Verified" : "Failed"}</span>
+              <span>{row.evaluation?.passed ? "Passed" : "Failed"}</span>
               <small>Observed action: {row.evaluation?.observedTool ?? "no native call"}</small>
             </li>
           ))}

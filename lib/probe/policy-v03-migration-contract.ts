@@ -17,8 +17,6 @@ import {
   PROBE_MAX_CONCURRENCY,
   PROBE_MODEL,
   PROBE_PER_CALL_RESERVATION_NANO_USD,
-  PROBE_POLICY_VERSION,
-  PROBE_PURPOSE_CALL_LIMITS,
   type ProbePurpose
 } from "@/lib/probe/policy";
 
@@ -33,6 +31,20 @@ export const PROBE_V03_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH =
 export const PROBE_V03_PREDECESSOR_MIGRATION_ID = PROBE_POLICY_MIGRATION_ID;
 export const PROBE_V03_PREDECESSOR_MIGRATION_RECEIPT_HASH =
   "4ee25981212e67324bda5ec21a67912eddacec622b20850035ca855574f43b84";
+
+/** Permanent v0.3 target identity. Never derive historical receipts from the active policy. */
+export const PROBE_V03_MIGRATED_POLICY_VERSION = "toolproof-probe-policy@0.3.0";
+export const PROBE_V03_MIGRATED_POLICY_HASH =
+  "8293eaee17e979eee1ca915a967ca3110f0d20068e4eda573554ae682dc563b0";
+export const PROBE_V03_MIGRATED_LEDGER_SCRIPT_HASH =
+  "c25d90f7e060662867925e83c6d33dc7636f22b18cbcd94c3ffc6880eb907779";
+export const PROBE_V03_MIGRATED_PURPOSE_CALL_LIMITS = Object.freeze({
+  calibration: 9,
+  baseline: 72,
+  repair: 2,
+  revised: 72,
+  judge: 5
+}) satisfies Readonly<Record<ProbePurpose, number>>;
 
 export const PROBE_V03_PREVIOUS_POLICY_VERSION = PROBE_MIGRATED_POLICY_VERSION;
 export const PROBE_V03_PREVIOUS_POLICY_HASH = PROBE_MIGRATED_POLICY_HASH;
@@ -102,7 +114,7 @@ export interface ProbeV03PolicyMigrationManifest extends Omit<
 > {
   readonly version: typeof PROBE_V03_POLICY_MIGRATION_VERSION;
   readonly migrationCommit: string;
-  readonly nextPolicyVersion: typeof PROBE_POLICY_VERSION;
+  readonly nextPolicyVersion: typeof PROBE_V03_MIGRATED_POLICY_VERSION;
   readonly nextPolicyHash: string;
   readonly nextScriptHash: string;
   readonly previousPurposeLimits: Readonly<Record<ProbePurpose, number>>;
@@ -447,10 +459,9 @@ export async function createProbeV03PolicyMigrationManifest(input: {
     input.predecessorReceipt
   );
   if (
-    PROBE_POLICY_VERSION !== "toolproof-probe-policy@0.3.0" ||
-    canonicalJson(PROBE_PURPOSE_CALL_LIMITS) !==
+    canonicalJson(PROBE_V03_MIGRATED_PURPOSE_CALL_LIMITS) !==
       canonicalJson({ calibration: 9, baseline: 72, repair: 2, revised: 72, judge: 5 }) ||
-    Object.values(PROBE_PURPOSE_CALL_LIMITS).reduce((sum, value) => sum + value, 0) !==
+    Object.values(PROBE_V03_MIGRATED_PURPOSE_CALL_LIMITS).reduce((sum, value) => sum + value, 0) !==
       PROBE_GLOBAL_CALL_LIMIT
   ) {
     throw new ProbeV03PolicyMigrationContractError("v03_next_policy_not_frozen");
@@ -460,11 +471,19 @@ export async function createProbeV03PolicyMigrationManifest(input: {
       ...source,
       version: PROBE_V03_POLICY_MIGRATION_VERSION,
       migrationCommit: gitCommit(input.migrationCommit, "invalid_v03_migration_commit"),
-      nextPolicyVersion: PROBE_POLICY_VERSION,
-      nextPolicyHash: hash(input.nextPolicyHash, "invalid_v03_next_policy_hash"),
-      nextScriptHash: hash(input.nextScriptHash, "invalid_v03_next_script_hash"),
+      nextPolicyVersion: PROBE_V03_MIGRATED_POLICY_VERSION,
+      nextPolicyHash: literal(
+        hash(input.nextPolicyHash, "invalid_v03_next_policy_hash"),
+        PROBE_V03_MIGRATED_POLICY_HASH,
+        "v03_next_policy_hash_mismatch"
+      ),
+      nextScriptHash: literal(
+        hash(input.nextScriptHash, "invalid_v03_next_script_hash"),
+        PROBE_V03_MIGRATED_LEDGER_SCRIPT_HASH,
+        "v03_next_script_hash_mismatch"
+      ),
       previousPurposeLimits: PROBE_V03_PREVIOUS_PURPOSE_CALL_LIMITS,
-      nextPurposeLimits: PROBE_PURPOSE_CALL_LIMITS,
+      nextPurposeLimits: PROBE_V03_MIGRATED_PURPOSE_CALL_LIMITS,
       globalCallLimit: PROBE_GLOBAL_CALL_LIMIT,
       lifetimeSpendCeilingNanoUsd: PROBE_LIFETIME_SPEND_CEILING_NANO_USD,
       perCallReservationNanoUsd: PROBE_PER_CALL_RESERVATION_NANO_USD

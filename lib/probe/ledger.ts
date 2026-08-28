@@ -31,6 +31,9 @@ import {
   PROBE_V03_POLICY_MIGRATION_PRIOR_APP_COMMIT,
   PROBE_V03_POLICY_MIGRATION_SOURCE_VERSION,
   PROBE_V03_POLICY_MIGRATION_VERSION,
+  PROBE_V03_MIGRATED_LEDGER_SCRIPT_HASH,
+  PROBE_V03_MIGRATED_POLICY_HASH,
+  PROBE_V03_MIGRATED_POLICY_VERSION,
   PROBE_V03_PREDECESSOR_MIGRATION_ID,
   PROBE_V03_PREDECESSOR_MIGRATION_RECEIPT_HASH,
   PROBE_V03_PREVIOUS_LEDGER_SCRIPT_HASH,
@@ -57,7 +60,6 @@ import {
   PROBE_POLICY_VERSION,
   PROBE_PURPOSE_CALL_LIMITS,
   PROBE_TOKEN_TTL_SECONDS,
-  probePolicyHash,
   type ProbePurpose
 } from "@/lib/probe/policy";
 
@@ -1877,10 +1879,10 @@ export async function readProbeV03PolicyMigrationReceipt(
     },
     predecessorReceipt
   );
-  const nextPolicyHash = await probePolicyHash();
-  const nextScriptHash = await probeLedgerScriptHash();
+  const nextPolicyHash = PROBE_V03_MIGRATED_POLICY_HASH;
+  const nextScriptHash = PROBE_V03_MIGRATED_LEDGER_SCRIPT_HASH;
   if (
-    String(reply[13]) !== PROBE_POLICY_VERSION ||
+    String(reply[13]) !== PROBE_V03_MIGRATED_POLICY_VERSION ||
     String(reply[14]) !== nextPolicyHash ||
     String(reply[15]) !== nextScriptHash
   ) {
@@ -1916,8 +1918,8 @@ export async function migrateProbeGuardPolicyV03(
     input.sourceReceipt,
     input.predecessorReceipt
   );
-  const nextPolicyHash = await probePolicyHash();
-  const nextScriptHash = await probeLedgerScriptHash();
+  const nextPolicyHash = PROBE_V03_MIGRATED_POLICY_HASH;
+  const nextScriptHash = PROBE_V03_MIGRATED_LEDGER_SCRIPT_HASH;
   const manifest = await createProbeV03PolicyMigrationManifest({
     sourceReceipt,
     predecessorReceipt: input.predecessorReceipt,

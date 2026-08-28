@@ -173,6 +173,47 @@ export interface ProbeDecisionJsonSchemaFormat {
   readonly schema: Readonly<Record<string, unknown>>;
 }
 
+export interface ProbeFunctionToolDefinition {
+  readonly type: "function";
+  readonly name: string;
+  readonly description: string;
+  readonly parameters: Readonly<Record<string, unknown>>;
+  readonly strict: true;
+}
+
+/**
+ * Maps the exact live WebMCP manifest to Responses API function definitions. Mutation schemas are
+ * narrowed to the runner-owned operation ID before they cross the provider boundary; read-only
+ * schemas remain byte-for-byte equivalent after canonical cloning.
+ */
+export function createProbeFunctionToolDefinitions(
+  manifest: ProbeLiveManifest,
+  transportValue: ProbeTransportBinding
+): readonly ProbeFunctionToolDefinition[] {
+  const parsed = probeLiveManifestSchema.parse(manifest);
+  const transport = probeTransportBindingSchema.parse(transportValue);
+  return deepFreeze(
+    canonicalClone(
+      [...parsed.tools]
+        .sort((left, right) => left.name.localeCompare(right.name))
+        .map((tool) => ({
+          type: "function" as const,
+          name: tool.name,
+          description: tool.description,
+          parameters: decisionArgumentSchema(tool, transport),
+          strict: true as const
+        }))
+    )
+  );
+}
+
+export function probeFunctionToolDefinitionsHash(
+  manifest: ProbeLiveManifest,
+  transport: ProbeTransportBinding
+): Promise<string> {
+  return canonicalSha256(createProbeFunctionToolDefinitions(manifest, transport));
+}
+
 function textBranch(kind: "clarify" | "abstain", field: "text" | "reason") {
   return {
     type: "object",

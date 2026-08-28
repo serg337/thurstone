@@ -3,6 +3,7 @@ import {
   probeFixtureSynopsisSchema,
   probeLiveManifestSchema
 } from "@/lib/probe/calibration-envelope";
+import { fallbackCalibrationEnvelopeSchema } from "@/lib/fallback/calibration-envelope";
 import { PROBE_CLIENT_RUNNER_VERSION } from "@/lib/probe/client-runner";
 import { z } from "zod";
 
@@ -14,6 +15,17 @@ export const PROBE_CALIBRATION_ATTEMPT_CASE_COUNT = 4 as const;
 export const PROBE_CALIBRATION_TERMINAL_CALLS = 9 as const;
 export const PROBE_MAX_CONTINUATION_CHARACTERS = 1_800_000;
 export const PROBE_SESSION_RESPONSE_VERSION = 3 as const;
+
+export const FALLBACK_PROBE_SERVICE_VERSION =
+  "toolproof-pinned-googlechromelabs-fallback-service@1.0.0";
+export const FALLBACK_PROBE_CALIBRATION_PROTOCOL_VERSION =
+  "toolproof-pinned-googlechromelabs-fallback-calibration@1.0.0";
+export const FALLBACK_PROBE_CALIBRATION_LANE =
+  "pinned-googlechromelabs-webmcp-fallback-calibration" as const;
+export const FALLBACK_PROBE_CALIBRATION_BASE_CALLS = 9 as const;
+export const FALLBACK_PROBE_CALIBRATION_CASE_COUNT = 4 as const;
+export const FALLBACK_PROBE_CALIBRATION_TERMINAL_CALLS = 13 as const;
+export const FALLBACK_PROBE_SESSION_RESPONSE_VERSION = 1 as const;
 
 const opaqueId = z.string().regex(/^[A-Za-z0-9_-]{16,96}$/u);
 const sha256 = z.string().regex(/^[a-f0-9]{64}$/u);
@@ -59,6 +71,50 @@ export const probeSessionStartBodySchema = z
   .object({
     intent: z.literal("start-final-four-case-calibration"),
     launchId: z.string().regex(/^launch_[A-Za-z0-9_-]{22,64}$/u)
+  })
+  .strict();
+
+export const fallbackProbeSessionStartBodySchema = z
+  .object({
+    intent: z.literal("start-pinned-fallback-four-case-calibration"),
+    launchId: z.string().regex(/^launch_[A-Za-z0-9_-]{22,64}$/u)
+  })
+  .strict();
+
+export const fallbackProbeSessionStartResponseSchema = z
+  .object({
+    version: z.literal(FALLBACK_PROBE_SESSION_RESPONSE_VERSION),
+    protocolVersion: z.literal(FALLBACK_PROBE_CALIBRATION_PROTOCOL_VERSION),
+    lane: z.literal(FALLBACK_PROBE_CALIBRATION_LANE),
+    csrfToken: z.string().regex(/^[A-Za-z0-9_-]{32,128}$/u),
+    continuation,
+    buildCommit: z.string().regex(/^[a-f0-9]{40}$/u),
+    expiresAt: z.number().int().positive(),
+    recoveryExpiresAt: z.number().int().positive(),
+    inferencePerformed: z.literal(false)
+  })
+  .strict();
+
+export const fallbackProbeSessionRecoverBodySchema = z
+  .object({
+    intent: z.literal("recover-pinned-fallback-four-case-calibration"),
+    documentId: z.string().regex(/^document_[A-Za-z0-9_-]{22,64}$/u)
+  })
+  .strict();
+
+export const fallbackProbeSessionRecoveryResponseSchema = z
+  .object({
+    version: z.literal(FALLBACK_PROBE_SESSION_RESPONSE_VERSION),
+    protocolVersion: z.literal(FALLBACK_PROBE_CALIBRATION_PROTOCOL_VERSION),
+    lane: z.literal(FALLBACK_PROBE_CALIBRATION_LANE),
+    status: z.literal("recovered"),
+    csrfToken: z.string().regex(/^[A-Za-z0-9_-]{32,128}$/u),
+    continuation,
+    buildCommit: z.string().regex(/^[a-f0-9]{40}$/u),
+    expiresAt: z.number().int().positive(),
+    recoveryExpiresAt: z.number().int().positive(),
+    path: z.enum(["/lab", "/results"]),
+    inferencePerformed: z.literal(false)
   })
   .strict();
 
@@ -130,6 +186,78 @@ export const probeIssueResultSchema = z.union([
   probeIssueResponseSchema,
   probeRecoveredCompletionResponseSchema
 ]);
+
+export const fallbackProbeIssueBodySchema = probeIssueBodySchema;
+
+export const fallbackProbeIssueResponseSchema = z
+  .object({
+    version: z.literal(FALLBACK_PROBE_SERVICE_VERSION),
+    protocolVersion: z.literal(FALLBACK_PROBE_CALIBRATION_PROTOCOL_VERSION),
+    lane: z.literal(FALLBACK_PROBE_CALIBRATION_LANE),
+    status: z.literal("issued"),
+    runId: z.string().regex(/^run_[A-Za-z0-9_-]{22}$/u),
+    caseId: z.string().regex(/^case_[A-Za-z0-9_-]{22}$/u),
+    trialId: z.string().regex(/^trial_[A-Za-z0-9_-]{22}$/u),
+    authorization: z
+      .object({
+        version: z.literal(1),
+        probeToken: z.string().min(32).max(16_384),
+        envelope: fallbackCalibrationEnvelopeSchema,
+        continuation
+      })
+      .strict()
+  })
+  .strict();
+
+export const fallbackProbeRecoveredCompletionResponseSchema = z
+  .object({
+    version: z.literal(FALLBACK_PROBE_SERVICE_VERSION),
+    protocolVersion: z.literal(FALLBACK_PROBE_CALIBRATION_PROTOCOL_VERSION),
+    lane: z.literal(FALLBACK_PROBE_CALIBRATION_LANE),
+    status: z.literal("already-sealed"),
+    continuation,
+    completedCount: z.number().int().min(1).max(FALLBACK_PROBE_CALIBRATION_CASE_COUNT),
+    terminal: z.boolean()
+  })
+  .strict();
+
+export const fallbackProbeIssueResultSchema = z.union([
+  fallbackProbeIssueResponseSchema,
+  fallbackProbeRecoveredCompletionResponseSchema
+]);
+
+export const fallbackProbeDecideBodySchema = z
+  .object({
+    probeToken: z.string().min(32).max(16_384),
+    envelope: fallbackCalibrationEnvelopeSchema
+  })
+  .strict();
+
+export const fallbackProbeNativeAdmissionBodySchema = z
+  .object({
+    probeToken: z.string().min(32).max(16_384),
+    envelope: fallbackCalibrationEnvelopeSchema,
+    initialBoundary: probeBoundaryEvidenceSchema
+  })
+  .strict();
+
+export const fallbackProbeFreshDecisionResponseSchema = z
+  .object({
+    context: z
+      .object({
+        kind: z.literal("fresh-stateless"),
+        previousResponseId: z.null(),
+        providerRequestCount: z.literal(1)
+      })
+      .strict(),
+    rawModelResponse: z
+      .string()
+      .min(1)
+      .max(256 * 1_024),
+    providerReceipt: z.json(),
+    decision: z.json()
+  })
+  .strict();
 
 export const probeDecideBodySchema = z
   .object({
@@ -208,6 +336,31 @@ export const probeCompleteBodySchema = z
   })
   .strict();
 
+export const fallbackProbeCompleteBodySchema = z
+  .object({
+    probeToken: z.string().min(32).max(16_384),
+    envelope: fallbackCalibrationEnvelopeSchema,
+    providerReceipt: z.json(),
+    continuation,
+    completion: z
+      .object({
+        runnerVersion: z.literal(PROBE_CLIENT_RUNNER_VERSION),
+        claim: z
+          .object({
+            runId: z.string().regex(/^run_[A-Za-z0-9_-]{22}$/u),
+            caseId: z.string().regex(/^case_[A-Za-z0-9_-]{22}$/u),
+            trialId: z.string().regex(/^trial_[A-Za-z0-9_-]{22}$/u)
+          })
+          .strict(),
+        terminalStatus: probeTerminalStatusSchema,
+        nativeDispatchCount: z.union([z.literal(0), z.literal(1)]),
+        evidence: z.json(),
+        postResetBoundary: probeBoundaryEvidenceSchema
+      })
+      .strict()
+  })
+  .strict();
+
 export const probeRevealBodySchema = z.object({ continuation }).strict();
 export const probeAcknowledgeBodySchema = z.object({ continuation }).strict();
 
@@ -223,6 +376,18 @@ export const probeCompleteResponseSchema = z
   })
   .strict();
 
+export const fallbackProbeCompleteResponseSchema = z
+  .object({
+    version: z.literal(FALLBACK_PROBE_SERVICE_VERSION),
+    protocolVersion: z.literal(FALLBACK_PROBE_CALIBRATION_PROTOCOL_VERSION),
+    lane: z.literal(FALLBACK_PROBE_CALIBRATION_LANE),
+    status: z.literal("sealed"),
+    continuation,
+    completedCount: z.number().int().min(1).max(FALLBACK_PROBE_CALIBRATION_CASE_COUNT),
+    terminal: z.boolean()
+  })
+  .strict();
+
 export type ProbeBoundaryEvidence = z.infer<typeof probeBoundaryEvidenceSchema>;
 export type ProbeResetEvidence = z.infer<typeof probeResetEvidenceSchema>;
 export type ProbeIssueBody = z.infer<typeof probeIssueBodySchema>;
@@ -233,3 +398,18 @@ export type ProbeFreshDecisionResponse = z.infer<typeof probeFreshDecisionRespon
 export type ProbeCompleteBody = z.infer<typeof probeCompleteBodySchema>;
 export type ProbeCompleteResponse = z.infer<typeof probeCompleteResponseSchema>;
 export type ProbeSessionRecoveryResponse = z.infer<typeof probeSessionRecoveryResponseSchema>;
+export type FallbackProbeIssueBody = z.infer<typeof fallbackProbeIssueBodySchema>;
+export type FallbackProbeSessionStartResponse = z.infer<
+  typeof fallbackProbeSessionStartResponseSchema
+>;
+export type FallbackProbeIssueResponse = z.infer<typeof fallbackProbeIssueResponseSchema>;
+export type FallbackProbeIssueResult = z.infer<typeof fallbackProbeIssueResultSchema>;
+export type FallbackProbeDecideBody = z.infer<typeof fallbackProbeDecideBodySchema>;
+export type FallbackProbeFreshDecisionResponse = z.infer<
+  typeof fallbackProbeFreshDecisionResponseSchema
+>;
+export type FallbackProbeCompleteBody = z.infer<typeof fallbackProbeCompleteBodySchema>;
+export type FallbackProbeCompleteResponse = z.infer<typeof fallbackProbeCompleteResponseSchema>;
+export type FallbackProbeSessionRecoveryResponse = z.infer<
+  typeof fallbackProbeSessionRecoveryResponseSchema
+>;
