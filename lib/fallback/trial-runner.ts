@@ -155,7 +155,7 @@ export async function runPinnedFallbackTrial<
           liveManifest: bridge.liveManifest
         });
       },
-      requestFreshDecision: input.serverAdapter.requestFreshDecision,
+      requestFreshDecision: (request) => input.serverAdapter.requestFreshDecision(request),
       reverifyLiveInitial: async ({ claim, initialBoundary }) => {
         const bridge = bridgeHolder.current;
         if (!bridge || !initialCatalog) throw new Error("fallback_bridge_unavailable");

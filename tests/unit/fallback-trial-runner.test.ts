@@ -272,4 +272,37 @@ describe("isolated pinned fallback trial orchestrator", () => {
     expect(source.serverAdapter.completeAndSeal).not.toHaveBeenCalled();
     expect(source.close).toHaveBeenCalledTimes(1);
   });
+
+  it("preserves the server-adapter receiver through decision dispatch", async () => {
+    const source = await setup({ kind: "clarify", text: "Which item?" });
+    const contextBound = {
+      receiver: "retained",
+      issueOpaqueClaim(input: unknown) {
+        void input;
+        return source.serverAdapter.issueOpaqueClaim();
+      },
+      requestFreshDecision(input: unknown) {
+        void input;
+        if (this.receiver !== "retained") throw new Error("server_adapter_receiver_lost");
+        return source.serverAdapter.requestFreshDecision();
+      },
+      admitNative(input: unknown) {
+        void input;
+        return source.serverAdapter.admitNative();
+      },
+      completeAndSeal(input: unknown) {
+        void input;
+        return source.serverAdapter.completeAndSeal();
+      }
+    };
+    await expect(
+      runPinnedFallbackTrial({
+        launchPlan: source.launchPlan,
+        pageAdapter: source.pageAdapter,
+        serverAdapter: contextBound,
+        launchTrial: source.launchTrial,
+        discoverBridge: source.discoverBridge
+      })
+    ).resolves.toMatchObject({ status: "sealed", terminalStatus: "clarified" });
+  });
 });
