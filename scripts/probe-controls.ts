@@ -1,5 +1,7 @@
 import { randomBytes } from "node:crypto";
 
+import { ProbeActivationError, requireProbeActivation } from "../lib/probe/activation";
+
 import { canonicalJson, canonicalSha256, sha256Hex } from "../lib/evidence/digest";
 import { fallbackRunnerContractHash } from "../lib/fallback/runner-contract";
 import {
@@ -261,6 +263,9 @@ async function productionStatus(): Promise<void> {
     throw new ProbeLedgerError("GUARD_IDENTITY_MISMATCH");
   }
   const migration = current ? await readProbeV05PolicyMigrationReceipt(redis) : null;
+  const activation = process.env.TOOLPROOF_PROBE_ACTIVATION_MODE
+    ? await requireProbeActivation()
+    : null;
   safeReceipt({
     ok: true,
     mode: migrationRequired ? "migration-required" : "status",
@@ -276,6 +281,12 @@ async function productionStatus(): Promise<void> {
       ? {
           migrationReceiptHash: migration.receiptHash,
           authorizationInventory: migration.authorizationInventory
+        }
+      : {}),
+    ...(activation
+      ? {
+          activationHash: activation.activationHash,
+          activationGuard: activation.guard
         }
       : {})
   });
@@ -2226,13 +2237,15 @@ try {
   const code =
     error instanceof ProbeLedgerError
       ? error.code
-      : error instanceof ProbeV05PolicyMigrationContractError
+      : error instanceof ProbeActivationError
         ? error.code
-        : error instanceof Error && /^V05_[A-Z0-9_]+$/u.test(error.message)
-          ? error.message
-          : error instanceof Error
-            ? error.name
-            : "unknown";
+        : error instanceof ProbeV05PolicyMigrationContractError
+          ? error.code
+          : error instanceof Error && /^V05_[A-Z0-9_]+$/u.test(error.message)
+            ? error.message
+            : error instanceof Error
+              ? error.name
+              : "unknown";
   process.stderr.write(`${JSON.stringify({ ok: false, mode: mode ?? null, error: code })}\n`);
   process.exit(1);
 }

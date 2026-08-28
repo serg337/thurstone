@@ -77,6 +77,8 @@ describe("Probe policy migration operator boundary", () => {
     expect(source).toContain("policyV05KnownRecordsVerified: 13");
     expect(source).toContain("migrationReceiptHash: migration.receiptHash");
     expect(source).toContain("authorizationInventory: migration.authorizationInventory");
+    expect(source).toContain("await requireProbeActivation()");
+    expect(source).toContain("activationHash: activation.activationHash");
     expect(source).toContain("migration_v05_${testId}");
     expect(source).toContain("migration_v05_tamper_${testId}");
     expect(source).toContain("migration_v05_issued_tamper_${testId}");
