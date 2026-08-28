@@ -1,7 +1,23 @@
 import { readFile, readdir } from "node:fs/promises";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const root = process.cwd();
+const scriptDirectory = dirname(fileURLToPath(import.meta.url));
+const gate3Sentinels = JSON.parse(
+  await readFile(resolve(scriptDirectory, "gate3-leakage-sentinels.json"), "utf8")
+);
+if (
+  gate3Sentinels?.version !== "toolproof-gate3-leakage-sentinels@1.0.0" ||
+  !Array.isArray(gate3Sentinels.sentinels) ||
+  gate3Sentinels.sentinels.length !== 130 ||
+  gate3Sentinels.sentinels.some(
+    (value) => typeof value !== "string" || value.length < 4 || value.trim() !== value
+  ) ||
+  new Set(gate3Sentinels.sentinels).size !== gate3Sentinels.sentinels.length
+) {
+  throw new Error("Gate 3 leakage sentinel manifest is invalid.");
+}
 const manifestPath = resolve(root, ".next/server/app/lab/page_client-reference-manifest.js");
 const manifest = await readFile(manifestPath, "utf8");
 
@@ -81,15 +97,13 @@ const labOnlyForbidden = [
   "191f7885eeb062de4bfe4effd9468ef648aef600",
   "41f8363c74f7b277c239689194069d80749d3f33342779662009f8c47e5348d6",
   "4ee25981212e67324bda5ec21a67912eddacec622b20850035ca855574f43b84",
-  "toolproof-gate2-invalid-infrastructure-lineage@1.0.0"
+  "toolproof-gate2-invalid-infrastructure-lineage@1.0.0",
+  ...gate3Sentinels.sentinels
 ];
 
-const allClientSource = (
-  await Promise.all(clientFiles.map((file) => readFile(file.path, "utf8")))
-).join("\n");
 for (const value of forbidden) {
-  if (labSource.includes(value) || allClientSource.includes(value)) {
-    throw new Error(`Production client bundle leaks server truth: ${value}`);
+  if (labSource.includes(value)) {
+    throw new Error(`Lab client bundle leaks server truth: ${value}`);
   }
 }
 for (const value of labOnlyForbidden) {

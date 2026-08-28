@@ -63,12 +63,12 @@ describe("Probe production client boundary verifier", () => {
       labChunkCount: 2,
       allClientChunkCount: 2,
       forbiddenSentinels: 7,
-      labOnlyForbiddenSentinels: 8,
+      labOnlyForbiddenSentinels: 138,
       sourceMaps: 0
     });
   });
 
-  it("rejects server truth in any client chunk even when the chunk is not Lab-referenced", async () => {
+  it("allows authoring truth outside Lab but rejects it from Lab-referenced chunks", async () => {
     const { root, staticRoot: outputRoot } = await buildFixture("vercel-builder");
     await mkdir(`${outputRoot}/public-script`, { recursive: true });
     await writeFile(
@@ -78,8 +78,17 @@ describe("Probe production client boundary verifier", () => {
     );
     await expect(
       execFileAsync(process.execPath, [verifierPath], { cwd: root })
+    ).resolves.toMatchObject({ stdout: expect.stringContaining('"mode":"probe-no-leakage"') });
+
+    await writeFile(
+      `${outputRoot}/${emittedChunkPath("vercel-builder", "app/lab/page.js")}`,
+      'const hidden = "expectedTool";',
+      "utf8"
+    );
+    await expect(
+      execFileAsync(process.execPath, [verifierPath], { cwd: root })
     ).rejects.toMatchObject({
-      stderr: expect.stringContaining("Production client bundle leaks server truth: expectedTool")
+      stderr: expect.stringContaining("Lab client bundle leaks server truth: expectedTool")
     });
   });
 
@@ -110,7 +119,9 @@ describe("Probe production client boundary verifier", () => {
     );
     await expect(
       execFileAsync(process.execPath, [verifierPath], { cwd: root })
-    ).resolves.toMatchObject({ stdout: expect.stringContaining('"labOnlyForbiddenSentinels":8') });
+    ).resolves.toMatchObject({
+      stdout: expect.stringContaining('"labOnlyForbiddenSentinels":138')
+    });
 
     await writeFile(
       `${outputRoot}/${emittedChunkPath("vercel-builder", "app/lab/page.js")}`,

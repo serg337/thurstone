@@ -1,5 +1,21 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const browserCommit = "e".repeat(40);
+const gate3SourceBinding = Buffer.from(
+  JSON.stringify({
+    source: {
+      repositoryCommit: browserCommit,
+      contractSourceSha256: "1".repeat(64),
+      casesSourceSha256: "2".repeat(64),
+      fixtureSourceSha256: "3".repeat(64),
+      manifestSourceSha256: "4".repeat(64),
+      runnerSourceSha256: "5".repeat(64),
+      evaluatorSourceSha256: "6".repeat(64)
+    },
+    canonicalizerSourceSha256: "7".repeat(64)
+  })
+).toString("base64url");
+
 export default defineConfig({
   testDir: "./tests/browser",
   fullyParallel: false,
@@ -15,8 +31,7 @@ export default defineConfig({
     ? {}
     : {
         webServer: {
-          command:
-            "TOOLPROOF_BROWSER_FAKE_PROBE=1 TOOLPROOF_COMMIT_SHA=eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee npm run dev",
+          command: `TOOLPROOF_BROWSER_FAKE_PROBE=1 TOOLPROOF_COMMIT_SHA=${browserCommit} TOOLPROOF_GATE3_SOURCE_BINDING_B64=${gate3SourceBinding} npm run dev`,
           url: "http://127.0.0.1:3000/api/health",
           reuseExistingServer: !process.env.CI,
           timeout: 120_000

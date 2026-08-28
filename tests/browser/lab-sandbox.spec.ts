@@ -327,8 +327,9 @@ test("normal UI shares deterministic state, pending policy, and verified reset",
   await page.goBack();
   await expect(page).toHaveURL(/\/lab$/u);
   await expect(page.getByText("consumer-ready", { exact: true })).toBeVisible();
-  await expect(mug.getByText("Current × 3", { exact: true })).toBeVisible();
-  await expect(mug.getByLabel("Stoneware mug quantity")).toHaveValue("3");
+  await expect(page.getByText("checkout-seed-v1 · r0", { exact: true })).toBeVisible();
+  await expect(mug.getByText("Current × 2", { exact: true })).toBeVisible();
+  await expect(mug.getByLabel("Stoneware mug quantity")).toHaveValue("2");
 
   await page.getByRole("button", { name: "Request simulated checkout" }).click();
   await expect(page.getByText(/Simulated checkout pending human approval/iu)).toBeVisible();
@@ -356,9 +357,7 @@ test("normal UI shares deterministic state, pending policy, and verified reset",
   await expect(page.getByText("consumer-ready", { exact: true })).toBeVisible();
 });
 
-test("quantity editor resynchronizes from persistent state after a route remount", async ({
-  page
-}) => {
+test("cross-surface navigation destroys Lab state and opens a clean document", async ({ page }) => {
   const mug = page.getByRole("listitem").filter({ hasText: "Stoneware mug" });
   const quantityEditor = mug.getByLabel("Stoneware mug quantity");
 
@@ -392,19 +391,13 @@ test("quantity editor resynchronizes from persistent state after a route remount
           .state.lines.find(({ itemId }) => itemId === "stoneware-mug")?.quantity;
       })
     )
-    .toBe(3);
+    .toBeUndefined();
 
-  await page.evaluate(() => {
-    const owner = window as typeof window & {
-      next?: { readonly router?: { push(href: string): void } };
-    };
-    if (!owner.next?.router) throw new Error("Next.js app router is unavailable.");
-    owner.next.router.push("/lab?remount=1");
-  });
-  await expect(page).toHaveURL(/\/lab\?remount=1$/u);
+  await page.getByRole("link", { name: "Lab", exact: true }).click();
+  await expect(page).toHaveURL(/\/lab$/u);
   await expect(page.getByText("consumer-ready", { exact: true })).toBeVisible();
-  await expect(mug.getByText("Current × 3", { exact: true })).toBeVisible();
-  await expect(quantityEditor).toHaveValue("3");
+  await expect(mug.getByText("Current × 2", { exact: true })).toBeVisible();
+  await expect(quantityEditor).toHaveValue("2");
 });
 
 test("emulated consumer exercises the exact native boundary and observes state before resolution", async ({
@@ -539,17 +532,6 @@ test("JSON-string one download preserves the complete Gate 1 journal and trace h
   await page.getByRole("button", { name: "Replay last native mutation" }).click();
   await expect(nativeReceipt).toContainText('"replayed": true');
 
-  await page.getByRole("link", { name: "Results" }).click();
-  await expect(page).toHaveURL(/\/results$/u);
-  await page.evaluate(() => {
-    const owner = window as typeof window & {
-      next?: { readonly router?: { push(href: string): void } };
-    };
-    if (!owner.next?.router) throw new Error("Next.js app router is unavailable.");
-    owner.next.router.push("/lab?proof-remount=1");
-  });
-  await expect(page).toHaveURL(/\/lab\?proof-remount=1$/u);
-  await expect(page.getByText("consumer-ready", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Hard reset fixture" }).click();
   const resetArticle = page.locator("article").filter({ hasText: "Reset verification receipt" });
   await expect(resetArticle).toContainText('"status": "verified"');

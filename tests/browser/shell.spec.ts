@@ -15,7 +15,7 @@ test("judge shell is honest, navigable, and permanently marks the simulation", a
 
   await page.getByRole("link", { name: "Results" }).click();
   await expect(page).toHaveURL(/\/results$/);
-  await expect(page.getByText("No terminal evidence yet.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "No run yet" })).toBeVisible();
   expect(pageErrors).toEqual([]);
 });
 

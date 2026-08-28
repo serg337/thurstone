@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 import { StatusPill } from "@/components/status-pill";
 
 const workflow = [
@@ -36,12 +34,12 @@ export default function HomePage() {
           </p>
           <p className="byline">ToolProof by Invarra — created by Sergio Valencia.</p>
           <div className="button-row">
-            <Link className="button button-primary" href="/lab">
+            <a className="button button-primary" href="/lab">
               Open checkout lab
-            </Link>
-            <Link className="button button-secondary" href="/studio">
+            </a>
+            <a className="button button-secondary" href="/studio">
               See the contract workflow
-            </Link>
+            </a>
           </div>
         </div>
 

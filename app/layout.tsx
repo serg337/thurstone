@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { SimulationNotice } from "@/components/simulation-notice";
 import { SiteHeader } from "@/components/site-header";
 import { PROBE_RESULTS_COOKIE, PROBE_SESSION_COOKIE } from "@/lib/probe/session";
+import { SCORED_RESULTS_COOKIE, SCORED_SESSION_COOKIE } from "@/lib/scored/session.server";
 
 import "./globals.css";
 
@@ -25,7 +26,9 @@ export const viewport: Viewport = {
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const cookieStore = await cookies();
-  const isolated = cookieStore.has(PROBE_SESSION_COOKIE) && !cookieStore.has(PROBE_RESULTS_COOKIE);
+  const isolated =
+    (cookieStore.has(PROBE_SESSION_COOKIE) && !cookieStore.has(PROBE_RESULTS_COOKIE)) ||
+    (cookieStore.has(SCORED_SESSION_COOKIE) && !cookieStore.has(SCORED_RESULTS_COOKIE));
   return (
     <html lang="en" data-scroll-behavior="smooth">
       <body>
