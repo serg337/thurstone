@@ -175,6 +175,39 @@ function isIntegrationV03GuardStatus(
   );
 }
 
+function isIntegrationV04GuardStatus(
+  guard: ProbeGuardStatus,
+  expected: { readonly guardInstanceId: string; readonly initializedCommit: string }
+): boolean {
+  return (
+    guard.status === "open" &&
+    guard.guardInstanceId === expected.guardInstanceId &&
+    guard.initializedCommit === expected.initializedCommit &&
+    guard.policyVersion === PROBE_V04_MIGRATED_POLICY_VERSION &&
+    guard.policyHash === PROBE_V04_MIGRATED_POLICY_HASH &&
+    guard.scriptHash === PROBE_V04_MIGRATED_LEDGER_SCRIPT_HASH &&
+    guard.model === PROBE_MODEL &&
+    guard.globalCallLimit === PROBE_GLOBAL_CALL_LIMIT &&
+    guard.spendCeilingNanoUsd === PROBE_LIFETIME_SPEND_CEILING_NANO_USD &&
+    guard.perCallReservationNanoUsd === PROBE_PER_CALL_RESERVATION_NANO_USD &&
+    guard.maxConcurrency === PROBE_MAX_CONCURRENCY &&
+    guard.challengeClosesAtMs === Date.parse(PROBE_CHALLENGE_CLOSES_AT) &&
+    canonicalJson(guard.purposeLimits) === canonicalJson(PROBE_V04_MIGRATED_PURPOSE_CALL_LIMITS) &&
+    Object.values(guard.purposeCounts).reduce((sum, count) => sum + count, 0) ===
+      guard.claimedCalls &&
+    guard.committedNanoUsd === guard.claimedCalls * PROBE_PER_CALL_RESERVATION_NANO_USD &&
+    guard.pendingCount + guard.knownCount + guard.uncertainCount === guard.claimedCalls &&
+    guard.knownActualNanoUsd <= guard.knownCount * PROBE_PER_CALL_RESERVATION_NANO_USD &&
+    guard.uncertainUpperNanoUsd === guard.uncertainCount * PROBE_PER_CALL_RESERVATION_NANO_USD &&
+    guard.inflightCount === guard.pendingCount &&
+    guard.sequence === guard.claimedCalls &&
+    !guard.haltMarkerPresent &&
+    !guard.uncertainMarkerPresent &&
+    guard.pendingCount === 0 &&
+    guard.uncertainCount === 0
+  );
+}
+
 async function identity(
   guardInstanceId: string,
   initializedCommit: string
@@ -1434,11 +1467,9 @@ async function integrationTest(): Promise<void> {
     }
     const v04Status = await readProbeGuardStatus(redis, v04MigrationKeyspace);
     if (
-      !isProbeGuardStatusConsistent(v04Status, {
+      !isIntegrationV04GuardStatus(v04Status, {
         guardInstanceId: v04Fixture.manifest.guardInstanceId,
-        initializedCommit: v04Fixture.manifest.initializedCommit,
-        policyHash: PROBE_V04_MIGRATED_POLICY_HASH,
-        scriptHash: PROBE_V04_MIGRATED_LEDGER_SCRIPT_HASH
+        initializedCommit: v04Fixture.manifest.initializedCommit
       }) ||
       v04Status.claimedCalls !== 9 ||
       v04Status.knownCount !== 9 ||
