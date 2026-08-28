@@ -95,6 +95,10 @@ interface LabEnvironment {
   readonly ledger: CheckoutTraceLedger;
   readonly proofJournal: Gate1EvidenceJournal;
   readonly tools: CheckoutToolSet;
+  readonly nativeConsumerHolds: {
+    acquire(toolName: string, registrationGeneration: number): string;
+    release(holdId: string): boolean;
+  };
 }
 
 const automatedProofClaims = new WeakSet<LabEnvironment>();
@@ -209,12 +213,33 @@ function createEnvironment(): LabEnvironment {
   });
   const proofJournal = new Gate1EvidenceJournal();
   const store = new CheckoutSessionStore({ traceSink: ledger });
+  const consumerHoldReleases = new Map<string, () => void>();
+  const nativeConsumerHolds = Object.freeze({
+    acquire(toolName: string, registrationGeneration: number): string {
+      const release = webMcpRegistryManager.holdConsumerCall(toolName, registrationGeneration);
+      const holdId = globalThis.crypto.randomUUID();
+      if (consumerHoldReleases.has(holdId)) {
+        release();
+        throw new Error("Native consumer hold identifier collision.");
+      }
+      consumerHoldReleases.set(holdId, release);
+      return holdId;
+    },
+    release(holdId: string): boolean {
+      const release = consumerHoldReleases.get(holdId);
+      if (!release) return false;
+      consumerHoldReleases.delete(holdId);
+      release();
+      return true;
+    }
+  });
   return Object.freeze({
     binding,
     store,
     ledger,
     proofJournal,
-    tools: createCheckoutTools(store)
+    tools: createCheckoutTools(store),
+    nativeConsumerHolds
   });
 }
 

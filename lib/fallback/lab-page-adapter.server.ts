@@ -26,6 +26,13 @@ const INITIAL_TOOL_NAMES = Object.freeze([
   "checkout_request",
   "order_review"
 ]);
+const PENDING_TOOL_NAMES = Object.freeze([
+  "cart_get",
+  "cart_update",
+  "checkout_cancel",
+  "checkout_request",
+  "order_review"
+]);
 const RESET_TIMEOUT_MS = 15_000;
 
 interface ProjectedReadinessTool {
@@ -118,11 +125,12 @@ function jsonSnapshot(value: unknown): ProbeClientJsonValue {
   return JSON.parse(canonicalJson(value)) as ProbeClientJsonValue;
 }
 
+function exactNames(value: readonly string[], expected: readonly string[]): boolean {
+  return value.length === expected.length && value.every((name, index) => name === expected[index]);
+}
+
 function exactInitialNames(value: readonly string[]): boolean {
-  return (
-    value.length === INITIAL_TOOL_NAMES.length &&
-    value.every((name, index) => name === INITIAL_TOOL_NAMES[index])
-  );
+  return exactNames(value, INITIAL_TOOL_NAMES);
 }
 
 function latestReadiness(
@@ -183,6 +191,34 @@ function exactReadiness(
   );
 }
 
+async function healthyStableReadiness(
+  snapshot: LabDocumentSnapshot,
+  readiness: ProjectedReadiness | null
+): Promise<boolean> {
+  if (!readiness || readiness.status !== "consumer-ready") return false;
+  const catalogState = snapshot.session.state.pendingCheckout === null ? "initial" : "pending";
+  const expectedNames = catalogState === "initial" ? INITIAL_TOOL_NAMES : PENDING_TOOL_NAMES;
+  return Boolean(
+    readiness.fixtureId === "checkout-seed-v1" &&
+    snapshot.session.state.fixtureId === "checkout-seed-v1" &&
+    snapshot.session.state.seed === "toolproof-checkout-seed-001" &&
+    readiness.fixtureRevision === snapshot.session.state.revision &&
+    readiness.stateHash === (await canonicalSha256(snapshot.session.state)) &&
+    readiness.manifest.catalogState === catalogState &&
+    (await canonicalSha256(readiness.manifest)) === readiness.manifestHash &&
+    readiness.runtimeCatalog &&
+    readiness.runtimeCatalog.generation >= 1 &&
+    readiness.runtimeCatalog.manifestHash === readiness.manifestHash &&
+    exactNames(readiness.registeredToolNames, expectedNames) &&
+    exactNames(
+      readiness.manifest.tools.map(({ name }) => name),
+      expectedNames
+    ) &&
+    !snapshot.journal.overflowed &&
+    snapshot.journal.fault === null
+  );
+}
+
 async function pageSnapshot(page: Page): Promise<LabDocumentSnapshot> {
   return page.evaluate(() => {
     type Environment = {
@@ -228,18 +264,20 @@ async function waitForFreshReadiness(
   throw new Error("fallback_reset_readiness_timeout");
 }
 
-async function waitForLabBoot(page: Page, timeoutMs = RESET_TIMEOUT_MS): Promise<void> {
+async function waitForResetAdmission(
+  page: Page,
+  stage: "before" | "after",
+  timeoutMs = RESET_TIMEOUT_MS
+): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const snapshot = await pageSnapshot(page).catch(() => null);
     const readiness = snapshot ? latestReadiness(snapshot) : null;
     if (
       snapshot &&
-      readiness?.status === "consumer-ready" &&
-      readiness.manifest.catalogState === "initial" &&
-      readiness.runtimeCatalog?.manifestHash === readiness.manifestHash &&
-      !snapshot.journal.overflowed &&
-      snapshot.journal.fault === null
+      (stage === "before"
+        ? exactReadiness(snapshot, readiness)
+        : await healthyStableReadiness(snapshot, readiness))
     ) {
       return;
     }
@@ -283,8 +321,8 @@ async function releaseReset(page: Page, resetId: string): Promise<boolean> {
   }, resetId);
 }
 
-async function verifiedBoundary(page: Page): Promise<ResetSource> {
-  await waitForLabBoot(page);
+async function verifiedBoundary(page: Page, stage: "before" | "after"): Promise<ResetSource> {
+  await waitForResetAdmission(page, stage);
   const reset = await resetDocument(page);
   const { snapshot, readiness } = await waitForFreshReadiness(page, reset.beforeEventCount);
   if ((await canonicalSha256(readiness.manifest)) !== readiness.manifestHash) {
@@ -358,11 +396,56 @@ export class ToolProofFallbackLabPageAdapter implements FallbackPageAdapter<
   FallbackTrialEvidence
 > {
   resetAndVerify(input: { readonly page: Page; readonly stage: "before" | "after" }) {
-    return verifiedBoundary(input.page);
+    return verifiedBoundary(input.page, input.stage);
   }
 
   async reverifyLive(input: { readonly page: Page }): Promise<FallbackLiveBoundarySource> {
     return liveBoundary(input.page);
+  }
+
+  async holdConsumerCall(input: {
+    readonly page: Page;
+    readonly toolName: string;
+    readonly registrationGeneration: number;
+  }): Promise<() => Promise<void>> {
+    const holdId = await input.page.evaluate(
+      ({ toolName, registrationGeneration }) => {
+        type Environment = {
+          readonly nativeConsumerHolds: {
+            acquire(name: string, generation: number): string;
+          };
+        };
+        const owner = window as typeof window & { __toolProofLabEnvironment?: Environment };
+        const environment = owner.__toolProofLabEnvironment;
+        if (!environment) throw new Error("fallback_lab_environment_missing");
+        return environment.nativeConsumerHolds.acquire(toolName, registrationGeneration);
+      },
+      {
+        toolName: input.toolName,
+        registrationGeneration: input.registrationGeneration
+      }
+    );
+    if (
+      typeof holdId !== "string" ||
+      !/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(holdId)
+    ) {
+      throw new Error("fallback_consumer_hold_invalid");
+    }
+    let released = false;
+    return async () => {
+      if (released) return;
+      released = true;
+      const didRelease = await input.page.evaluate((id) => {
+        type Environment = {
+          readonly nativeConsumerHolds: { release(value: string): boolean };
+        };
+        const owner = window as typeof window & { __toolProofLabEnvironment?: Environment };
+        const environment = owner.__toolProofLabEnvironment;
+        if (!environment) throw new Error("fallback_lab_environment_missing");
+        return environment.nativeConsumerHolds.release(id);
+      }, holdId);
+      if (!didRelease) throw new Error("fallback_consumer_hold_release_failed");
+    };
   }
 
   async capture(input: {

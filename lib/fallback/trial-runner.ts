@@ -46,6 +46,11 @@ export interface FallbackPageAdapter<TResetReceipt, TEvidence> {
     readonly claim: ProbePublicClaim;
     readonly initialBoundary: ProbeInitialBoundaryBinding;
   }): Promise<FallbackLiveBoundarySource>;
+  holdConsumerCall(input: {
+    readonly page: Page;
+    readonly toolName: string;
+    readonly registrationGeneration: number;
+  }): Promise<() => Promise<void>>;
   capture(input: {
     readonly page: Page;
     readonly capture: ProbeClientTrialCapture<TResetReceipt, FallbackNativeExecutionReceipt>;
@@ -197,6 +202,12 @@ export async function runPinnedFallbackTrial<
           manifestHash,
           registrationGeneration,
           timeoutMs: 20_000,
+          holdConsumerCall: (hold) =>
+            input.pageAdapter.holdConsumerCall({
+              page: trial.page,
+              toolName: hold.toolName,
+              registrationGeneration: hold.registrationGeneration
+            }),
           terminateTrial: async (reason) => trial.terminate(reason),
           ...(input.nowMs ? { nowMs: input.nowMs } : {})
         });

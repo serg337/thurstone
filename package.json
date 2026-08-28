@@ -27,6 +27,8 @@
     "probe-controls:integration": "tsx --tsconfig tsconfig.operator.json scripts/probe-controls.ts integration-test",
     "probe-controls:preflight-v04": "tsx --tsconfig tsconfig.operator.json scripts/probe-controls.ts preflight-policy-v04",
     "probe-controls:migrate-v04": "tsx --tsconfig tsconfig.operator.json scripts/probe-controls.ts migrate-policy-v04",
+    "probe-controls:preflight-fallback-ack-recovery": "tsx --tsconfig tsconfig.operator.json scripts/probe-controls.ts preflight-fallback-ack-recovery",
+    "probe-controls:fallback-ack-recovery": "tsx --tsconfig tsconfig.operator.json scripts/probe-controls.ts fallback-ack-recovery",
     "probe-continuation:integration": "tsx --tsconfig tsconfig.operator.json scripts/probe-continuation-integration.ts",
     "probe-controls:reap": "tsx --tsconfig tsconfig.operator.json scripts/probe-controls.ts reap",
     "probe-controls:status": "tsx --tsconfig tsconfig.operator.json scripts/probe-controls.ts status",

@@ -362,6 +362,10 @@ export class FallbackNativeWebMcpBridge {
     readonly manifestHash: string;
     readonly registrationGeneration: number;
     readonly timeoutMs: number;
+    readonly holdConsumerCall: (input: {
+      readonly toolName: string;
+      readonly registrationGeneration: number;
+    }) => Promise<() => Promise<void>>;
     readonly terminateTrial: (reason: "native_timeout") => Promise<void>;
     readonly nowMs?: () => number;
   }): Promise<FallbackNativeExecutionReceipt> {
@@ -379,6 +383,15 @@ export class FallbackNativeWebMcpBridge {
       throw new FallbackNativeBridgeError("invalid_native_timeout");
     }
     const argumentsEvidence = jsonArguments(input.arguments);
+    let releaseConsumerCall: () => Promise<void>;
+    try {
+      releaseConsumerCall = await input.holdConsumerCall({
+        toolName: input.toolName,
+        registrationGeneration: input.registrationGeneration
+      });
+    } catch {
+      throw new FallbackNativeBridgeError("native_consumer_hold_failed");
+    }
     this.#consumed = true;
     const invoked: WebMCPToolCall[] = [];
     const responded: WebMCPToolCallResult[] = [];
@@ -391,6 +404,8 @@ export class FallbackNativeWebMcpBridge {
     let result: WebMCPToolCallResult | null = null;
     let thrown: unknown = null;
     let timedOut = false;
+    let correlated = false;
+    let holdReleaseError: unknown = null;
     let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
       const timeoutPromise = new Promise<never>((_resolve, reject) => {
@@ -403,7 +418,6 @@ export class FallbackNativeWebMcpBridge {
     } catch (error) {
       if (error instanceof FallbackNativeBridgeError && error.code === "native_timeout") {
         timedOut = true;
-        await input.terminateTrial("native_timeout");
       } else {
         thrown = error;
       }
@@ -411,18 +425,27 @@ export class FallbackNativeWebMcpBridge {
       if (timeout) clearTimeout(timeout);
       this.#page.webmcp.off("toolinvoked", onInvoked);
       this.#page.webmcp.off("toolresponded", onResponded);
+      correlated =
+        result !== null &&
+        resultEvidenceMatches(result, tool, argumentsEvidence.bytes, invoked, responded);
+      try {
+        await releaseConsumerCall();
+      } catch (error) {
+        holdReleaseError = error;
+      }
     }
     const completedMs = nowMs();
-    const correlated =
-      result !== null &&
-      resultEvidenceMatches(result, tool, argumentsEvidence.bytes, invoked, responded);
-    const outcome = timedOut
-      ? "TimedOut"
-      : thrown !== null
-        ? "Thrown"
-        : !correlated
-          ? "EvidenceMismatch"
-          : result!.status;
+    if (timedOut) await input.terminateTrial("native_timeout");
+    const outcome =
+      holdReleaseError !== null
+        ? "EvidenceMismatch"
+        : timedOut
+          ? "TimedOut"
+          : thrown !== null
+            ? "Thrown"
+            : !correlated
+              ? "EvidenceMismatch"
+              : result!.status;
     return Object.freeze({
       version: FALLBACK_NATIVE_BRIDGE_VERSION,
       toolName: input.toolName,
@@ -439,7 +462,12 @@ export class FallbackNativeWebMcpBridge {
       rawResult: result === null ? null : responseEvidence(result),
       invokedEvents: Object.freeze(invoked.map(callEvidence)),
       respondedEvents: Object.freeze(responded.map(responseEvidence)),
-      error: thrown === null && !timedOut ? null : normalizeJsonSafe(thrown ?? "native_timeout"),
+      error:
+        holdReleaseError !== null
+          ? normalizeJsonSafe(holdReleaseError)
+          : thrown === null && !timedOut
+            ? null
+            : normalizeJsonSafe(thrown ?? "native_timeout"),
       startedAt: iso(startedMs),
       completedAt: iso(completedMs),
       durationMs: Math.max(0, completedMs - startedMs)

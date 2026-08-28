@@ -120,10 +120,25 @@ async function setup(decision: unknown) {
       order.push("reverify-native");
       return bridge.catalog;
     }),
-    executeOnce: vi.fn(async () => {
-      order.push("execute-native");
-      return receipt;
-    }),
+    executeOnce: vi.fn(
+      async (input: {
+        readonly toolName: string;
+        readonly registrationGeneration: number;
+        readonly holdConsumerCall: (hold: {
+          readonly toolName: string;
+          readonly registrationGeneration: number;
+        }) => Promise<() => Promise<void>>;
+      }) => {
+        order.push("execute-native");
+        const release = await input.holdConsumerCall({
+          toolName: input.toolName,
+          registrationGeneration: input.registrationGeneration
+        });
+        order.push("native-result-correlated");
+        await release();
+        return receipt;
+      }
+    ),
     dispose: vi.fn()
   };
   const discoverBridge = vi.fn(async () => bridge);
@@ -165,6 +180,12 @@ async function setup(decision: unknown) {
       expectedManifest: manifest
     };
   });
+  const holdConsumerCall = vi.fn(async () => {
+    order.push("hold-consumer");
+    return async () => {
+      order.push("release-consumer");
+    };
+  });
   const admitNative = vi.fn(async () => {
     order.push("admit-native");
   });
@@ -186,7 +207,7 @@ async function setup(decision: unknown) {
     launchPlan,
     launchTrial,
     discoverBridge,
-    pageAdapter: { resetAndVerify, reverifyLive, capture },
+    pageAdapter: { resetAndVerify, reverifyLive, holdConsumerCall, capture },
     serverAdapter: { issueOpaqueClaim, requestFreshDecision, admitNative, completeAndSeal },
     bridge,
     runtimeReceipt,
@@ -218,6 +239,9 @@ describe("isolated pinned fallback trial orchestrator", () => {
       "reverify-native",
       "admit-native",
       "execute-native",
+      "hold-consumer",
+      "native-result-correlated",
+      "release-consumer",
       "capture",
       "reset:after",
       "complete",
@@ -225,6 +249,11 @@ describe("isolated pinned fallback trial orchestrator", () => {
     ]);
     expect(source.serverAdapter.admitNative).toHaveBeenCalledTimes(1);
     expect(source.bridge.executeOnce).toHaveBeenCalledTimes(1);
+    expect(source.pageAdapter.holdConsumerCall).toHaveBeenCalledExactlyOnceWith({
+      page: expect.anything(),
+      toolName: "cart_get",
+      registrationGeneration: 3
+    });
     expect(source.close).toHaveBeenCalledTimes(1);
   });
 

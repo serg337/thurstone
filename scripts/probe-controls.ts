@@ -3,6 +3,12 @@ import { randomBytes } from "node:crypto";
 import { canonicalJson, canonicalSha256, sha256Hex } from "../lib/evidence/digest";
 import { fallbackRunnerContractHash } from "../lib/fallback/runner-contract";
 import {
+  ProbeFallbackAckRecoveryError,
+  assertProbeFallbackAckRecoveryProductionContext,
+  preflightProbeFallbackAckRecovery,
+  recoverProbeFallbackAck
+} from "../lib/probe/fallback-ack-recovery.server";
+import {
   PROBE_LEDGER_SCRIPTS,
   ProbeLedgerError,
   beginProbeCall,
@@ -106,6 +112,68 @@ function hasExpectedVercelProjectIdentity(): boolean {
 
 function safeReceipt(value: unknown): void {
   process.stdout.write(`${JSON.stringify(value)}\n`);
+}
+
+class ProbeFallbackAckRecoveryBuildStop extends Error {
+  constructor() {
+    super("ACK_RECOVERY_BUILD_STOP");
+    this.name = "ProbeFallbackAckRecoveryBuildStop";
+  }
+}
+
+async function prepareFallbackAckRecovery() {
+  const context = assertProbeFallbackAckRecoveryProductionContext(process.env);
+  const evidencePath = process.env.TOOLPROOF_PROBE_FALLBACK_ACK_EVIDENCE_PATH;
+  const prepared = await preflightProbeFallbackAckRecovery(createProbeRedis(), {
+    ...context,
+    ...(evidencePath ? { evidencePath } : {})
+  });
+  return { context, prepared };
+}
+
+async function preflightFallbackAckRecovery(): Promise<never> {
+  const { prepared } = await prepareFallbackAckRecovery();
+  safeReceipt({
+    ok: true,
+    mode: "preflight-fallback-ack-recovery",
+    disposition: prepared.disposition,
+    evidence: prepared.evidence,
+    programHash: prepared.programHash,
+    guardSnapshotDigest: prepared.guardSnapshotDigest,
+    runIdentityDigest: prepared.runIdentityDigest,
+    confirmation: prepared.confirmation
+  });
+  throw new ProbeFallbackAckRecoveryBuildStop();
+}
+
+async function executeFallbackAckRecovery(): Promise<never> {
+  const confirmation = process.env.TOOLPROOF_PROBE_FALLBACK_ACK_RECOVERY_CONFIRM;
+  if (!confirmation || !/^[a-f0-9]{64}$/u.test(confirmation)) {
+    throw new ProbeFallbackAckRecoveryError("ACK_RECOVERY_CONFIRMATION_REQUIRED");
+  }
+  const { context, prepared } = await prepareFallbackAckRecovery();
+  const redis = createProbeRedis();
+  const result = await recoverProbeFallbackAck(redis, { prepared, confirmation });
+  const evidencePath = process.env.TOOLPROOF_PROBE_FALLBACK_ACK_EVIDENCE_PATH;
+  const verified = await preflightProbeFallbackAckRecovery(redis, {
+    ...context,
+    ...(evidencePath ? { evidencePath } : {})
+  });
+  if (verified.disposition !== "existing") {
+    throw new ProbeFallbackAckRecoveryError("ACK_RECOVERY_POSTCONDITION_MISMATCH");
+  }
+  safeReceipt({
+    ok: true,
+    mode: "fallback-ack-recovery",
+    disposition: result.disposition,
+    acknowledgedAtMs: result.acknowledgedAtMs,
+    dataDeleted: true,
+    anchorRetained: true,
+    evidence: verified.evidence,
+    programHash: prepared.programHash,
+    guardSnapshotDigest: prepared.guardSnapshotDigest
+  });
+  throw new ProbeFallbackAckRecoveryBuildStop();
 }
 
 function isIntegrationV03GuardStatus(
@@ -1538,6 +1606,8 @@ try {
   else if (mode === "reap") await reapProduction();
   else if (mode === "preflight-policy-v04") await preflightProductionPolicyV04();
   else if (mode === "migrate-policy-v04") await migrateProductionPolicyV04();
+  else if (mode === "preflight-fallback-ack-recovery") await preflightFallbackAckRecovery();
+  else if (mode === "fallback-ack-recovery") await executeFallbackAckRecovery();
   else if (
     mode === "preflight-policy-v03" ||
     mode === "migrate-policy" ||
@@ -1552,7 +1622,9 @@ try {
       process.env.TOOLPROOF_PROBE_POLICY_V03_MIGRATION_PREFLIGHT,
       process.env.TOOLPROOF_PROBE_POLICY_MIGRATION_CONFIRM,
       process.env.TOOLPROOF_PROBE_REAP_CONFIRM,
-      process.env.TOOLPROOF_PROBE_INIT_CONFIRM
+      process.env.TOOLPROOF_PROBE_INIT_CONFIRM,
+      process.env.TOOLPROOF_PROBE_FALLBACK_ACK_RECOVERY_PREFLIGHT,
+      process.env.TOOLPROOF_PROBE_FALLBACK_ACK_RECOVERY_CONFIRM
     ].filter(Boolean).length;
     if (operatorIntentCount > 1) throw new ProbeLedgerError("AMBIGUOUS_OPERATOR_INTENT");
     if (
@@ -1562,7 +1634,14 @@ try {
     ) {
       throw new ProbeLedgerError("RETIRED_V03_MIGRATION_INTENT_REJECTED");
     }
-    if (process.env.TOOLPROOF_PROBE_POLICY_V04_MIGRATION_PREFLIGHT) {
+    if (process.env.TOOLPROOF_PROBE_FALLBACK_ACK_RECOVERY_PREFLIGHT) {
+      if (process.env.TOOLPROOF_PROBE_FALLBACK_ACK_RECOVERY_PREFLIGHT !== "1") {
+        throw new ProbeFallbackAckRecoveryError("ACK_RECOVERY_INVALID_PREFLIGHT_INTENT");
+      }
+      await preflightFallbackAckRecovery();
+    } else if (process.env.TOOLPROOF_PROBE_FALLBACK_ACK_RECOVERY_CONFIRM) {
+      await executeFallbackAckRecovery();
+    } else if (process.env.TOOLPROOF_PROBE_POLICY_V04_MIGRATION_PREFLIGHT) {
       if (process.env.TOOLPROOF_PROBE_POLICY_V04_MIGRATION_PREFLIGHT !== "1") {
         throw new ProbeLedgerError("INVALID_V04_MIGRATION_PREFLIGHT_INTENT");
       }
@@ -1575,11 +1654,11 @@ try {
   } else if (mode === "integration-test") await integrationTest();
   else
     throw new Error(
-      "usage: probe-controls.ts <hashes|status|init|reap|preflight-policy-v04|migrate-policy-v04|bootstrap|integration-test>"
+      "usage: probe-controls.ts <hashes|status|init|reap|preflight-policy-v04|migrate-policy-v04|preflight-fallback-ack-recovery|fallback-ack-recovery|bootstrap|integration-test>"
     );
 } catch (error) {
   const code =
-    error instanceof ProbeLedgerError
+    error instanceof ProbeLedgerError || error instanceof ProbeFallbackAckRecoveryError
       ? error.code
       : error instanceof Error
         ? error.name

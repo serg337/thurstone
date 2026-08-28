@@ -27,13 +27,13 @@ interface Harness {
   readonly manifest: ProbeLiveManifest;
 }
 
-function manifest(): ProbeLiveManifest {
+function manifest(toolName = "cart_get"): ProbeLiveManifest {
   return {
     version: PROBE_LIVE_MANIFEST_VERSION,
     manifestHash: "a".repeat(64),
     tools: [
       {
-        name: "cart_get",
+        name: toolName,
         title: "Read cart lines",
         description: "Return current cart line-item identities and quantities.",
         inputSchema: { type: "object", properties: {}, additionalProperties: false },
@@ -45,16 +45,18 @@ function manifest(): ProbeLiveManifest {
 
 function harness(
   options: {
+    readonly toolName?: string;
     readonly output?: unknown;
     readonly execute?: (input: object) => Promise<WebMCPToolCallResult>;
     readonly frameUrl?: string;
     readonly annotations?: { readOnly?: boolean; untrustedContent?: boolean; autosubmit?: boolean };
   } = {}
 ): Harness {
+  const toolName = options.toolName ?? "cart_get";
   const frame = { url: () => options.frameUrl ?? "https://toolproof-rust.vercel.app/lab" };
   const webmcp = new FakeWebMcp([]);
   const tool = {
-    name: "cart_get",
+    name: toolName,
     description: "Return current cart line-item identities and quantities.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
     annotations: options.annotations ?? { readOnly: true, untrustedContent: false },
@@ -80,7 +82,11 @@ function harness(
     mainFrame: () => frame,
     webmcp
   } as unknown as Page;
-  return { page, webmcp, frame, tool, manifest: manifest() };
+  return { page, webmcp, frame, tool, manifest: manifest(toolName) };
+}
+
+async function noOpConsumerHold() {
+  return async () => undefined;
 }
 
 async function discover(source: Harness) {
@@ -139,12 +145,14 @@ describe("pinned native Puppeteer WebMCP bridge", () => {
     for (const output of [false, null, "raw-string-result"]) {
       const source = harness({ output });
       const bridge = await discover(source);
+      const holdConsumerCall = vi.fn(noOpConsumerHold);
       const receipt = await bridge.executeOnce({
         toolName: "cart_get",
         arguments: {},
         manifestHash: source.manifest.manifestHash,
         registrationGeneration: 3,
         timeoutMs: 1_000,
+        holdConsumerCall,
         terminateTrial: vi.fn(async () => undefined)
       });
       expect(source.tool.execute).toHaveBeenCalledTimes(1);
@@ -166,18 +174,75 @@ describe("pinned native Puppeteer WebMCP bridge", () => {
           manifestHash: source.manifest.manifestHash,
           registrationGeneration: 3,
           timeoutMs: 1_000,
+          holdConsumerCall,
           terminateTrial: vi.fn(async () => undefined)
         })
       ).rejects.toMatchObject({
         code: "native_allowance_consumed"
       });
+      expect(holdConsumerCall).toHaveBeenCalledTimes(1);
       bridge.dispose();
     }
+  });
+
+  it("holds checkout_request delivery through event correlation before catalog transition", async () => {
+    const order: string[] = [];
+    const source = harness({
+      toolName: "checkout_request",
+      execute: async (input) => {
+        order.push("execute");
+        const call = { id: "checkout_fixture", tool: source.tool, input } as WebMCPToolCall;
+        source.webmcp.emit("toolinvoked", call);
+        const result = {
+          id: call.id,
+          call,
+          status: "Completed",
+          output: { ok: true, code: "checkout_pending" }
+        } as WebMCPToolCallResult;
+        source.webmcp.emit("toolresponded", result);
+        order.push("responded");
+        return result;
+      }
+    });
+    const bridge = await discover(source);
+    const holdConsumerCall = vi.fn(async (hold) => {
+      expect(hold).toEqual({ toolName: "checkout_request", registrationGeneration: 3 });
+      order.push("hold");
+      return async () => {
+        order.push("release");
+        source.webmcp.emit("toolsremoved", { tools: [source.tool] });
+      };
+    });
+
+    await expect(
+      bridge.executeOnce({
+        toolName: "checkout_request",
+        arguments: { operationId: "request_000000000001" },
+        manifestHash: source.manifest.manifestHash,
+        registrationGeneration: 3,
+        timeoutMs: 1_000,
+        holdConsumerCall,
+        terminateTrial: vi.fn(async () => undefined)
+      })
+    ).resolves.toMatchObject({
+      toolName: "checkout_request",
+      outcome: "Completed",
+      nativeCallCount: 1,
+      invokedEvents: [{ id: "checkout_fixture" }],
+      respondedEvents: [{ id: "checkout_fixture", status: "Completed" }]
+    });
+    expect(order).toEqual(["hold", "execute", "responded", "release"]);
+    expect(holdConsumerCall).toHaveBeenCalledTimes(1);
+    expect(source.tool.execute).toHaveBeenCalledTimes(1);
+    await expect(bridge.verifyStillCurrent()).rejects.toMatchObject({
+      code: "native_catalog_drift"
+    });
   });
 
   it("fails before dispatch on catalog drift, unknown tools, or accessor arguments", async () => {
     const drift = harness();
     const driftBridge = await discover(drift);
+    const driftHold = vi.fn(noOpConsumerHold);
     drift.webmcp.emit("toolsremoved", { tools: [drift.tool] });
     await expect(
       driftBridge.executeOnce({
@@ -186,10 +251,12 @@ describe("pinned native Puppeteer WebMCP bridge", () => {
         manifestHash: drift.manifest.manifestHash,
         registrationGeneration: 3,
         timeoutMs: 1_000,
+        holdConsumerCall: driftHold,
         terminateTrial: vi.fn(async () => undefined)
       })
     ).rejects.toMatchObject({ code: "native_catalog_drift" });
     expect(drift.tool.execute).not.toHaveBeenCalled();
+    expect(driftHold).not.toHaveBeenCalled();
 
     const replaced = harness();
     const replacedBridge = await discover(replaced);
@@ -209,6 +276,7 @@ describe("pinned native Puppeteer WebMCP bridge", () => {
         manifestHash: unknown.manifest.manifestHash,
         registrationGeneration: 3,
         timeoutMs: 1_000,
+        holdConsumerCall: noOpConsumerHold,
         terminateTrial: vi.fn(async () => undefined)
       })
     ).rejects.toMatchObject({ code: "native_tool_not_registered" });
@@ -229,6 +297,7 @@ describe("pinned native Puppeteer WebMCP bridge", () => {
         manifestHash: accessor.manifest.manifestHash,
         registrationGeneration: 3,
         timeoutMs: 1_000,
+        holdConsumerCall: noOpConsumerHold,
         terminateTrial: vi.fn(async () => undefined)
       })
     ).rejects.toMatchObject({ code: "invalid_native_arguments" });
@@ -236,6 +305,7 @@ describe("pinned native Puppeteer WebMCP bridge", () => {
   });
 
   it("records throws, evidence mismatch, and timeout without retrying", async () => {
+    const rejectedRelease = vi.fn(async () => undefined);
     const rejected = harness({
       execute: async () => {
         throw new Error("handler failed");
@@ -249,10 +319,12 @@ describe("pinned native Puppeteer WebMCP bridge", () => {
       manifestHash: rejected.manifest.manifestHash,
       registrationGeneration: 3,
       timeoutMs: 1_000,
+      holdConsumerCall: async () => rejectedRelease,
       terminateTrial: vi.fn(async () => undefined)
     });
     expect(rejectedReceipt.outcome).toBe("Thrown");
     expect(rejected.tool.execute).toHaveBeenCalledTimes(1);
+    expect(rejectedRelease).toHaveBeenCalledTimes(1);
 
     const mismatch = harness({
       execute: async (input) => ({
@@ -270,13 +342,20 @@ describe("pinned native Puppeteer WebMCP bridge", () => {
       manifestHash: mismatch.manifest.manifestHash,
       registrationGeneration: 3,
       timeoutMs: 1_000,
+      holdConsumerCall: noOpConsumerHold,
       terminateTrial: vi.fn(async () => undefined)
     });
     expect(mismatchReceipt.outcome).toBe("EvidenceMismatch");
     expect(mismatch.tool.execute).toHaveBeenCalledTimes(1);
 
     const timeout = harness({ execute: async () => await new Promise(() => {}) });
-    const terminateTrial = vi.fn(async () => undefined);
+    const timeoutOrder: string[] = [];
+    const timeoutRelease = vi.fn(async () => {
+      timeoutOrder.push("release");
+    });
+    const terminateTrial = vi.fn(async () => {
+      timeoutOrder.push("terminate");
+    });
     const timeoutReceipt = await (
       await discover(timeout)
     ).executeOnce({
@@ -285,11 +364,14 @@ describe("pinned native Puppeteer WebMCP bridge", () => {
       manifestHash: timeout.manifest.manifestHash,
       registrationGeneration: 3,
       timeoutMs: 1,
+      holdConsumerCall: async () => timeoutRelease,
       terminateTrial
     });
     expect(timeoutReceipt.outcome).toBe("TimedOut");
     expect(timeout.tool.execute).toHaveBeenCalledTimes(1);
+    expect(timeoutRelease).toHaveBeenCalledTimes(1);
     expect(terminateTrial).toHaveBeenCalledExactlyOnceWith("native_timeout");
+    expect(timeoutOrder).toEqual(["release", "terminate"]);
   });
 });
 

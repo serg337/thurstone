@@ -34,6 +34,12 @@ async function main(): Promise<void> {
         manifestHash: before.manifestHash,
         registrationGeneration: before.registrationGeneration,
         timeoutMs: 20_000,
+        holdConsumerCall: (hold) =>
+          adapter.holdConsumerCall({
+            page: trial.page,
+            toolName: hold.toolName,
+            registrationGeneration: hold.registrationGeneration
+          }),
         terminateTrial: (reason) => trial.terminate(reason)
       });
       if (receipt.outcome !== "Completed") throw new Error("fallback_native_smoke_failed");
