@@ -98,6 +98,7 @@ import {
 } from "@/lib/probe/policy-v04-migration-contract";
 import {
   PROBE_V05_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
+  PROBE_V05_POLICY_MIGRATION_EXECUTION_COMMIT,
   PROBE_V05_POLICY_MIGRATION_ID,
   PROBE_V05_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
   PROBE_V05_POLICY_MIGRATION_VERSION,
@@ -463,7 +464,7 @@ function fallbackMigrationOf(activation: ProbeActivationContext): ProbeV05Policy
     migration.nextPolicyHash !== activation.manifest.policyHash ||
     migration.nextScriptHash !== activation.manifest.scriptHash ||
     migration.nextRunnerHash !== activation.manifest.runnerContractHash ||
-    migration.migrationCommit !== activation.manifest.activeCommit ||
+    migration.migrationCommit !== PROBE_V05_POLICY_MIGRATION_EXECUTION_COMMIT ||
     migration.receiptHash !== activation.manifest.policyMigrationReceiptHash ||
     migration.guardInstanceId !== activation.manifest.guardInstanceId ||
     migration.initializedCommit !== activation.manifest.guardInitializedCommit ||

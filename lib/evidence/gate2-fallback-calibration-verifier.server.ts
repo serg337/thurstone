@@ -68,6 +68,7 @@ import {
   PROBE_V05_MIGRATED_PURPOSE_CALL_LIMITS,
   PROBE_V05_MIGRATED_RUNNER_CONTRACT_HASH,
   PROBE_V05_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
+  PROBE_V05_POLICY_MIGRATION_EXECUTION_COMMIT,
   PROBE_V05_POLICY_MIGRATION_ID,
   PROBE_V05_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
   PROBE_V05_POLICY_MIGRATION_PRIOR_APP_COMMIT,
@@ -387,7 +388,8 @@ async function verifyMigration(
     migration.nextRunnerHash !== contract.runnerContractHash ||
     migration.nextRunnerHash !== expected.nextRunnerHash ||
     migration.migrationProgramHash !== expected.migrationProgramHash ||
-    migration.migrationCommit !== appCommit ||
+    migration.migrationCommit !==
+      (isV1 ? appCommit : PROBE_V05_POLICY_MIGRATION_EXECUTION_COMMIT) ||
     migration.predecessorMigrationReceiptHash !== contract.priorMigrationReceiptHash ||
     migration.priorEvidenceRawSha256 !== contract.priorEvidenceRawSha256 ||
     migration.priorEvidenceDigest !== contract.priorEvidenceDigest ||

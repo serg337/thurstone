@@ -24,6 +24,7 @@ import {
   PROBE_V05_AUTHORIZATION_INVENTORY,
   PROBE_V05_MIGRATED_RUNNER_CONTRACT_HASH,
   PROBE_V05_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
+  PROBE_V05_POLICY_MIGRATION_EXECUTION_COMMIT,
   PROBE_V05_POLICY_MIGRATION_ID,
   PROBE_V05_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
   PROBE_V05_POLICY_MIGRATION_PRIOR_APP_COMMIT,
@@ -463,7 +464,7 @@ export async function requireProbeActivation(
       migration.receiptHash !== (await probeV05PolicyMigrationReceiptHash(migration)) ||
       migration.version !== PROBE_V05_POLICY_MIGRATION_VERSION ||
       migration.migrationId !== PROBE_V05_POLICY_MIGRATION_ID ||
-      migration.migrationCommit !== manifest.activeCommit ||
+      migration.migrationCommit !== PROBE_V05_POLICY_MIGRATION_EXECUTION_COMMIT ||
       migration.priorAppCommit !== PROBE_V05_POLICY_MIGRATION_PRIOR_APP_COMMIT ||
       migration.priorActivationHash !== PROBE_V05_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH ||
       migration.priorEvidenceRawSha256 !== PROBE_V05_PRIOR_EVIDENCE_RAW_SHA256 ||

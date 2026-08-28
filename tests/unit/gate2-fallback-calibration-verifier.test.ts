@@ -59,6 +59,7 @@ import {
   PROBE_V05_MIGRATED_POLICY_VERSION,
   PROBE_V05_MIGRATED_PURPOSE_CALL_LIMITS,
   PROBE_V05_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
+  PROBE_V05_POLICY_MIGRATION_EXECUTION_COMMIT,
   PROBE_V05_POLICY_MIGRATION_ID,
   PROBE_V05_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
   PROBE_V05_POLICY_MIGRATION_PRIOR_APP_COMMIT,
@@ -291,7 +292,7 @@ async function migrationFixture(input: {
       payloadBinding: "6".repeat(64),
       encryptedDataPresent: false
     },
-    migrationCommit: APP_COMMIT,
+    migrationCommit: PROBE_V05_POLICY_MIGRATION_EXECUTION_COMMIT,
     nextPolicyVersion: PROBE_V05_MIGRATED_POLICY_VERSION,
     nextPolicyHash: input.policyHash,
     nextScriptHash: input.ledgerScriptHash,
