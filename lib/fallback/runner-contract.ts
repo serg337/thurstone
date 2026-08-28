@@ -1,5 +1,11 @@
 import { canonicalSha256 } from "@/lib/evidence/digest";
 import {
+  FALLBACK_IMPLEMENTATION,
+  FALLBACK_RUNNER_IMPLEMENTATION_MANIFEST,
+  fallbackRunnerImplementationHash,
+  type FallbackRunnerImplementationManifest
+} from "@/lib/fallback/implementation-contract";
+import {
   PROBE_MAX_INPUT_TOKENS,
   PROBE_MAX_OUTPUT_TOKENS,
   PROBE_MODEL,
@@ -8,8 +14,9 @@ import {
 } from "@/lib/probe/policy";
 
 export const FALLBACK_RUNNER_PROMPT_VERSION = "toolproof-fallback-runner-prompt@1.0.0";
-export const FALLBACK_RUNNER_SETTINGS_VERSION = "toolproof-fallback-runner-settings@1.0.0";
-export const FALLBACK_IMPLEMENTATION = "googlechromelabs-webmcp-tools-adapter@1.0.0";
+export const FALLBACK_RUNNER_SETTINGS_VERSION = "toolproof-fallback-runner-settings@1.1.0";
+export { FALLBACK_IMPLEMENTATION } from "@/lib/fallback/implementation-contract";
+export const FALLBACK_RUNNER_CONTRACT_VERSION = "toolproof-fallback-runner-contract@1.1.0";
 export const FALLBACK_BROWSER_RUNTIME_CONTRACT_VERSION =
   "toolproof-fallback-browser-contract@1.0.0";
 
@@ -98,9 +105,13 @@ export function fallbackRunnerSettingsHash(): Promise<string> {
   return canonicalSha256(FALLBACK_RUNNER_SETTINGS_MANIFEST);
 }
 
-export async function fallbackRunnerContractHash(): Promise<string> {
+export async function fallbackRunnerContractHash(
+  implementationManifest: FallbackRunnerImplementationManifest = FALLBACK_RUNNER_IMPLEMENTATION_MANIFEST
+): Promise<string> {
   return canonicalSha256({
+    version: FALLBACK_RUNNER_CONTRACT_VERSION,
     promptHash: await fallbackRunnerPromptHash(),
-    settingsHash: await fallbackRunnerSettingsHash()
+    settingsHash: await fallbackRunnerSettingsHash(),
+    implementationHash: await fallbackRunnerImplementationHash(implementationManifest)
   });
 }

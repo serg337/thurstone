@@ -24,7 +24,7 @@ import {
   FALLBACK_PROBE_CALIBRATION_BASE_CALLS,
   FALLBACK_PROBE_CALIBRATION_TERMINAL_CALLS
 } from "@/lib/probe/service-contract";
-import { isProbeV04PolicyMigrationSourceStatus } from "@/lib/probe/policy-v04-migration-contract";
+import { isProbeV05PolicyMigrationSourceStatus } from "@/lib/probe/policy-v05-migration-contract";
 
 interface EnvironmentLike {
   readonly [key: string]: string | undefined;
@@ -157,7 +157,7 @@ export async function readPublicProbeControlStatus(environment: EnvironmentLike 
       }
     }
     const internallyConsistent = isProbeGuardStatusConsistent(guard, expectedIdentity);
-    const migrationRequired = isProbeV04PolicyMigrationSourceStatus(guard, {
+    const migrationRequired = isProbeV05PolicyMigrationSourceStatus(guard, {
       guardInstanceId: expectedIdentity.guardInstanceId,
       initializedCommit: expectedIdentity.initializedCommit
     });
@@ -179,7 +179,7 @@ export async function readPublicProbeControlStatus(environment: EnvironmentLike 
       activation: "disabled" as const,
       policy,
       reason: migrationRequired
-        ? "The exact terminal-nine v0.3 guard is verified and awaits the approved atomic v0.4 migration."
+        ? "The exact terminal-thirteen v0.4 guard is verified and awaits the approved atomic v0.5 migration."
         : "The lifetime guard is verified; the Probe lane remains disabled until Gate 2.",
       ...(migrationRequired ? { migration: "required" as const } : {}),
       commit

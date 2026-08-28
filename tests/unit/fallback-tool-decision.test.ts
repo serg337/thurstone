@@ -10,6 +10,7 @@ import {
   fallbackNoCallJsonSchemaHash,
   parseFallbackToolDecisionResponse
 } from "@/lib/fallback/openai-tool-decision";
+import { fallbackRunnerImplementationHash } from "@/lib/fallback/implementation-contract";
 import {
   FALLBACK_IMPLEMENTATION,
   FALLBACK_RUNNER_PROMPT_VERSION,
@@ -92,6 +93,7 @@ async function envelope(): Promise<FallbackCalibrationEnvelope> {
     liveManifest,
     runner: {
       implementation: FALLBACK_IMPLEMENTATION,
+      implementationHash: await fallbackRunnerImplementationHash(),
       upstreamCommit: FALLBACK_UPSTREAM_PIN.commit,
       upstreamSubtree: FALLBACK_UPSTREAM_PIN.subtree,
       promptVersion: FALLBACK_RUNNER_PROMPT_VERSION,

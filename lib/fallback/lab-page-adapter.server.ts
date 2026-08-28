@@ -2,6 +2,10 @@ import "server-only";
 
 import { CHECKOUT_FIXTURE_STATE_HASH, verifyCheckoutReset } from "@/lib/domain/checkout-reset";
 import { canonicalJson, canonicalSha256, sha256Hex } from "@/lib/evidence/digest";
+import {
+  FALLBACK_LAB_PAGE_ADAPTER_VERSION,
+  FALLBACK_TRIAL_EVIDENCE_VERSION
+} from "@/lib/fallback/implementation-contract";
 import type { FallbackNativeExecutionReceipt } from "@/lib/fallback/native-webmcp-bridge";
 import type {
   FallbackBoundarySource,
@@ -17,8 +21,10 @@ import type { ProbeClientJsonValue, ProbeClientTrialCapture } from "@/lib/probe/
 import { normalizeInputSchema } from "@/lib/webmcp/manifest-normalization";
 import type { Page } from "puppeteer-core";
 
-export const FALLBACK_LAB_PAGE_ADAPTER_VERSION = "toolproof-fallback-lab-page-adapter@1.0.0";
-export const FALLBACK_TRIAL_EVIDENCE_VERSION = "toolproof-fallback-trial-evidence@1.0.0";
+export {
+  FALLBACK_LAB_PAGE_ADAPTER_VERSION,
+  FALLBACK_TRIAL_EVIDENCE_VERSION
+} from "@/lib/fallback/implementation-contract";
 
 const INITIAL_TOOL_NAMES = Object.freeze([
   "cart_get",

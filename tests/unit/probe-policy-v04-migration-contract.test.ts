@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import { canonicalSha256 } from "@/lib/evidence/digest";
-import { fallbackRunnerContractHash } from "@/lib/fallback/runner-contract";
 import {
   PROBE_V03_MIGRATED_LEDGER_SCRIPT_HASH,
   PROBE_V03_MIGRATED_POLICY_HASH,
@@ -10,6 +9,9 @@ import {
   type ProbeV03PolicyMigrationReceipt
 } from "@/lib/probe/policy-v03-migration-contract";
 import {
+  PROBE_V04_MIGRATED_POLICY_HASH,
+  PROBE_V04_MIGRATED_POLICY_VERSION,
+  PROBE_V04_MIGRATED_RUNNER_CONTRACT_HASH,
   PROBE_V04_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
   PROBE_V04_POLICY_MIGRATION_ID,
   PROBE_V04_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
@@ -45,9 +47,7 @@ import {
   PROBE_LIFETIME_SPEND_CEILING_NANO_USD,
   PROBE_MAX_CONCURRENCY,
   PROBE_MODEL,
-  PROBE_PER_CALL_RESERVATION_NANO_USD,
-  PROBE_POLICY_VERSION,
-  probePolicyHash
+  PROBE_PER_CALL_RESERVATION_NANO_USD
 } from "@/lib/probe/policy";
 import { PROBE_LEDGER_SCRIPTS, probeLedgerScriptHash } from "@/lib/probe/ledger";
 
@@ -225,19 +225,19 @@ describe("Probe v0.3 -> v0.4 fallback policy migration contract", () => {
   it("binds the exact nine-call lineage, same lifetime caps, and distinct fallback runner", async () => {
     await expect(canonicalSha256(knownCalls)).resolves.toBe(PROBE_V04_PRESERVED_KNOWN_CALLS_DIGEST);
     const source = await sourceFixture();
-    const fallbackRunnerHash = await fallbackRunnerContractHash();
+    const fallbackRunnerHash = PROBE_V04_MIGRATED_RUNNER_CONTRACT_HASH;
     const manifest = await createProbeV04PolicyMigrationManifest({
       sourceReceipt: source,
       predecessorReceipt: predecessor,
       migrationCommit: "d".repeat(40),
-      nextPolicyHash: await probePolicyHash(),
+      nextPolicyHash: PROBE_V04_MIGRATED_POLICY_HASH,
       nextScriptHash: PROBE_V04_PREVIOUS_LEDGER_SCRIPT_HASH,
       nextRunnerHash: fallbackRunnerHash,
       migrationProgramHash: await probeV04PolicyMigrationProgramHash()
     });
     expect(manifest).toMatchObject({
       version: PROBE_V04_POLICY_MIGRATION_VERSION,
-      nextPolicyVersion: PROBE_POLICY_VERSION,
+      nextPolicyVersion: PROBE_V04_MIGRATED_POLICY_VERSION,
       previousRunnerHash: PROBE_V04_PREVIOUS_RUNNER_CONTRACT_HASH,
       nextRunnerHash: fallbackRunnerHash,
       previousPurposeLimits: { calibration: 9, judge: 5 },
@@ -318,9 +318,9 @@ describe("Probe v0.3 -> v0.4 fallback policy migration contract", () => {
       sourceReceipt: source,
       predecessorReceipt: predecessor,
       migrationCommit: "d".repeat(40),
-      nextPolicyHash: await probePolicyHash(),
+      nextPolicyHash: PROBE_V04_MIGRATED_POLICY_HASH,
       nextScriptHash: PROBE_V04_PREVIOUS_LEDGER_SCRIPT_HASH,
-      nextRunnerHash: await fallbackRunnerContractHash(),
+      nextRunnerHash: PROBE_V04_MIGRATED_RUNNER_CONTRACT_HASH,
       migrationProgramHash: await probeV04PolicyMigrationProgramHash()
     };
     await expect(

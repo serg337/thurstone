@@ -228,7 +228,25 @@ async function main(): Promise<void> {
     } finally {
       interfaceInstance.close();
     }
-    await adapter.acknowledge();
+    // The human evidence gate can outlive the short API session. Recover from the still-bounded
+    // four-hour credential only after ACK, renew document ownership, and require the exact same
+    // terminal continuation before deleting encrypted recovery data.
+    const acknowledgementSession = await recoverFallbackBrowserSession({
+      page: revealTrial.page,
+      documentId,
+      expectedBuildCommit: buildCommit
+    });
+    if (
+      acknowledgementSession.path !== "/results" ||
+      acknowledgementSession.continuation !== session.continuation
+    ) {
+      throw new Error("fallback_acknowledgement_recovery_mismatch");
+    }
+    const acknowledgementAdapter = new ToolProofFallbackSameOriginServerAdapter<
+      FallbackResetEvidence,
+      FallbackTrialEvidence
+    >(revealTrial.page, acknowledgementSession);
+    await acknowledgementAdapter.acknowledge();
     process.stdout.write(`${JSON.stringify({ status: "terminal_evidence_acknowledged" })}\n`);
   } finally {
     await revealTrial.close();

@@ -1,5 +1,4 @@
 import { canonicalJson, canonicalSha256 } from "@/lib/evidence/digest";
-import { fallbackRunnerContractHash } from "@/lib/fallback/runner-contract";
 import { type ProbePolicyMigrationKnownCall } from "@/lib/probe/policy-migration-contract";
 import {
   PROBE_V03_MIGRATED_LEDGER_SCRIPT_HASH,
@@ -17,9 +16,6 @@ import {
   PROBE_MAX_CONCURRENCY,
   PROBE_MODEL,
   PROBE_PER_CALL_RESERVATION_NANO_USD,
-  PROBE_POLICY_VERSION,
-  PROBE_PURPOSE_CALL_LIMITS,
-  probePolicyHash,
   type ProbePurpose
 } from "@/lib/probe/policy";
 
@@ -498,20 +494,13 @@ export async function createProbeV04PolicyMigrationManifest(input: {
     input.sourceReceipt,
     input.predecessorReceipt
   );
-  const expectedNextPolicyHash = await probePolicyHash();
-  const expectedNextRunnerHash = await fallbackRunnerContractHash();
   if (
-    PROBE_POLICY_VERSION !== PROBE_V04_MIGRATED_POLICY_VERSION ||
-    expectedNextPolicyHash !== PROBE_V04_MIGRATED_POLICY_HASH ||
-    canonicalJson(PROBE_PURPOSE_CALL_LIMITS) !==
-      canonicalJson(PROBE_V04_MIGRATED_PURPOSE_CALL_LIMITS) ||
     canonicalJson(PROBE_V04_MIGRATED_PURPOSE_CALL_LIMITS) !==
       canonicalJson({ calibration: 13, baseline: 72, repair: 2, revised: 72, judge: 1 }) ||
-    Object.values(PROBE_PURPOSE_CALL_LIMITS).reduce((sum, value) => sum + value, 0) !==
+    Object.values(PROBE_V04_MIGRATED_PURPOSE_CALL_LIMITS).reduce((sum, value) => sum + value, 0) !==
       PROBE_GLOBAL_CALL_LIMIT ||
     input.nextPolicyHash !== PROBE_V04_MIGRATED_POLICY_HASH ||
     input.nextScriptHash !== PROBE_V04_MIGRATED_LEDGER_SCRIPT_HASH ||
-    expectedNextRunnerHash !== PROBE_V04_MIGRATED_RUNNER_CONTRACT_HASH ||
     input.nextRunnerHash !== PROBE_V04_MIGRATED_RUNNER_CONTRACT_HASH
   ) {
     throw new ProbeV04PolicyMigrationContractError("v04_next_policy_not_frozen");

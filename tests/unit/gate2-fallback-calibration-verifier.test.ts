@@ -1,3 +1,6 @@
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -8,6 +11,11 @@ import {
 import { CHECKOUT_FIXTURE_STATE_HASH } from "@/lib/domain/checkout-reset";
 import { canonicalJson, canonicalSha256, sha256Hex } from "@/lib/evidence/digest";
 import {
+  GATE2_FALLBACK_CALIBRATION_BUNDLE_V1_VERSION,
+  GATE2_FALLBACK_CALIBRATION_BUNDLE_V2_VERSION,
+  GATE2_FALLBACK_V2_FROZEN_SOURCE_IDENTITY
+} from "@/lib/evidence/gate2-fallback-calibration-contract";
+import {
   GATE2_FALLBACK_CALIBRATION_BUNDLE_VERSION,
   verifyGate2FallbackCalibrationBundleServer
 } from "@/lib/evidence/gate2-fallback-calibration-verifier.server";
@@ -16,6 +24,7 @@ import {
   fallbackCalibrationEnvelopeHash,
   type FallbackCalibrationEnvelope
 } from "@/lib/fallback/calibration-envelope";
+import { fallbackRunnerImplementationHash } from "@/lib/fallback/implementation-contract";
 import { fallbackNoCallJsonSchemaHash } from "@/lib/fallback/openai-tool-decision";
 import {
   FALLBACK_IMPLEMENTATION,
@@ -44,32 +53,35 @@ import { probeContinuationScriptHash } from "@/lib/probe/continuation-store";
 import { probeFunctionToolDefinitionsHash } from "@/lib/probe/decision";
 import { probeLedgerScriptHash } from "@/lib/probe/ledger";
 import {
-  PROBE_V04_MIGRATED_POLICY_VERSION,
-  PROBE_V04_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
-  PROBE_V04_POLICY_MIGRATION_ID,
-  PROBE_V04_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
-  PROBE_V04_POLICY_MIGRATION_PRIOR_APP_COMMIT,
-  PROBE_V04_POLICY_MIGRATION_VERSION,
-  PROBE_V04_PREDECESSOR_MIGRATION_ID,
-  PROBE_V04_PREDECESSOR_MIGRATION_RECEIPT_HASH,
-  PROBE_V04_PREVIOUS_LEDGER_SCRIPT_HASH,
-  PROBE_V04_PREVIOUS_POLICY_HASH,
-  PROBE_V04_PREVIOUS_POLICY_VERSION,
-  PROBE_V04_PREVIOUS_PURPOSE_CALL_LIMITS,
-  PROBE_V04_PREVIOUS_RUNNER_CONTRACT_HASH,
-  PROBE_V04_PRIOR_ATTEMPT3_EVIDENCE_DIGEST,
-  PROBE_V04_PRIOR_ATTEMPT3_RAW_SHA256,
-  PROBE_V04_PRESERVED_KNOWN_CALLS_DIGEST,
-  createProbeV04PolicyMigrationReceipt,
-  type ProbeV04PolicyMigrationManifest,
-  type ProbeV04PolicyMigrationReceipt
-} from "@/lib/probe/policy-v04-migration-contract";
-import { PROBE_V04_POLICY_MIGRATION_PROGRAM_HASH } from "@/lib/probe/policy-v04-migration.server";
+  PROBE_V05_ACK_ANCHOR_FIXED,
+  PROBE_V05_MIGRATED_POLICY_VERSION,
+  PROBE_V05_MIGRATED_PURPOSE_CALL_LIMITS,
+  PROBE_V05_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
+  PROBE_V05_POLICY_MIGRATION_ID,
+  PROBE_V05_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
+  PROBE_V05_POLICY_MIGRATION_PRIOR_APP_COMMIT,
+  PROBE_V05_POLICY_MIGRATION_VERSION,
+  PROBE_V05_PREDECESSOR_MIGRATION_ID,
+  PROBE_V05_PREDECESSOR_MIGRATION_RECEIPT_HASH,
+  PROBE_V05_PRESERVED_KNOWN_CALLS,
+  PROBE_V05_PREVIOUS_LEDGER_SCRIPT_HASH,
+  PROBE_V05_PREVIOUS_POLICY_HASH,
+  PROBE_V05_PREVIOUS_POLICY_VERSION,
+  PROBE_V05_PREVIOUS_PURPOSE_CALL_LIMITS,
+  PROBE_V05_PREVIOUS_RUNNER_CONTRACT_HASH,
+  PROBE_V05_PRIOR_EVIDENCE_DIGEST,
+  PROBE_V05_PRIOR_EVIDENCE_RAW_SHA256,
+  PROBE_V05_PRIOR_REPRODUCER_EVIDENCE_DIGEST,
+  PROBE_V05_PRIOR_REPRODUCER_RAW_SHA256,
+  createProbeV05PolicyMigrationReceipt,
+  type ProbeV05PolicyMigrationManifest,
+  type ProbeV05PolicyMigrationReceipt
+} from "@/lib/probe/policy-v05-migration-contract";
+import { PROBE_V05_POLICY_MIGRATION_PROGRAM_HASH } from "@/lib/probe/policy-v05-migration.server";
 import {
   PROBE_GLOBAL_CALL_LIMIT,
   PROBE_LIFETIME_SPEND_CEILING_NANO_USD,
   PROBE_PER_CALL_RESERVATION_NANO_USD,
-  PROBE_PURPOSE_CALL_LIMITS,
   calculateProbeCostNanoUsd,
   probePolicyHash
 } from "@/lib/probe/policy";
@@ -180,110 +192,6 @@ const ACTIVATION_HASH = "a".repeat(64);
 const RUN_ID = `run_${"r".repeat(22)}`;
 const COMPLETED_AT = "2026-08-28T12:00:00.000Z";
 
-const knownCallTuples = [
-  [
-    0,
-    "jti_3ttNKoeU_37eePWqlaQTAd",
-    1,
-    2_752_200,
-    "6ad2354dd698c3485acdf764436d2e006fca921dbcf816e21838726e66e08a34",
-    "79d59941177121ee14813c652e4042ab73797c4952477c70301cbaf76a73f730",
-    "4575531a0117bcba5679e0c8926ef35a51301ab65dd71ff8b8217ba3d0340ed3"
-  ],
-  [
-    1,
-    "jti_KbzmhiHJVFITzY_LutQLsW",
-    2,
-    2_745_600,
-    "72ff841d0b8a0b77ea42b97a082215571bf048a13ad29cfb3015b5fc433ce4b8",
-    "f006918f47aafc8b9c57321ec16c7a6360bdabeb397d5782175f94d23de30c32",
-    "ac6cc9b1fedc07839fd21592c38233be6023cd152820a2e0ef297f362903a3d8"
-  ],
-  [
-    2,
-    "jti_-NVfSckdMZ9ZBaB3lR6Shd",
-    3,
-    2_862_200,
-    "80230a2a6d04d5493b7d3116cbad1459891c0151b2306de2427b662fb54cf03e",
-    "24d5c889e87d9301b7fe19b0c618e3b2252092cd4d48a3077ebe284cc93750f7",
-    "be54b40921ff0e395f0a92ee21b530926ddfaf49b589a5d12ebf24730b5d2675"
-  ],
-  [
-    3,
-    "jti_fnoZqfzfBTsmlgSYJGJtjm",
-    4,
-    3_000_800,
-    "b7c53214faf520268872b3d17eba17a4e65260e50d754e1acbc5915f80672ed6",
-    "f727dc2f1f439a085ec6fce8d3c822d656b495e6ee025562bc3478868bec6938",
-    "961a4ecb2a7f083f83c4afa520836716289af392c65ac722c0c433945e239d1a"
-  ],
-  [
-    4,
-    "jti_k3jaZ-FMU0962MmGl7Gtoy",
-    5,
-    3_216_400,
-    "22eec2222d3b8cb73451df90f6af52ecc13df4080d4b44c5f26d9e48370b8e02",
-    "606dea43a57488f28c43edf02d4c58fdf6910755f381c69d3a8d05d4a5d80c1c",
-    "0756f7467db7984f1141aa5dd356198aa26963776d403a5fe507951fec8b27af"
-  ],
-  [
-    5,
-    "jti_9Es4dLaTwzJKmw9l1pLAje",
-    6,
-    3_322_000,
-    "65dcc98af9f86533c4b25f5401a9272713bfbfbd0552f4b283f6dd519862b3c2",
-    "415f7e8fb84d6c1c4c079a16b88dcbe039e7f037a08cea813b5d56f497782e89",
-    "56044e97681209511cb0d54a62307cf59db0e5c6b87c8b52283890ba33f1ab2c"
-  ],
-  [
-    6,
-    "jti_2CK2ZdwtY_ExNqGWBzFtZH",
-    7,
-    3_280_200,
-    "9dc549c8a52388f5fd844c3999ba1b9183acde9ec5fd46dad190bf11c1fcce34",
-    "ee141035305247d16e9765d6bef48b7fbdba344646eceb777bb533c3ffa4ee59",
-    "fcacfaee765db8cc7a8f72fe2bcee82ea227a0c9424ed8a1ebb1c648cb4a93ec"
-  ],
-  [
-    7,
-    "jti_9W52PDxVkWy2YlOXfiMU7d",
-    8,
-    3_489_200,
-    "d7defedf2e8e8ec1c7d1b504ad13349ee3c9546829e6e3d761687766f2b1b604",
-    "45e667f18bbd7b4ae7648f8600dcb14aa39af5fb5950745d9fcbb825d56ecab6",
-    "2b364c94b58f6049131fc697e5dc0db519d960f21291a8becbebc5c80b13729c"
-  ],
-  [
-    8,
-    "jti_W_dK9y1PGv1mAbigResi3t",
-    9,
-    3_324_200,
-    "a5524d99801cc9e750b220849d3501bee4cfcc5487fe30e9df756db9e8c1667f",
-    "b47ebbeccaf8f936015781a8556769019b68a8f568c0e6c6ae6881bf07a421b4",
-    "235e69b9f50ba05f6682efdcc56bc2392639c2c15a453f6fe2aac9c7b551dd52"
-  ]
-] as const;
-
-const knownCalls = knownCallTuples.map(
-  ([
-    ordinal,
-    jti,
-    dispatchSequence,
-    actualNanoUsd,
-    providerResponseHash,
-    settlementDigest,
-    usageHash
-  ]) => ({
-    ordinal,
-    jti,
-    dispatchSequence,
-    actualNanoUsd,
-    providerResponseHash,
-    settlementDigest,
-    usageHash
-  })
-);
-
 function clone<T>(value: T): T {
   return JSON.parse(canonicalJson(value)) as T;
 }
@@ -346,39 +254,50 @@ async function migrationFixture(input: {
   policyHash: string;
   ledgerScriptHash: string;
   runnerContractHash: string;
-}): Promise<ProbeV04PolicyMigrationReceipt> {
-  expect(await canonicalSha256(knownCalls)).toBe(PROBE_V04_PRESERVED_KNOWN_CALLS_DIGEST);
-  const manifest: ProbeV04PolicyMigrationManifest = {
-    version: PROBE_V04_POLICY_MIGRATION_VERSION,
-    migrationId: PROBE_V04_POLICY_MIGRATION_ID,
-    priorAppCommit: PROBE_V04_POLICY_MIGRATION_PRIOR_APP_COMMIT,
-    priorActivationHash: PROBE_V04_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
-    priorEvidenceRawSha256: PROBE_V04_PRIOR_ATTEMPT3_RAW_SHA256,
-    priorEvidenceDigest: PROBE_V04_PRIOR_ATTEMPT3_EVIDENCE_DIGEST,
-    predecessorMigrationId: PROBE_V04_PREDECESSOR_MIGRATION_ID,
-    predecessorMigrationReceiptHash: PROBE_V04_PREDECESSOR_MIGRATION_RECEIPT_HASH,
-    guardInstanceId: "guard_fallback_verifier_fixture",
-    initializedCommit: "c".repeat(40),
-    previousPolicyVersion: PROBE_V04_PREVIOUS_POLICY_VERSION,
-    previousPolicyHash: PROBE_V04_PREVIOUS_POLICY_HASH,
-    previousScriptHash: PROBE_V04_PREVIOUS_LEDGER_SCRIPT_HASH,
-    previousRunnerHash: PROBE_V04_PREVIOUS_RUNNER_CONTRACT_HASH,
-    preserved: PROBE_V04_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
-    knownCalls,
+}): Promise<ProbeV05PolicyMigrationReceipt> {
+  const manifest: ProbeV05PolicyMigrationManifest = {
+    version: PROBE_V05_POLICY_MIGRATION_VERSION,
+    migrationId: PROBE_V05_POLICY_MIGRATION_ID,
+    priorAppCommit: PROBE_V05_POLICY_MIGRATION_PRIOR_APP_COMMIT,
+    priorActivationHash: PROBE_V05_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
+    priorEvidenceRawSha256: PROBE_V05_PRIOR_EVIDENCE_RAW_SHA256,
+    priorEvidenceDigest: PROBE_V05_PRIOR_EVIDENCE_DIGEST,
+    priorReproducerRawSha256: PROBE_V05_PRIOR_REPRODUCER_RAW_SHA256,
+    priorReproducerEvidenceDigest: PROBE_V05_PRIOR_REPRODUCER_EVIDENCE_DIGEST,
+    predecessorMigrationId: PROBE_V05_PREDECESSOR_MIGRATION_ID,
+    predecessorMigrationReceiptHash: PROBE_V05_PREDECESSOR_MIGRATION_RECEIPT_HASH,
+    guardInstanceId: GATE2_FALLBACK_V2_FROZEN_SOURCE_IDENTITY.guardInstanceId,
+    initializedCommit: GATE2_FALLBACK_V2_FROZEN_SOURCE_IDENTITY.initializedCommit,
+    previousPolicyVersion: PROBE_V05_PREVIOUS_POLICY_VERSION,
+    previousPolicyHash: PROBE_V05_PREVIOUS_POLICY_HASH,
+    previousScriptHash: PROBE_V05_PREVIOUS_LEDGER_SCRIPT_HASH,
+    previousRunnerHash: PROBE_V05_PREVIOUS_RUNNER_CONTRACT_HASH,
+    preserved: PROBE_V05_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
+    knownCalls: PROBE_V05_PRESERVED_KNOWN_CALLS,
+    ackAnchor: {
+      ...PROBE_V05_ACK_ANCHOR_FIXED,
+      recoveryHash: "1".repeat(64),
+      sessionHash: "2".repeat(64),
+      runHash: "3".repeat(64),
+      actorHash: "4".repeat(64),
+      launchHash: "5".repeat(64),
+      payloadBinding: "6".repeat(64),
+      encryptedDataPresent: false
+    },
     migrationCommit: APP_COMMIT,
-    nextPolicyVersion: PROBE_V04_MIGRATED_POLICY_VERSION,
+    nextPolicyVersion: PROBE_V05_MIGRATED_POLICY_VERSION,
     nextPolicyHash: input.policyHash,
     nextScriptHash: input.ledgerScriptHash,
     nextRunnerHash: input.runnerContractHash,
-    migrationProgramHash: PROBE_V04_POLICY_MIGRATION_PROGRAM_HASH,
-    previousPurposeLimits: PROBE_V04_PREVIOUS_PURPOSE_CALL_LIMITS,
-    nextPurposeLimits: PROBE_PURPOSE_CALL_LIMITS,
+    migrationProgramHash: PROBE_V05_POLICY_MIGRATION_PROGRAM_HASH,
+    previousPurposeLimits: PROBE_V05_PREVIOUS_PURPOSE_CALL_LIMITS,
+    nextPurposeLimits: PROBE_V05_MIGRATED_PURPOSE_CALL_LIMITS,
     globalCallLimit: PROBE_GLOBAL_CALL_LIMIT,
     lifetimeSpendCeilingNanoUsd: PROBE_LIFETIME_SPEND_CEILING_NANO_USD,
     perCallReservationNanoUsd: PROBE_PER_CALL_RESERVATION_NANO_USD
   };
   const digest = await canonicalSha256(manifest);
-  return createProbeV04PolicyMigrationReceipt(manifest, digest, 1_800_000_000_000);
+  return createProbeV05PolicyMigrationReceipt(manifest, digest, 1_800_000_000_000);
 }
 
 async function envelopeFixture(
@@ -410,6 +329,7 @@ async function envelopeFixture(
     liveManifest: manifest,
     runner: {
       implementation: FALLBACK_IMPLEMENTATION,
+      implementationHash: await fallbackRunnerImplementationHash(),
       upstreamCommit: FALLBACK_UPSTREAM_PIN.commit,
       upstreamSubtree: FALLBACK_UPSTREAM_PIN.subtree,
       promptVersion: FALLBACK_RUNNER_PROMPT_VERSION,
@@ -486,6 +406,14 @@ async function rehashTerminalAndBundle(bundle: BundleFixture): Promise<void> {
   bundle.evidenceDigest = await canonicalSha256(core);
 }
 
+async function rehashMigrationAndBundle(bundle: BundleFixture): Promise<void> {
+  const migration = bundle["policyMigration"] as Record<string, unknown>;
+  const manifest = projectionWithout(migration, ["receiptHash", "migrationDigest", "migratedAtMs"]);
+  migration.migrationDigest = await canonicalSha256(manifest);
+  migration.receiptHash = await canonicalSha256(projectionWithout(migration, ["receiptHash"]));
+  bundle.evidenceDigest = await canonicalSha256(projectionWithout(bundle, ["evidenceDigest"]));
+}
+
 async function rowFixture(ordinal: number, manifest: ProbeLiveManifest): Promise<RowFixture> {
   const envelope = await envelopeFixture(ordinal, manifest);
   const boundary = cleanBoundary(manifest.manifestHash);
@@ -544,6 +472,11 @@ async function rowFixture(ordinal: number, manifest: ProbeLiveManifest): Promise
   };
   const providerReceipt = { status: "known", receipt: provider };
   const capture = {
+    claim: {
+      runId: envelope.runId,
+      caseId: envelope.caseId,
+      trialId: envelope.trialId
+    },
     initialBoundary: boundary,
     nativeDispatchCount: 0,
     providerReceiptHash: "",
@@ -564,7 +497,7 @@ async function rowFixture(ordinal: number, manifest: ProbeLiveManifest): Promise
     ordinal,
     jti: `jti_fallback_fixture_${String(ordinal).padStart(2, "0")}`,
     trialEvidence: {
-      version: "toolproof-fallback-trial-evidence@1.0.0",
+      version: "toolproof-fallback-trial-evidence@1.1.0",
       appCommit: APP_COMMIT,
       capturedAt: `2026-08-28T12:00:0${ordinal}.200Z`,
       capture,
@@ -611,14 +544,16 @@ async function bundleFixture(): Promise<BundleFixture> {
     lane: FALLBACK_PROBE_CALIBRATION_LANE,
     calibrationOnly: true,
     includedInBenchmark: false,
-    designation: "approved-pinned-fallback-not-fourth-preferred-attempt",
+    designation: "approved-pinned-fallback-repair-attempt-2",
     callLineage: {
-      preservedPreferredCalls: FALLBACK_PROBE_CALIBRATION_BASE_CALLS,
+      preservedPreferredCalls: 9,
+      preservedFallbackCalls: 4,
+      preservedCalibrationCalls: FALLBACK_PROBE_CALIBRATION_BASE_CALLS,
       fallbackCalibrationCalls: FALLBACK_PROBE_CALIBRATION_CASE_COUNT,
       terminalCalibrationCalls: FALLBACK_PROBE_CALIBRATION_TERMINAL_CALLS,
-      priorEvidenceRawSha256: PROBE_V04_PRIOR_ATTEMPT3_RAW_SHA256,
-      priorEvidenceDigest: PROBE_V04_PRIOR_ATTEMPT3_EVIDENCE_DIGEST,
-      priorMigrationReceiptHash: PROBE_V04_PREDECESSOR_MIGRATION_RECEIPT_HASH
+      priorEvidenceRawSha256: PROBE_V05_PRIOR_EVIDENCE_RAW_SHA256,
+      priorEvidenceDigest: PROBE_V05_PRIOR_EVIDENCE_DIGEST,
+      priorMigrationReceiptHash: PROBE_V05_PREDECESSOR_MIGRATION_RECEIPT_HASH
     },
     policyMigration: await migrationFixture({ policyHash, ledgerScriptHash, runnerContractHash }),
     provider: "OpenAI",
@@ -648,7 +583,7 @@ async function bundleFixture(): Promise<BundleFixture> {
     },
     calibrationCost: {
       priorCumulativeKnownAccountedNanoUsd:
-        PROBE_V04_POLICY_MIGRATION_FIXED_PRESERVED_STATE.knownActualNanoUsd,
+        PROBE_V05_POLICY_MIGRATION_FIXED_PRESERVED_STATE.knownActualNanoUsd,
       fallbackCalibrationAccountedNanoUsd: 0,
       terminalCumulativeKnownAccountedNanoUsd: 0
     },
@@ -660,9 +595,138 @@ async function bundleFixture(): Promise<BundleFixture> {
 }
 
 describe("Gate 2 pinned fallback calibration bundle verifier", () => {
+  it("continues to verify the immutable saved v1 3/4 bundle under its historical contract", async () => {
+    const path = resolve(
+      process.cwd(),
+      ".toolproof-local/evidence/gate2/toolproof-gate2-fallback-42f65f0345ad-20260828T111429495Z.json"
+    );
+    const raw = await readFile(path, "utf8");
+    expect(await sha256Hex(raw)).toBe(
+      "cbc359472f18f8c240480562905507806ea2db45d84ba8f247714a097d05814c"
+    );
+    const bundle = JSON.parse(raw) as { version: string; passedCount: number };
+    expect(bundle).toMatchObject({
+      version: GATE2_FALLBACK_CALIBRATION_BUNDLE_V1_VERSION,
+      passedCount: 3
+    });
+    await expect(verifyGate2FallbackCalibrationBundleServer(bundle)).resolves.toBeUndefined();
+  });
+
   it("accepts an internally authentic four-row abstention bundle", async () => {
     const bundle = await bundleFixture();
+    expect(bundle.version).toBe(GATE2_FALLBACK_CALIBRATION_BUNDLE_V2_VERSION);
     await expect(verifyGate2FallbackCalibrationBundleServer(bundle)).resolves.toBeUndefined();
+  });
+
+  it("rejects a rehashed v2 lineage substitution", async () => {
+    const bundle = await bundleFixture();
+    const lineage = bundle["callLineage"] as Record<string, unknown>;
+    lineage.priorEvidenceRawSha256 = "f".repeat(64);
+    bundle.evidenceDigest = await canonicalSha256(projectionWithout(bundle, ["evidenceDigest"]));
+    await expect(verifyGate2FallbackCalibrationBundleServer(bundle)).rejects.toThrow();
+  });
+
+  it("rejects a fully rehashed v2 preserved-call substitution", async () => {
+    const bundle = clone(await bundleFixture());
+    const migration = bundle["policyMigration"] as Record<string, unknown>;
+    const calls = clone(migration.knownCalls as readonly Record<string, unknown>[]);
+    const first = calls[0];
+    if (!first) throw new Error("Missing v2 migration fixture call.");
+    first.actualNanoUsd = Number(first.actualNanoUsd) + 1;
+    migration.knownCalls = calls;
+    await rehashMigrationAndBundle(bundle);
+    await expect(verifyGate2FallbackCalibrationBundleServer(bundle)).rejects.toThrow(
+      /fallback_bundle_migration_mismatch/u
+    );
+  });
+
+  it("rejects a fully rehashed v2 predecessor-source substitution", async () => {
+    const bundle = clone(await bundleFixture());
+    const migration = bundle["policyMigration"] as Record<string, unknown>;
+    migration.priorAppCommit = "e".repeat(40);
+    migration.priorActivationHash = "e".repeat(64);
+    migration.predecessorMigrationId = "migration_gate2_googlechromelabs_fallback_replaced";
+    await rehashMigrationAndBundle(bundle);
+    await expect(verifyGate2FallbackCalibrationBundleServer(bundle)).rejects.toThrow(
+      /fallback_bundle_migration_mismatch/u
+    );
+  });
+
+  it("rejects a fully rehashed v2 guard-source substitution", async () => {
+    const bundle = clone(await bundleFixture());
+    const migration = bundle["policyMigration"] as Record<string, unknown>;
+    migration.guardInstanceId = "guard_replaced_fallback_source";
+    migration.initializedCommit = "e".repeat(40);
+    await rehashMigrationAndBundle(bundle);
+    await expect(verifyGate2FallbackCalibrationBundleServer(bundle)).rejects.toThrow(
+      /fallback_bundle_migration_mismatch/u
+    );
+  });
+
+  it("rejects a fully rehashed v2 previous-policy-chain substitution", async () => {
+    const bundle = clone(await bundleFixture());
+    const migration = bundle["policyMigration"] as Record<string, unknown>;
+    migration.previousPolicyVersion = "toolproof-probe-policy@0.4.1";
+    migration.previousPolicyHash = "e".repeat(64);
+    migration.previousScriptHash = "d".repeat(64);
+    migration.previousRunnerHash = "c".repeat(64);
+    migration.previousPurposeLimits = {
+      ...(migration.previousPurposeLimits as Record<string, number>),
+      calibration: 14
+    };
+    await rehashMigrationAndBundle(bundle);
+    await expect(verifyGate2FallbackCalibrationBundleServer(bundle)).rejects.toThrow(
+      /fallback_bundle_migration_mismatch/u
+    );
+  });
+
+  it("rejects a fully rehashed v2 prior-artifact substitution", async () => {
+    const bundle = clone(await bundleFixture());
+    const migration = bundle["policyMigration"] as Record<string, unknown>;
+    migration.priorReproducerRawSha256 = "e".repeat(64);
+    migration.priorReproducerEvidenceDigest = "d".repeat(64);
+    const ack = migration.ackAnchor as Record<string, unknown>;
+    ack.confirmation = "c".repeat(64);
+    await rehashMigrationAndBundle(bundle);
+    await expect(verifyGate2FallbackCalibrationBundleServer(bundle)).rejects.toThrow(
+      /fallback_bundle_migration_mismatch/u
+    );
+  });
+
+  it("rejects a rehashed v2 row JTI that overlaps the 13-call predecessor", async () => {
+    const bundle = clone(await bundleFixture());
+    const migration = bundle["policyMigration"] as Record<string, unknown>;
+    const calls = migration.knownCalls as readonly Record<string, unknown>[];
+    const preserved = calls[0];
+    if (!preserved) throw new Error("Missing preserved v2 JTI fixture.");
+    const row = requiredRow(bundle, 0);
+    row.jti = String(preserved.jti);
+    await rehashRow(row);
+    await rehashTerminalAndBundle(bundle);
+    await expect(verifyGate2FallbackCalibrationBundleServer(bundle)).rejects.toThrow(
+      /fallback_bundle_jti_lineage_overlap/u
+    );
+  });
+
+  it("rejects a rehashed v2 bundle run substitution", async () => {
+    const bundle = await bundleFixture();
+    bundle["runId"] = `run_${"s".repeat(22)}`;
+    bundle.evidenceDigest = await canonicalSha256(projectionWithout(bundle, ["evidenceDigest"]));
+    await expect(verifyGate2FallbackCalibrationBundleServer(bundle)).rejects.toThrow(
+      /fallback_bundle_case_mismatch/u
+    );
+  });
+
+  it("rejects rehashed v2 capture claims that diverge from the envelope", async () => {
+    const bundle = await bundleFixture();
+    const row = requiredRow(bundle, 1);
+    const claim = row.trialEvidence.capture.claim as Record<string, unknown>;
+    claim.caseId = `case_${"x".repeat(22)}`;
+    await rehashRow(row);
+    await rehashTerminalAndBundle(bundle);
+    await expect(verifyGate2FallbackCalibrationBundleServer(bundle)).rejects.toThrow(
+      /fallback_bundle_case_mismatch/u
+    );
   });
 
   it("rejects a rehashed evaluation substitution", async () => {

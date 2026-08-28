@@ -12,6 +12,7 @@
  */
 
 import { canonicalJson, canonicalSha256, sha256Hex } from "@/lib/evidence/digest";
+import { FALLBACK_NATIVE_BRIDGE_VERSION } from "@/lib/fallback/implementation-contract";
 import { normalizeJsonSafe } from "@/lib/evidence/operation-trace";
 import { probeLiveManifestSchema, type ProbeLiveManifest } from "@/lib/probe/calibration-envelope";
 import type { ProbeClientJsonValue } from "@/lib/probe/client-runner";
@@ -25,7 +26,7 @@ import type {
 } from "puppeteer-core";
 import { z } from "zod";
 
-export const FALLBACK_NATIVE_BRIDGE_VERSION = "toolproof-fallback-native-bridge@1.0.0";
+export { FALLBACK_NATIVE_BRIDGE_VERSION } from "@/lib/fallback/implementation-contract";
 
 const argumentsSchema = z.record(z.string(), z.json());
 const SHA256_PATTERN = /^[a-f0-9]{64}$/u;

@@ -17,14 +17,14 @@ export const PROBE_MAX_CONTINUATION_CHARACTERS = 1_800_000;
 export const PROBE_SESSION_RESPONSE_VERSION = 3 as const;
 
 export const FALLBACK_PROBE_SERVICE_VERSION =
-  "toolproof-pinned-googlechromelabs-fallback-service@1.0.0";
+  "toolproof-pinned-googlechromelabs-fallback-service@1.1.0";
 export const FALLBACK_PROBE_CALIBRATION_PROTOCOL_VERSION =
-  "toolproof-pinned-googlechromelabs-fallback-calibration@1.0.0";
+  "toolproof-pinned-googlechromelabs-fallback-calibration@2.0.0";
 export const FALLBACK_PROBE_CALIBRATION_LANE =
   "pinned-googlechromelabs-webmcp-fallback-calibration" as const;
-export const FALLBACK_PROBE_CALIBRATION_BASE_CALLS = 9 as const;
+export const FALLBACK_PROBE_CALIBRATION_BASE_CALLS = 13 as const;
 export const FALLBACK_PROBE_CALIBRATION_CASE_COUNT = 4 as const;
-export const FALLBACK_PROBE_CALIBRATION_TERMINAL_CALLS = 13 as const;
+export const FALLBACK_PROBE_CALIBRATION_TERMINAL_CALLS = 17 as const;
 export const FALLBACK_PROBE_SESSION_RESPONSE_VERSION = 1 as const;
 
 const opaqueId = z.string().regex(/^[A-Za-z0-9_-]{16,96}$/u);

@@ -20,7 +20,7 @@ import {
 import { z } from "zod";
 
 export const FALLBACK_CALIBRATION_ENVELOPE_VERSION =
-  "toolproof-fallback-calibration-envelope@1.0.0";
+  "toolproof-fallback-calibration-envelope@1.1.0";
 
 const sha256 = z.string().regex(/^[a-f0-9]{64}$/u);
 const identity = {
@@ -33,6 +33,7 @@ const identity = {
 export const fallbackRunnerBindingSchema = z
   .object({
     implementation: z.literal(FALLBACK_IMPLEMENTATION),
+    implementationHash: sha256,
     upstreamCommit: z.literal(FALLBACK_UPSTREAM_PIN.commit),
     upstreamSubtree: z.literal(FALLBACK_UPSTREAM_PIN.subtree),
     promptVersion: z.literal(FALLBACK_RUNNER_PROMPT_VERSION),

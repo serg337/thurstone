@@ -24,7 +24,7 @@ import {
 } from "@/lib/probe/client-runner";
 import type { Page } from "puppeteer-core";
 
-export const FALLBACK_TRIAL_RUNNER_VERSION = "toolproof-fallback-trial-runner@1.0.0";
+export { FALLBACK_TRIAL_RUNNER_VERSION } from "@/lib/fallback/implementation-contract";
 
 export interface FallbackBoundarySource<TResetReceipt> extends ProbeInitialBoundaryBinding {
   readonly resetId: string;

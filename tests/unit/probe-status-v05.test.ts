@@ -31,15 +31,19 @@ import {
   PROBE_PER_CALL_RESERVATION_NANO_USD
 } from "@/lib/probe/policy";
 import {
-  PROBE_V04_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
-  PROBE_V04_PREVIOUS_POLICY_HASH,
-  PROBE_V04_PREVIOUS_POLICY_VERSION,
-  PROBE_V04_PREVIOUS_PURPOSE_CALL_LIMITS,
-  PROBE_V04_PREVIOUS_LEDGER_SCRIPT_HASH
-} from "@/lib/probe/policy-v04-migration-contract";
+  PROBE_V05_MIGRATED_LEDGER_SCRIPT_HASH,
+  PROBE_V05_MIGRATED_POLICY_HASH,
+  PROBE_V05_MIGRATED_POLICY_VERSION,
+  PROBE_V05_MIGRATED_PURPOSE_CALL_LIMITS,
+  PROBE_V05_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
+  PROBE_V05_PREVIOUS_LEDGER_SCRIPT_HASH,
+  PROBE_V05_PREVIOUS_POLICY_HASH,
+  PROBE_V05_PREVIOUS_POLICY_VERSION,
+  PROBE_V05_PREVIOUS_PURPOSE_CALL_LIMITS
+} from "@/lib/probe/policy-v05-migration-contract";
 import { readPublicProbeControlStatus } from "@/lib/probe/status";
 
-const guardInstanceId = "guard_status_v04_0123456789";
+const guardInstanceId = "guard_status_v05_0123456789";
 const initializedCommit = "a".repeat(40);
 const signingSecret = Buffer.alloc(32, 9).toString("base64url");
 
@@ -56,15 +60,12 @@ function environment(activation = false) {
   };
 }
 
-function migrationSourceGuard() {
-  const fixed = PROBE_V04_POLICY_MIGRATION_FIXED_PRESERVED_STATE;
+function guardCore() {
+  const fixed = PROBE_V05_POLICY_MIGRATION_FIXED_PRESERVED_STATE;
   return {
     status: "open" as const,
     guardInstanceId,
     initializedCommit,
-    policyVersion: PROBE_V04_PREVIOUS_POLICY_VERSION,
-    policyHash: PROBE_V04_PREVIOUS_POLICY_HASH,
-    scriptHash: PROBE_V04_PREVIOUS_LEDGER_SCRIPT_HASH,
     model: PROBE_MODEL,
     globalCallLimit: PROBE_GLOBAL_CALL_LIMIT,
     spendCeilingNanoUsd: PROBE_LIFETIME_SPEND_CEILING_NANO_USD,
@@ -78,7 +79,6 @@ function migrationSourceGuard() {
     uncertainCount: fixed.uncertainCalls,
     knownActualNanoUsd: fixed.knownActualNanoUsd,
     uncertainUpperNanoUsd: fixed.uncertainUpperNanoUsd,
-    purposeLimits: PROBE_V04_PREVIOUS_PURPOSE_CALL_LIMITS,
     purposeCounts: fixed.purposeCounts,
     inflightCount: fixed.inflightCalls,
     sequence: fixed.sequence,
@@ -87,30 +87,61 @@ function migrationSourceGuard() {
   };
 }
 
-describe("public v0.4 Probe status", () => {
+function migrationSourceGuard() {
+  return {
+    ...guardCore(),
+    policyVersion: PROBE_V05_PREVIOUS_POLICY_VERSION,
+    policyHash: PROBE_V05_PREVIOUS_POLICY_HASH,
+    scriptHash: PROBE_V05_PREVIOUS_LEDGER_SCRIPT_HASH,
+    purposeLimits: PROBE_V05_PREVIOUS_PURPOSE_CALL_LIMITS
+  };
+}
+
+function currentGuard() {
+  return {
+    ...guardCore(),
+    policyVersion: PROBE_V05_MIGRATED_POLICY_VERSION,
+    policyHash: PROBE_V05_MIGRATED_POLICY_HASH,
+    scriptHash: PROBE_V05_MIGRATED_LEDGER_SCRIPT_HASH,
+    purposeLimits: PROBE_V05_MIGRATED_PURPOSE_CALL_LIMITS
+  };
+}
+
+describe("public v0.5 Probe status", () => {
   beforeEach(() => {
     statusMocks.guard = migrationSourceGuard();
     statusMocks.activation = undefined;
   });
 
-  it("reports the exact terminal-nine v0.3 source as migration-required", async () => {
+  it("reports the exact terminal-thirteen v0.4 source as migration-required", async () => {
     await expect(readPublicProbeControlStatus(environment())).resolves.toMatchObject({
       status: "controls-ready",
       enabled: false,
       activation: "disabled",
       migration: "required",
-      reason: expect.stringContaining("terminal-nine v0.3")
+      reason: expect.stringContaining("terminal-thirteen v0.4")
     });
   });
 
-  it("uses fallback base 9 and terminal 13 for activated readiness", async () => {
+  it("recognizes the exact current v0.5 guard without mutating it", async () => {
+    statusMocks.guard = currentGuard();
+    await expect(readPublicProbeControlStatus(environment())).resolves.toMatchObject({
+      status: "controls-ready",
+      enabled: false,
+      activation: "disabled",
+      policy: { version: PROBE_V05_MIGRATED_POLICY_VERSION },
+      reason: expect.stringContaining("lifetime guard is verified")
+    });
+  });
+
+  it("uses fallback base 13 and terminal 17 for activated readiness", async () => {
     statusMocks.activation = {
       activationHash: "b".repeat(64),
       guard: {
         phase: "idle",
-        claimedCalls: 9,
-        knownCalls: 9,
-        calibrationCalls: 9,
+        claimedCalls: 13,
+        knownCalls: 13,
+        calibrationCalls: 13,
         pendingCalls: 0,
         uncertainCalls: 0
       }
@@ -127,9 +158,9 @@ describe("public v0.4 Probe status", () => {
       activationHash: "b".repeat(64),
       guard: {
         phase: "idle",
-        claimedCalls: 13,
-        knownCalls: 13,
-        calibrationCalls: 13,
+        claimedCalls: 17,
+        knownCalls: 17,
+        calibrationCalls: 17,
         pendingCalls: 0,
         uncertainCalls: 0
       }

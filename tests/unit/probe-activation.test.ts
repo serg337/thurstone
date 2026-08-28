@@ -45,13 +45,14 @@ import {
   createProbeV03PolicyMigrationReceipt,
   parseProbeV03PolicyMigrationSourceReceipt,
   probeV03PolicyMigrationDigest,
-  probeV03PolicyMigrationReceiptHash,
-  type ProbeV03PolicyMigrationReceipt,
   type ProbeV03PolicyMigrationManifest
 } from "@/lib/probe/policy-v03-migration-contract";
 import {
   PROBE_V04_MIGRATED_LEDGER_SCRIPT_HASH,
+  PROBE_V04_MIGRATED_POLICY_HASH,
   PROBE_V04_MIGRATED_POLICY_VERSION,
+  PROBE_V04_MIGRATED_PURPOSE_CALL_LIMITS,
+  PROBE_V04_MIGRATED_RUNNER_CONTRACT_HASH,
   PROBE_V04_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
   PROBE_V04_POLICY_MIGRATION_ID,
   PROBE_V04_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
@@ -71,6 +72,30 @@ import {
   type ProbeV04PolicyMigrationManifest
 } from "@/lib/probe/policy-v04-migration-contract";
 import { PROBE_V04_POLICY_MIGRATION_PROGRAM_HASH } from "@/lib/probe/policy-v04-migration.server";
+import {
+  PROBE_V05_ACK_ANCHOR_FIXED,
+  PROBE_V05_MIGRATED_POLICY_VERSION,
+  PROBE_V05_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
+  PROBE_V05_POLICY_MIGRATION_ID,
+  PROBE_V05_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
+  PROBE_V05_POLICY_MIGRATION_PRIOR_APP_COMMIT,
+  PROBE_V05_POLICY_MIGRATION_VERSION,
+  PROBE_V05_PREVIOUS_LEDGER_SCRIPT_HASH,
+  PROBE_V05_PREVIOUS_POLICY_HASH,
+  PROBE_V05_PREVIOUS_POLICY_VERSION,
+  PROBE_V05_PREVIOUS_PURPOSE_CALL_LIMITS,
+  PROBE_V05_PREVIOUS_RUNNER_CONTRACT_HASH,
+  PROBE_V05_PRIOR_EVIDENCE_DIGEST,
+  PROBE_V05_PRIOR_EVIDENCE_RAW_SHA256,
+  PROBE_V05_PRIOR_REPRODUCER_EVIDENCE_DIGEST,
+  PROBE_V05_PRIOR_REPRODUCER_RAW_SHA256,
+  createProbeV05PolicyMigrationReceipt,
+  probeV05PolicyMigrationDigest,
+  probeV05PolicyMigrationReceiptHash,
+  type ProbeV05PolicyMigrationManifest,
+  type ProbeV05PolicyMigrationReceipt
+} from "@/lib/probe/policy-v05-migration-contract";
+import { PROBE_V05_POLICY_MIGRATION_PROGRAM_HASH } from "@/lib/probe/policy-v05-migration.server";
 import {
   PROBE_CHALLENGE_CLOSES_AT,
   PROBE_GLOBAL_CALL_LIMIT,
@@ -248,20 +273,79 @@ async function validFixture() {
     knownCalls,
     migrationCommit: activeCommit,
     nextPolicyVersion: PROBE_V04_MIGRATED_POLICY_VERSION,
-    nextPolicyHash: hashes.policyHash,
+    nextPolicyHash: PROBE_V04_MIGRATED_POLICY_HASH,
     nextScriptHash: PROBE_V04_MIGRATED_LEDGER_SCRIPT_HASH,
-    nextRunnerHash: hashes.runnerContractHash,
+    nextRunnerHash: PROBE_V04_MIGRATED_RUNNER_CONTRACT_HASH,
     migrationProgramHash: PROBE_V04_POLICY_MIGRATION_PROGRAM_HASH,
     previousPurposeLimits: PROBE_V04_PREVIOUS_PURPOSE_CALL_LIMITS,
-    nextPurposeLimits: PROBE_PURPOSE_CALL_LIMITS,
+    nextPurposeLimits: PROBE_V04_MIGRATED_PURPOSE_CALL_LIMITS,
     globalCallLimit: PROBE_GLOBAL_CALL_LIMIT,
     lifetimeSpendCeilingNanoUsd: PROBE_LIFETIME_SPEND_CEILING_NANO_USD,
     perCallReservationNanoUsd: PROBE_PER_CALL_RESERVATION_NANO_USD
   } satisfies ProbeV04PolicyMigrationManifest;
-  const migration = await createProbeV04PolicyMigrationReceipt(
+  const predecessorMigrationV04 = await createProbeV04PolicyMigrationReceipt(
     migrationManifest,
     await probeV04PolicyMigrationDigest(migrationManifest),
     nowMs - 1_000
+  );
+  const v05Calls = [
+    ...predecessorMigrationV04.knownCalls,
+    ...[9, 10, 11, 12].map((ordinal) => ({
+      ordinal,
+      jti: `jti_activation_v05_${String(ordinal).repeat(10)}`,
+      dispatchSequence: ordinal + 1,
+      actualNanoUsd: [3_192_200, 3_207_600, 3_971_000, 3_801_600][ordinal - 9]!,
+      providerResponseHash: ["c", "d", "e", "f"][ordinal - 9]!.repeat(64),
+      settlementDigest: ["1", "2", "3", "4"][ordinal - 9]!.repeat(64),
+      usageHash: ["5", "6", "7", "8"][ordinal - 9]!.repeat(64)
+    }))
+  ];
+  const ackAnchor = {
+    ...PROBE_V05_ACK_ANCHOR_FIXED,
+    recoveryHash: "1".repeat(64),
+    sessionHash: "2".repeat(64),
+    runHash: "3".repeat(64),
+    actorHash: "4".repeat(64),
+    launchHash: "5".repeat(64),
+    payloadBinding: "6".repeat(64),
+    encryptedDataPresent: false as const
+  };
+  const v05Manifest = {
+    version: PROBE_V05_POLICY_MIGRATION_VERSION,
+    migrationId: PROBE_V05_POLICY_MIGRATION_ID,
+    priorAppCommit: PROBE_V05_POLICY_MIGRATION_PRIOR_APP_COMMIT,
+    priorActivationHash: PROBE_V05_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
+    priorEvidenceRawSha256: PROBE_V05_PRIOR_EVIDENCE_RAW_SHA256,
+    priorEvidenceDigest: PROBE_V05_PRIOR_EVIDENCE_DIGEST,
+    priorReproducerRawSha256: PROBE_V05_PRIOR_REPRODUCER_RAW_SHA256,
+    priorReproducerEvidenceDigest: PROBE_V05_PRIOR_REPRODUCER_EVIDENCE_DIGEST,
+    predecessorMigrationId: PROBE_V04_POLICY_MIGRATION_ID,
+    predecessorMigrationReceiptHash: predecessorMigrationV04.receiptHash,
+    guardInstanceId,
+    initializedCommit,
+    previousPolicyVersion: PROBE_V05_PREVIOUS_POLICY_VERSION,
+    previousPolicyHash: PROBE_V05_PREVIOUS_POLICY_HASH,
+    previousScriptHash: PROBE_V05_PREVIOUS_LEDGER_SCRIPT_HASH,
+    previousRunnerHash: PROBE_V05_PREVIOUS_RUNNER_CONTRACT_HASH,
+    preserved: PROBE_V05_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
+    knownCalls: v05Calls,
+    ackAnchor,
+    migrationCommit: activeCommit,
+    nextPolicyVersion: PROBE_V05_MIGRATED_POLICY_VERSION,
+    nextPolicyHash: hashes.policyHash,
+    nextScriptHash: hashes.scriptHash,
+    nextRunnerHash: hashes.runnerContractHash,
+    migrationProgramHash: PROBE_V05_POLICY_MIGRATION_PROGRAM_HASH,
+    previousPurposeLimits: PROBE_V05_PREVIOUS_PURPOSE_CALL_LIMITS,
+    nextPurposeLimits: PROBE_PURPOSE_CALL_LIMITS,
+    globalCallLimit: PROBE_GLOBAL_CALL_LIMIT,
+    lifetimeSpendCeilingNanoUsd: PROBE_LIFETIME_SPEND_CEILING_NANO_USD,
+    perCallReservationNanoUsd: PROBE_PER_CALL_RESERVATION_NANO_USD
+  } satisfies ProbeV05PolicyMigrationManifest;
+  const migration = await createProbeV05PolicyMigrationReceipt(
+    v05Manifest,
+    await probeV05PolicyMigrationDigest(v05Manifest),
+    nowMs - 500
   );
   const environment: Record<string, string> = {
     VERCEL: "1",
@@ -290,7 +374,7 @@ async function validFixture() {
   const manifest = await createProbeActivationManifest(
     environment,
     hashes,
-    predecessorMigration.receiptHash
+    predecessorMigrationV04.receiptHash
   );
   environment.TOOLPROOF_PROBE_ACTIVATION_HASH = computeProbeActivationHash(
     manifest,
@@ -299,21 +383,28 @@ async function validFixture() {
   const liveGuard = guard({
     policyHash: hashes.policyHash,
     scriptHash: hashes.scriptHash,
-    claimedCalls: 9,
-    committedNanoUsd: 562_500_000,
-    knownCount: 9,
-    knownActualNanoUsd: 27_992_800,
-    purposeCounts: { calibration: 9, baseline: 0, repair: 0, revised: 0, judge: 0 },
-    sequence: 9
+    claimedCalls: 13,
+    committedNanoUsd: 812_500_000,
+    knownCount: 13,
+    knownActualNanoUsd: 42_165_200,
+    purposeCounts: { calibration: 13, baseline: 0, repair: 0, revised: 0, judge: 0 },
+    sequence: 13
   });
-  return { environment, hashes, manifest, liveGuard, predecessorMigration, migration };
+  return {
+    environment,
+    hashes,
+    manifest,
+    liveGuard,
+    predecessorMigration: predecessorMigrationV04,
+    migration
+  };
 }
 
 async function repinMigration(
   fixture: Awaited<ReturnType<typeof validFixture>>,
-  changed: Omit<ProbeV04PolicyMigrationReceipt, "receiptHash">
-): Promise<ProbeV04PolicyMigrationReceipt> {
-  const migration = { ...changed, receiptHash: await probeV04PolicyMigrationReceiptHash(changed) };
+  changed: Omit<ProbeV05PolicyMigrationReceipt, "receiptHash">
+): Promise<ProbeV05PolicyMigrationReceipt> {
+  const migration = { ...changed, receiptHash: await probeV05PolicyMigrationReceiptHash(changed) };
   fixture.environment.TOOLPROOF_PROBE_POLICY_MIGRATION_RECEIPT_HASH = migration.receiptHash;
   const manifest = await createProbeActivationManifest(
     fixture.environment,
@@ -369,7 +460,7 @@ describe("Probe activation", () => {
       mode: "calibration",
       activationHash: fixture.environment.TOOLPROOF_PROBE_ACTIVATION_HASH,
       manifest: {
-        version: "toolproof-probe-activation@4.0.0",
+        version: "toolproof-probe-activation@5.0.0",
         activeCommit,
         vercelProjectId: projectId,
         guardInstanceId,
@@ -382,7 +473,7 @@ describe("Probe activation", () => {
         policyMigrationReceiptHash: fixture.migration.receiptHash,
         operatorCapabilityHash
       },
-      guard: { phase: "idle", claimedCalls: 9, pendingCalls: 0 },
+      guard: { phase: "idle", claimedCalls: 13, pendingCalls: 0 },
       predecessorMigration: { receiptHash: fixture.predecessorMigration.receiptHash },
       migration: {
         receiptHash: fixture.migration.receiptHash,
@@ -390,11 +481,11 @@ describe("Probe activation", () => {
         globalCallLimit: 160,
         lifetimeSpendCeilingNanoUsd: 10_000_000_000,
         preserved: {
-          claimedCalls: 9,
-          knownCalls: 9,
-          committedNanoUsd: 562_500_000,
-          knownActualNanoUsd: 27_992_800,
-          sequence: 9
+          claimedCalls: 13,
+          knownCalls: 13,
+          committedNanoUsd: 812_500_000,
+          knownActualNanoUsd: 42_165_200,
+          sequence: 13
         }
       }
     });
@@ -504,12 +595,12 @@ describe("Probe activation", () => {
         guard: guard({
           policyHash: reset.hashes.policyHash,
           scriptHash: reset.hashes.scriptHash,
-          claimedCalls: 9,
-          committedNanoUsd: 562_500_000,
-          knownCount: 9,
-          knownActualNanoUsd: 27_992_799,
-          purposeCounts: { calibration: 9, baseline: 0, repair: 0, revised: 0, judge: 0 },
-          sequence: 9
+          claimedCalls: 13,
+          committedNanoUsd: 812_500_000,
+          knownCount: 13,
+          knownActualNanoUsd: 42_165_199,
+          purposeCounts: { calibration: 13, baseline: 0, repair: 0, revised: 0, judge: 0 },
+          sequence: 13
         }),
         predecessorMigration: reset.predecessorMigration,
         migration: reset.migration,
@@ -552,17 +643,17 @@ describe("Probe activation", () => {
     ).rejects.toMatchObject({ code: "activation_migration_invalid" });
   });
 
-  it("rejects a self-consistent substitution of the historical v0.3 predecessor", async () => {
+  it("rejects a self-consistent substitution of the historical v0.4 predecessor", async () => {
     const fixture = await validFixture();
     const { receiptHash: _predecessorHash, ...predecessorCore } = fixture.predecessorMigration;
     void _predecessorHash;
     const changedPredecessorCore = {
       ...predecessorCore,
       nextPolicyHash: "c".repeat(64)
-    } as Omit<ProbeV03PolicyMigrationReceipt, "receiptHash">;
+    } as Omit<ProbeV04PolicyMigrationReceipt, "receiptHash">;
     const predecessorMigration = {
       ...changedPredecessorCore,
-      receiptHash: await probeV03PolicyMigrationReceiptHash(changedPredecessorCore)
+      receiptHash: await probeV04PolicyMigrationReceiptHash(changedPredecessorCore)
     };
     const { receiptHash: _migrationHash, ...migrationCore } = fixture.migration;
     void _migrationHash;
@@ -602,36 +693,36 @@ describe("Probe activation", () => {
     const idleProgress = guard({
       policyHash: fixture.hashes.policyHash,
       scriptHash: fixture.hashes.scriptHash,
-      claimedCalls: 9,
-      committedNanoUsd: 9 * PROBE_PER_CALL_RESERVATION_NANO_USD,
-      knownCount: 9,
-      knownActualNanoUsd: 27_992_800,
-      purposeCounts: { calibration: 9, baseline: 0, repair: 0, revised: 0, judge: 0 },
-      sequence: 9
+      claimedCalls: 13,
+      committedNanoUsd: 13 * PROBE_PER_CALL_RESERVATION_NANO_USD,
+      knownCount: 13,
+      knownActualNanoUsd: 42_165_200,
+      purposeCounts: { calibration: 13, baseline: 0, repair: 0, revised: 0, judge: 0 },
+      sequence: 13
     });
     expect(validateProbeActivationGuard(idleProgress, expected, nowMs)).toMatchObject({
       phase: "idle",
-      claimedCalls: 9,
-      knownCalls: 9,
+      claimedCalls: 13,
+      knownCalls: 13,
       pendingCalls: 0
     });
 
     const inflight = guard({
       policyHash: fixture.hashes.policyHash,
       scriptHash: fixture.hashes.scriptHash,
-      claimedCalls: 10,
-      committedNanoUsd: 10 * PROBE_PER_CALL_RESERVATION_NANO_USD,
-      knownCount: 9,
-      knownActualNanoUsd: 27_992_800,
+      claimedCalls: 14,
+      committedNanoUsd: 14 * PROBE_PER_CALL_RESERVATION_NANO_USD,
+      knownCount: 13,
+      knownActualNanoUsd: 42_165_200,
       pendingCount: 1,
       inflightCount: 1,
-      purposeCounts: { calibration: 10, baseline: 0, repair: 0, revised: 0, judge: 0 },
-      sequence: 10
+      purposeCounts: { calibration: 14, baseline: 0, repair: 0, revised: 0, judge: 0 },
+      sequence: 14
     });
     expect(validateProbeActivationGuard(inflight, expected, nowMs)).toMatchObject({
       phase: "single-inflight",
-      claimedCalls: 10,
-      knownCalls: 9,
+      claimedCalls: 14,
+      knownCalls: 13,
       pendingCalls: 1
     });
   });
@@ -678,7 +769,7 @@ describe("Probe activation", () => {
 
   it("freezes the migrated policy and Lua bundle hashes", async () => {
     await expect(probePolicyHash()).resolves.toBe(
-      "4c70f123b0e3bc9b31477e976e51604e570e1475ef1d315a21615553e0be2b77"
+      "61765daf8a620613e4b94946ac897211a3c977de7922970228788aec5d893281"
     );
     await expect(probeLedgerScriptHash()).resolves.toBe(
       "c25d90f7e060662867925e83c6d33dc7636f22b18cbcd94c3ffc6880eb907779"

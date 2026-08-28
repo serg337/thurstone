@@ -1,7 +1,6 @@
 import "server-only";
 
 import { canonicalJson, canonicalSha256 } from "@/lib/evidence/digest";
-import { fallbackRunnerContractHash } from "@/lib/fallback/runner-contract";
 import {
   PROBE_MIGRATED_LEDGER_SCRIPT_HASH as PROBE_V01_LEDGER_SCRIPT_HASH,
   PROBE_MIGRATED_POLICY_HASH as PROBE_V01_POLICY_HASH,
@@ -16,6 +15,8 @@ import {
   type ProbeV03PolicyMigrationReceipt
 } from "@/lib/probe/policy-v03-migration-contract";
 import {
+  PROBE_V04_MIGRATED_POLICY_HASH,
+  PROBE_V04_MIGRATED_POLICY_VERSION,
   PROBE_V04_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
   PROBE_V04_POLICY_MIGRATION_ID,
   PROBE_V04_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
@@ -30,6 +31,7 @@ import {
   PROBE_V04_PREVIOUS_POLICY_HASH,
   PROBE_V04_PREVIOUS_POLICY_VERSION,
   PROBE_V04_PREVIOUS_RUNNER_CONTRACT_HASH,
+  PROBE_V04_MIGRATED_RUNNER_CONTRACT_HASH,
   createProbeV04PolicyMigrationManifest,
   createProbeV04PolicyMigrationReceipt,
   isProbeV04PolicyMigrationSourceStatus,
@@ -45,9 +47,7 @@ import {
   PROBE_LIFETIME_SPEND_CEILING_NANO_USD,
   PROBE_MAX_CONCURRENCY,
   PROBE_MODEL,
-  PROBE_PER_CALL_RESERVATION_NANO_USD,
-  PROBE_POLICY_VERSION,
-  probePolicyHash
+  PROBE_PER_CALL_RESERVATION_NANO_USD
 } from "@/lib/probe/policy";
 import {
   PRODUCTION_PROBE_KEYSPACE,
@@ -693,7 +693,6 @@ export async function readProbeV04PolicyMigrationReceipt(
     { expectedReceiptHash: PROBE_V04_PREDECESSOR_MIGRATION_RECEIPT_HASH },
     keyspace
   );
-  const expectedNextRunnerHash = await fallbackRunnerContractHash();
   const expectedMigrationProgramHash = await assertFrozenMigrationProgram();
   const reply = parseReply(
     await redis.evalRo<[], unknown>(
@@ -751,8 +750,8 @@ export async function readProbeV04PolicyMigrationReceipt(
     migrationProgramHash: String(reply[21])
   });
   if (
-    String(reply[14]) !== PROBE_POLICY_VERSION ||
-    manifest.nextRunnerHash !== expectedNextRunnerHash ||
+    String(reply[14]) !== PROBE_V04_MIGRATED_POLICY_VERSION ||
+    manifest.nextRunnerHash !== PROBE_V04_MIGRATED_RUNNER_CONTRACT_HASH ||
     manifest.migrationProgramHash !== expectedMigrationProgramHash
   ) {
     throw new Error("V04_MIGRATION_NEXT_IDENTITY_MISMATCH");
@@ -784,9 +783,9 @@ export async function migrateProbeGuardPolicyV04(
     sourceReceipt,
     predecessorReceipt: input.predecessorReceipt,
     migrationCommit: gitCommit(input.migrationCommit),
-    nextPolicyHash: await probePolicyHash(),
+    nextPolicyHash: PROBE_V04_MIGRATED_POLICY_HASH,
     nextScriptHash: await probeLedgerScriptHash(),
-    nextRunnerHash: await fallbackRunnerContractHash(),
+    nextRunnerHash: PROBE_V04_MIGRATED_RUNNER_CONTRACT_HASH,
     migrationProgramHash: await assertFrozenMigrationProgram()
   });
   const migrationDigest = await probeV04PolicyMigrationDigest(manifest);

@@ -4,6 +4,7 @@ import {
   FALLBACK_CALIBRATION_ENVELOPE_VERSION,
   type FallbackCalibrationEnvelope
 } from "@/lib/fallback/calibration-envelope";
+import { fallbackRunnerImplementationHash } from "@/lib/fallback/implementation-contract";
 import {
   ToolProofFallbackSameOriginServerAdapter,
   armAndStartFallbackBrowserSession
@@ -68,6 +69,7 @@ async function envelope(): Promise<FallbackCalibrationEnvelope> {
     },
     runner: {
       implementation: FALLBACK_IMPLEMENTATION,
+      implementationHash: await fallbackRunnerImplementationHash(),
       upstreamCommit: FALLBACK_UPSTREAM_PIN.commit,
       upstreamSubtree: FALLBACK_UPSTREAM_PIN.subtree,
       promptVersion: FALLBACK_RUNNER_PROMPT_VERSION,
@@ -86,7 +88,7 @@ describe("fallback same-origin server adapter", () => {
   it("arms, starts, and immediately claims one recovered document without exposing cookies", async () => {
     const start = {
       version: 1,
-      protocolVersion: "toolproof-pinned-googlechromelabs-fallback-calibration@1.0.0",
+      protocolVersion: "toolproof-pinned-googlechromelabs-fallback-calibration@2.0.0",
       lane: "pinned-googlechromelabs-webmcp-fallback-calibration",
       csrfToken: "c".repeat(32),
       continuation: "s".repeat(32),
@@ -129,8 +131,8 @@ describe("fallback same-origin server adapter", () => {
   it("carries one issued claim through decision, native admission, and sealing", async () => {
     const authorizationEnvelope = await envelope();
     const issue = {
-      version: "toolproof-pinned-googlechromelabs-fallback-service@1.0.0",
-      protocolVersion: "toolproof-pinned-googlechromelabs-fallback-calibration@1.0.0",
+      version: "toolproof-pinned-googlechromelabs-fallback-service@1.1.0",
+      protocolVersion: "toolproof-pinned-googlechromelabs-fallback-calibration@2.0.0",
       lane: "pinned-googlechromelabs-webmcp-fallback-calibration",
       status: "issued",
       runId: authorizationEnvelope.runId,
@@ -150,8 +152,8 @@ describe("fallback same-origin server adapter", () => {
       decision: { kind: "call", tool: "cart_get", arguments: {} }
     };
     const completed = {
-      version: "toolproof-pinned-googlechromelabs-fallback-service@1.0.0",
-      protocolVersion: "toolproof-pinned-googlechromelabs-fallback-calibration@1.0.0",
+      version: "toolproof-pinned-googlechromelabs-fallback-service@1.1.0",
+      protocolVersion: "toolproof-pinned-googlechromelabs-fallback-calibration@2.0.0",
       lane: "pinned-googlechromelabs-webmcp-fallback-calibration",
       status: "sealed",
       continuation: "n".repeat(32),
@@ -216,8 +218,8 @@ describe("fallback same-origin server adapter", () => {
   it("preserves a known null decision for deterministic failed-row sealing", async () => {
     const authorizationEnvelope = await envelope();
     const issue = {
-      version: "toolproof-pinned-googlechromelabs-fallback-service@1.0.0",
-      protocolVersion: "toolproof-pinned-googlechromelabs-fallback-calibration@1.0.0",
+      version: "toolproof-pinned-googlechromelabs-fallback-service@1.1.0",
+      protocolVersion: "toolproof-pinned-googlechromelabs-fallback-calibration@2.0.0",
       lane: "pinned-googlechromelabs-webmcp-fallback-calibration",
       status: "issued",
       runId: authorizationEnvelope.runId,

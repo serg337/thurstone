@@ -12,6 +12,12 @@ import {
 } from "@/lib/fallback/calibration-envelope";
 import { FALLBACK_LAB_PAGE_ADAPTER_VERSION } from "@/lib/fallback/lab-page-adapter.server";
 import {
+  FALLBACK_BROWSER_RUNTIME_VERSION,
+  FALLBACK_NATIVE_BRIDGE_VERSION,
+  FALLBACK_TRIAL_EVIDENCE_VERSION,
+  fallbackRunnerImplementationHash
+} from "@/lib/fallback/implementation-contract";
+import {
   FallbackProviderError,
   decideWithFallbackOpenAi,
   type FallbackProviderKnownReceipt
@@ -84,20 +90,19 @@ import {
 } from "@/lib/probe/openai";
 import { PROBE_PER_CALL_RESERVATION_NANO_USD, probePolicyHash } from "@/lib/probe/policy";
 import {
-  PROBE_V03_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
-  PROBE_V03_POLICY_MIGRATION_ID,
-  PROBE_V03_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
-  PROBE_V03_POLICY_MIGRATION_VERSION,
-  type ProbeV03PolicyMigrationReceipt
-} from "@/lib/probe/policy-v03-migration-contract";
-import {
   PROBE_V04_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
   PROBE_V04_POLICY_MIGRATION_ID,
   PROBE_V04_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
   PROBE_V04_POLICY_MIGRATION_VERSION,
-  PROBE_V04_PREDECESSOR_MIGRATION_RECEIPT_HASH,
   type ProbeV04PolicyMigrationReceipt
 } from "@/lib/probe/policy-v04-migration-contract";
+import {
+  PROBE_V05_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
+  PROBE_V05_POLICY_MIGRATION_ID,
+  PROBE_V05_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
+  PROBE_V05_POLICY_MIGRATION_VERSION,
+  type ProbeV05PolicyMigrationReceipt
+} from "@/lib/probe/policy-v05-migration-contract";
 import {
   advanceProbeRunContinuation,
   createInitialProbeRunContinuation,
@@ -393,54 +398,15 @@ async function activationOf(
   }
 }
 
-function migrationOf(activation: ProbeActivationContext): ProbeV03PolicyMigrationReceipt {
+function migrationOf(activation: ProbeActivationContext): ProbeV04PolicyMigrationReceipt {
   const migration = activation.predecessorMigration;
-  const preserved = migration?.preserved;
-  if (
-    !migration ||
-    migration.version !== PROBE_V03_POLICY_MIGRATION_VERSION ||
-    migration.migrationId !== PROBE_V03_POLICY_MIGRATION_ID ||
-    migration.priorActivationHash !== PROBE_V03_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH ||
-    migration.receiptHash !== activation.manifest.predecessorPolicyMigrationReceiptHash ||
-    migration.guardInstanceId !== activation.manifest.guardInstanceId ||
-    migration.initializedCommit !== activation.manifest.guardInitializedCommit ||
-    !preserved ||
-    preserved.claimedCalls !== PROBE_V03_POLICY_MIGRATION_FIXED_PRESERVED_STATE.claimedCalls ||
-    preserved.knownCalls !== PROBE_V03_POLICY_MIGRATION_FIXED_PRESERVED_STATE.knownCalls ||
-    preserved.pendingCalls !== 0 ||
-    preserved.uncertainCalls !== 0 ||
-    preserved.inflightCalls !== 0 ||
-    preserved.committedNanoUsd !==
-      PROBE_V03_POLICY_MIGRATION_FIXED_PRESERVED_STATE.committedNanoUsd ||
-    preserved.uncertainUpperNanoUsd !== 0 ||
-    preserved.sequence !== PROBE_V03_POLICY_MIGRATION_FIXED_PRESERVED_STATE.sequence ||
-    canonicalJson(preserved.purposeCounts) !==
-      canonicalJson(PROBE_V03_POLICY_MIGRATION_FIXED_PRESERVED_STATE.purposeCounts) ||
-    migration.knownCalls.length !== preserved.knownCalls ||
-    migration.knownCalls.reduce((sum, call) => sum + call.actualNanoUsd, 0) !==
-      preserved.knownActualNanoUsd
-  ) {
-    throw new ProbeServiceError("probe_policy_migration_unavailable", 503);
-  }
-  return migration;
-}
-
-function fallbackMigrationOf(activation: ProbeActivationContext): ProbeV04PolicyMigrationReceipt {
-  const migration = activation.migration;
   const preserved = migration?.preserved;
   if (
     !migration ||
     migration.version !== PROBE_V04_POLICY_MIGRATION_VERSION ||
     migration.migrationId !== PROBE_V04_POLICY_MIGRATION_ID ||
     migration.priorActivationHash !== PROBE_V04_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH ||
-    migration.predecessorMigrationReceiptHash !== PROBE_V04_PREDECESSOR_MIGRATION_RECEIPT_HASH ||
-    migration.predecessorMigrationReceiptHash !==
-      activation.manifest.predecessorPolicyMigrationReceiptHash ||
-    migration.nextPolicyHash !== activation.manifest.policyHash ||
-    migration.nextScriptHash !== activation.manifest.scriptHash ||
-    migration.nextRunnerHash !== activation.manifest.runnerContractHash ||
-    migration.migrationCommit !== activation.manifest.activeCommit ||
-    migration.receiptHash !== activation.manifest.policyMigrationReceiptHash ||
+    migration.receiptHash !== activation.manifest.predecessorPolicyMigrationReceiptHash ||
     migration.guardInstanceId !== activation.manifest.guardInstanceId ||
     migration.initializedCommit !== activation.manifest.guardInitializedCommit ||
     !preserved ||
@@ -451,12 +417,70 @@ function fallbackMigrationOf(activation: ProbeActivationContext): ProbeV04Policy
     preserved.inflightCalls !== 0 ||
     preserved.committedNanoUsd !==
       PROBE_V04_POLICY_MIGRATION_FIXED_PRESERVED_STATE.committedNanoUsd ||
-    preserved.knownActualNanoUsd !==
-      PROBE_V04_POLICY_MIGRATION_FIXED_PRESERVED_STATE.knownActualNanoUsd ||
     preserved.uncertainUpperNanoUsd !== 0 ||
     preserved.sequence !== PROBE_V04_POLICY_MIGRATION_FIXED_PRESERVED_STATE.sequence ||
     canonicalJson(preserved.purposeCounts) !==
       canonicalJson(PROBE_V04_POLICY_MIGRATION_FIXED_PRESERVED_STATE.purposeCounts) ||
+    migration.knownCalls.length !== preserved.knownCalls ||
+    migration.knownCalls.reduce((sum, call) => sum + call.actualNanoUsd, 0) !==
+      preserved.knownActualNanoUsd
+  ) {
+    throw new ProbeServiceError("probe_policy_migration_unavailable", 503);
+  }
+  const legacyCalls = migration.knownCalls.slice(0, PROBE_CALIBRATION_BASE_CALLS);
+  const legacyKnownActualNanoUsd = legacyCalls.reduce((sum, call) => sum + call.actualNanoUsd, 0);
+  return {
+    ...migration,
+    knownCalls: legacyCalls,
+    preserved: {
+      ...migration.preserved,
+      claimedCalls: PROBE_CALIBRATION_BASE_CALLS,
+      knownCalls: PROBE_CALIBRATION_BASE_CALLS,
+      committedNanoUsd: PROBE_CALIBRATION_BASE_CALLS * PROBE_PER_CALL_RESERVATION_NANO_USD,
+      knownActualNanoUsd: legacyKnownActualNanoUsd,
+      sequence: PROBE_CALIBRATION_BASE_CALLS,
+      purposeCounts: {
+        calibration: PROBE_CALIBRATION_BASE_CALLS,
+        baseline: 0,
+        repair: 0,
+        revised: 0,
+        judge: 0
+      }
+    }
+  } as unknown as ProbeV04PolicyMigrationReceipt;
+}
+
+function fallbackMigrationOf(activation: ProbeActivationContext): ProbeV05PolicyMigrationReceipt {
+  const migration = activation.migration;
+  const preserved = migration?.preserved;
+  if (
+    !migration ||
+    migration.version !== PROBE_V05_POLICY_MIGRATION_VERSION ||
+    migration.migrationId !== PROBE_V05_POLICY_MIGRATION_ID ||
+    migration.priorActivationHash !== PROBE_V05_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH ||
+    migration.predecessorMigrationReceiptHash !==
+      activation.manifest.predecessorPolicyMigrationReceiptHash ||
+    migration.nextPolicyHash !== activation.manifest.policyHash ||
+    migration.nextScriptHash !== activation.manifest.scriptHash ||
+    migration.nextRunnerHash !== activation.manifest.runnerContractHash ||
+    migration.migrationCommit !== activation.manifest.activeCommit ||
+    migration.receiptHash !== activation.manifest.policyMigrationReceiptHash ||
+    migration.guardInstanceId !== activation.manifest.guardInstanceId ||
+    migration.initializedCommit !== activation.manifest.guardInitializedCommit ||
+    !preserved ||
+    preserved.claimedCalls !== PROBE_V05_POLICY_MIGRATION_FIXED_PRESERVED_STATE.claimedCalls ||
+    preserved.knownCalls !== PROBE_V05_POLICY_MIGRATION_FIXED_PRESERVED_STATE.knownCalls ||
+    preserved.pendingCalls !== 0 ||
+    preserved.uncertainCalls !== 0 ||
+    preserved.inflightCalls !== 0 ||
+    preserved.committedNanoUsd !==
+      PROBE_V05_POLICY_MIGRATION_FIXED_PRESERVED_STATE.committedNanoUsd ||
+    preserved.knownActualNanoUsd !==
+      PROBE_V05_POLICY_MIGRATION_FIXED_PRESERVED_STATE.knownActualNanoUsd ||
+    preserved.uncertainUpperNanoUsd !== 0 ||
+    preserved.sequence !== PROBE_V05_POLICY_MIGRATION_FIXED_PRESERVED_STATE.sequence ||
+    canonicalJson(preserved.purposeCounts) !==
+      canonicalJson(PROBE_V05_POLICY_MIGRATION_FIXED_PRESERVED_STATE.purposeCounts) ||
     migration.knownCalls.length !== FALLBACK_PROBE_CALIBRATION_BASE_CALLS ||
     migration.knownCalls.reduce((sum, call) => sum + call.actualNanoUsd, 0) !==
       preserved.knownActualNanoUsd
@@ -846,6 +870,7 @@ async function validateFrozenFallbackEnvelope(
   const expectedFixture = createProbeFixtureSynopsis(createCheckoutFixture());
   const transport = await verifyFallbackTransportBinding(envelope);
   const [
+    implementationHash,
     promptHash,
     settingsHash,
     browserRuntimeHash,
@@ -853,6 +878,7 @@ async function validateFrozenFallbackEnvelope(
     noCallSchemaHash,
     runnerHash
   ] = await Promise.all([
+    fallbackRunnerImplementationHash(),
     fallbackRunnerPromptHash(),
     fallbackRunnerSettingsHash(),
     fallbackBrowserRuntimeContractHash(),
@@ -865,6 +891,7 @@ async function validateFrozenFallbackEnvelope(
     envelope.buildCommit !== activation.manifest.activeCommit ||
     canonicalJson(envelope.fixture) !== canonicalJson(expectedFixture) ||
     canonicalJson(envelope.liveManifest) !== canonicalJson(expectedManifest) ||
+    envelope.runner.implementationHash !== implementationHash ||
     envelope.runner.promptVersion !== FALLBACK_RUNNER_PROMPT_VERSION ||
     envelope.runner.promptHash !== promptHash ||
     envelope.runner.settingsVersion !== FALLBACK_RUNNER_SETTINGS_VERSION ||
@@ -1753,14 +1780,21 @@ export async function issueFallbackProbeCalibrationTrial(
     caseId: ids.caseId,
     trialId: ids.trialId
   });
-  const [promptHash, settingsHash, browserRuntimeHash, toolDefinitionsHash, noCallSchemaHash] =
-    await Promise.all([
-      fallbackRunnerPromptHash(),
-      fallbackRunnerSettingsHash(),
-      fallbackBrowserRuntimeContractHash(),
-      probeFunctionToolDefinitionsHash(body.liveManifest, transport),
-      fallbackNoCallJsonSchemaHash()
-    ]);
+  const [
+    implementationHash,
+    promptHash,
+    settingsHash,
+    browserRuntimeHash,
+    toolDefinitionsHash,
+    noCallSchemaHash
+  ] = await Promise.all([
+    fallbackRunnerImplementationHash(),
+    fallbackRunnerPromptHash(),
+    fallbackRunnerSettingsHash(),
+    fallbackBrowserRuntimeContractHash(),
+    probeFunctionToolDefinitionsHash(body.liveManifest, transport),
+    fallbackNoCallJsonSchemaHash()
+  ]);
   const envelope: FallbackCalibrationEnvelope = {
     version: FALLBACK_CALIBRATION_ENVELOPE_VERSION,
     purpose: "calibration",
@@ -1773,6 +1807,7 @@ export async function issueFallbackProbeCalibrationTrial(
     liveManifest: body.liveManifest,
     runner: {
       implementation: FALLBACK_IMPLEMENTATION,
+      implementationHash,
       upstreamCommit: FALLBACK_UPSTREAM_PIN.commit,
       upstreamSubtree: FALLBACK_UPSTREAM_PIN.subtree,
       promptVersion: FALLBACK_RUNNER_PROMPT_VERSION,
@@ -2982,7 +3017,7 @@ async function extractFallbackCalibrationObservation(
   requestUserAgent: string
 ): Promise<{ readonly observation: ProbeCalibrationObservation; readonly evidence: unknown }> {
   const evidence = objectValue(body.completion.evidence, "invalid_fallback_trial_evidence");
-  if (evidence.version !== "toolproof-fallback-trial-evidence@1.0.0") {
+  if (evidence.version !== FALLBACK_TRIAL_EVIDENCE_VERSION) {
     throw new ProbeServiceError("invalid_fallback_trial_evidence", 400);
   }
   const capture = objectValue(evidence.capture, "invalid_fallback_trial_capture");
@@ -3016,7 +3051,7 @@ async function extractFallbackCalibrationObservation(
     Number.isNaN(Date.parse(capturedAt)) ||
     new Date(capturedAt).toISOString() !== capturedAt ||
     evidence.captureDigest !== (await canonicalSha256(capture)) ||
-    catalog.version !== "toolproof-fallback-native-bridge@1.0.0" ||
+    catalog.version !== FALLBACK_NATIVE_BRIDGE_VERSION ||
     catalog.targetOrigin !== activation.manifest.origin ||
     catalog.pageUrl !== `${activation.manifest.origin}/lab` ||
     catalog.manifestHash !== envelope.liveManifest.manifestHash ||
@@ -3031,7 +3066,7 @@ async function extractFallbackCalibrationObservation(
       })) ||
     catalog.upstreamCommit !== FALLBACK_UPSTREAM_PIN.commit ||
     catalog.puppeteerCore !== FALLBACK_UPSTREAM_PIN.puppeteerCore ||
-    runtime.version !== "toolproof-fallback-browser-runtime@1.0.0" ||
+    runtime.version !== FALLBACK_BROWSER_RUNTIME_VERSION ||
     typeof runtime.planHash !== "string" ||
     !/^[a-f0-9]{64}$/u.test(runtime.planHash) ||
     runtime.runtimeContractHash !== envelope.runner.browserRuntimeHash ||
@@ -4004,14 +4039,16 @@ export async function revealFallbackProbeCalibrationRun(
     throw new ProbeServiceError("fallback_terminal_guard_cost_mismatch", 409);
   }
   const evidence = {
-    version: "toolproof-gate2-googlechromelabs-fallback-evidence@1.0.0",
+    version: "toolproof-gate2-googlechromelabs-fallback-evidence@2.0.0",
     protocolVersion: FALLBACK_PROBE_CALIBRATION_PROTOCOL_VERSION,
     lane: FALLBACK_PROBE_CALIBRATION_LANE,
     calibrationOnly: true,
     includedInBenchmark: false,
-    designation: "approved-pinned-fallback-not-fourth-preferred-attempt",
+    designation: "approved-pinned-fallback-repair-attempt-2",
     callLineage: {
-      preservedPreferredCalls: FALLBACK_PROBE_CALIBRATION_BASE_CALLS,
+      preservedPreferredCalls: 9,
+      preservedFallbackCalls: 4,
+      preservedCalibrationCalls: FALLBACK_PROBE_CALIBRATION_BASE_CALLS,
       fallbackCalibrationCalls: FALLBACK_PROBE_CALIBRATION_CASE_COUNT,
       terminalCalibrationCalls: FALLBACK_PROBE_CALIBRATION_TERMINAL_CALLS,
       priorEvidenceRawSha256: migration.priorEvidenceRawSha256,

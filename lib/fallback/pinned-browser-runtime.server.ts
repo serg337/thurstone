@@ -19,6 +19,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { canonicalSha256 } from "@/lib/evidence/digest";
+import { FALLBACK_BROWSER_RUNTIME_VERSION } from "@/lib/fallback/implementation-contract";
 import {
   FALLBACK_BROWSER_RUNTIME_CONTRACT,
   FALLBACK_UPSTREAM_PIN,
@@ -32,7 +33,7 @@ import puppeteer, {
   type Target
 } from "puppeteer-core";
 
-export const FALLBACK_BROWSER_RUNTIME_VERSION = "toolproof-fallback-browser-runtime@1.0.0";
+export { FALLBACK_BROWSER_RUNTIME_VERSION } from "@/lib/fallback/implementation-contract";
 const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
 
 export class FallbackBrowserRuntimeError extends Error {

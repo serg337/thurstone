@@ -202,6 +202,24 @@ import {
   PROBE_V04_PRIOR_ATTEMPT3_RAW_SHA256
 } from "@/lib/probe/policy-v04-migration-contract";
 import {
+  PROBE_V05_ACK_ANCHOR_FIXED,
+  PROBE_V05_MIGRATED_POLICY_VERSION,
+  PROBE_V05_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
+  PROBE_V05_POLICY_MIGRATION_ID,
+  PROBE_V05_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
+  PROBE_V05_POLICY_MIGRATION_PRIOR_APP_COMMIT,
+  PROBE_V05_POLICY_MIGRATION_VERSION,
+  PROBE_V05_PREVIOUS_LEDGER_SCRIPT_HASH,
+  PROBE_V05_PREVIOUS_POLICY_HASH,
+  PROBE_V05_PREVIOUS_POLICY_VERSION,
+  PROBE_V05_PREVIOUS_PURPOSE_CALL_LIMITS,
+  PROBE_V05_PREVIOUS_RUNNER_CONTRACT_HASH,
+  PROBE_V05_PRIOR_EVIDENCE_DIGEST,
+  PROBE_V05_PRIOR_EVIDENCE_RAW_SHA256,
+  PROBE_V05_PRIOR_REPRODUCER_EVIDENCE_DIGEST,
+  PROBE_V05_PRIOR_REPRODUCER_RAW_SHA256
+} from "@/lib/probe/policy-v05-migration-contract";
+import {
   PROBE_GLOBAL_CALL_LIMIT,
   PROBE_LIFETIME_SPEND_CEILING_NANO_USD,
   PROBE_PURPOSE_CALL_LIMITS,
@@ -280,7 +298,7 @@ function activation(input: {
     mode: "calibration",
     activationHash: "b".repeat(64),
     manifest: {
-      version: "toolproof-probe-activation@4.0.0",
+      version: "toolproof-probe-activation@5.0.0",
       mode: "calibration",
       origin: "https://toolproof-rust.vercel.app",
       activeCommit: buildCommit,
@@ -322,13 +340,13 @@ function fallbackActivation(input: {
   pending: 0 | 1;
 }): ProbeActivationContext {
   const value = activation(input);
-  const cumulativeClaimed = 9 + input.claimed;
-  const cumulativeKnown = 9 + input.known;
+  const cumulativeClaimed = FALLBACK_PROBE_CALIBRATION_BASE_CALLS + input.claimed;
+  const cumulativeKnown = FALLBACK_PROBE_CALIBRATION_BASE_CALLS + input.known;
   return {
     ...value,
     manifest: {
       ...value.manifest,
-      predecessorPolicyMigrationReceiptHash: PROBE_V04_PREDECESSOR_MIGRATION_RECEIPT_HASH,
+      predecessorPolicyMigrationReceiptHash: predecessorMigration.receiptHash,
       policyMigrationReceiptHash: policyMigration.receiptHash,
       runnerContractHash: policyMigration.nextRunnerHash
     },
@@ -338,7 +356,7 @@ function fallbackActivation(input: {
       knownCalls: cumulativeKnown,
       calibrationCalls: cumulativeClaimed,
       committedNanoUsd: cumulativeClaimed * 62_500_000,
-      knownAccountedNanoUsd: 27_992_800 + input.known * 440_000
+      knownAccountedNanoUsd: 42_165_200 + input.known * 440_000
     }
   };
 }
@@ -713,7 +731,7 @@ async function migrationFixture(): Promise<ProbeActivationContext["migration"]> 
     nextPolicyHash: PROBE_V03_MIGRATED_POLICY_HASH,
     nextScriptHash: PROBE_V03_MIGRATED_LEDGER_SCRIPT_HASH
   });
-  predecessorMigration = await createProbeV03PolicyMigrationReceipt(
+  const predecessorMigrationV03 = await createProbeV03PolicyMigrationReceipt(
     v03Manifest,
     await probeV03PolicyMigrationDigest(v03Manifest),
     nowMs - 1_000
@@ -733,7 +751,7 @@ async function migrationFixture(): Promise<ProbeActivationContext["migration"]> 
       .repeat(32)
       .padEnd(64, String(index + 7))
   }));
-  return {
+  predecessorMigration = {
     version: PROBE_V04_POLICY_MIGRATION_VERSION,
     migrationId: PROBE_V04_POLICY_MIGRATION_ID,
     priorAppCommit: PROBE_V04_POLICY_MIGRATION_PRIOR_APP_COMMIT,
@@ -749,10 +767,10 @@ async function migrationFixture(): Promise<ProbeActivationContext["migration"]> 
     previousScriptHash: PROBE_V04_PREVIOUS_LEDGER_SCRIPT_HASH,
     previousRunnerHash: PROBE_V04_PREVIOUS_RUNNER_CONTRACT_HASH,
     preserved: PROBE_V04_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
-    knownCalls: [...predecessorMigration.knownCalls, ...appendedCalls],
+    knownCalls: [...predecessorMigrationV03.knownCalls, ...appendedCalls],
     migrationCommit: buildCommit,
     nextPolicyVersion: PROBE_V04_MIGRATED_POLICY_VERSION,
-    nextPolicyHash: policyHash,
+    nextPolicyHash: "4c70f123b0e3bc9b31477e976e51604e570e1475ef1d315a21615553e0be2b77",
     nextScriptHash: scriptHash,
     nextRunnerHash: PROBE_V04_MIGRATED_RUNNER_CONTRACT_HASH,
     migrationProgramHash: "e".repeat(64),
@@ -764,6 +782,62 @@ async function migrationFixture(): Promise<ProbeActivationContext["migration"]> 
     migrationDigest: "f".repeat(64),
     migratedAtMs: nowMs,
     receiptHash: "6".repeat(64)
+  };
+  const v05Calls = [
+    ...predecessorMigration.knownCalls,
+    ...[9, 10, 11, 12].map((ordinal) => ({
+      ordinal,
+      jti: `fallback_attempt2_fixture_${ordinal}`,
+      dispatchSequence: ordinal + 1,
+      actualNanoUsd: [3_192_200, 3_207_600, 3_971_000, 3_801_600][ordinal - 9]!,
+      providerResponseHash: ["c", "d", "e", "f"][ordinal - 9]!.repeat(64),
+      settlementDigest: ["1", "2", "3", "4"][ordinal - 9]!.repeat(64),
+      usageHash: ["5", "6", "7", "8"][ordinal - 9]!.repeat(64)
+    }))
+  ];
+  return {
+    version: PROBE_V05_POLICY_MIGRATION_VERSION,
+    migrationId: PROBE_V05_POLICY_MIGRATION_ID,
+    priorAppCommit: PROBE_V05_POLICY_MIGRATION_PRIOR_APP_COMMIT,
+    priorActivationHash: PROBE_V05_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH,
+    priorEvidenceRawSha256: PROBE_V05_PRIOR_EVIDENCE_RAW_SHA256,
+    priorEvidenceDigest: PROBE_V05_PRIOR_EVIDENCE_DIGEST,
+    priorReproducerRawSha256: PROBE_V05_PRIOR_REPRODUCER_RAW_SHA256,
+    priorReproducerEvidenceDigest: PROBE_V05_PRIOR_REPRODUCER_EVIDENCE_DIGEST,
+    predecessorMigrationId: PROBE_V04_POLICY_MIGRATION_ID,
+    predecessorMigrationReceiptHash: predecessorMigration.receiptHash,
+    guardInstanceId: "guard_fixture_service_001",
+    initializedCommit: "d".repeat(40),
+    previousPolicyVersion: PROBE_V05_PREVIOUS_POLICY_VERSION,
+    previousPolicyHash: PROBE_V05_PREVIOUS_POLICY_HASH,
+    previousScriptHash: PROBE_V05_PREVIOUS_LEDGER_SCRIPT_HASH,
+    previousRunnerHash: PROBE_V05_PREVIOUS_RUNNER_CONTRACT_HASH,
+    preserved: PROBE_V05_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
+    knownCalls: v05Calls,
+    ackAnchor: {
+      ...PROBE_V05_ACK_ANCHOR_FIXED,
+      recoveryHash: "1".repeat(64),
+      sessionHash: "2".repeat(64),
+      runHash: "3".repeat(64),
+      actorHash: "4".repeat(64),
+      launchHash: "5".repeat(64),
+      payloadBinding: "6".repeat(64),
+      encryptedDataPresent: false
+    },
+    migrationCommit: buildCommit,
+    nextPolicyVersion: PROBE_V05_MIGRATED_POLICY_VERSION,
+    nextPolicyHash: policyHash,
+    nextScriptHash: scriptHash,
+    nextRunnerHash: "6c44eb19479e460cdef51bca52b577526170eb455d26066b97ec81fe1d7b5230",
+    migrationProgramHash: "f5cf62fc0d10ea1a7c7e5aaafa93baf5c243dce40b18df5b82ac987a473a29cf",
+    previousPurposeLimits: PROBE_V05_PREVIOUS_PURPOSE_CALL_LIMITS,
+    nextPurposeLimits: PROBE_PURPOSE_CALL_LIMITS,
+    globalCallLimit: 160,
+    lifetimeSpendCeilingNanoUsd: 10_000_000_000,
+    perCallReservationNanoUsd: 62_500_000,
+    migrationDigest: "7".repeat(64),
+    migratedAtMs: nowMs + 1,
+    receiptHash: "8".repeat(64)
   };
 }
 
@@ -1496,15 +1570,15 @@ describe("Dormant pinned fallback service lane", () => {
     policyMigration = await migrationFixture();
   });
 
-  it("freezes the reviewed 9 + 4 = 13 allocation under the unchanged lifetime caps", () => {
-    expect(FALLBACK_PROBE_CALIBRATION_BASE_CALLS).toBe(9);
+  it("freezes the reviewed 13 + 4 = 17 allocation under the unchanged lifetime caps", () => {
+    expect(FALLBACK_PROBE_CALIBRATION_BASE_CALLS).toBe(13);
     expect(FALLBACK_PROBE_CALIBRATION_CASE_COUNT).toBe(4);
-    expect(FALLBACK_PROBE_CALIBRATION_TERMINAL_CALLS).toBe(13);
+    expect(FALLBACK_PROBE_CALIBRATION_TERMINAL_CALLS).toBe(17);
     expect(PROBE_PURPOSE_CALL_LIMITS).toEqual({
-      calibration: 13,
-      baseline: 72,
+      calibration: 17,
+      baseline: 70,
       repair: 2,
-      revised: 72,
+      revised: 70,
       judge: 1
     });
     expect(PROBE_GLOBAL_CALL_LIMIT).toBe(160);
@@ -1619,7 +1693,7 @@ describe("Dormant pinned fallback service lane", () => {
       exception: null
     };
     const fallbackNativeReceipt = {
-      version: "toolproof-fallback-native-bridge@1.0.0",
+      version: "toolproof-fallback-native-bridge@1.1.0",
       toolName: "cart_get",
       manifestHash: manifest.manifestHash,
       registrationGeneration: 1,
@@ -1667,8 +1741,8 @@ describe("Dormant pinned fallback service lane", () => {
       }
     };
     const evidence = {
-      version: "toolproof-fallback-trial-evidence@1.0.0",
-      adapterVersion: "toolproof-fallback-lab-page-adapter@1.0.0",
+      version: "toolproof-fallback-trial-evidence@1.1.0",
+      adapterVersion: "toolproof-fallback-lab-page-adapter@1.1.0",
       appCommit: buildCommit,
       origin: "https://toolproof-rust.vercel.app",
       userAgent: "Fixture Browser",
@@ -1680,7 +1754,7 @@ describe("Dormant pinned fallback service lane", () => {
       currentTraces: [native.result.trace],
       fallback: {
         catalog: {
-          version: "toolproof-fallback-native-bridge@1.0.0",
+          version: "toolproof-fallback-native-bridge@1.1.0",
           targetOrigin: "https://toolproof-rust.vercel.app",
           pageUrl: "https://toolproof-rust.vercel.app/lab",
           manifestHash: manifest.manifestHash,
@@ -1920,8 +1994,8 @@ describe("Dormant pinned fallback service lane", () => {
           terminalStatus: "call_failed",
           nativeDispatchCount: 1,
           evidence: {
-            version: "toolproof-fallback-trial-evidence@1.0.0",
-            adapterVersion: "toolproof-fallback-lab-page-adapter@1.0.0",
+            version: "toolproof-fallback-trial-evidence@1.1.0",
+            adapterVersion: "toolproof-fallback-lab-page-adapter@1.1.0",
             appCommit: buildCommit,
             origin: "https://toolproof-rust.vercel.app",
             userAgent: "Fixture Browser",
@@ -1933,7 +2007,7 @@ describe("Dormant pinned fallback service lane", () => {
             currentTraces: [],
             fallback: {
               catalog: {
-                version: "toolproof-fallback-native-bridge@1.0.0",
+                version: "toolproof-fallback-native-bridge@1.1.0",
                 targetOrigin: "https://toolproof-rust.vercel.app",
                 pageUrl: "https://toolproof-rust.vercel.app/lab",
                 manifestHash: manifest.manifestHash,

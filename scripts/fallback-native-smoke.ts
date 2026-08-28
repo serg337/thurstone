@@ -1,11 +1,15 @@
 import { canonicalSha256 } from "@/lib/evidence/digest";
+import {
+  FALLBACK_RUNNER_IMPLEMENTATION_MANIFEST,
+  fallbackRunnerImplementationHash
+} from "@/lib/fallback/implementation-contract";
 import { ToolProofFallbackLabPageAdapter } from "@/lib/fallback/lab-page-adapter.server";
 import { FallbackNativeWebMcpBridge } from "@/lib/fallback/native-webmcp-bridge";
 import {
   createPinnedFallbackLaunchPlan,
   launchPinnedFallbackTrial
 } from "@/lib/fallback/pinned-browser-runtime.server";
-import { FALLBACK_UPSTREAM_PIN } from "@/lib/fallback/runner-contract";
+import { FALLBACK_UPSTREAM_PIN, fallbackRunnerContractHash } from "@/lib/fallback/runner-contract";
 import { PROBE_PRODUCTION_ORIGIN } from "@/lib/probe/policy";
 
 const DEFAULT_EXECUTABLE = "/var/tmp/toolproof-cft-151.0.7922.47/chrome-linux64/chrome";
@@ -45,9 +49,12 @@ async function main(): Promise<void> {
       if (receipt.outcome !== "Completed") throw new Error("fallback_native_smoke_failed");
       const after = await adapter.resetAndVerify({ page: trial.page, stage: "after" });
       const evidence = Object.freeze({
-        version: "toolproof-fallback-native-smoke@1.0.0",
+        version: "toolproof-fallback-native-smoke@1.1.0",
         proofClass: "local-native-plumbing-only",
         providerCallCount: 0,
+        implementation: FALLBACK_RUNNER_IMPLEMENTATION_MANIFEST,
+        implementationHash: await fallbackRunnerImplementationHash(),
+        runnerContractHash: await fallbackRunnerContractHash(),
         planHash: launchPlan.planHash,
         runtimeContractHash: launchPlan.runtimeContractHash,
         archiveSha256: FALLBACK_UPSTREAM_PIN.chromeArchiveSha256,
