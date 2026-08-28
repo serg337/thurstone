@@ -67,25 +67,6 @@ export interface RepairProviderKnownReceipt {
   readonly providerCallCount: 1;
 }
 
-function repairBuilderModelPackage(developmentPackage: RepairDevelopmentPackage) {
-  return Object.freeze({
-    version: developmentPackage.version,
-    evidenceLabel: developmentPackage.evidenceLabel,
-    changedField: developmentPackage.changedField,
-    currentDescription: developmentPackage.currentDescription,
-    taskBoundary: developmentPackage.taskBoundary,
-    liveManifest: developmentPackage.liveManifest,
-    developmentCaseCount: developmentPackage.developmentCaseCount,
-    developmentAggregate: developmentPackage.developmentAggregate,
-    meaningContractTupleSchema: developmentPackage.meaningContractTupleSchema,
-    meaningContracts: developmentPackage.meaningContracts,
-    rowTupleSchema: developmentPackage.rowTupleSchema,
-    traceTupleSchema: developmentPackage.traceTupleSchema,
-    rows: developmentPackage.rows,
-    holdoutDataIncluded: false as const
-  });
-}
-
 export class RepairProviderError extends Error {
   constructor(
     readonly code: string,
@@ -145,7 +126,7 @@ export async function runRepairBuilder(input: {
   const body = {
     model: PROBE_MODEL,
     instructions: REPAIR_BUILDER_PROMPT,
-    input: canonicalJson(repairBuilderModelPackage(input.developmentPackage)),
+    input: canonicalJson(input.developmentPackage),
     reasoning: { effort: "low" },
     text: {
       format: {
