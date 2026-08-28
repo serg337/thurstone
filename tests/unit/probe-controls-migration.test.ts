@@ -63,6 +63,8 @@ describe("Probe policy migration operator boundary", () => {
     expect(source).toContain("policyV04MigrationTamperRejected: true");
     expect(source).toContain("migration_v04_${testId}");
     expect(source).toContain("migration_v04_tamper_${testId}");
+    expect(source).toContain("isIntegrationV03GuardStatus(v03Status");
+    expect(source).toContain("guard.policyVersion === PROBE_V03_MIGRATED_POLICY_VERSION");
   });
 
   it("requires exact Production/project/commit/guard context before discovery", async () => {

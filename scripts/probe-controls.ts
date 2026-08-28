@@ -19,7 +19,8 @@ import {
   readProbeGuardStatus,
   reapExpiredProbeCall,
   settleProbeCallKnown,
-  type ProbeGuardIdentity
+  type ProbeGuardIdentity,
+  type ProbeGuardStatus
 } from "../lib/probe/ledger";
 import {
   PROBE_MIGRATED_LEDGER_SCRIPT_HASH,
@@ -105,6 +106,43 @@ function hasExpectedVercelProjectIdentity(): boolean {
 
 function safeReceipt(value: unknown): void {
   process.stdout.write(`${JSON.stringify(value)}\n`);
+}
+
+function isIntegrationV03GuardStatus(
+  guard: ProbeGuardStatus,
+  expected: { readonly guardInstanceId: string; readonly initializedCommit: string }
+): boolean {
+  return (
+    guard.status === "open" &&
+    guard.guardInstanceId === expected.guardInstanceId &&
+    guard.initializedCommit === expected.initializedCommit &&
+    guard.policyVersion === PROBE_V03_MIGRATED_POLICY_VERSION &&
+    guard.policyHash === PROBE_V03_MIGRATED_POLICY_HASH &&
+    guard.scriptHash === PROBE_V03_MIGRATED_LEDGER_SCRIPT_HASH &&
+    guard.model === PROBE_MODEL &&
+    guard.globalCallLimit === PROBE_GLOBAL_CALL_LIMIT &&
+    guard.spendCeilingNanoUsd === PROBE_LIFETIME_SPEND_CEILING_NANO_USD &&
+    guard.perCallReservationNanoUsd === PROBE_PER_CALL_RESERVATION_NANO_USD &&
+    guard.maxConcurrency === PROBE_MAX_CONCURRENCY &&
+    guard.challengeClosesAtMs === Date.parse(PROBE_CHALLENGE_CLOSES_AT) &&
+    Object.entries(PROBE_V03_MIGRATED_PURPOSE_CALL_LIMITS).every(
+      ([purpose, limit]) =>
+        guard.purposeLimits[purpose as ProbePurpose] === limit &&
+        guard.purposeCounts[purpose as ProbePurpose] <= limit
+    ) &&
+    Object.values(guard.purposeCounts).reduce((sum, count) => sum + count, 0) ===
+      guard.claimedCalls &&
+    guard.committedNanoUsd === guard.claimedCalls * PROBE_PER_CALL_RESERVATION_NANO_USD &&
+    guard.pendingCount + guard.knownCount + guard.uncertainCount === guard.claimedCalls &&
+    guard.knownActualNanoUsd <= guard.knownCount * PROBE_PER_CALL_RESERVATION_NANO_USD &&
+    guard.uncertainUpperNanoUsd === guard.uncertainCount * PROBE_PER_CALL_RESERVATION_NANO_USD &&
+    guard.inflightCount === guard.pendingCount &&
+    guard.sequence === guard.claimedCalls &&
+    !guard.haltMarkerPresent &&
+    !guard.uncertainMarkerPresent &&
+    guard.pendingCount === 0 &&
+    guard.uncertainCount === 0
+  );
 }
 
 async function identity(
@@ -1003,11 +1041,9 @@ async function integrationTest(): Promise<void> {
       replayedV03.disposition !== "existing" ||
       migratedV03.receipt.receiptHash !== replayedV03.receipt.receiptHash ||
       migratedV03.receipt.predecessorMigrationReceiptHash !== migrated.receipt.receiptHash ||
-      !isProbeGuardStatusConsistent(v03Status, {
+      !isIntegrationV03GuardStatus(v03Status, {
         guardInstanceId: migrationPrior.guardInstanceId,
-        initializedCommit: migrationPrior.initializedCommit,
-        policyHash: PROBE_V03_MIGRATED_POLICY_HASH,
-        scriptHash: PROBE_V03_MIGRATED_LEDGER_SCRIPT_HASH
+        initializedCommit: migrationPrior.initializedCommit
       }) ||
       v03Status.claimedCalls !== 5 ||
       v03Status.knownCount !== 5 ||
