@@ -70,7 +70,7 @@ describe("fallback Lab page adapter", () => {
     });
   });
 
-  it("creates a full verified reset lineage and releases only its matching admission", async () => {
+  it("cleans a healthy initial compatibility trace before proving the reset lineage", async () => {
     const ready = await readiness();
     const ledger = new CheckoutTraceLedger({
       getRegistryHash: () => ready.manifestHash,
@@ -84,9 +84,12 @@ describe("fallback Lab page adapter", () => {
       .mockImplementationOnce(async () => {
         return {
           session: store.getSnapshot(),
-          inspection: store.inspect(),
+          inspection: { ...store.inspect(), currentOperationCount: 0 },
           domainArchives: store.archivedTrajectories(),
-          traceLedger: ledger.snapshot(),
+          traceLedger: {
+            ...ledger.snapshot(),
+            current: [{ source: "native", toolName: "cart_get", status: "completed" }]
+          },
           journal: {
             entries: [{ sequence: 1, kind: "readiness_receipt", payload: ready }],
             eventCount: 1,

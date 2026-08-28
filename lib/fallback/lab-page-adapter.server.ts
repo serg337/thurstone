@@ -225,6 +225,18 @@ async function healthyStableReadiness(
   );
 }
 
+async function healthyInitialReadiness(
+  snapshot: LabDocumentSnapshot,
+  readiness: ProjectedReadiness | null
+): Promise<boolean> {
+  return Boolean(
+    snapshot.session.state.pendingCheckout === null &&
+    readiness?.manifest.catalogState === "initial" &&
+    exactInitialNames(readiness.registeredToolNames) &&
+    (await healthyStableReadiness(snapshot, readiness))
+  );
+}
+
 async function pageSnapshot(page: Page): Promise<LabDocumentSnapshot> {
   return page.evaluate(() => {
     type Environment = {
@@ -282,7 +294,7 @@ async function waitForResetAdmission(
     if (
       snapshot &&
       (stage === "before"
-        ? exactReadiness(snapshot, readiness)
+        ? await healthyInitialReadiness(snapshot, readiness)
         : await healthyStableReadiness(snapshot, readiness))
     ) {
       return;
