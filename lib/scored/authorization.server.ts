@@ -5,7 +5,10 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { canonicalSha256 } from "@/lib/evidence/digest";
 import { signProbeArtifact, verifyProbeArtifact } from "@/lib/probe/server-artifact";
 import { decodeProbeSigningSecret } from "@/lib/probe/signing-secret";
-import type { ScoredSessionClaims } from "@/lib/scored/session.server";
+import {
+  SCORED_PREDECESSOR_DISPOSITIONS,
+  type ScoredSessionClaims
+} from "@/lib/scored/session.server";
 import { z } from "zod";
 
 export const SCORED_AUTHORIZATION_VERSION = "toolproof-scored-authorization@1.0.0";
@@ -22,12 +25,14 @@ export const scoredAuthorizationClaimsSchema = z
     frozenProtocolHash: sha256,
     freezeCandidateHash: sha256,
     phaseCallOffset: z.number().int().min(0).max(46),
+    repairPhaseCallOffset: z.union([z.literal(0), z.literal(1)]),
     predecessorProtocolHash: sha256.nullable(),
     predecessorEvidenceDigest: sha256.nullable(),
     predecessorRunId: z
       .string()
       .regex(/^run_[A-Za-z0-9_-]{22}$/u)
       .nullable(),
+    predecessorDisposition: z.enum(SCORED_PREDECESSOR_DISPOSITIONS).nullable(),
     runId: z.string().regex(/^run_[A-Za-z0-9_-]{22}$/u),
     runnerCaseId: z.string().regex(/^case_[A-Za-z0-9_-]{22}$/u),
     trialId: z.string().regex(/^trial_[A-Za-z0-9_-]{22}$/u),
@@ -140,9 +145,11 @@ export async function issueScoredAuthorization(input: {
     frozenProtocolHash: input.session.frozenProtocolHash,
     freezeCandidateHash: input.session.freezeCandidateHash,
     phaseCallOffset: input.session.phaseCallOffset,
+    repairPhaseCallOffset: input.session.repairPhaseCallOffset,
     predecessorProtocolHash: input.session.predecessorProtocolHash,
     predecessorEvidenceDigest: input.session.predecessorEvidenceDigest,
     predecessorRunId: input.session.predecessorRunId,
+    predecessorDisposition: input.session.predecessorDisposition,
     runId: input.session.runId,
     runnerCaseId: input.runnerCaseId,
     trialId: input.trialId,

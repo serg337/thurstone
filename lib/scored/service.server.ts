@@ -32,6 +32,8 @@ import {
 } from "@/lib/probe/ledger";
 import { deriveProbeActorHash, deriveProbeLaunchHash } from "@/lib/probe/session";
 import { decodeProbeSigningSecret } from "@/lib/probe/signing-secret";
+import { deriveRepairGrantIdentity } from "@/lib/repair/identity.server";
+import { readRepairProviderReceipt } from "@/lib/repair/store.server";
 import {
   deriveScoredAuthorizationIdentity,
   issueScoredAuthorization,
@@ -46,6 +48,7 @@ import {
   type ScoredTrialEnvelope
 } from "@/lib/scored/envelope";
 import {
+  assertScoredPredecessorDisposition,
   assertScoredReplacementOffset,
   assertScoredPhaseCanStart,
   readScoredGuardContext
@@ -84,6 +87,7 @@ import {
 } from "@/lib/scored/run-store.server";
 import { scoredInfrastructureReplacementEligible } from "@/lib/scored/retry-policy";
 import {
+  SCORED_PREDECESSOR_DISPOSITIONS,
   SCORED_RECOVERY_COOKIE,
   SCORED_SESSION_COOKIE,
   issueRecoveredScoredSession,
@@ -92,12 +96,14 @@ import {
   verifyScoredRecovery,
   verifyScoredSession,
   type ScoredRecoveryClaims,
+  type ScoredPredecessorDisposition,
   type ScoredSessionClaims
 } from "@/lib/scored/session.server";
 import type { ScoredFailureBody, ScoredSessionResponse } from "@/lib/scored/service-contract";
 import { configuredGate3FrozenProtocol } from "@/lib/semantic/frozen-config.server";
 import { readGate3Freeze } from "@/lib/semantic/freeze-store.server";
 import { configuredGate3ReviewPackage } from "@/lib/semantic/review-package-config.server";
+import type { Gate3SuccessorLineage } from "@/lib/semantic/gate3-successor-lineage.server";
 import { deriveSemanticCaseOrder } from "@/lib/semantic/protocol-freeze.server";
 import { configuredGate5Revision } from "@/lib/semantic/revision-config.server";
 import {
@@ -113,10 +119,12 @@ export const GATE3_BASELINE_REVEAL_VERSION = "toolproof-gate3-baseline-developme
 export const SCORED_OPERATOR_CAPABILITY_HASH_ENV = "TOOLPROOF_SCORED_OPERATOR_CAPABILITY_HASH";
 export const SCORED_OPERATOR_PHASE_ENV = "TOOLPROOF_SCORED_OPERATOR_PHASE";
 export const SCORED_PHASE_CALL_OFFSET_ENV = "TOOLPROOF_SCORED_PHASE_CALL_OFFSET";
+export const SCORED_REPAIR_PHASE_CALL_OFFSET_ENV = "TOOLPROOF_REPAIR_PHASE_CALL_OFFSET";
 export const SCORED_PREDECESSOR_PROTOCOL_HASH_ENV = "TOOLPROOF_SCORED_PREDECESSOR_PROTOCOL_HASH";
 export const SCORED_PREDECESSOR_EVIDENCE_DIGEST_ENV =
   "TOOLPROOF_SCORED_PREDECESSOR_EVIDENCE_DIGEST";
 export const SCORED_PREDECESSOR_RUN_ID_ENV = "TOOLPROOF_SCORED_PREDECESSOR_RUN_ID";
+export const SCORED_PREDECESSOR_DISPOSITION_ENV = "TOOLPROOF_SCORED_PREDECESSOR_DISPOSITION";
 
 type EnvironmentLike = Readonly<Record<string, string | undefined>>;
 
@@ -180,9 +188,11 @@ export interface Gate3ScoredBundle {
   readonly scheduleHash: string;
   readonly orderedRunnerCaseIds: readonly string[];
   readonly phaseCallOffset: number;
+  readonly repairPhaseCallOffset: 0 | 1;
   readonly predecessorProtocolHash: string | null;
   readonly predecessorEvidenceDigest: string | null;
   readonly predecessorRunId: string | null;
+  readonly predecessorDisposition: ScoredPredecessorDisposition | null;
   readonly status: "terminal-complete" | "terminal-invalid";
   readonly completedCount: number;
   readonly attemptCount: number;
@@ -211,9 +221,11 @@ export interface Gate3BaselineRevealBundle {
   readonly frozenProtocolHash: string;
   readonly freezeCandidateHash: string;
   readonly phaseCallOffset: number;
+  readonly repairPhaseCallOffset: 0 | 1;
   readonly predecessorProtocolHash: string | null;
   readonly predecessorEvidenceDigest: string | null;
   readonly predecessorRunId: string | null;
+  readonly predecessorDisposition: ScoredPredecessorDisposition | null;
   readonly status: "terminal-complete" | "terminal-invalid";
   readonly completedCount: number;
   readonly attemptCount: number;
@@ -239,6 +251,12 @@ export interface Gate3BundleExpectedBinding {
   readonly frozenProtocolHash?: string;
   readonly freezeCandidateHash?: string;
   readonly scheduleHash?: string;
+  readonly phaseCallOffset?: number;
+  readonly repairPhaseCallOffset?: 0 | 1;
+  readonly predecessorProtocolHash?: string | null;
+  readonly predecessorEvidenceDigest?: string | null;
+  readonly predecessorRunId?: string | null;
+  readonly predecessorDisposition?: ScoredPredecessorDisposition | null;
 }
 
 const CONSUME_CAPABILITY_SCRIPT = `
@@ -389,9 +407,11 @@ async function runIdentity(input: {
     frozenProtocolHash: input.session.frozenProtocolHash,
     freezeCandidateHash: input.session.freezeCandidateHash,
     phaseCallOffset: input.session.phaseCallOffset,
+    repairPhaseCallOffset: input.session.repairPhaseCallOffset,
     predecessorProtocolHash: input.session.predecessorProtocolHash,
     predecessorEvidenceDigest: input.session.predecessorEvidenceDigest,
     predecessorRunId: input.session.predecessorRunId,
+    predecessorDisposition: input.session.predecessorDisposition,
     runId: input.session.runId,
     actorHash: input.actorHash,
     orderedRunnerCaseIds: [...input.orderedRunnerCaseIds]
@@ -406,9 +426,11 @@ function bindingFromFrozen(input: {
   readonly frozenProtocolHash: string;
   readonly freezeCandidateHash: string;
   readonly phaseCallOffset: number;
+  readonly repairPhaseCallOffset: 0 | 1;
   readonly predecessorProtocolHash: string | null;
   readonly predecessorEvidenceDigest: string | null;
   readonly predecessorRunId: string | null;
+  readonly predecessorDisposition: ScoredPredecessorDisposition | null;
 }) {
   return {
     phase: input.phase,
@@ -417,28 +439,49 @@ function bindingFromFrozen(input: {
     frozenProtocolHash: input.frozenProtocolHash,
     freezeCandidateHash: input.freezeCandidateHash,
     phaseCallOffset: input.phaseCallOffset,
+    repairPhaseCallOffset: input.repairPhaseCallOffset,
     predecessorProtocolHash: input.predecessorProtocolHash,
     predecessorEvidenceDigest: input.predecessorEvidenceDigest,
     predecessorRunId: input.predecessorRunId,
+    predecessorDisposition: input.predecessorDisposition,
     actorHash: input.actorHash
   } as const;
 }
 
 function phaseExecutionBinding(environment: EnvironmentLike): {
   readonly phaseCallOffset: number;
+  readonly repairPhaseCallOffset: 0 | 1;
   readonly predecessorProtocolHash: string | null;
   readonly predecessorEvidenceDigest: string | null;
   readonly predecessorRunId: string | null;
+  readonly predecessorDisposition: ScoredPredecessorDisposition | null;
 } {
   const rawOffset = requiredEnvironment(environment, SCORED_PHASE_CALL_OFFSET_ENV);
   if (!/^(0|[1-9][0-9]?)$/u.test(rawOffset)) {
     throw new ScoredServiceError("scored_phase_call_offset_invalid", 503);
   }
   const phaseCallOffset = Number(rawOffset);
+  const rawRepairOffset = requiredEnvironment(environment, SCORED_REPAIR_PHASE_CALL_OFFSET_ENV);
+  if (!/^[01]$/u.test(rawRepairOffset)) {
+    throw new ScoredServiceError("scored_repair_phase_call_offset_invalid", 503);
+  }
+  const repairPhaseCallOffset = Number(rawRepairOffset) as 0 | 1;
   const predecessorProtocolHash = environment[SCORED_PREDECESSOR_PROTOCOL_HASH_ENV]?.trim() || null;
   const predecessor = environment[SCORED_PREDECESSOR_EVIDENCE_DIGEST_ENV]?.trim() || null;
   const predecessorRunId = environment[SCORED_PREDECESSOR_RUN_ID_ENV]?.trim() || null;
-  const predecessorValues = [predecessorProtocolHash, predecessor, predecessorRunId];
+  const predecessorDispositionValue =
+    environment[SCORED_PREDECESSOR_DISPOSITION_ENV]?.trim() || null;
+  const predecessorDisposition = SCORED_PREDECESSOR_DISPOSITIONS.includes(
+    predecessorDispositionValue as ScoredPredecessorDisposition
+  )
+    ? (predecessorDispositionValue as ScoredPredecessorDisposition)
+    : null;
+  const predecessorValues = [
+    predecessorProtocolHash,
+    predecessor,
+    predecessorRunId,
+    predecessorDisposition
+  ];
   const predecessorCount = predecessorValues.filter((value) => value !== null).length;
   if (
     phaseCallOffset > 46 ||
@@ -446,16 +489,92 @@ function phaseExecutionBinding(environment: EnvironmentLike): {
     (phaseCallOffset > 0 && predecessorCount !== predecessorValues.length) ||
     (predecessorProtocolHash !== null && !/^[a-f0-9]{64}$/u.test(predecessorProtocolHash)) ||
     (predecessor !== null && !/^[a-f0-9]{64}$/u.test(predecessor)) ||
-    (predecessorRunId !== null && !/^run_[A-Za-z0-9_-]{22}$/u.test(predecessorRunId))
+    (predecessorRunId !== null && !/^run_[A-Za-z0-9_-]{22}$/u.test(predecessorRunId)) ||
+    (predecessorDispositionValue !== null && predecessorDisposition === null)
   ) {
     throw new ScoredServiceError("scored_predecessor_binding_invalid", 503);
   }
   return Object.freeze({
     phaseCallOffset,
+    repairPhaseCallOffset,
     predecessorProtocolHash,
     predecessorEvidenceDigest: predecessor,
-    predecessorRunId
+    predecessorRunId,
+    predecessorDisposition
   });
+}
+
+export function assertScoredFrozenPhaseExecution(input: {
+  readonly lineage:
+    | {
+        readonly lineageHash: string;
+        readonly disposition: "superseded-protocol";
+        readonly predecessor: {
+          readonly frozenProtocolHash: string;
+          readonly evidenceDigest: string;
+          readonly runId: string;
+        };
+        readonly phaseCallOffsets: {
+          readonly baseline: 24;
+          readonly repair: 1;
+          readonly revised: 0;
+        };
+      }
+    | undefined;
+  readonly frozenSuccessorLineageHash: string | undefined;
+  readonly phase: "baseline" | "revised";
+  readonly execution: ReturnType<typeof phaseExecutionBinding>;
+}): void {
+  const { lineage, phase, execution } = input;
+  if (!lineage) {
+    if (
+      execution.repairPhaseCallOffset !== 0 ||
+      execution.predecessorDisposition === "superseded-protocol"
+    ) {
+      throw new ScoredServiceError("scored_execution_freeze_lineage_mismatch", 503);
+    }
+    return;
+  }
+  if (
+    input.frozenSuccessorLineageHash !== lineage.lineageHash ||
+    execution.repairPhaseCallOffset !== lineage.phaseCallOffsets.repair
+  ) {
+    throw new ScoredServiceError("scored_execution_freeze_lineage_mismatch", 503);
+  }
+  if (phase === "baseline") {
+    if (execution.phaseCallOffset === lineage.phaseCallOffsets.baseline) {
+      if (
+        execution.predecessorProtocolHash !== lineage.predecessor.frozenProtocolHash ||
+        execution.predecessorEvidenceDigest !== lineage.predecessor.evidenceDigest ||
+        execution.predecessorRunId !== lineage.predecessor.runId ||
+        execution.predecessorDisposition !== lineage.disposition
+      ) {
+        throw new ScoredServiceError("scored_execution_freeze_lineage_mismatch", 503);
+      }
+      return;
+    }
+    if (
+      execution.phaseCallOffset <= lineage.phaseCallOffsets.baseline ||
+      execution.predecessorDisposition !== "invalid-schedule"
+    ) {
+      throw new ScoredServiceError("scored_execution_freeze_lineage_mismatch", 503);
+    }
+    return;
+  }
+  if (execution.phaseCallOffset === lineage.phaseCallOffsets.revised) {
+    if (
+      execution.predecessorProtocolHash !== null ||
+      execution.predecessorEvidenceDigest !== null ||
+      execution.predecessorRunId !== null ||
+      execution.predecessorDisposition !== null
+    ) {
+      throw new ScoredServiceError("scored_execution_freeze_lineage_mismatch", 503);
+    }
+    return;
+  }
+  if (execution.predecessorDisposition !== "invalid-schedule") {
+    throw new ScoredServiceError("scored_execution_freeze_lineage_mismatch", 503);
+  }
 }
 
 function progressResponse(input: {
@@ -515,9 +634,11 @@ async function authenticateSession(
           frozenProtocolHash: candidateProtocolHash,
           freezeCandidateHash: context.frozen.freezeCandidateHash,
           phaseCallOffset: execution.phaseCallOffset,
+          repairPhaseCallOffset: execution.repairPhaseCallOffset,
           predecessorProtocolHash: execution.predecessorProtocolHash,
           predecessorEvidenceDigest: execution.predecessorEvidenceDigest,
-          predecessorRunId: execution.predecessorRunId
+          predecessorRunId: execution.predecessorRunId,
+          predecessorDisposition: execution.predecessorDisposition
         }),
         cookieValue: phaseCookie,
         signingSecret: secret,
@@ -542,9 +663,11 @@ async function authenticateSession(
     frozenProtocolHash: selectedProtocolHash,
     freezeCandidateHash: context.frozen.freezeCandidateHash,
     phaseCallOffset: execution.phaseCallOffset,
+    repairPhaseCallOffset: execution.repairPhaseCallOffset,
     predecessorProtocolHash: execution.predecessorProtocolHash,
     predecessorEvidenceDigest: execution.predecessorEvidenceDigest,
-    predecessorRunId: execution.predecessorRunId
+    predecessorRunId: execution.predecessorRunId,
+    predecessorDisposition: execution.predecessorDisposition
   });
   const session = verifyScoredSession({
     ...binding,
@@ -701,9 +824,11 @@ function authorizationExpected(input: {
     frozenProtocolHash: input.session.frozenProtocolHash,
     freezeCandidateHash: input.session.freezeCandidateHash,
     phaseCallOffset: input.session.phaseCallOffset,
+    repairPhaseCallOffset: input.session.repairPhaseCallOffset,
     predecessorProtocolHash: input.session.predecessorProtocolHash,
     predecessorEvidenceDigest: input.session.predecessorEvidenceDigest,
     predecessorRunId: input.session.predecessorRunId,
+    predecessorDisposition: input.session.predecessorDisposition,
     runId: input.session.runId,
     runnerCaseId: input.envelope.caseId,
     trialId: input.envelope.trialId,
@@ -737,11 +862,197 @@ function capabilityKey(phase: "baseline" | "revised", frozenProtocolHash: string
   return `tp:{webmcp26}:scored-capability:${phase}:${frozenProtocolHash}`;
 }
 
+async function assertConfiguredScoredPredecessor(input: {
+  readonly phase: "baseline" | "revised";
+  readonly protocolHash: string;
+  readonly phaseExecution: ReturnType<typeof phaseExecutionBinding>;
+  readonly guard: Awaited<ReturnType<typeof readScoredGuardContext>>;
+  readonly artifactSecret: string;
+  readonly successorLineage: Gate3SuccessorLineage | undefined;
+}): Promise<void> {
+  const lineage = input.successorLineage;
+  if (lineage) {
+    const [permanentFreeze, permanentRun, permanentRepair] = await Promise.all([
+      readGate3Freeze(input.guard.redis, {
+        frozenProtocolHash: lineage.predecessor.frozenProtocolHash,
+        artifactSecret: input.artifactSecret
+      }),
+      readPermanentScoredRunById(input.guard.redis, {
+        phase: "baseline",
+        frozenProtocolHash: lineage.predecessor.frozenProtocolHash,
+        runId: lineage.predecessor.runId,
+        artifactSecret: input.artifactSecret
+      }),
+      readRepairProviderReceipt(input.guard.redis, {
+        baselineEvidenceDigest: lineage.predecessor.evidenceDigest,
+        artifactSecret: input.artifactSecret
+      })
+    ]);
+    const originalTermination = permanentFreeze?.frozenProtocol.authoringTermination;
+    if (
+      !permanentFreeze ||
+      permanentFreeze.reviewPackage.packageHash !== lineage.predecessor.reviewPackageHash ||
+      permanentFreeze.reviewPackage.freezeHash !== lineage.predecessor.freezeCandidateHash ||
+      permanentFreeze.frozenProtocol.frozenProtocolHash !==
+        lineage.predecessor.frozenProtocolHash ||
+      !originalTermination ||
+      canonicalJson(originalTermination) !==
+        canonicalJson(lineage.authoringContinuity.originalAuthoringTermination) ||
+      permanentFreeze.frozenProtocol.authoringTerminationHash !==
+        lineage.authoringContinuity.originalAuthoringTerminationHash ||
+      !permanentRun ||
+      permanentRun.status !== lineage.predecessor.acknowledgementStatus ||
+      permanentRun.terminalStatus !== lineage.predecessor.terminalStatus ||
+      permanentRun.completedCount !== lineage.predecessor.completedCaseCount ||
+      permanentRun.evidenceDigest !== lineage.predecessor.evidenceDigest ||
+      permanentRun.identity.reviewPackageHash !== lineage.predecessor.reviewPackageHash ||
+      permanentRun.identity.freezeCandidateHash !== lineage.predecessor.freezeCandidateHash ||
+      permanentRun.identity.frozenProtocolHash !== lineage.predecessor.frozenProtocolHash ||
+      !permanentRepair ||
+      canonicalJson(permanentRepair.repairBuilderReceipt) !==
+        canonicalJson(lineage.priorRepair.repairBuilderReceipt)
+    ) {
+      throw new ScoredServiceError("scored_successor_permanent_lineage_mismatch", 409);
+    }
+    const repairIdentity = await deriveRepairGrantIdentity({
+      artifactSecret: input.artifactSecret,
+      developmentPackageHash: permanentRepair.repairBuilderReceipt.developmentPackageHash
+    });
+    if (repairIdentity.contextId !== permanentRepair.repairBuilderReceipt.contextId) {
+      throw new ScoredServiceError("scored_successor_permanent_lineage_mismatch", 409);
+    }
+    const repairRecord = await readScoredLedgerRecord(input.guard.redis, {
+      ...input.guard.identity,
+      jti: repairIdentity.jti
+    });
+    const repairSettlementDigest = await canonicalSha256({
+      version: "toolproof-repair-known-settlement@1.0.0",
+      jti: repairIdentity.jti,
+      providerResponseHash: permanentRepair.rawResponseHash,
+      usageHash: permanentRepair.usageHash,
+      actualNanoUsd: permanentRepair.actualNanoUsd
+    });
+    if (
+      !repairRecord ||
+      repairRecord.state !== "KNOWN" ||
+      repairRecord.purpose !== "repair" ||
+      repairRecord.claimsHash !== repairIdentity.claimsHash ||
+      repairRecord.providerResponseHash !== permanentRepair.rawResponseHash ||
+      repairRecord.usageHash !== permanentRepair.usageHash ||
+      repairRecord.actualNanoUsd !== permanentRepair.actualNanoUsd ||
+      repairRecord.settlementDigest !== repairSettlementDigest
+    ) {
+      throw new ScoredServiceError("scored_successor_repair_ledger_mismatch", 409);
+    }
+  }
+  const predecessorProtocolHash = input.phaseExecution.predecessorProtocolHash;
+  const predecessorRunId = input.phaseExecution.predecessorRunId;
+  const predecessorEvidenceDigest = input.phaseExecution.predecessorEvidenceDigest;
+  const predecessorDisposition = input.phaseExecution.predecessorDisposition;
+  if (
+    !predecessorProtocolHash ||
+    !predecessorRunId ||
+    !predecessorEvidenceDigest ||
+    !predecessorDisposition
+  ) {
+    return;
+  }
+  const predecessor = await readPermanentScoredRunById(input.guard.redis, {
+    phase: input.phase,
+    frozenProtocolHash: predecessorProtocolHash,
+    runId: predecessorRunId,
+    artifactSecret: input.artifactSecret
+  });
+  if (
+    !predecessor ||
+    predecessor.status !== "acknowledged" ||
+    predecessor.terminalStatus === null ||
+    predecessor.evidenceDigest !== predecessorEvidenceDigest ||
+    predecessor.identity.frozenProtocolHash !== predecessorProtocolHash
+  ) {
+    throw new ScoredServiceError("scored_predecessor_evidence_mismatch", 409);
+  }
+  assertScoredPredecessorDisposition({
+    disposition: predecessorDisposition,
+    currentProtocolHash: input.protocolHash,
+    predecessorProtocolHash,
+    predecessorTerminalStatus: predecessor.terminalStatus,
+    predecessorCompletedCount: predecessor.completedCount
+  });
+  const predecessorJtis = new Set<string>();
+  let predecessorProviderGrants = 0;
+  for (const attempt of predecessor.attempts) {
+    const evidence = attempt.evidence as Record<string, unknown>;
+    const jti = evidence.authorizationJti;
+    if (
+      typeof jti !== "string" ||
+      !/^jti_scored_[A-Za-z0-9_-]{22}$/u.test(jti) ||
+      predecessorJtis.has(jti)
+    ) {
+      throw new ScoredServiceError("scored_predecessor_attempt_identity_mismatch", 409);
+    }
+    predecessorJtis.add(jti);
+    const record = await readScoredLedgerRecord(input.guard.redis, {
+      ...input.guard.identity,
+      jti
+    });
+    if (record && record.purpose !== input.phase) {
+      throw new ScoredServiceError("scored_predecessor_ledger_mismatch", 409);
+    }
+    const stateImpliesDispatch =
+      record?.state === "IN_FLIGHT" || record?.state === "KNOWN" || record?.state === "UNCERTAIN";
+    if (record && stateImpliesDispatch !== (record.dispatchSequence !== null)) {
+      throw new ScoredServiceError("scored_predecessor_ledger_mismatch", 409);
+    }
+    if (stateImpliesDispatch) predecessorProviderGrants += 1;
+  }
+  assertScoredReplacementOffset({
+    phaseCallOffset: input.phaseExecution.phaseCallOffset,
+    predecessorPhaseCallOffset: predecessor.identity.phaseCallOffset,
+    predecessorProviderGrants
+  });
+}
+
 export async function readGate3ScoredReadiness(dependencies: ScoredServiceDependencies = {}) {
   const environment = environmentOf(dependencies);
   try {
     const context = await frozenContext(environment);
     const guard = await readScoredGuardContext(environment);
+    const configuredPhase = environment[SCORED_OPERATOR_PHASE_ENV]?.trim() || null;
+    let phaseReadiness: Readonly<Record<string, unknown>> = Object.freeze({
+      configuredPhase: null,
+      executionVerified: false
+    });
+    if (configuredPhase !== null) {
+      if (configuredPhase !== "baseline" && configuredPhase !== "revised") {
+        throw new ScoredServiceError("scored_operator_phase_invalid", 503);
+      }
+      const phaseExecution = phaseExecutionBinding(environment);
+      const protocolHash = await runProtocolHash(environment, configuredPhase, context);
+      assertScoredFrozenPhaseExecution({
+        lineage: context.review.successorLineage,
+        frozenSuccessorLineageHash: context.frozen.successorLineageHash,
+        phase: configuredPhase,
+        execution: phaseExecution
+      });
+      assertScoredPhaseCanStart(guard.status, configuredPhase, phaseExecution);
+      await assertConfiguredScoredPredecessor({
+        phase: configuredPhase,
+        protocolHash,
+        phaseExecution,
+        guard,
+        artifactSecret: signingSecret(environment),
+        successorLineage: context.review.successorLineage
+      });
+      phaseReadiness = Object.freeze({
+        configuredPhase,
+        executionVerified: true,
+        protocolHash,
+        phaseCallOffset: phaseExecution.phaseCallOffset,
+        repairPhaseCallOffset: phaseExecution.repairPhaseCallOffset,
+        predecessorDisposition: phaseExecution.predecessorDisposition
+      });
+    }
     return Object.freeze({
       status: "ready" as const,
       appCommit: appCommit(environment),
@@ -751,6 +1062,7 @@ export async function readGate3ScoredReadiness(dependencies: ScoredServiceDepend
       scheduleCases: 24,
       repetitionCount: 1,
       evidenceLabel: "demonstration-snapshot" as const,
+      phaseReadiness,
       guard: {
         claimedCalls: guard.status.claimedCalls,
         knownCalls: guard.status.knownCount,
@@ -796,60 +1108,21 @@ export async function startScoredSession(
   const actorHash = deriveProbeActorHash(request, secret);
   const guard = await readScoredGuardContext(environment);
   const phaseExecution = phaseExecutionBinding(environment);
+  assertScoredFrozenPhaseExecution({
+    lineage: context.review.successorLineage,
+    frozenSuccessorLineageHash: context.frozen.successorLineageHash,
+    phase: input.phase,
+    execution: phaseExecution
+  });
   assertScoredPhaseCanStart(guard.status, input.phase, phaseExecution);
-  if (
-    phaseExecution.predecessorProtocolHash &&
-    phaseExecution.predecessorRunId &&
-    phaseExecution.predecessorEvidenceDigest
-  ) {
-    const predecessor = await readPermanentScoredRunById(guard.redis, {
-      phase: input.phase,
-      frozenProtocolHash: phaseExecution.predecessorProtocolHash,
-      runId: phaseExecution.predecessorRunId,
-      artifactSecret: secret
-    });
-    if (
-      !predecessor ||
-      predecessor.status !== "acknowledged" ||
-      predecessor.evidenceDigest !== phaseExecution.predecessorEvidenceDigest ||
-      predecessor.completedCount >= SCORED_RUN_CASE_COUNT ||
-      predecessor.identity.frozenProtocolHash !== phaseExecution.predecessorProtocolHash
-    ) {
-      throw new ScoredServiceError("scored_predecessor_evidence_mismatch", 409);
-    }
-    const predecessorJtis = new Set<string>();
-    let predecessorProviderGrants = 0;
-    for (const attempt of predecessor.attempts) {
-      const evidence = attempt.evidence as Record<string, unknown>;
-      const jti = evidence.authorizationJti;
-      if (
-        typeof jti !== "string" ||
-        !/^jti_scored_[A-Za-z0-9_-]{22}$/u.test(jti) ||
-        predecessorJtis.has(jti)
-      ) {
-        throw new ScoredServiceError("scored_predecessor_attempt_identity_mismatch", 409);
-      }
-      predecessorJtis.add(jti);
-      const record = await readScoredLedgerRecord(guard.redis, {
-        ...guard.identity,
-        jti
-      });
-      if (record && record.purpose !== input.phase) {
-        throw new ScoredServiceError("scored_predecessor_ledger_mismatch", 409);
-      }
-      const stateImpliesDispatch =
-        record?.state === "IN_FLIGHT" || record?.state === "KNOWN" || record?.state === "UNCERTAIN";
-      if (record && stateImpliesDispatch !== (record.dispatchSequence !== null)) {
-        throw new ScoredServiceError("scored_predecessor_ledger_mismatch", 409);
-      }
-      if (stateImpliesDispatch) predecessorProviderGrants += 1;
-    }
-    assertScoredReplacementOffset({
-      phaseCallOffset: phaseExecution.phaseCallOffset,
-      predecessorPhaseCallOffset: predecessor.identity.phaseCallOffset,
-      predecessorProviderGrants
-    });
-  }
+  await assertConfiguredScoredPredecessor({
+    phase: input.phase,
+    protocolHash,
+    phaseExecution,
+    guard,
+    artifactSecret: secret,
+    successorLineage: context.review.successorLineage
+  });
   const binding = bindingFromFrozen({
     phase: input.phase,
     commit: appCommit(environment),
@@ -946,9 +1219,11 @@ export async function recoverScoredSession(
         frozenProtocolHash: candidateProtocolHash,
         freezeCandidateHash: context.frozen.freezeCandidateHash,
         phaseCallOffset: execution.phaseCallOffset,
+        repairPhaseCallOffset: execution.repairPhaseCallOffset,
         predecessorProtocolHash: execution.predecessorProtocolHash,
         predecessorEvidenceDigest: execution.predecessorEvidenceDigest,
-        predecessorRunId: execution.predecessorRunId
+        predecessorRunId: execution.predecessorRunId,
+        predecessorDisposition: execution.predecessorDisposition
       });
       recovery = verifyScoredRecovery({
         ...binding,
@@ -1810,7 +2085,13 @@ function assertExpectedBundleBinding(
     "reviewPackageHash",
     "frozenProtocolHash",
     "freezeCandidateHash",
-    "scheduleHash"
+    "scheduleHash",
+    "phaseCallOffset",
+    "repairPhaseCallOffset",
+    "predecessorProtocolHash",
+    "predecessorEvidenceDigest",
+    "predecessorRunId",
+    "predecessorDisposition"
   ] as const) {
     if (expected[key] !== undefined && value[key] !== expected[key]) {
       throw new ScoredServiceError("scored_bundle_expected_binding_mismatch", 500);
@@ -1826,7 +2107,11 @@ export async function verifyGate3ScoredBundle(
     throw new ScoredServiceError("scored_bundle_invalid", 500);
   }
   const root = value as Record<string, unknown>;
+  const repairOffsetPresent = Object.hasOwn(root, "repairPhaseCallOffset");
+  const predecessorDispositionPresent = Object.hasOwn(root, "predecessorDisposition");
+  const legacyBundle = !repairOffsetPresent && !predecessorDispositionPresent;
   if (
+    repairOffsetPresent !== predecessorDispositionPresent ||
     !exactRecordKeys(root, [
       "appCommit",
       "attemptCount",
@@ -1840,6 +2125,7 @@ export async function verifyGate3ScoredBundle(
       "orderedRunnerCaseIds",
       "phase",
       "phaseCallOffset",
+      ...(legacyBundle ? [] : ["repairPhaseCallOffset", "predecessorDisposition"]),
       "predecessorEvidenceDigest",
       "predecessorProtocolHash",
       "predecessorRunId",
@@ -1867,6 +2153,16 @@ export async function verifyGate3ScoredBundle(
     throw new ScoredServiceError("scored_bundle_schema_invalid", 500);
   }
   const bundle = value as Gate3ScoredBundle;
+  const repairPhaseCallOffset = legacyBundle ? 0 : bundle.repairPhaseCallOffset;
+  const legacyPredecessorPresent =
+    bundle.predecessorProtocolHash !== null ||
+    bundle.predecessorEvidenceDigest !== null ||
+    bundle.predecessorRunId !== null;
+  const predecessorDisposition = legacyBundle
+    ? legacyPredecessorPresent
+      ? "invalid-schedule"
+      : null
+    : bundle.predecessorDisposition;
   const { evidenceDigest, ...payload } = bundle;
   const derivedOrder = await deriveSemanticCaseOrder(
     GATE3_ORDER_SEED,
@@ -1879,7 +2175,8 @@ export async function verifyGate3ScoredBundle(
   const predecessorPresent =
     bundle.predecessorProtocolHash !== null ||
     bundle.predecessorEvidenceDigest !== null ||
-    bundle.predecessorRunId !== null;
+    bundle.predecessorRunId !== null ||
+    predecessorDisposition !== null;
   const guardValues = Object.values(bundle.guard);
   if (
     bundle.version !== GATE3_SCORED_BUNDLE_VERSION ||
@@ -1893,11 +2190,15 @@ export async function verifyGate3ScoredBundle(
     canonicalJson(bundle.orderedRunnerCaseIds) !== canonicalJson(derivedOrder) ||
     !nonnegativeInteger(bundle.phaseCallOffset) ||
     bundle.phaseCallOffset > 46 ||
+    (repairPhaseCallOffset !== 0 && repairPhaseCallOffset !== 1) ||
     (predecessorPresent &&
       (!hashValue(bundle.predecessorProtocolHash) ||
         !hashValue(bundle.predecessorEvidenceDigest) ||
         typeof bundle.predecessorRunId !== "string" ||
-        !/^run_[A-Za-z0-9_-]{22}$/u.test(bundle.predecessorRunId))) ||
+        !/^run_[A-Za-z0-9_-]{22}$/u.test(bundle.predecessorRunId) ||
+        !SCORED_PREDECESSOR_DISPOSITIONS.includes(
+          predecessorDisposition as ScoredPredecessorDisposition
+        ))) ||
     (!predecessorPresent && bundle.phaseCallOffset !== 0) ||
     (bundle.status !== "terminal-complete" && bundle.status !== "terminal-invalid") ||
     !nonnegativeInteger(bundle.completedCount) ||
@@ -2024,7 +2325,11 @@ export async function verifyGate3BaselineRevealBundle(
     throw new ScoredServiceError("baseline_reveal_invalid", 500);
   }
   const root = value as Record<string, unknown>;
+  const repairOffsetPresent = Object.hasOwn(root, "repairPhaseCallOffset");
+  const predecessorDispositionPresent = Object.hasOwn(root, "predecessorDisposition");
+  const legacyBundle = !repairOffsetPresent && !predecessorDispositionPresent;
   if (
+    repairOffsetPresent !== predecessorDispositionPresent ||
     !exactRecordKeys(root, [
       "appCommit",
       "attemptCount",
@@ -2036,6 +2341,7 @@ export async function verifyGate3BaselineRevealBundle(
       "guard",
       "phase",
       "phaseCallOffset",
+      ...(legacyBundle ? [] : ["repairPhaseCallOffset", "predecessorDisposition"]),
       "predecessorEvidenceDigest",
       "predecessorProtocolHash",
       "predecessorRunId",
@@ -2074,11 +2380,22 @@ export async function verifyGate3BaselineRevealBundle(
     throw new ScoredServiceError("baseline_reveal_schema_invalid", 500);
   }
   const reveal = value as Gate3BaselineRevealBundle;
+  const repairPhaseCallOffset = legacyBundle ? 0 : reveal.repairPhaseCallOffset;
+  const legacyPredecessorPresent =
+    reveal.predecessorProtocolHash !== null ||
+    reveal.predecessorEvidenceDigest !== null ||
+    reveal.predecessorRunId !== null;
+  const predecessorDisposition = legacyBundle
+    ? legacyPredecessorPresent
+      ? "invalid-schedule"
+      : null
+    : reveal.predecessorDisposition;
   const { revealDigest, ...payload } = reveal;
   const predecessorPresent =
     reveal.predecessorProtocolHash !== null ||
     reveal.predecessorEvidenceDigest !== null ||
-    reveal.predecessorRunId !== null;
+    reveal.predecessorRunId !== null ||
+    predecessorDisposition !== null;
   if (
     reveal.version !== GATE3_BASELINE_REVEAL_VERSION ||
     reveal.phase !== "baseline" ||
@@ -2089,11 +2406,15 @@ export async function verifyGate3BaselineRevealBundle(
     !hashValue(reveal.freezeCandidateHash) ||
     !nonnegativeInteger(reveal.phaseCallOffset) ||
     reveal.phaseCallOffset > 46 ||
+    (repairPhaseCallOffset !== 0 && repairPhaseCallOffset !== 1) ||
     (predecessorPresent &&
       (!hashValue(reveal.predecessorProtocolHash) ||
         !hashValue(reveal.predecessorEvidenceDigest) ||
         typeof reveal.predecessorRunId !== "string" ||
-        !/^run_[A-Za-z0-9_-]{22}$/u.test(reveal.predecessorRunId))) ||
+        !/^run_[A-Za-z0-9_-]{22}$/u.test(reveal.predecessorRunId) ||
+        !SCORED_PREDECESSOR_DISPOSITIONS.includes(
+          predecessorDisposition as ScoredPredecessorDisposition
+        ))) ||
     (!predecessorPresent && reveal.phaseCallOffset !== 0) ||
     (reveal.status !== "terminal-complete" && reveal.status !== "terminal-invalid") ||
     !nonnegativeInteger(reveal.completedCount) ||
@@ -2247,9 +2568,11 @@ export async function revealScoredRun(
     scheduleHash: authenticated.identity.scheduleHash,
     orderedRunnerCaseIds: authenticated.identity.orderedRunnerCaseIds,
     phaseCallOffset: authenticated.session.phaseCallOffset,
+    repairPhaseCallOffset: authenticated.session.repairPhaseCallOffset,
     predecessorProtocolHash: authenticated.session.predecessorProtocolHash,
     predecessorEvidenceDigest: authenticated.session.predecessorEvidenceDigest,
     predecessorRunId: authenticated.session.predecessorRunId,
+    predecessorDisposition: authenticated.session.predecessorDisposition,
     status: terminalStatus,
     completedCount: reconciled.snapshot.completedCount,
     attemptCount: reconciled.snapshot.attemptCount,
@@ -2310,9 +2633,11 @@ export async function revealScoredRun(
     frozenProtocolHash: bundle.frozenProtocolHash,
     freezeCandidateHash: bundle.freezeCandidateHash,
     phaseCallOffset: bundle.phaseCallOffset,
+    repairPhaseCallOffset: bundle.repairPhaseCallOffset,
     predecessorProtocolHash: bundle.predecessorProtocolHash,
     predecessorEvidenceDigest: bundle.predecessorEvidenceDigest,
     predecessorRunId: bundle.predecessorRunId,
+    predecessorDisposition: bundle.predecessorDisposition,
     status: bundle.status,
     completedCount: bundle.completedCount,
     attemptCount: bundle.attemptCount,

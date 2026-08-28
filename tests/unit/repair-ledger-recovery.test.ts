@@ -1,4 +1,9 @@
-import { RepairServiceError, assertRepairDispatchLedgerState } from "@/lib/repair/service.server";
+import {
+  RepairServiceError,
+  assertRepairDispatchLedgerState,
+  configuredRepairCallOffset
+} from "@/lib/repair/service.server";
+import { deriveRepairGrantIdentity } from "@/lib/repair/identity.server";
 import type { ScoredLedgerRecord } from "@/lib/scored/ledger-record.server";
 import { describe, expect, it } from "vitest";
 
@@ -19,6 +24,38 @@ function record(state: ScoredLedgerRecord["state"]): ScoredLedgerRecord {
 }
 
 describe("Repair Builder restart admission", () => {
+  it("derives one stable grant identity shared by execution and successor verification", async () => {
+    const artifactSecret = Buffer.alloc(32, 29).toString("base64url");
+    const first = await deriveRepairGrantIdentity({
+      artifactSecret,
+      developmentPackageHash: "a".repeat(64)
+    });
+    const replay = await deriveRepairGrantIdentity({
+      artifactSecret,
+      developmentPackageHash: "a".repeat(64)
+    });
+    expect(replay).toEqual(first);
+    expect(first).toMatchObject({
+      contextId: expect.stringMatching(/^repair_[A-Za-z0-9_-]{22}$/u),
+      jti: expect.stringMatching(/^jti_repair_[A-Za-z0-9_-]{22}$/u),
+      claimsHash: expect.stringMatching(/^[a-f0-9]{64}$/u)
+    });
+    await expect(
+      deriveRepairGrantIdentity({
+        artifactSecret,
+        developmentPackageHash: "b".repeat(64)
+      })
+    ).resolves.not.toEqual(first);
+  });
+
+  it("binds either a fresh or one-prior-repair protocol offset", () => {
+    expect(configuredRepairCallOffset({})).toBe(0);
+    expect(configuredRepairCallOffset({ TOOLPROOF_REPAIR_PHASE_CALL_OFFSET: "1" })).toBe(1);
+    expect(() => configuredRepairCallOffset({ TOOLPROOF_REPAIR_PHASE_CALL_OFFSET: "2" })).toThrow(
+      /repair_phase_call_offset_invalid/u
+    );
+  });
+
   it("permits only a missing or still-issued authorization before dispatch", () => {
     expect(() => assertRepairDispatchLedgerState(null, claimsHash)).not.toThrow();
     expect(() => assertRepairDispatchLedgerState(record("ISSUED"), claimsHash)).not.toThrow();

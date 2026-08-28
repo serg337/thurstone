@@ -21,11 +21,21 @@ import {
   type ScoredBrowserSessionState
 } from "@/lib/scored/same-origin-server-adapter.server";
 import {
+  SCORED_PHASE_CALL_OFFSET_ENV,
+  SCORED_PREDECESSOR_EVIDENCE_DIGEST_ENV,
+  SCORED_PREDECESSOR_DISPOSITION_ENV,
+  SCORED_PREDECESSOR_PROTOCOL_HASH_ENV,
+  SCORED_PREDECESSOR_RUN_ID_ENV,
+  SCORED_REPAIR_PHASE_CALL_OFFSET_ENV,
   verifyGate3ScoredBundle,
   verifyGate3BaselineRevealBundle,
   type Gate3BaselineRevealBundle,
   type Gate3ScoredBundle
 } from "@/lib/scored/service.server";
+import {
+  SCORED_PREDECESSOR_DISPOSITIONS,
+  type ScoredPredecessorDisposition
+} from "@/lib/scored/session.server";
 import {
   SCORED_LOCAL_RECOVERY_VERSION,
   deleteScoredLocalRecovery,
@@ -276,11 +286,58 @@ async function main(): Promise<void> {
     if (session.path !== "/results") throw new Error("scored_terminal_recovery_missing");
     let adapter = new ToolProofScoredSameOriginServerAdapter(revealBrowser.page, session);
     const revealed = await adapter.reveal();
+    const rawPhaseCallOffset = process.env[SCORED_PHASE_CALL_OFFSET_ENV]?.trim() ?? "0";
+    const rawRepairPhaseCallOffset =
+      process.env[SCORED_REPAIR_PHASE_CALL_OFFSET_ENV]?.trim() ?? "0";
+    if (
+      !/^(0|[1-9][0-9]?)$/u.test(rawPhaseCallOffset) ||
+      !/^[01]$/u.test(rawRepairPhaseCallOffset)
+    ) {
+      throw new Error("scored_phase_offsets_invalid");
+    }
+    const predecessorProtocolHash =
+      process.env[SCORED_PREDECESSOR_PROTOCOL_HASH_ENV]?.trim() || null;
+    const predecessorEvidenceDigest =
+      process.env[SCORED_PREDECESSOR_EVIDENCE_DIGEST_ENV]?.trim() || null;
+    const predecessorRunId = process.env[SCORED_PREDECESSOR_RUN_ID_ENV]?.trim() || null;
+    const predecessorDispositionValue = process.env[SCORED_PREDECESSOR_DISPOSITION_ENV]?.trim();
+    if (
+      predecessorDispositionValue !== undefined &&
+      !SCORED_PREDECESSOR_DISPOSITIONS.includes(
+        predecessorDispositionValue as ScoredPredecessorDisposition
+      )
+    ) {
+      throw new Error("scored_predecessor_disposition_invalid");
+    }
+    const predecessorDisposition = predecessorDispositionValue
+      ? (predecessorDispositionValue as ScoredPredecessorDisposition)
+      : null;
+    const predecessorValues = [
+      predecessorProtocolHash,
+      predecessorEvidenceDigest,
+      predecessorRunId,
+      predecessorDisposition
+    ];
+    const predecessorCount = predecessorValues.filter((value) => value !== null).length;
+    if (
+      (predecessorCount !== 0 && predecessorCount !== predecessorValues.length) ||
+      (predecessorProtocolHash !== null && !/^[a-f0-9]{64}$/u.test(predecessorProtocolHash)) ||
+      (predecessorEvidenceDigest !== null && !/^[a-f0-9]{64}$/u.test(predecessorEvidenceDigest)) ||
+      (predecessorRunId !== null && !/^run_[A-Za-z0-9_-]{22}$/u.test(predecessorRunId))
+    ) {
+      throw new Error("scored_predecessor_binding_invalid");
+    }
     const expectedBundle = {
       phase,
       appCommit: buildCommit,
       frozenProtocolHash: session.frozenProtocolHash,
-      reviewPackageHash: session.reviewPackageHash
+      reviewPackageHash: session.reviewPackageHash,
+      phaseCallOffset: Number(rawPhaseCallOffset),
+      repairPhaseCallOffset: Number(rawRepairPhaseCallOffset) as 0 | 1,
+      predecessorProtocolHash,
+      predecessorEvidenceDigest,
+      predecessorRunId,
+      predecessorDisposition
     } as const;
     const bundle =
       phase === "baseline"

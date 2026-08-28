@@ -2,12 +2,26 @@ import "server-only";
 
 import { canonicalJson, canonicalSha256 } from "@/lib/evidence/digest";
 import { openProbeArtifact, sealProbeArtifact } from "@/lib/probe/server-artifact";
-import type { Gate3HumanReviewPackage } from "@/lib/semantic/checkout-candidate.server";
 import {
+  GATE3_REVIEW_PACKAGE_VERSION,
+  GATE3_SUCCESSOR_REVIEW_PACKAGE_VERSION,
+  type Gate3HumanReviewPackage
+} from "@/lib/semantic/checkout-candidate.server";
+import { buildSemanticProtocolFreezeCandidate } from "@/lib/semantic/protocol-freeze.server";
+import {
+  GATE3_FROZEN_PROTOCOL_VERSION,
+  GATE3_SUCCESSOR_FROZEN_PROTOCOL_VERSION,
   finalizeGate3HumanFreeze,
+  gate3AuthoringTerminationSchema,
+  gate3HumanReviewReceiptSchema,
   verifyGate3HumanReviewPackage,
   type Gate3FrozenProtocol
 } from "@/lib/semantic/human-freeze.server";
+import {
+  assertGate3SuccessorSemanticContinuity,
+  gate3V1TargetContractSemanticProjectionHash,
+  verifyGate3SuccessorLineage
+} from "@/lib/semantic/gate3-successor-lineage.server";
 
 export const GATE3_FREEZE_STORE_VERSION = "toolproof-gate3-freeze-store@1.0.0";
 
@@ -99,12 +113,192 @@ async function verifiedPayload(input: {
   const frozenProtocol = await finalizeGate3HumanFreeze({
     reviewPackage,
     humanReviewReceipt: supplied.humanReviewReceipt,
-    authoringTermination: supplied.authoringTermination
+    ...(supplied.authoringTermination
+      ? { authoringTermination: supplied.authoringTermination }
+      : {})
   });
   if (canonicalJson(supplied) !== canonicalJson(frozenProtocol)) {
     throw new Gate3FreezeStoreError("GATE3_FROZEN_PROTOCOL_MISMATCH");
   }
   return Object.freeze({ reviewPackage, frozenProtocol });
+}
+
+function objectValue(value: unknown, code: string): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Gate3FreezeStoreError(code);
+  }
+  return value as Record<string, unknown>;
+}
+
+function exactKeys(record: Record<string, unknown>, keys: readonly string[]): boolean {
+  return canonicalJson(Object.keys(record).sort()) === canonicalJson([...keys].sort());
+}
+
+/**
+ * Verifies an already-admitted encrypted freeze without re-deriving target metadata from the
+ * current checkout description. The write boundary performs the source-dependent verification;
+ * the permanent read boundary verifies the sealed artifact and every internal digest/binding.
+ */
+export async function verifyStoredGate3FreezePayload(input: {
+  readonly reviewPackage: unknown;
+  readonly frozenProtocol: unknown;
+}) {
+  const reviewRecord = objectValue(input.reviewPackage, "GATE3_STORED_REVIEW_INVALID");
+  const suppliedRecord = objectValue(input.frozenProtocol, "GATE3_STORED_FREEZE_INVALID");
+  const review = input.reviewPackage as Gate3HumanReviewPackage;
+  const supplied = input.frozenProtocol as Gate3FrozenProtocol;
+  const { packageHash, ...reviewPayload } = review;
+  let rebuiltFreeze: Awaited<ReturnType<typeof buildSemanticProtocolFreezeCandidate>>;
+  try {
+    rebuiltFreeze = await buildSemanticProtocolFreezeCandidate({
+      source: review.source,
+      contract: review.contract,
+      suite: review.suite,
+      fixture: review.fixture,
+      targetContract: review.targetContract,
+      runner: review.runner,
+      evaluator: review.evaluator,
+      retryPolicy: review.retryPolicy,
+      schedule: review.schedule
+    });
+  } catch {
+    throw new Gate3FreezeStoreError("GATE3_STORED_REVIEW_MISMATCH");
+  }
+  const successorReview = review.version === GATE3_SUCCESSOR_REVIEW_PACKAGE_VERSION;
+  let successorLineage = null;
+  try {
+    if (successorReview) {
+      successorLineage = await verifyGate3SuccessorLineage(review.successorLineage);
+      assertGate3SuccessorSemanticContinuity(
+        successorLineage,
+        rebuiltFreeze.manifest.componentHashes,
+        await gate3V1TargetContractSemanticProjectionHash(review.targetContract, review.fixture)
+      );
+    }
+  } catch {
+    throw new Gate3FreezeStoreError("GATE3_STORED_REVIEW_MISMATCH");
+  }
+  if (
+    (review.version !== GATE3_REVIEW_PACKAGE_VERSION && !successorReview) ||
+    review.status !== "awaiting-human-approval" ||
+    review.semanticAuthority !== "Sergio Valencia" ||
+    review.authoringBuilderDisposition !==
+      (successorReview
+        ? "original-authoring-context-terminated-successor-review-only"
+        : "candidate-context-completed-awaiting-freeze-termination-receipt") ||
+    (!successorReview && Object.hasOwn(reviewRecord, "successorLineage")) ||
+    !/^[a-f0-9]{64}$/u.test(packageHash) ||
+    (await canonicalSha256(reviewPayload)) !== packageHash ||
+    !/^[a-f0-9]{64}$/u.test(review.freezeHash) ||
+    review.freezeHash !== rebuiltFreeze.freezeHash ||
+    canonicalJson(review.freezeManifest) !== canonicalJson(rebuiltFreeze.manifest) ||
+    !Array.isArray(review.suite?.scoredCases) ||
+    review.suite.scoredCases.length !== 24 ||
+    !Array.isArray(review.suite?.calibrationCases) ||
+    review.suite.calibrationCases.length !== 4 ||
+    review.schedule?.repetitionCountPerCase !== 1 ||
+    review.schedule?.orderedRunnerCaseIds.length !== 24 ||
+    !/^[a-f0-9]{40}$/u.test(review.source?.repositoryCommit ?? "") ||
+    review.targetContract?.appCommit !== review.source.repositoryCommit ||
+    !exactKeys(reviewRecord, [
+      "version",
+      "status",
+      "semanticAuthority",
+      "authoringBuilderDisposition",
+      ...(successorReview ? ["successorLineage"] : []),
+      "source",
+      "contract",
+      "suite",
+      "fixture",
+      "targetContract",
+      "runner",
+      "evaluator",
+      "retryPolicy",
+      "schedule",
+      "freezeManifest",
+      "freezeHash",
+      "packageHash"
+    ])
+  ) {
+    throw new Gate3FreezeStoreError("GATE3_STORED_REVIEW_MISMATCH");
+  }
+  const humanReviewReceipt = gate3HumanReviewReceiptSchema.parse(supplied.humanReviewReceipt);
+  const humanReviewReceiptHash = await canonicalSha256(humanReviewReceipt);
+  const expectedFrozenManifest = { ...review.freezeManifest, status: "frozen" as const };
+  const { frozenProtocolHash, ...frozenPayload } = supplied;
+  if (
+    supplied.status !== "frozen" ||
+    supplied.reviewPackageHash !== review.packageHash ||
+    supplied.freezeCandidateHash !== review.freezeHash ||
+    supplied.humanReviewReceiptHash !== humanReviewReceiptHash ||
+    humanReviewReceipt.reviewPackageHash !== review.packageHash ||
+    humanReviewReceipt.freezeHash !== review.freezeHash ||
+    supplied.frozenAt !== humanReviewReceipt.reviewedAt ||
+    canonicalJson(supplied.frozenManifest) !== canonicalJson(expectedFrozenManifest) ||
+    !/^[a-f0-9]{64}$/u.test(frozenProtocolHash) ||
+    (await canonicalSha256(frozenPayload)) !== frozenProtocolHash
+  ) {
+    throw new Gate3FreezeStoreError("GATE3_STORED_FREEZE_MISMATCH");
+  }
+  if (successorReview) {
+    if (!successorLineage) {
+      throw new Gate3FreezeStoreError("GATE3_STORED_FREEZE_MISMATCH");
+    }
+    const continuity = successorLineage.authoringContinuity;
+    if (
+      supplied.version !== GATE3_SUCCESSOR_FROZEN_PROTOCOL_VERSION ||
+      supplied.successorLineageHash !== successorLineage.lineageHash ||
+      canonicalJson(supplied.authoringContinuity) !== canonicalJson(continuity) ||
+      supplied.authoringContinuityHash !== (await canonicalSha256(continuity)) ||
+      Date.parse(continuity.originalAuthoringTermination.terminatedAt) >
+        Date.parse(humanReviewReceipt.reviewedAt) ||
+      !exactKeys(suppliedRecord, [
+        "version",
+        "status",
+        "reviewPackageHash",
+        "freezeCandidateHash",
+        "humanReviewReceipt",
+        "humanReviewReceiptHash",
+        "successorLineageHash",
+        "authoringContinuity",
+        "authoringContinuityHash",
+        "frozenManifest",
+        "frozenAt",
+        "frozenProtocolHash"
+      ])
+    ) {
+      throw new Gate3FreezeStoreError("GATE3_STORED_FREEZE_MISMATCH");
+    }
+  } else {
+    const authoringTermination = gate3AuthoringTerminationSchema.parse(
+      supplied.authoringTermination
+    );
+    if (
+      supplied.version !== GATE3_FROZEN_PROTOCOL_VERSION ||
+      supplied.authoringTerminationHash !== (await canonicalSha256(authoringTermination)) ||
+      authoringTermination.reviewPackageHash !== review.packageHash ||
+      Date.parse(authoringTermination.terminatedAt) > Date.parse(humanReviewReceipt.reviewedAt) ||
+      !exactKeys(suppliedRecord, [
+        "version",
+        "status",
+        "reviewPackageHash",
+        "freezeCandidateHash",
+        "humanReviewReceipt",
+        "humanReviewReceiptHash",
+        "authoringTermination",
+        "authoringTerminationHash",
+        "frozenManifest",
+        "frozenAt",
+        "frozenProtocolHash"
+      ])
+    ) {
+      throw new Gate3FreezeStoreError("GATE3_STORED_FREEZE_MISMATCH");
+    }
+  }
+  return Object.freeze({
+    reviewPackage: JSON.parse(canonicalJson(review)) as Gate3HumanReviewPackage,
+    frozenProtocol: JSON.parse(canonicalJson(supplied)) as Gate3FrozenProtocol
+  });
 }
 
 export interface Gate3FreezeStoreReceipt {
@@ -177,7 +371,7 @@ export async function readGate3Freeze(
   } catch {
     throw new Gate3FreezeStoreError("GATE3_FREEZE_ARTIFACT_INVALID");
   }
-  const payload = await verifiedPayload(
+  const payload = await verifyStoredGate3FreezePayload(
     opened as { readonly reviewPackage: unknown; readonly frozenProtocol: unknown }
   );
   if (

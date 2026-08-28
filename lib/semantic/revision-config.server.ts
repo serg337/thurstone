@@ -15,6 +15,10 @@ import {
 } from "@/lib/semantic/frozen-config.server";
 import { readGate3Freeze } from "@/lib/semantic/freeze-store.server";
 import {
+  GATE5_SOURCE_DIFF_ENV,
+  decodeGate5SourceDiffProofBase64Url
+} from "@/lib/semantic/gate5-source-diff-proof";
+import {
   buildGate5RevisionFreeze,
   type Gate5RevisionFreeze
 } from "@/lib/semantic/revision-freeze.server";
@@ -117,6 +121,8 @@ export async function configuredGate5Revision(
     if (!repair) return Object.freeze({ status: "awaiting-repair", revision: null, issue: null });
     const approval = environment[GATE5_REVISION_APPROVAL_ENV]?.trim();
     if (!approval) return Object.freeze({ status: "awaiting-human", revision: null, issue: null });
+    const sourceDiffProof = environment[GATE5_SOURCE_DIFF_ENV]?.trim();
+    if (!sourceDiffProof) throw new Error("gate5_source_diff_proof_missing");
     const revisionApproval = decode(approval);
     const rebuilt = await buildGate5RevisionFreeze({
       gate3ReviewPackage: gate3.reviewPackage,
@@ -125,7 +131,8 @@ export async function configuredGate5Revision(
       baselineEvidenceDigest: baselineEvidenceDigest!,
       repairBuilderReceipt: repair.repairBuilderReceipt,
       revisionApproval,
-      v2TargetContract: await createGate3TargetContractBinding(activeCommit(environment))
+      v2TargetContract: await createGate3TargetContractBinding(activeCommit(environment)),
+      sourceDiffProof: await decodeGate5SourceDiffProofBase64Url(sourceDiffProof)
     });
     const storedRevisionHash = environment[GATE5_REVISION_FREEZE_HASH_ENV]?.trim();
     if (storedRevisionHash) {

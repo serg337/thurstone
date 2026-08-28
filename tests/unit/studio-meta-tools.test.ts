@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { studioAuthoringIsLocked } from "@/components/studio/studio-client";
 
 import {
   createStudioMetaTools,
@@ -63,6 +64,19 @@ function toolHarness() {
 }
 
 describe("Studio phase-specific meta-tools", () => {
+  it("permanently disables authoring for successor and frozen review packages", () => {
+    expect(studioAuthoringIsLocked({ status: "awaiting-human", successorLineage: null })).toBe(
+      false
+    );
+    expect(
+      studioAuthoringIsLocked({
+        status: "awaiting-human",
+        successorLineage: {} as never
+      })
+    ).toBe(true);
+    expect(studioAuthoringIsLocked({ status: "frozen", successorLineage: null })).toBe(true);
+  });
+
   it("exposes only the cumulative authoring tools required by each phase", () => {
     const { tools } = toolHarness();
 

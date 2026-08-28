@@ -10,6 +10,8 @@ export const SCORED_RECOVERY_COOKIE = "toolproof_scored_recovery";
 export const SCORED_RESULTS_COOKIE = "toolproof_scored_results";
 export const SCORED_SESSION_VERSION = "toolproof-scored-session@1.0.0";
 export const SCORED_RECOVERY_VERSION = "toolproof-scored-recovery@1.0.0";
+export const SCORED_PREDECESSOR_DISPOSITIONS = ["invalid-schedule", "superseded-protocol"] as const;
+export type ScoredPredecessorDisposition = (typeof SCORED_PREDECESSOR_DISPOSITIONS)[number];
 export const SCORED_SESSION_TTL_SECONDS = 20 * 60;
 export const SCORED_RECOVERY_TTL_SECONDS = 4 * 60 * 60;
 
@@ -26,12 +28,14 @@ export const scoredSessionClaimsSchema = z
     frozenProtocolHash: sha256,
     freezeCandidateHash: sha256,
     phaseCallOffset: z.number().int().min(0).max(46),
+    repairPhaseCallOffset: z.union([z.literal(0), z.literal(1)]),
     predecessorProtocolHash: sha256.nullable(),
     predecessorEvidenceDigest: sha256.nullable(),
     predecessorRunId: z
       .string()
       .regex(/^run_[A-Za-z0-9_-]{22}$/u)
       .nullable(),
+    predecessorDisposition: z.enum(SCORED_PREDECESSOR_DISPOSITIONS).nullable(),
     sessionId: opaque,
     runId: z.string().regex(/^run_[A-Za-z0-9_-]{22}$/u),
     actorHash: sha256,
@@ -52,12 +56,14 @@ export const scoredRecoveryClaimsSchema = z
     frozenProtocolHash: sha256,
     freezeCandidateHash: sha256,
     phaseCallOffset: z.number().int().min(0).max(46),
+    repairPhaseCallOffset: z.union([z.literal(0), z.literal(1)]),
     predecessorProtocolHash: sha256.nullable(),
     predecessorEvidenceDigest: sha256.nullable(),
     predecessorRunId: z
       .string()
       .regex(/^run_[A-Za-z0-9_-]{22}$/u)
       .nullable(),
+    predecessorDisposition: z.enum(SCORED_PREDECESSOR_DISPOSITIONS).nullable(),
     launchHash: sha256,
     recoveryId: opaque,
     sessionId: opaque,
@@ -105,9 +111,11 @@ interface FrozenSessionBinding {
   readonly frozenProtocolHash: string;
   readonly freezeCandidateHash: string;
   readonly phaseCallOffset: number;
+  readonly repairPhaseCallOffset: 0 | 1;
   readonly predecessorProtocolHash: string | null;
   readonly predecessorEvidenceDigest: string | null;
   readonly predecessorRunId: string | null;
+  readonly predecessorDisposition: ScoredPredecessorDisposition | null;
   readonly actorHash: string;
 }
 
@@ -120,9 +128,11 @@ function bindingMatches(
     | "frozenProtocolHash"
     | "freezeCandidateHash"
     | "phaseCallOffset"
+    | "repairPhaseCallOffset"
     | "predecessorProtocolHash"
     | "predecessorEvidenceDigest"
     | "predecessorRunId"
+    | "predecessorDisposition"
     | "actorHash"
   >,
   binding: FrozenSessionBinding
@@ -134,6 +144,7 @@ function bindingMatches(
     safeEqual(claims.frozenProtocolHash, binding.frozenProtocolHash) &&
     safeEqual(claims.freezeCandidateHash, binding.freezeCandidateHash) &&
     claims.phaseCallOffset === binding.phaseCallOffset &&
+    claims.repairPhaseCallOffset === binding.repairPhaseCallOffset &&
     ((claims.predecessorProtocolHash === null && binding.predecessorProtocolHash === null) ||
       (typeof claims.predecessorProtocolHash === "string" &&
         typeof binding.predecessorProtocolHash === "string" &&
@@ -146,6 +157,7 @@ function bindingMatches(
       (typeof claims.predecessorRunId === "string" &&
         typeof binding.predecessorRunId === "string" &&
         safeEqual(claims.predecessorRunId, binding.predecessorRunId))) &&
+    claims.predecessorDisposition === binding.predecessorDisposition &&
     safeEqual(claims.actorHash, binding.actorHash)
   );
 }
@@ -168,9 +180,11 @@ export function issueScoredSession(
     frozenProtocolHash: input.frozenProtocolHash,
     freezeCandidateHash: input.freezeCandidateHash,
     phaseCallOffset: input.phaseCallOffset,
+    repairPhaseCallOffset: input.repairPhaseCallOffset,
     predecessorProtocolHash: input.predecessorProtocolHash,
     predecessorEvidenceDigest: input.predecessorEvidenceDigest,
     predecessorRunId: input.predecessorRunId,
+    predecessorDisposition: input.predecessorDisposition,
     sessionId: input.sessionId ?? `session_${randomBytes(16).toString("base64url")}`,
     runId: input.runId ?? `run_${randomBytes(16).toString("base64url")}`,
     actorHash: input.actorHash,
@@ -198,9 +212,11 @@ export function issueScoredRecovery(input: {
     frozenProtocolHash: input.session.frozenProtocolHash,
     freezeCandidateHash: input.session.freezeCandidateHash,
     phaseCallOffset: input.session.phaseCallOffset,
+    repairPhaseCallOffset: input.session.repairPhaseCallOffset,
     predecessorProtocolHash: input.session.predecessorProtocolHash,
     predecessorEvidenceDigest: input.session.predecessorEvidenceDigest,
     predecessorRunId: input.session.predecessorRunId,
+    predecessorDisposition: input.session.predecessorDisposition,
     launchHash: input.launchHash,
     recoveryId: `recovery_${randomBytes(16).toString("base64url")}`,
     sessionId: input.session.sessionId,
@@ -290,9 +306,11 @@ export function issueRecoveredScoredSession(input: {
     frozenProtocolHash: input.recovery.frozenProtocolHash,
     freezeCandidateHash: input.recovery.freezeCandidateHash,
     phaseCallOffset: input.recovery.phaseCallOffset,
+    repairPhaseCallOffset: input.recovery.repairPhaseCallOffset,
     predecessorProtocolHash: input.recovery.predecessorProtocolHash,
     predecessorEvidenceDigest: input.recovery.predecessorEvidenceDigest,
     predecessorRunId: input.recovery.predecessorRunId,
+    predecessorDisposition: input.recovery.predecessorDisposition,
     sessionId: input.recovery.sessionId,
     runId: input.recovery.runId,
     actorHash: input.recovery.actorHash,

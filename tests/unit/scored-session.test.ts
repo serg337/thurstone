@@ -19,9 +19,11 @@ const binding = {
   frozenProtocolHash: "2".repeat(64),
   freezeCandidateHash: "3".repeat(64),
   phaseCallOffset: 0,
+  repairPhaseCallOffset: 0 as const,
   predecessorProtocolHash: null,
   predecessorEvidenceDigest: null,
   predecessorRunId: null,
+  predecessorDisposition: null,
   actorHash: "4".repeat(64)
 };
 
@@ -70,6 +72,10 @@ describe("scored session credentials", () => {
       { csrfToken: "wrong" },
       { phase: "revised" as const, csrfToken: session.csrfToken },
       { frozenProtocolHash: "f".repeat(64), csrfToken: session.csrfToken },
+      {
+        predecessorDisposition: "invalid-schedule" as const,
+        csrfToken: session.csrfToken
+      },
       { actorHash: "e".repeat(64), csrfToken: session.csrfToken }
     ]) {
       expect(() =>
@@ -91,5 +97,31 @@ describe("scored session credentials", () => {
         nowMs: NOW + SCORED_SESSION_TTL_SECONDS * 1_000
       })
     ).toThrow(/scored_session_binding_mismatch/u);
+  });
+
+  it("preserves superseded-protocol lineage across session and recovery credentials", () => {
+    const replacement = {
+      ...binding,
+      phaseCallOffset: 24,
+      repairPhaseCallOffset: 1 as const,
+      predecessorProtocolHash: "6".repeat(64),
+      predecessorEvidenceDigest: "7".repeat(64),
+      predecessorRunId: `run_${"p".repeat(22)}`,
+      predecessorDisposition: "superseded-protocol" as const
+    };
+    const session = issueScoredSession({ ...replacement, signingSecret: SECRET, nowMs: NOW });
+    const recovery = issueScoredRecovery({
+      session: session.claims,
+      launchHash: "8".repeat(64),
+      signingSecret: SECRET
+    });
+    expect(
+      verifyScoredRecovery({
+        ...replacement,
+        cookieValue: recovery.cookieValue,
+        signingSecret: SECRET,
+        nowMs: NOW
+      }).predecessorDisposition
+    ).toBe("superseded-protocol");
   });
 });

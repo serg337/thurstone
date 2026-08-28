@@ -49,6 +49,17 @@ export function SemanticPairedResults({ results }: { readonly results: Paired })
         Results Site Tools:{" "}
         {registry.phase === "ready" ? registry.toolNames.join(", ") : registry.phase}
       </p>
+      {results.supersededEvidence ? (
+        <div className="runtime-receipt">
+          <span>Permanent predecessor evidence · excluded from this Matrix</span>
+          <strong>{results.supersededEvidence.predecessorEvidenceDigest}</strong>
+          <small>
+            {results.supersededEvidence.disposition} · run{" "}
+            {results.supersededEvidence.predecessorRunId} · prior Repair{" "}
+            {results.supersededEvidence.priorRepairReceiptHash}
+          </small>
+        </div>
+      ) : null}
       <div className="studio-allocation" aria-label="Paired result counts">
         <div>
           <strong>

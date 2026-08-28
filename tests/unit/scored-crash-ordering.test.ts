@@ -128,11 +128,22 @@ describe("scored crash-ordering invariants", () => {
 
   it("loads replacement evidence through its predecessor protocol and verifies the exact call delta", async () => {
     const text = await source("lib/scored/service.server.ts");
-    const start = text.indexOf("export async function startScoredSession");
-    const end = text.indexOf("export async function recoverScoredSession", start);
+    const start = text.indexOf("async function assertConfiguredScoredPredecessor");
+    const end = text.indexOf("export async function readGate3ScoredReadiness", start);
     const section = text.slice(start, end);
-    expect(section).toContain("frozenProtocolHash: phaseExecution.predecessorProtocolHash");
+    expect(section).toContain("frozenProtocolHash: predecessorProtocolHash");
+    expect(section).toContain("assertScoredPredecessorDisposition({");
     expect(section).toContain("assertScoredReplacementOffset({");
     expect(section).toContain("predecessorProviderGrants");
+  });
+
+  it("binds predecessor disposition into CLI evidence verification", async () => {
+    const text = await source("scripts/scored-run.ts");
+    expect(text).toContain("SCORED_PREDECESSOR_DISPOSITION_ENV");
+    expect(text).toContain("SCORED_PREDECESSOR_PROTOCOL_HASH_ENV");
+    expect(text).toContain("SCORED_PREDECESSOR_EVIDENCE_DIGEST_ENV");
+    expect(text).toContain("SCORED_PREDECESSOR_RUN_ID_ENV");
+    expect(text).toContain("repairPhaseCallOffset:");
+    expect(text).toContain("predecessorDisposition");
   });
 });

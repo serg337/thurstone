@@ -9,9 +9,9 @@ import {
 import { canonicalJson } from "@/lib/evidence/digest";
 import {
   gate3ReviewPackageCanonicalJson,
-  meaningForScoredCase,
   type Gate3HumanReviewPackage
 } from "@/lib/semantic/checkout-candidate.server";
+import { semanticMeaningForCase } from "@/lib/semantic/contract";
 import { configuredGate3FrozenProtocol } from "@/lib/semantic/frozen-config.server";
 import type { Gate3FrozenProtocol } from "@/lib/semantic/human-freeze.server";
 import { configuredGate3ReviewPackage } from "@/lib/semantic/review-package-config.server";
@@ -186,6 +186,7 @@ const PREPARING_REVIEW_PACKAGE: StudioReviewPackageView = Object.freeze({
   families: FAMILIES,
   cases: Object.freeze([]),
   canonicalJson: null,
+  successorLineage: null,
   readinessIssues: Object.freeze([
     "Exact 24-case texts and human-review fields are not loaded.",
     "Component hashes and canonical frozen-run manifest are not loaded.",
@@ -203,9 +204,10 @@ const PREPARING_REVIEW_PACKAGE: StudioReviewPackageView = Object.freeze({
 });
 
 function expectedDecision(
+  contract: Gate3HumanReviewPackage["contract"],
   reviewCase: Gate3HumanReviewPackage["suite"]["scoredCases"][number]
 ): string {
-  const expectation = meaningForScoredCase(reviewCase).expectation;
+  const expectation = semanticMeaningForCase(contract, reviewCase).expectation;
   if (expectation.kind === "call") return `Call ${expectation.tool}`;
   if (expectation.kind === "clarify") return "Clarify; make no target call";
   return "No action; make no target call";
@@ -230,7 +232,7 @@ function exactReviewPackage(
     (runnerCaseId, index) => {
       const reviewCase = caseByRunnerId.get(runnerCaseId);
       if (!reviewCase) throw new Error(`Gate 3 schedule references unknown ${runnerCaseId}.`);
-      const approved = meaningForScoredCase(reviewCase);
+      const approved = semanticMeaningForCase(review.contract, reviewCase);
       const expectation = approved.expectation;
       return {
         opaqueId: reviewCase.runnerCaseId,
@@ -241,7 +243,7 @@ function exactReviewPackage(
         prompt: reviewCase.naturalLanguageRequest,
         meaningIdentity: approved.meaningId,
         meaningSpec: approved.approvedMeaning,
-        expectedDecision: expectedDecision(reviewCase),
+        expectedDecision: expectedDecision(review.contract, reviewCase),
         argumentPredicate:
           expectation.kind === "call"
             ? canonicalJson(expectation.arguments)
@@ -268,6 +270,19 @@ function exactReviewPackage(
     families: FAMILIES,
     cases: Object.freeze(cases),
     canonicalJson: gate3ReviewPackageCanonicalJson(review),
+    successorLineage: review.successorLineage
+      ? Object.freeze({
+          disposition: review.successorLineage.disposition,
+          predecessorRunId: review.successorLineage.predecessor.runId,
+          predecessorEvidenceDigest: review.successorLineage.predecessor.evidenceDigest,
+          priorRepairReceiptHash: review.successorLineage.priorRepair.repairBuilderReceiptHash,
+          baselinePhaseCallOffset: review.successorLineage.phaseCallOffsets.baseline,
+          repairPhaseCallOffset: review.successorLineage.phaseCallOffsets.repair,
+          revisedPhaseCallOffset: review.successorLineage.phaseCallOffsets.revised,
+          originalAuthoringContextRemainsTerminated: true as const,
+          lineageHash: review.successorLineage.lineageHash
+        })
+      : null,
     readinessIssues: frozen
       ? Object.freeze([])
       : Object.freeze([

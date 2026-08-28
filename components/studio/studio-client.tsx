@@ -58,6 +58,17 @@ export interface StudioReviewPackageView {
   readonly cases: readonly StudioCaseReviewProjection[];
   /** Exact canonical server-produced bytes. Never reconstructed from the rendered projection. */
   readonly canonicalJson: string | null;
+  readonly successorLineage: {
+    readonly disposition: "superseded-protocol";
+    readonly predecessorRunId: string;
+    readonly predecessorEvidenceDigest: string;
+    readonly priorRepairReceiptHash: string;
+    readonly baselinePhaseCallOffset: 24;
+    readonly repairPhaseCallOffset: 1;
+    readonly revisedPhaseCallOffset: 0;
+    readonly originalAuthoringContextRemainsTerminated: true;
+    readonly lineageHash: string;
+  } | null;
   readonly readinessIssues: readonly string[];
   readonly contractDraft: {
     readonly title: string;
@@ -188,7 +199,15 @@ function phaseLabel(phase: StudioAuthoringPhase): string {
   return "Review";
 }
 
+export function studioAuthoringIsLocked(
+  reviewPackage: Pick<StudioReviewPackageView, "status" | "successorLineage">
+): boolean {
+  return reviewPackage.status === "frozen" || reviewPackage.successorLineage !== null;
+}
+
 export function StudioClient({ target, reviewPackage }: StudioClientProps) {
+  const packageFrozen = reviewPackage.status === "frozen";
+  const authoringLocked = studioAuthoringIsLocked(reviewPackage);
   const [session, dispatch] = useReducer(sessionReducer, {
     phase: "inspect",
     reviewNote: "",
@@ -217,6 +236,7 @@ export function StudioClient({ target, reviewPackage }: StudioClientProps) {
 
   const saveDraft = useCallback(
     (input: StudioDraftInput): StudioDraftReceipt => {
+      if (authoringLocked) throw new Error("studio_authoring_context_terminated");
       const unknownCaseIds = (input.caseUpdates ?? [])
         .map(({ caseId }) => caseId)
         .filter((caseId) => !knownCaseIds.has(caseId));
@@ -236,10 +256,11 @@ export function StudioClient({ target, reviewPackage }: StudioClientProps) {
         caseIdsUpdated: Object.freeze((input.caseUpdates ?? []).map(({ caseId }) => caseId))
       });
     },
-    [knownCaseIds]
+    [authoringLocked, knownCaseIds]
   );
 
   const submitReview = useCallback((): StudioReviewReceipt => {
+    if (authoringLocked) throw new Error("studio_authoring_context_terminated");
     dispatch({ type: "present" });
     return Object.freeze({
       ok: true,
@@ -250,13 +271,16 @@ export function StudioClient({ target, reviewPackage }: StudioClientProps) {
       canApprove: false,
       canFreeze: false
     });
-  }, []);
+  }, [authoringLocked]);
 
   const metaTools = useMemo(
     () => createStudioMetaTools({ inspect, draft: saveDraft, submitReview }),
     [inspect, saveDraft, submitReview]
   );
-  const desiredTools = useMemo(() => metaTools.forPhase(session.phase), [metaTools, session.phase]);
+  const desiredTools = useMemo(
+    () => (authoringLocked ? [] : metaTools.forPhase(session.phase)),
+    [authoringLocked, metaTools, session.phase]
+  );
   const desiredNames = useMemo(() => desiredTools.map(({ name }) => name), [desiredTools]);
 
   useEffect(() => {
@@ -285,7 +309,6 @@ export function StudioClient({ target, reviewPackage }: StudioClientProps) {
   const registryReady =
     registryStatus.phase === "ready" && sameNames(registryStatus.toolNames, desiredNames);
   const packageReady = reviewPackage.exactPackageReady && reviewPackage.canonicalJson !== null;
-  const packageFrozen = reviewPackage.status === "frozen";
   const noteIsValid = session.reviewNote.trim().length <= STUDIO_REVIEW_NOTE_MAX_LENGTH;
   const hasStructuredDraft =
     Object.keys(session.contractPatch).length > 0 || Object.keys(session.caseUpdates).length > 0;
@@ -356,8 +379,9 @@ export function StudioClient({ target, reviewPackage }: StudioClientProps) {
           <p className="eyebrow">Studio · authoring trust surface</p>
           <h1>Freeze meaning before measuring behavior.</h1>
           <p>
-            The Authoring Builder may inspect and draft. Sergio remains the semantic authority for
-            every identity, boundary, argument, effect, fixture, and revision.
+            {authoringLocked
+              ? "The original Authoring Builder is permanently terminated. This document is read-only for Sergio’s exact review."
+              : "The Authoring Builder may inspect and draft. Sergio remains the semantic authority for every identity, boundary, argument, effect, fixture, and revision."}
           </p>
         </div>
         <StatusPill state={packageFrozen ? "ready" : packageReady ? "pending" : "blocked"}>
@@ -491,335 +515,368 @@ export function StudioClient({ target, reviewPackage }: StudioClientProps) {
         <div className="panel-heading">
           <div>
             <span className="eyebrow">Phase-specific Site Tools</span>
-            <h2 id="authoring-heading">Authoring handoff · {phaseLabel(session.phase)}</h2>
+            <h2 id="authoring-heading">
+              {authoringLocked
+                ? "Authoring context permanently terminated"
+                : "Authoring handoff · " + phaseLabel(session.phase)}
+            </h2>
           </div>
-          <StatusPill state={registryReady ? "ready" : providerAvailable ? "pending" : "neutral"}>
-            {!providerChecked
-              ? "Checking Site Tools"
-              : !providerAvailable
-                ? "Site Tools unavailable"
+          <StatusPill
+            state={
+              authoringLocked
+                ? "neutral"
                 : registryReady
-                  ? `Registry ready · generation ${registryStatus.generation ?? 0}`
-                  : registryStatus.phase === "error"
-                    ? "Registry error"
-                    : "Registry transitioning"}
+                  ? "ready"
+                  : providerAvailable
+                    ? "pending"
+                    : "neutral"
+            }
+          >
+            {authoringLocked
+              ? "No authoring tools exposed"
+              : !providerChecked
+                ? "Checking Site Tools"
+                : !providerAvailable
+                  ? "Site Tools unavailable"
+                  : registryReady
+                    ? `Registry ready · generation ${registryStatus.generation ?? 0}`
+                    : registryStatus.phase === "error"
+                      ? "Registry error"
+                      : "Registry transitioning"}
           </StatusPill>
         </div>
 
-        <ol className="studio-phase-track">
-          {(["inspect", "draft", "review"] as const).map((phase, index) => (
-            <li key={phase} data-active={session.phase === phase}>
-              <span>{index + 1}</span>
-              <div>
-                <strong>{phaseLabel(phase)}</strong>
-                <small>
-                  {phase === "inspect"
-                    ? "Historical verified target snapshot"
-                    : phase === "draft"
-                      ? "Session-local contract and case patch"
-                      : "Present to Sergio; never self-approve"}
-                </small>
-              </div>
-            </li>
-          ))}
-        </ol>
-
-        <p className="studio-registry-names">
-          Exposed now: <code>{desiredNames.join(", ")}</code>
-        </p>
-        {registryStatus.phase === "error" ? (
-          <p className="studio-error" role="alert">
-            {registryStatus.error}
-          </p>
-        ) : null}
-
-        {session.phase === "inspect" ? (
-          <div className="studio-action-block">
-            <p>
-              Inspection returns the exact historical snapshot above and opens the drafting phase.
-              It performs no model call and reads no active Lab document.
-            </p>
-            <button className="button button-primary" type="button" onClick={beginDraft}>
-              Inspect snapshot and open drafting
-            </button>
-          </div>
-        ) : (
-          <div className="studio-draft-form">
-            <fieldset>
-              <legend>Contract text draft</legend>
-              <label htmlFor="studio-contract-title">
-                Contract title
-                <input
-                  id="studio-contract-title"
-                  value={projectedContract.title}
-                  maxLength={160}
-                  onChange={(event) =>
-                    dispatch({
-                      type: "edit-contract",
-                      field: "title",
-                      value: event.currentTarget.value
-                    })
-                  }
-                />
-              </label>
-              <label htmlFor="studio-meaning-principle">
-                Meaning held fixed
-                <textarea
-                  id="studio-meaning-principle"
-                  value={projectedContract.meaningPrinciple}
-                  rows={3}
-                  onChange={(event) =>
-                    dispatch({
-                      type: "edit-contract",
-                      field: "meaningPrinciple",
-                      value: event.currentTarget.value
-                    })
-                  }
-                />
-              </label>
-              <div className="studio-two-fields">
-                <label htmlFor="studio-clarification-policy">
-                  Clarification policy
-                  <textarea
-                    id="studio-clarification-policy"
-                    value={projectedContract.clarificationPolicy}
-                    rows={3}
-                    onChange={(event) =>
-                      dispatch({
-                        type: "edit-contract",
-                        field: "clarificationPolicy",
-                        value: event.currentTarget.value
-                      })
-                    }
-                  />
-                </label>
-                <label htmlFor="studio-effect-policy">
-                  Observable effect policy
-                  <textarea
-                    id="studio-effect-policy"
-                    value={projectedContract.effectPolicy}
-                    rows={3}
-                    onChange={(event) =>
-                      dispatch({
-                        type: "edit-contract",
-                        field: "effectPolicy",
-                        value: event.currentTarget.value
-                      })
-                    }
-                  />
-                </label>
-              </div>
-            </fieldset>
-
-            <fieldset>
-              <legend>Candidate case draft</legend>
-              {projectedCases.length > 0 ? (
-                <>
-                  <label htmlFor="studio-case-selector">
-                    Human review case ID
-                    <select
-                      id="studio-case-selector"
-                      value={selectedCaseId}
-                      onChange={(event) => setSelectedCaseId(event.currentTarget.value)}
-                    >
-                      {projectedCases.map((item) => (
-                        <option value={item.opaqueId} key={item.opaqueId}>
-                          {item.ordinal}. {item.opaqueId} · {item.family}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  {selectedCase ? (
-                    <>
-                      <label htmlFor="studio-case-prompt">
-                        Exact request
-                        <textarea
-                          id="studio-case-prompt"
-                          value={selectedCase.prompt}
-                          rows={3}
-                          onChange={(event) =>
-                            dispatch({
-                              type: "edit-case",
-                              caseId: selectedCase.opaqueId,
-                              field: "prompt",
-                              value: event.currentTarget.value
-                            })
-                          }
-                        />
-                      </label>
-                      <label htmlFor="studio-case-meaning">
-                        Meaning specification
-                        <textarea
-                          id="studio-case-meaning"
-                          value={selectedCase.meaningSpec}
-                          rows={3}
-                          onChange={(event) =>
-                            dispatch({
-                              type: "edit-case",
-                              caseId: selectedCase.opaqueId,
-                              field: "meaningSpec",
-                              value: event.currentTarget.value
-                            })
-                          }
-                        />
-                      </label>
-                      <div className="studio-two-fields">
-                        <label htmlFor="studio-case-decision">
-                          Expected outcome
-                          <textarea
-                            id="studio-case-decision"
-                            value={selectedCase.expectedDecision}
-                            rows={3}
-                            onChange={(event) =>
-                              dispatch({
-                                type: "edit-case",
-                                caseId: selectedCase.opaqueId,
-                                field: "expectedDecision",
-                                value: event.currentTarget.value
-                              })
-                            }
-                          />
-                        </label>
-                        <label htmlFor="studio-case-arguments">
-                          Argument predicate
-                          <textarea
-                            id="studio-case-arguments"
-                            value={selectedCase.argumentPredicate}
-                            rows={3}
-                            onChange={(event) =>
-                              dispatch({
-                                type: "edit-case",
-                                caseId: selectedCase.opaqueId,
-                                field: "argumentPredicate",
-                                value: event.currentTarget.value
-                              })
-                            }
-                          />
-                        </label>
-                      </div>
-                      <div className="studio-two-fields">
-                        <label htmlFor="studio-case-allowed-effects">
-                          Allowed effects · one per line
-                          <textarea
-                            id="studio-case-allowed-effects"
-                            value={selectedCase.allowedEffects.join("\n")}
-                            rows={3}
-                            onChange={(event) =>
-                              dispatch({
-                                type: "edit-case",
-                                caseId: selectedCase.opaqueId,
-                                field: "allowedEffects",
-                                value: event.currentTarget.value
-                                  .split("\n")
-                                  .map((value) => value.trim())
-                                  .filter(Boolean)
-                              })
-                            }
-                          />
-                        </label>
-                        <label htmlFor="studio-case-forbidden-effects">
-                          Forbidden effects · one per line
-                          <textarea
-                            id="studio-case-forbidden-effects"
-                            value={selectedCase.forbiddenEffects.join("\n")}
-                            rows={3}
-                            onChange={(event) =>
-                              dispatch({
-                                type: "edit-case",
-                                caseId: selectedCase.opaqueId,
-                                field: "forbiddenEffects",
-                                value: event.currentTarget.value
-                                  .split("\n")
-                                  .map((value) => value.trim())
-                                  .filter(Boolean)
-                              })
-                            }
-                          />
-                        </label>
-                      </div>
-                    </>
-                  ) : null}
-                </>
-              ) : (
-                <p>
-                  Structured case editing opens when the exact server-owned candidate rows are
-                  present. No invented placeholder case may be patched.
-                </p>
-              )}
-            </fieldset>
-
-            <label htmlFor="studio-review-note">
-              Session-local review note (optional when structured fields changed)
-              <textarea
-                id="studio-review-note"
-                value={session.reviewNote}
-                maxLength={STUDIO_REVIEW_NOTE_MAX_LENGTH}
-                rows={5}
-                onChange={(event) =>
-                  dispatch({ type: "edit-note", note: event.currentTarget.value })
-                }
-                placeholder="Flag an identity, boundary, argument, effect, fixture, or allocation item for Sergio."
-              />
-            </label>
-            <label htmlFor="studio-review-focus">
-              Review focus
-              <select
-                id="studio-review-focus"
-                value={session.requestedFocus}
-                onChange={(event) =>
-                  dispatch({
-                    type: "set-focus",
-                    focus: event.currentTarget.value as StudioSessionState["requestedFocus"]
-                  })
-                }
-              >
-                <option value="">General</option>
-                <option value="meaning">Meaning identities</option>
-                <option value="boundaries">Boundary pairs</option>
-                <option value="arguments">Argument predicates</option>
-                <option value="effects">Effect rules</option>
-                <option value="allocation">Allocation and pairing</option>
-              </select>
-            </label>
-            <div className="button-row">
-              <button
-                className="button button-primary"
-                type="button"
-                disabled={!draftIsValid}
-                onClick={handleSaveDraft}
-              >
-                Save structured draft for human review
-              </button>
-              {session.phase === "review" ? (
-                <>
-                  <button className="button button-secondary" type="button" onClick={submitReview}>
-                    Present draft to human UI
-                  </button>
-                  <button
-                    className="button button-secondary"
-                    type="button"
-                    onClick={() => dispatch({ type: "return-to-draft" })}
-                  >
-                    Return to drafting
-                  </button>
-                </>
-              ) : null}
-            </div>
-          </div>
-        )}
-
-        <p className="studio-activity" aria-live="polite">
-          {session.activity}
-        </p>
-        {session.presented ? (
-          <div className="studio-review-alert" ref={reviewAlertRef} role="status" tabIndex={-1}>
-            <strong>Presented—not approved.</strong>
+        {authoringLocked ? (
+          <div className="studio-review-alert" role="status">
+            <strong>Read-only semantic review.</strong>
             <span>
-              The Authoring Builder handoff is visible to Sergio. No semantic decision, review
-              receipt, provider call, or freeze occurred.
+              No inspect, draft, or submit-review Site Tool is registered. The original Authoring
+              Builder was not reauthorized, no successor reauthoring is permitted, and a frozen
+              package cannot be edited.
             </span>
           </div>
-        ) : null}
+        ) : (
+          <>
+            <ol className="studio-phase-track">
+              {(["inspect", "draft", "review"] as const).map((phase, index) => (
+                <li key={phase} data-active={session.phase === phase}>
+                  <span>{index + 1}</span>
+                  <div>
+                    <strong>{phaseLabel(phase)}</strong>
+                    <small>
+                      {phase === "inspect"
+                        ? "Historical verified target snapshot"
+                        : phase === "draft"
+                          ? "Session-local contract and case patch"
+                          : "Present to Sergio; never self-approve"}
+                    </small>
+                  </div>
+                </li>
+              ))}
+            </ol>
+
+            <p className="studio-registry-names">
+              Exposed now: <code>{desiredNames.join(", ")}</code>
+            </p>
+            {registryStatus.phase === "error" ? (
+              <p className="studio-error" role="alert">
+                {registryStatus.error}
+              </p>
+            ) : null}
+
+            {session.phase === "inspect" ? (
+              <div className="studio-action-block">
+                <p>
+                  Inspection returns the exact historical snapshot above and opens the drafting
+                  phase. It performs no model call and reads no active Lab document.
+                </p>
+                <button className="button button-primary" type="button" onClick={beginDraft}>
+                  Inspect snapshot and open drafting
+                </button>
+              </div>
+            ) : (
+              <div className="studio-draft-form">
+                <fieldset>
+                  <legend>Contract text draft</legend>
+                  <label htmlFor="studio-contract-title">
+                    Contract title
+                    <input
+                      id="studio-contract-title"
+                      value={projectedContract.title}
+                      maxLength={160}
+                      onChange={(event) =>
+                        dispatch({
+                          type: "edit-contract",
+                          field: "title",
+                          value: event.currentTarget.value
+                        })
+                      }
+                    />
+                  </label>
+                  <label htmlFor="studio-meaning-principle">
+                    Meaning held fixed
+                    <textarea
+                      id="studio-meaning-principle"
+                      value={projectedContract.meaningPrinciple}
+                      rows={3}
+                      onChange={(event) =>
+                        dispatch({
+                          type: "edit-contract",
+                          field: "meaningPrinciple",
+                          value: event.currentTarget.value
+                        })
+                      }
+                    />
+                  </label>
+                  <div className="studio-two-fields">
+                    <label htmlFor="studio-clarification-policy">
+                      Clarification policy
+                      <textarea
+                        id="studio-clarification-policy"
+                        value={projectedContract.clarificationPolicy}
+                        rows={3}
+                        onChange={(event) =>
+                          dispatch({
+                            type: "edit-contract",
+                            field: "clarificationPolicy",
+                            value: event.currentTarget.value
+                          })
+                        }
+                      />
+                    </label>
+                    <label htmlFor="studio-effect-policy">
+                      Observable effect policy
+                      <textarea
+                        id="studio-effect-policy"
+                        value={projectedContract.effectPolicy}
+                        rows={3}
+                        onChange={(event) =>
+                          dispatch({
+                            type: "edit-contract",
+                            field: "effectPolicy",
+                            value: event.currentTarget.value
+                          })
+                        }
+                      />
+                    </label>
+                  </div>
+                </fieldset>
+
+                <fieldset>
+                  <legend>Candidate case draft</legend>
+                  {projectedCases.length > 0 ? (
+                    <>
+                      <label htmlFor="studio-case-selector">
+                        Human review case ID
+                        <select
+                          id="studio-case-selector"
+                          value={selectedCaseId}
+                          onChange={(event) => setSelectedCaseId(event.currentTarget.value)}
+                        >
+                          {projectedCases.map((item) => (
+                            <option value={item.opaqueId} key={item.opaqueId}>
+                              {item.ordinal}. {item.opaqueId} · {item.family}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      {selectedCase ? (
+                        <>
+                          <label htmlFor="studio-case-prompt">
+                            Exact request
+                            <textarea
+                              id="studio-case-prompt"
+                              value={selectedCase.prompt}
+                              rows={3}
+                              onChange={(event) =>
+                                dispatch({
+                                  type: "edit-case",
+                                  caseId: selectedCase.opaqueId,
+                                  field: "prompt",
+                                  value: event.currentTarget.value
+                                })
+                              }
+                            />
+                          </label>
+                          <label htmlFor="studio-case-meaning">
+                            Meaning specification
+                            <textarea
+                              id="studio-case-meaning"
+                              value={selectedCase.meaningSpec}
+                              rows={3}
+                              onChange={(event) =>
+                                dispatch({
+                                  type: "edit-case",
+                                  caseId: selectedCase.opaqueId,
+                                  field: "meaningSpec",
+                                  value: event.currentTarget.value
+                                })
+                              }
+                            />
+                          </label>
+                          <div className="studio-two-fields">
+                            <label htmlFor="studio-case-decision">
+                              Expected outcome
+                              <textarea
+                                id="studio-case-decision"
+                                value={selectedCase.expectedDecision}
+                                rows={3}
+                                onChange={(event) =>
+                                  dispatch({
+                                    type: "edit-case",
+                                    caseId: selectedCase.opaqueId,
+                                    field: "expectedDecision",
+                                    value: event.currentTarget.value
+                                  })
+                                }
+                              />
+                            </label>
+                            <label htmlFor="studio-case-arguments">
+                              Argument predicate
+                              <textarea
+                                id="studio-case-arguments"
+                                value={selectedCase.argumentPredicate}
+                                rows={3}
+                                onChange={(event) =>
+                                  dispatch({
+                                    type: "edit-case",
+                                    caseId: selectedCase.opaqueId,
+                                    field: "argumentPredicate",
+                                    value: event.currentTarget.value
+                                  })
+                                }
+                              />
+                            </label>
+                          </div>
+                          <div className="studio-two-fields">
+                            <label htmlFor="studio-case-allowed-effects">
+                              Allowed effects · one per line
+                              <textarea
+                                id="studio-case-allowed-effects"
+                                value={selectedCase.allowedEffects.join("\n")}
+                                rows={3}
+                                onChange={(event) =>
+                                  dispatch({
+                                    type: "edit-case",
+                                    caseId: selectedCase.opaqueId,
+                                    field: "allowedEffects",
+                                    value: event.currentTarget.value
+                                      .split("\n")
+                                      .map((value) => value.trim())
+                                      .filter(Boolean)
+                                  })
+                                }
+                              />
+                            </label>
+                            <label htmlFor="studio-case-forbidden-effects">
+                              Forbidden effects · one per line
+                              <textarea
+                                id="studio-case-forbidden-effects"
+                                value={selectedCase.forbiddenEffects.join("\n")}
+                                rows={3}
+                                onChange={(event) =>
+                                  dispatch({
+                                    type: "edit-case",
+                                    caseId: selectedCase.opaqueId,
+                                    field: "forbiddenEffects",
+                                    value: event.currentTarget.value
+                                      .split("\n")
+                                      .map((value) => value.trim())
+                                      .filter(Boolean)
+                                  })
+                                }
+                              />
+                            </label>
+                          </div>
+                        </>
+                      ) : null}
+                    </>
+                  ) : (
+                    <p>
+                      Structured case editing opens when the exact server-owned candidate rows are
+                      present. No invented placeholder case may be patched.
+                    </p>
+                  )}
+                </fieldset>
+
+                <label htmlFor="studio-review-note">
+                  Session-local review note (optional when structured fields changed)
+                  <textarea
+                    id="studio-review-note"
+                    value={session.reviewNote}
+                    maxLength={STUDIO_REVIEW_NOTE_MAX_LENGTH}
+                    rows={5}
+                    onChange={(event) =>
+                      dispatch({ type: "edit-note", note: event.currentTarget.value })
+                    }
+                    placeholder="Flag an identity, boundary, argument, effect, fixture, or allocation item for Sergio."
+                  />
+                </label>
+                <label htmlFor="studio-review-focus">
+                  Review focus
+                  <select
+                    id="studio-review-focus"
+                    value={session.requestedFocus}
+                    onChange={(event) =>
+                      dispatch({
+                        type: "set-focus",
+                        focus: event.currentTarget.value as StudioSessionState["requestedFocus"]
+                      })
+                    }
+                  >
+                    <option value="">General</option>
+                    <option value="meaning">Meaning identities</option>
+                    <option value="boundaries">Boundary pairs</option>
+                    <option value="arguments">Argument predicates</option>
+                    <option value="effects">Effect rules</option>
+                    <option value="allocation">Allocation and pairing</option>
+                  </select>
+                </label>
+                <div className="button-row">
+                  <button
+                    className="button button-primary"
+                    type="button"
+                    disabled={!draftIsValid}
+                    onClick={handleSaveDraft}
+                  >
+                    Save structured draft for human review
+                  </button>
+                  {session.phase === "review" ? (
+                    <>
+                      <button
+                        className="button button-secondary"
+                        type="button"
+                        onClick={submitReview}
+                      >
+                        Present draft to human UI
+                      </button>
+                      <button
+                        className="button button-secondary"
+                        type="button"
+                        onClick={() => dispatch({ type: "return-to-draft" })}
+                      >
+                        Return to drafting
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+              </div>
+            )}
+
+            <p className="studio-activity" aria-live="polite">
+              {session.activity}
+            </p>
+            {session.presented ? (
+              <div className="studio-review-alert" ref={reviewAlertRef} role="status" tabIndex={-1}>
+                <strong>Presented—not approved.</strong>
+                <span>
+                  The Authoring Builder handoff is visible to Sergio. No semantic decision, review
+                  receipt, provider call, or freeze occurred.
+                </span>
+              </div>
+            ) : null}
+          </>
+        )}
       </section>
 
       <section className="panel studio-review-package" aria-labelledby="review-package-heading">
@@ -837,6 +894,19 @@ export function StudioClient({ target, reviewPackage }: StudioClientProps) {
           texts, expectations, fixtures, pairings, ordering, runner/evaluator rules, and hashes
           before approval can open.
         </p>
+        {reviewPackage.successorLineage ? (
+          <div className="runtime-receipt" aria-label="Successor protocol evidence lineage">
+            <span>Declared predecessor · durable execution preflight required</span>
+            <strong>{reviewPackage.successorLineage.disposition}</strong>
+            <small>
+              Prior baseline {reviewPackage.successorLineage.predecessorRunId} · offsets baseline{" "}
+              {reviewPackage.successorLineage.baselinePhaseCallOffset}, Repair{" "}
+              {reviewPackage.successorLineage.repairPhaseCallOffset}, revised{" "}
+              {reviewPackage.successorLineage.revisedPhaseCallOffset} · original Authoring Builder
+              remains terminated · lineage {reviewPackage.successorLineage.lineageHash}
+            </small>
+          </div>
+        ) : null}
         {packageFrozen ? (
           <div className="runtime-receipt" aria-label="Frozen Gate 3 human review receipt">
             <span>Human semantic authority · Sergio Valencia</span>

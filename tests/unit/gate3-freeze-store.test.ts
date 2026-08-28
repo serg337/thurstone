@@ -1,9 +1,11 @@
+import { canonicalSha256 } from "@/lib/evidence/digest";
 import { buildGate3HumanReviewPackage } from "@/lib/semantic/checkout-candidate.server";
 import {
   GATE3_FREEZE_STORE_SCRIPTS,
   createGate3FreezeKeyspace,
   putGate3Freeze,
   readGate3Freeze,
+  verifyStoredGate3FreezePayload,
   type Gate3FreezeRedisClient
 } from "@/lib/semantic/freeze-store.server";
 import {
@@ -112,6 +114,33 @@ describe("permanent Gate 3 freeze store", () => {
       KEYSPACE
     );
     expect(first.disposition).toBe("new");
+    await expect(
+      verifyStoredGate3FreezePayload({ reviewPackage: review, frozenProtocol: frozen })
+    ).resolves.toMatchObject({
+      reviewPackage: { packageHash: review.packageHash },
+      frozenProtocol: { frozenProtocolHash: frozen.frozenProtocolHash }
+    });
+    await expect(
+      verifyStoredGate3FreezePayload({
+        reviewPackage: { ...review, status: "tampered" },
+        frozenProtocol: frozen
+      })
+    ).rejects.toThrow(/GATE3_STORED_REVIEW_MISMATCH/u);
+    const rehashedDriftPayload = {
+      ...review,
+      contract: { ...review.contract, taskBoundary: `${review.contract.taskBoundary} drift` }
+    };
+    const { packageHash: _ignored, ...rehashedDriftWithoutHash } = rehashedDriftPayload;
+    void _ignored;
+    await expect(
+      verifyStoredGate3FreezePayload({
+        reviewPackage: {
+          ...rehashedDriftWithoutHash,
+          packageHash: await canonicalSha256(rehashedDriftWithoutHash)
+        },
+        frozenProtocol: frozen
+      })
+    ).rejects.toThrow(/GATE3_STORED_REVIEW_MISMATCH/u);
     expect(redis.record.token).not.toContain(review.suite.scoredCases[0]!.naturalLanguageRequest);
     expect(
       (

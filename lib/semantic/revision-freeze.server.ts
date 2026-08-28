@@ -2,6 +2,10 @@ import "server-only";
 
 import { canonicalJson, canonicalSha256 } from "@/lib/evidence/digest";
 import type { Gate3HumanReviewPackage } from "@/lib/semantic/checkout-candidate.server";
+import {
+  type Gate5SourceDiffProof,
+  verifyGate5SourceDiffProof
+} from "@/lib/semantic/gate5-source-diff-proof";
 import type { Gate3FrozenProtocol } from "@/lib/semantic/human-freeze.server";
 import {
   semanticTargetContractBindingSchema,
@@ -78,6 +82,7 @@ export interface Gate5RevisionFreeze {
   readonly changedField: "checkout_request.description";
   readonly oldDescription: string;
   readonly newDescription: string;
+  readonly sourceDiffProof: Gate5SourceDiffProof;
   readonly repairBuilderReceipt: Gate5RepairBuilderReceipt;
   readonly revisionApproval: Gate5RevisionApproval;
   readonly v2TargetContract: SemanticTargetContractBinding;
@@ -145,6 +150,7 @@ export async function buildGate5RevisionFreeze(input: {
   readonly repairBuilderReceipt: unknown;
   readonly revisionApproval: unknown;
   readonly v2TargetContract: unknown;
+  readonly sourceDiffProof: unknown;
 }): Promise<Gate5RevisionFreeze> {
   const repairBuilderReceipt = await verifyGate5RepairBuilderReceipt(input.repairBuilderReceipt);
   const revisionApproval = gate5RevisionApprovalSchema.parse(input.revisionApproval);
@@ -152,6 +158,12 @@ export async function buildGate5RevisionFreeze(input: {
   const v1TargetContract = input.gate3ReviewPackage.targetContract;
   const oldDescription = checkoutDescription(v1TargetContract);
   const newDescription = checkoutDescription(v2TargetContract);
+  const sourceDiffProof = await verifyGate5SourceDiffProof(input.sourceDiffProof, {
+    v1AppCommit: v1TargetContract.appCommit,
+    v2AppCommit: v2TargetContract.appCommit,
+    oldDescription,
+    newDescription
+  });
   if (
     input.gate3FrozenProtocol.reviewPackageHash !== input.gate3ReviewPackage.packageHash ||
     repairBuilderReceipt.baselineRunId !== input.baselineRunId ||
@@ -179,6 +191,7 @@ export async function buildGate5RevisionFreeze(input: {
     changedField: "checkout_request.description" as const,
     oldDescription,
     newDescription,
+    sourceDiffProof,
     repairBuilderReceipt,
     revisionApproval,
     v2TargetContract,
@@ -196,4 +209,26 @@ export async function buildGate5RevisionFreeze(input: {
     ...payload,
     revisionFreezeHash: await canonicalSha256(payload)
   });
+}
+
+export async function verifyGate5RevisionFreezeIntegrity(
+  value: Gate5RevisionFreeze
+): Promise<void> {
+  if (
+    value.version !== GATE5_REVISION_FREEZE_VERSION ||
+    value.status !== "frozen" ||
+    value.changedField !== "checkout_request.description"
+  ) {
+    throw new Gate5RevisionFreezeError("gate5_revision_shape_invalid");
+  }
+  await verifyGate5SourceDiffProof(value.sourceDiffProof, {
+    v1AppCommit: value.v1AppCommit,
+    v2AppCommit: value.v2AppCommit,
+    oldDescription: value.oldDescription,
+    newDescription: value.newDescription
+  });
+  const { revisionFreezeHash, ...payload } = value;
+  if ((await canonicalSha256(payload)) !== revisionFreezeHash) {
+    throw new Gate5RevisionFreezeError("gate5_revision_digest_invalid");
+  }
 }

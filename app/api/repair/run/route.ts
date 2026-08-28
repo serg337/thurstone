@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { readBoundedProbeJson } from "@/lib/probe/http";
+import { ProbeHttpError, probeHttpErrorResponse, readBoundedProbeJson } from "@/lib/probe/http";
 import { RepairServiceError, runFrozenRepairBuilder } from "@/lib/repair/service.server";
 import { z } from "zod";
 
@@ -17,6 +17,7 @@ export async function POST(request: Request) {
       headers: { "Cache-Control": "no-store" }
     });
   } catch (error) {
+    if (error instanceof ProbeHttpError) return probeHttpErrorResponse(error);
     if (error instanceof RepairServiceError) {
       return NextResponse.json(
         { error: error.code, inferencePerformed: error.inferencePerformed },

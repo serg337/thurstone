@@ -7,6 +7,7 @@ import { z } from "zod";
 import { canonicalJson, canonicalSha256 } from "@/lib/evidence/digest";
 import { openProbeArtifact, sealProbeArtifact } from "@/lib/probe/server-artifact";
 import { decodeProbeSigningSecret } from "@/lib/probe/signing-secret";
+import { SCORED_PREDECESSOR_DISPOSITIONS } from "@/lib/scored/session.server";
 
 export const SCORED_RUN_STORE_VERSION = "toolproof-scored-run-store@1.0.0";
 export const SCORED_RUN_ATTEMPT_VERSION = "toolproof-scored-run-attempt@1.0.0";
@@ -22,6 +23,70 @@ const runnerCaseId = z.string().regex(/^case_[A-Za-z0-9_-]{22}$/u);
 const runId = z.string().regex(/^run_[A-Za-z0-9_-]{22}$/u);
 
 export const scoredRunIdentitySchema = z
+  .object({
+    phase: z.enum(["baseline", "revised"]),
+    appCommit: gitCommit,
+    reviewPackageHash: sha256,
+    frozenProtocolHash: sha256,
+    freezeCandidateHash: sha256,
+    scheduleHash: sha256,
+    runId,
+    actorHash: sha256,
+    phaseCallOffset: z.number().int().min(0).max(46),
+    repairPhaseCallOffset: z.union([z.literal(0), z.literal(1)]),
+    predecessorProtocolHash: sha256.nullable(),
+    predecessorEvidenceDigest: sha256.nullable(),
+    predecessorRunId: runId.nullable(),
+    predecessorDisposition: z.enum(SCORED_PREDECESSOR_DISPOSITIONS).nullable(),
+    orderedRunnerCaseIds: z.array(runnerCaseId).length(SCORED_RUN_CASE_COUNT)
+  })
+  .strict()
+  .superRefine(
+    (
+      {
+        orderedRunnerCaseIds,
+        phaseCallOffset,
+        predecessorProtocolHash,
+        predecessorEvidenceDigest,
+        predecessorRunId,
+        predecessorDisposition
+      },
+      context
+    ) => {
+      if (new Set(orderedRunnerCaseIds).size !== SCORED_RUN_CASE_COUNT) {
+        context.addIssue({
+          code: "custom",
+          path: ["orderedRunnerCaseIds"],
+          message: "A scored schedule must contain 24 unique opaque runner IDs."
+        });
+      }
+      const predecessorValues = [
+        predecessorProtocolHash,
+        predecessorEvidenceDigest,
+        predecessorRunId,
+        predecessorDisposition
+      ];
+      const predecessorCount = predecessorValues.filter((value) => value !== null).length;
+      if (predecessorCount !== 0 && predecessorCount !== predecessorValues.length) {
+        context.addIssue({
+          code: "custom",
+          path: ["predecessorProtocolHash"],
+          message: "Replacement predecessor bindings must be all present or all absent."
+        });
+      }
+      if (phaseCallOffset > 0 && predecessorCount !== predecessorValues.length) {
+        context.addIssue({
+          code: "custom",
+          path: ["phaseCallOffset"],
+          message: "A nonzero phase offset requires an exact predecessor binding."
+        });
+      }
+    }
+  );
+
+export type ScoredRunIdentity = z.infer<typeof scoredRunIdentitySchema>;
+
+const legacyScoredRunIdentitySchema = z
   .object({
     phase: z.enum(["baseline", "revised"]),
     appCommit: gitCommit,
@@ -62,24 +127,38 @@ export const scoredRunIdentitySchema = z
         predecessorRunId
       ];
       const predecessorCount = predecessorValues.filter((value) => value !== null).length;
-      if (predecessorCount !== 0 && predecessorCount !== predecessorValues.length) {
+      if (
+        (predecessorCount !== 0 && predecessorCount !== predecessorValues.length) ||
+        (phaseCallOffset > 0 && predecessorCount !== predecessorValues.length)
+      ) {
         context.addIssue({
           code: "custom",
           path: ["predecessorProtocolHash"],
-          message: "Replacement predecessor bindings must be all present or all absent."
-        });
-      }
-      if (phaseCallOffset > 0 && predecessorCount !== predecessorValues.length) {
-        context.addIssue({
-          code: "custom",
-          path: ["phaseCallOffset"],
-          message: "A nonzero phase offset requires an exact predecessor binding."
+          message: "Legacy predecessor bindings must be all present or all absent."
         });
       }
     }
   );
 
-export type ScoredRunIdentity = z.infer<typeof scoredRunIdentitySchema>;
+type LegacyScoredRunIdentity = z.infer<typeof legacyScoredRunIdentitySchema>;
+type StoredScoredRunIdentity = ScoredRunIdentity | LegacyScoredRunIdentity;
+
+function parseStoredScoredRunIdentity(value: unknown): {
+  readonly raw: StoredScoredRunIdentity;
+  readonly normalized: ScoredRunIdentity;
+} {
+  const current = scoredRunIdentitySchema.safeParse(value);
+  if (current.success) return Object.freeze({ raw: current.data, normalized: current.data });
+  const legacy = legacyScoredRunIdentitySchema.parse(value);
+  return Object.freeze({
+    raw: legacy,
+    normalized: scoredRunIdentitySchema.parse({
+      ...legacy,
+      repairPhaseCallOffset: 0,
+      predecessorDisposition: legacy.predecessorProtocolHash === null ? null : "invalid-schedule"
+    })
+  });
+}
 
 export const scoredRunAttemptSchema = z
   .object({
@@ -130,6 +209,19 @@ const scoredRunScheduleArtifactSchema = z
     createdAt: z.string().datetime({ offset: true })
   })
   .strict();
+
+const legacyScoredRunScheduleArtifactSchema = z
+  .object({
+    version: z.literal(SCORED_RUN_SCHEDULE_VERSION),
+    identity: legacyScoredRunIdentitySchema,
+    createdAt: z.string().datetime({ offset: true })
+  })
+  .strict();
+
+const storedScoredRunScheduleArtifactSchema = z.union([
+  scoredRunScheduleArtifactSchema,
+  legacyScoredRunScheduleArtifactSchema
+]);
 
 export interface ScoredRunKeyspace {
   readonly namespace: string;
@@ -519,7 +611,7 @@ export function scoredRunEvidenceKey(
 }
 
 export async function scoredRunIdentityHash(identityValue: unknown): Promise<string> {
-  return canonicalSha256(scoredRunIdentitySchema.parse(identityValue));
+  return canonicalSha256(parseStoredScoredRunIdentity(identityValue).raw);
 }
 
 export async function createScoredRunIdentity(
@@ -800,15 +892,15 @@ export async function recordScoredRunAttempt(
   return progress;
 }
 
-function openSchedule(token: string, identity: ScoredRunIdentity, secret: string): void {
+function openSchedule(token: string, identityValue: StoredScoredRunIdentity, secret: string): void {
   let value: unknown;
   try {
     value = openProbeArtifact("scored_schedule", token, secret);
   } catch {
     throw new ScoredRunStoreError("INVALID_SCORED_SCHEDULE_ARTIFACT");
   }
-  const parsed = scoredRunScheduleArtifactSchema.parse(value);
-  if (canonicalJson(parsed.identity) !== canonicalJson(identity)) {
+  const parsed = storedScoredRunScheduleArtifactSchema.parse(value);
+  if (canonicalJson(parsed.identity) !== canonicalJson(identityValue)) {
     throw new ScoredRunStoreError("SCORED_SCHEDULE_ARTIFACT_MISMATCH");
   }
 }
@@ -826,12 +918,13 @@ function openAttempt(token: string, secret: string): ScoredRunAttempt {
 export async function readScoredRun(
   redis: ScoredRunRedisClient,
   input: {
-    readonly identity: ScoredRunIdentity;
+    readonly identity: StoredScoredRunIdentity;
     readonly artifactSecret: string;
   },
   keyspace: ScoredRunKeyspace = PRODUCTION_SCORED_RUN_KEYSPACE
 ): Promise<ScoredRunSnapshot | null> {
-  const identity = scoredRunIdentitySchema.parse(input.identity);
+  const storedIdentity = parseStoredScoredRunIdentity(input.identity);
+  const identity = storedIdentity.normalized;
   const reply = parseReply(
     await redis.evalRo(
       READ_SCRIPT,
@@ -841,7 +934,7 @@ export async function readScoredRun(
   );
   if (String(reply[1]) === "MISSING") return null;
   const anchor = hashReply(reply[2]);
-  const expectedIdentityHash = await scoredRunIdentityHash(identity);
+  const expectedIdentityHash = await scoredRunIdentityHash(storedIdentity.raw);
   if (!safeEqual(anchor.identity_hash ?? "", expectedIdentityHash)) {
     throw new ScoredRunStoreError("SCORED_RUN_IDENTITY_MISMATCH");
   }
@@ -864,7 +957,7 @@ export async function readScoredRun(
   if (!safeEqual(data.identity_hash ?? "", expectedIdentityHash)) {
     throw new ScoredRunStoreError("SCORED_RUN_IDENTITY_MISMATCH");
   }
-  openSchedule(String(data.schedule_token ?? ""), identity, input.artifactSecret);
+  openSchedule(String(data.schedule_token ?? ""), storedIdentity.raw, input.artifactSecret);
   const attempts: ScoredRunAttempt[] = [];
   for (let ordinal = 0; ordinal < SCORED_RUN_CASE_COUNT; ordinal += 1) {
     for (let attemptIndex = 0; attemptIndex <= 1; attemptIndex += 1) {
@@ -987,12 +1080,13 @@ export async function acknowledgeScoredRun(
 export async function readPermanentScoredRun(
   redis: ScoredRunRedisClient,
   input: {
-    readonly identity: ScoredRunIdentity;
+    readonly identity: StoredScoredRunIdentity;
     readonly artifactSecret: string;
   },
   keyspace: ScoredRunKeyspace = PRODUCTION_SCORED_RUN_KEYSPACE
 ): Promise<ScoredRunSnapshot | null> {
-  const identity = scoredRunIdentitySchema.parse(input.identity);
+  const storedIdentity = parseStoredScoredRunIdentity(input.identity);
+  const identity = storedIdentity.normalized;
   const reply = parseReply(
     await redis.evalRo(
       READ_PERMANENT_EVIDENCE_SCRIPT,
@@ -1006,14 +1100,14 @@ export async function readPermanentScoredRun(
   if (String(reply[1]) === "MISSING" || String(reply[1]) === "MISSING_EVIDENCE") return null;
   const anchor = hashReply(reply[2]);
   const evidence = hashReply(reply[3]);
-  const expectedIdentityHash = await scoredRunIdentityHash(identity);
+  const expectedIdentityHash = await scoredRunIdentityHash(storedIdentity.raw);
   if (
     !safeEqual(anchor.identity_hash ?? "", expectedIdentityHash) ||
     !safeEqual(evidence.identity_hash ?? "", expectedIdentityHash)
   ) {
     throw new ScoredRunStoreError("SCORED_RUN_IDENTITY_MISMATCH");
   }
-  openSchedule(String(evidence.schedule_token ?? ""), identity, input.artifactSecret);
+  openSchedule(String(evidence.schedule_token ?? ""), storedIdentity.raw, input.artifactSecret);
   const attempts: ScoredRunAttempt[] = [];
   for (let ordinal = 0; ordinal < SCORED_RUN_CASE_COUNT; ordinal += 1) {
     for (let attemptIndex = 0; attemptIndex <= 1; attemptIndex += 1) {
@@ -1084,9 +1178,9 @@ export async function readPermanentScoredRunById(
     return null;
   }
   const evidence = hashReply(result[3]);
-  let artifact: z.infer<typeof scoredRunScheduleArtifactSchema>;
+  let artifact: z.infer<typeof storedScoredRunScheduleArtifactSchema>;
   try {
-    artifact = scoredRunScheduleArtifactSchema.parse(
+    artifact = storedScoredRunScheduleArtifactSchema.parse(
       openProbeArtifact(
         "scored_schedule",
         String(evidence.schedule_token ?? ""),

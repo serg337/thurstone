@@ -27,7 +27,8 @@ export default async function ResultsPage() {
   const terminalEvidence = cookieStore.has(PROBE_RESULTS_COOKIE);
   const semanticResults = await readSemanticResults().catch(() => ({
     status: "no-scored-run" as const,
-    disclosure: "No run yet" as const
+    disclosure: "No run yet" as const,
+    supersededEvidence: null
   }));
   const scoredAvailable = semanticResults.status !== "no-scored-run";
   return (
@@ -59,6 +60,7 @@ export default async function ResultsPage() {
           rows={semanticResults.rows}
           earned={semanticResults.development.earned}
           holdoutCommitmentDigest={semanticResults.holdout.commitmentDigest}
+          supersededEvidence={semanticResults.supersededEvidence}
         />
       ) : (
         <section className="empty-results" aria-label="Scored semantic results status">
@@ -66,6 +68,17 @@ export default async function ResultsPage() {
             <span className="eyebrow">Scored suite</span>
             <h2>No run yet</h2>
             <p>The Meaning Matrix stays empty until authentic frozen scored evidence exists.</p>
+            {semanticResults.supersededEvidence ? (
+              <div className="runtime-receipt">
+                <span>Preserved earlier protocol · not merged</span>
+                <strong>{semanticResults.supersededEvidence.predecessorEvidenceDigest}</strong>
+                <small>
+                  Run {semanticResults.supersededEvidence.predecessorRunId} and Repair{" "}
+                  {semanticResults.supersededEvidence.priorRepairReceiptHash} remain permanent while
+                  the complete successor baseline is pending.
+                </small>
+              </div>
+            ) : null}
           </div>
         </section>
       )}

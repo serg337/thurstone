@@ -8,7 +8,10 @@ import {
   type RevisionProposal,
   type ToolProofDevelopmentResultsProjection
 } from "@/lib/results/meta-tools";
-import type { SemanticDevelopmentResultRow } from "@/lib/results/semantic-results.server";
+import type {
+  SemanticDevelopmentResultRow,
+  SemanticSupersededProtocolEvidence
+} from "@/lib/results/semantic-results.server";
 import { webMcpRegistryManager, type RegistryStatus } from "@/lib/webmcp/registry-manager";
 
 export function SemanticDevelopmentResults(input: {
@@ -17,6 +20,7 @@ export function SemanticDevelopmentResults(input: {
   readonly rows: readonly SemanticDevelopmentResultRow[];
   readonly earned: number;
   readonly holdoutCommitmentDigest: string;
+  readonly supersededEvidence: SemanticSupersededProtocolEvidence | null;
 }) {
   const [proposal, setProposal] = useState<RevisionProposal | null>(null);
   const [registry, setRegistry] = useState<RegistryStatus>({ phase: "idle", toolNames: [] });
@@ -74,6 +78,16 @@ export function SemanticDevelopmentResults(input: {
         Results Site Tools:{" "}
         {registry.phase === "ready" ? registry.toolNames.join(", ") : registry.phase}
       </p>
+      {input.supersededEvidence ? (
+        <div className="runtime-receipt">
+          <span>Permanent superseded-protocol evidence · not merged</span>
+          <strong>{input.supersededEvidence.predecessorEvidenceDigest}</strong>
+          <small>
+            Baseline {input.supersededEvidence.predecessorRunId} · 24 calls · prior Repair{" "}
+            {input.supersededEvidence.priorRepairReceiptHash}
+          </small>
+        </div>
+      ) : null}
       <ul className="result-list" aria-label="Baseline development results">
         {input.rows.map((row) => (
           <li key={row.runnerCaseId}>

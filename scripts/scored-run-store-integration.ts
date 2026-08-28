@@ -33,9 +33,11 @@ const identity = await createScoredRunIdentity({
   runId: `run_${randomBytes(16).toString("base64url")}`,
   actorHash: "4".repeat(64),
   phaseCallOffset: 0,
+  repairPhaseCallOffset: 0,
   predecessorProtocolHash: null,
   predecessorEvidenceDigest: null,
   predecessorRunId: null,
+  predecessorDisposition: null,
   orderedRunnerCaseIds: Array.from(
     { length: SCORED_RUN_CASE_COUNT },
     (_, index) => `case_${String(index).padStart(22, "0")}`

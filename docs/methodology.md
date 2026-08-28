@@ -6,8 +6,8 @@ This pairs invariance with sensitivity: a system cannot pass by reacting differe
 
 The experimental unit is declared meaning, not an isolated prompt string. Realizations are controlled repeated measurements. Observed mismatches remain evidence; ToolProof does not delete an inconvenient failure or reinterpret it after a run.
 
-The challenge protocol will use four non-scored calibration cases and exactly 24 human-reviewed scored single-step cases: 12 development and 12 Builder-blinded holdout. Every scored trial begins from a verified fixture and live registry, uses a fresh stateless model context, allows one decision and at most one target call, and is scored deterministically outside that model context.
+The challenge protocol uses four permanently excluded non-scored calibration cases and exactly 24 human-reviewed scored single-step cases: 12 development and 12 Builder-blinded holdout. Every scored trial begins from a verified fixture and live registry, uses a fresh stateless model context, allows one decision and at most one target call, and is scored deterministically outside that model context.
 
-Baseline and revision will hold every frozen factor constant except one human-approved target-tool description. No improvement, mixed results, and regressions are all valid outcomes. A one-trial-per-case protocol will be labeled a demonstration snapshot rather than evidence of stability.
+Baseline and revision hold every frozen factor constant except one human-approved target-tool description. A first complete baseline and Repair remain permanent superseded-protocol evidence after a pre-revised deployment defect required a source-bound replacement protocol; they are not merged with the replacement Matrix. No improvement, mixed results, and regressions are all valid outcomes. The one-trial-per-case protocol is labeled a demonstration snapshot rather than evidence of stability.
 
 ToolProof measures behavior against the declared contract. It does not prove understanding, guarantee safety, or certify compliance.

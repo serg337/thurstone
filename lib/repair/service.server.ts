@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createHash, createHmac } from "node:crypto";
+import { createHash } from "node:crypto";
 
 import { canonicalSha256 } from "@/lib/evidence/digest";
 import {
@@ -9,8 +9,11 @@ import {
   settleProbeCallKnown,
   settleProbeCallUncertain
 } from "@/lib/probe/ledger";
-import { decodeProbeSigningSecret } from "@/lib/probe/signing-secret";
 import { buildRepairDevelopmentPackage } from "@/lib/repair/development-package.server";
+import {
+  deriveRepairCapabilityBinding,
+  deriveRepairGrantIdentity
+} from "@/lib/repair/identity.server";
 import {
   RepairProviderError,
   runRepairBuilder,
@@ -22,6 +25,7 @@ import { readScoredGuardContext } from "@/lib/scored/guard.server";
 import { readScoredLedgerRecord, type ScoredLedgerRecord } from "@/lib/scored/ledger-record.server";
 
 export const REPAIR_OPERATOR_CAPABILITY_HASH_ENV = "TOOLPROOF_REPAIR_OPERATOR_CAPABILITY_HASH";
+export const REPAIR_PHASE_CALL_OFFSET_ENV = "TOOLPROOF_REPAIR_PHASE_CALL_OFFSET";
 
 type EnvironmentLike = Readonly<Record<string, string | undefined>>;
 
@@ -42,22 +46,16 @@ function required(environment: EnvironmentLike, name: string): string {
   return value;
 }
 
-function secretKey(secret: string): Buffer {
-  try {
-    return decodeProbeSigningSecret(secret);
-  } catch {
-    throw new RepairServiceError("repair_signing_secret_invalid", 503);
-  }
-}
-
-function keyed(secret: string, label: string, value: string, encoding: "hex" | "base64url") {
-  return createHmac("sha256", secretKey(secret))
-    .update(`toolproof.repair.${label}.v1.${value}`)
-    .digest(encoding);
-}
-
 function rawSha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
+}
+
+export function configuredRepairCallOffset(environment: EnvironmentLike): 0 | 1 {
+  const value = environment[REPAIR_PHASE_CALL_OFFSET_ENV]?.trim() ?? "0";
+  if (value !== "0" && value !== "1") {
+    throw new RepairServiceError("repair_phase_call_offset_invalid", 503);
+  }
+  return Number(value) as 0 | 1;
 }
 
 const CONSUME_SCRIPT = `
@@ -146,43 +144,25 @@ export async function runFrozenRepairBuilder(
   const results = await readSemanticResults(environment);
   const developmentPackage = await buildRepairDevelopmentPackage(results);
   const guard = await readScoredGuardContext(environment);
+  const repairCallOffset = configuredRepairCallOffset(environment);
   if (
-    guard.status.purposeCounts.baseline < 24 ||
-    guard.status.purposeCounts.repair > 1 ||
+    guard.status.purposeCounts.baseline < (repairCallOffset + 1) * 24 ||
+    guard.status.purposeCounts.repair < repairCallOffset ||
+    guard.status.purposeCounts.repair > repairCallOffset + 1 ||
     guard.status.purposeCounts.revised !== 0
   ) {
     throw new RepairServiceError("repair_guard_not_ready", 409);
   }
-  const contextId = `repair_${keyed(
+  const grantIdentity = await deriveRepairGrantIdentity({
     artifactSecret,
-    "context",
-    developmentPackage.packageHash,
-    "base64url"
-  ).slice(0, 22)}`;
-  const jti = `jti_repair_${keyed(
-    artifactSecret,
-    "jti",
-    developmentPackage.packageHash,
-    "base64url"
-  ).slice(0, 22)}`;
-  const subjectHash = await canonicalSha256({
-    version: "toolproof-repair-subject@1.0.0",
-    developmentPackageHash: developmentPackage.packageHash,
-    contextId
-  });
-  const claimsHash = await canonicalSha256({
-    version: "toolproof-repair-claims@1.0.0",
-    jti,
-    subjectHash,
-    contextId,
     developmentPackageHash: developmentPackage.packageHash
   });
-  const capabilityBinding = keyed(
+  const { contextId, jti, subjectHash, claimsHash } = grantIdentity;
+  const capabilityBinding = deriveRepairCapabilityBinding({
     artifactSecret,
-    "capability",
-    `${expectedCapabilityHash}.${developmentPackage.packageHash}`,
-    "hex"
-  );
+    operatorCapabilityHash: expectedCapabilityHash,
+    developmentPackageHash: developmentPackage.packageHash
+  });
   const consumed = await guard.redis.eval<string[], unknown>(
     CONSUME_SCRIPT,
     [`tp:{webmcp26}:repair-capability:${developmentPackage.packageHash}`],
@@ -196,6 +176,9 @@ export async function runFrozenRepairBuilder(
     artifactSecret
   });
   if (stored) {
+    if (guard.status.purposeCounts.repair !== repairCallOffset + 1) {
+      throw new RepairServiceError("repair_recovery_count_mismatch", 500, true);
+    }
     try {
       await settleStoredReceipt({ stored, jti, claimsHash, guard });
     } catch (error) {
@@ -212,6 +195,9 @@ export async function runFrozenRepairBuilder(
       recovered: true
     });
   }
+  if (guard.status.purposeCounts.repair !== repairCallOffset) {
+    throw new RepairServiceError("repair_grant_without_receipt", 500, true);
+  }
   assertRepairDispatchLedgerState(
     await readScoredLedgerRecord(guard.redis, {
       ...guard.identity,
@@ -225,7 +211,7 @@ export async function runFrozenRepairBuilder(
     claimsHash,
     purpose: "repair",
     subjectHash,
-    actorHash: keyed(artifactSecret, "actor", developmentPackage.packageHash, "hex")
+    actorHash: grantIdentity.actorHash
   });
   let receipt: RepairProviderKnownReceipt;
   try {
@@ -233,7 +219,7 @@ export async function runFrozenRepairBuilder(
       developmentPackage,
       apiKey: required(environment, "OPENAI_API_KEY"),
       contextId,
-      safetyIdentifier: keyed(artifactSecret, "safety", developmentPackage.packageHash, "hex"),
+      safetyIdentifier: grantIdentity.safetyIdentifier,
       beforeDispatch: async () => {
         await beginProbeCall(guard.redis, {
           ...guard.identity,
@@ -245,16 +231,20 @@ export async function runFrozenRepairBuilder(
     });
   } catch (error) {
     if (error instanceof RepairProviderError && error.dispatch === "after_dispatch_uncertain") {
-      await settleProbeCallUncertain(guard.redis, {
-        ...guard.identity,
-        jti,
-        settlementDigest: await canonicalSha256({
-          version: "toolproof-repair-uncertain-settlement@1.0.0",
+      try {
+        await settleProbeCallUncertain(guard.redis, {
+          ...guard.identity,
           jti,
-          code: error.code
-        }),
-        reason: error.code
-      });
+          settlementDigest: await canonicalSha256({
+            version: "toolproof-repair-uncertain-settlement@1.0.0",
+            jti,
+            code: error.code
+          }),
+          reason: error.code
+        });
+      } catch {
+        throw new RepairServiceError("repair_uncertain_settlement_failed", 500, true);
+      }
       throw new RepairServiceError(error.code, 502, true);
     }
     throw new RepairServiceError(
@@ -271,6 +261,21 @@ export async function runFrozenRepairBuilder(
     });
     await settleStoredReceipt({ stored: receipt, jti, claimsHash, guard });
   } catch (error) {
+    try {
+      await settleProbeCallUncertain(guard.redis, {
+        ...guard.identity,
+        jti,
+        settlementDigest: await canonicalSha256({
+          version: "toolproof-repair-uncertain-settlement@1.0.0",
+          jti,
+          code: "repair_receipt_persistence_failed"
+        }),
+        reason: "repair_receipt_persistence_failed"
+      });
+    } catch {
+      // The original persistence/settlement error remains authoritative. Inference is still true,
+      // and the durable ledger stays fail-closed as IN_FLIGHT, UNCERTAIN, or already KNOWN.
+    }
     throw new RepairServiceError(
       error instanceof Error ? error.message : "repair_receipt_persistence_failed",
       500,

@@ -48,6 +48,12 @@ import {
 } from "@/lib/semantic/contract";
 import { SEMANTIC_EVALUATOR_VERSION } from "@/lib/semantic/evaluator.server";
 import {
+  assertGate3SuccessorSemanticContinuity,
+  gate3V1TargetContractSemanticProjectionHash,
+  verifyGate3SuccessorLineage,
+  type Gate3SuccessorLineage
+} from "@/lib/semantic/gate3-successor-lineage.server";
+import {
   SEMANTIC_RETRY_POLICY_VERSION,
   SEMANTIC_SCHEDULE_VERSION,
   buildSemanticProtocolFreezeCandidate,
@@ -64,6 +70,7 @@ import { CHECKOUT_TOOLSET_VERSION, checkoutToolContractSnapshot } from "@/lib/we
 import { createCheckoutLiveManifest } from "@/lib/webmcp/live-manifest.server";
 
 export const GATE3_REVIEW_PACKAGE_VERSION = "toolproof-gate3-human-review-package@1.0.0";
+export const GATE3_SUCCESSOR_REVIEW_PACKAGE_VERSION = "toolproof-gate3-human-review-package@1.1.0";
 export const GATE3_ORDER_SEED = "toolproof-gate3-order-v1-20260828";
 export const GATE3_SCORED_RUNNER_VERSION = "toolproof-scored-pinned-runner@1.0.0";
 export const GATE3_CANONICALIZER_VERSION = "json-canonicalize@3.0.0";
@@ -828,13 +835,18 @@ export const GATE3_SEMANTIC_SUITE: SemanticSuite = verifySemanticSuiteStructure(
 export interface Gate3BuildSourceBindings {
   readonly source: SemanticSourceBinding;
   readonly canonicalizerSourceSha256: string;
+  readonly successorLineage?: Gate3SuccessorLineage;
 }
 
 export interface Gate3HumanReviewPackage {
-  readonly version: typeof GATE3_REVIEW_PACKAGE_VERSION;
+  readonly version:
+    typeof GATE3_REVIEW_PACKAGE_VERSION | typeof GATE3_SUCCESSOR_REVIEW_PACKAGE_VERSION;
   readonly status: "awaiting-human-approval";
   readonly semanticAuthority: "Sergio Valencia";
-  readonly authoringBuilderDisposition: "candidate-context-completed-awaiting-freeze-termination-receipt";
+  readonly authoringBuilderDisposition:
+    | "candidate-context-completed-awaiting-freeze-termination-receipt"
+    | "original-authoring-context-terminated-successor-review-only";
+  readonly successorLineage?: Gate3SuccessorLineage;
   readonly source: SemanticSourceBinding;
   readonly contract: SemanticContract;
   readonly suite: SemanticSuite;
@@ -959,6 +971,9 @@ export async function buildGate3HumanReviewPackage(
   if (!/^[a-f0-9]{64}$/u.test(bindings.canonicalizerSourceSha256)) {
     throw new TypeError("Gate 3 canonicalizer source binding must be SHA-256.");
   }
+  const successorLineage = bindings.successorLineage
+    ? await verifyGate3SuccessorLineage(bindings.successorLineage)
+    : undefined;
   const target = await createGate3TargetContractBinding(bindings.source.repositoryCommit);
   const runner = await runnerBinding(target.initialManifest);
   const evaluator: SemanticEvaluatorBinding = {
@@ -980,12 +995,23 @@ export async function buildGate3HumanReviewPackage(
     retryPolicy: retry,
     schedule: orderedSchedule
   });
+  if (successorLineage) {
+    assertGate3SuccessorSemanticContinuity(
+      successorLineage,
+      freeze.manifest.componentHashes,
+      await gate3V1TargetContractSemanticProjectionHash(target, fixtureContract)
+    );
+  }
   const payload: Omit<Gate3HumanReviewPackage, "packageHash"> = {
-    version: GATE3_REVIEW_PACKAGE_VERSION,
+    version: successorLineage
+      ? GATE3_SUCCESSOR_REVIEW_PACKAGE_VERSION
+      : GATE3_REVIEW_PACKAGE_VERSION,
     status: "awaiting-human-approval" as const,
     semanticAuthority: "Sergio Valencia" as const,
-    authoringBuilderDisposition:
-      "candidate-context-completed-awaiting-freeze-termination-receipt" as const,
+    authoringBuilderDisposition: successorLineage
+      ? ("original-authoring-context-terminated-successor-review-only" as const)
+      : ("candidate-context-completed-awaiting-freeze-termination-receipt" as const),
+    ...(successorLineage ? { successorLineage } : {}),
     source: bindings.source,
     contract: GATE3_SEMANTIC_CONTRACT,
     suite: GATE3_SEMANTIC_SUITE,

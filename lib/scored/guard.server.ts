@@ -19,6 +19,7 @@ import {
   PROBE_PURPOSE_CALL_LIMITS
 } from "@/lib/probe/policy";
 import { isProbeGuardStatusConsistent } from "@/lib/probe/status";
+import type { ScoredPredecessorDisposition } from "@/lib/scored/session.server";
 
 type EnvironmentLike = Readonly<Record<string, string | undefined>>;
 
@@ -96,21 +97,30 @@ export function assertScoredPhaseCanStart(
   phase: "baseline" | "revised",
   execution: {
     readonly phaseCallOffset: number;
+    readonly repairPhaseCallOffset: 0 | 1;
     readonly predecessorProtocolHash: string | null;
     readonly predecessorEvidenceDigest: string | null;
     readonly predecessorRunId: string | null;
+    readonly predecessorDisposition: ScoredPredecessorDisposition | null;
   }
 ): void {
   const observed = guard.purposeCounts[phase];
   const predecessorValues = [
     execution.predecessorProtocolHash,
     execution.predecessorEvidenceDigest,
-    execution.predecessorRunId
+    execution.predecessorRunId,
+    execution.predecessorDisposition
   ];
   const predecessorCount = predecessorValues.filter((value) => value !== null).length;
   if (
     observed !== execution.phaseCallOffset ||
     execution.phaseCallOffset + 24 > PROBE_PURPOSE_CALL_LIMITS[phase] ||
+    guard.purposeCounts.repair !==
+      execution.repairPhaseCallOffset + (phase === "revised" ? 1 : 0) ||
+    (phase === "baseline" &&
+      execution.repairPhaseCallOffset === 1 &&
+      execution.phaseCallOffset === 24 &&
+      execution.predecessorDisposition !== "superseded-protocol") ||
     (predecessorCount !== 0 && predecessorCount !== predecessorValues.length) ||
     (execution.phaseCallOffset > 0 && predecessorCount !== predecessorValues.length) ||
     (execution.predecessorProtocolHash !== null &&
@@ -123,13 +133,34 @@ export function assertScoredPhaseCanStart(
     throw new ScoredGuardError("scored_phase_offset_mismatch");
   }
   if (phase === "baseline") {
-    if (guard.purposeCounts.revised !== 0 || guard.purposeCounts.repair !== 0) {
+    if (guard.purposeCounts.revised !== 0) {
       throw new ScoredGuardError("baseline_already_started");
     }
     return;
   }
-  if (guard.purposeCounts.repair !== 1 || guard.purposeCounts.baseline < 24) {
+  if (guard.purposeCounts.baseline < (execution.repairPhaseCallOffset + 1) * 24) {
     throw new ScoredGuardError("revised_phase_not_ready");
+  }
+}
+
+export function assertScoredPredecessorDisposition(input: {
+  readonly disposition: ScoredPredecessorDisposition;
+  readonly currentProtocolHash: string;
+  readonly predecessorProtocolHash: string;
+  readonly predecessorTerminalStatus: "terminal-complete" | "terminal-invalid";
+  readonly predecessorCompletedCount: number;
+}): void {
+  const invalidSchedule =
+    input.disposition === "invalid-schedule" &&
+    input.predecessorTerminalStatus === "terminal-invalid" &&
+    input.predecessorCompletedCount < 24;
+  const supersededProtocol =
+    input.disposition === "superseded-protocol" &&
+    input.predecessorTerminalStatus === "terminal-complete" &&
+    input.predecessorCompletedCount === 24 &&
+    input.predecessorProtocolHash !== input.currentProtocolHash;
+  if (!invalidSchedule && !supersededProtocol) {
+    throw new ScoredGuardError("scored_predecessor_disposition_mismatch");
   }
 }
 

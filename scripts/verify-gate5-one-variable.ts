@@ -1,42 +1,111 @@
 import { execFile as execFileCallback } from "node:child_process";
 import { promisify } from "node:util";
 
+import { canonicalJson } from "../lib/evidence/digest";
+import {
+  GATE5_SOURCE_DIFF_PATH,
+  buildGate5SourceDiffProof
+} from "../lib/semantic/gate5-source-diff-proof";
 import { configuredGate5Revision } from "../lib/semantic/revision-config.server";
 
 const execFile = promisify(execFileCallback);
-const revision = await configuredGate5Revision();
 
-if (revision.status !== "ready" || !revision.revision) {
+async function git(args: readonly string[]): Promise<string> {
+  const result = await execFile("git", [...args], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    maxBuffer: 1_048_576
+  });
+  return result.stdout;
+}
+
+function patchArguments(v1AppCommit: string, v2AppCommit: string): string[] {
+  return [
+    "-c",
+    "core.quotePath=false",
+    "diff",
+    "--no-ext-diff",
+    "--no-textconv",
+    "--no-color",
+    "--no-renames",
+    "--full-index",
+    "--src-prefix=a/",
+    "--dst-prefix=b/",
+    "--unified=3",
+    "--diff-algorithm=myers",
+    "--no-indent-heuristic",
+    v1AppCommit,
+    v2AppCommit,
+    "--",
+    GATE5_SOURCE_DIFF_PATH
+  ];
+}
+
+const configured = await configuredGate5Revision();
+
+if (configured.status === "awaiting-repair" || configured.status === "awaiting-human") {
   process.stdout.write(
-    `${JSON.stringify({ ok: true, mode: "gate5-one-variable", status: revision.status })}\n`
+    `${JSON.stringify({ ok: true, mode: "gate5-one-variable", status: configured.status })}\n`
   );
+} else if (configured.status !== "ready" || !configured.revision) {
+  throw new Error(configured.issue ?? "gate5_revision_configuration_invalid");
 } else {
-  const result = await execFile(
-    "git",
-    ["diff", "--name-only", `${revision.revision.v1AppCommit}..${revision.revision.v2AppCommit}`],
-    { cwd: process.cwd(), encoding: "utf8" }
+  const revision = configured.revision;
+  const activeCommit =
+    process.env.VERCEL_GIT_COMMIT_SHA?.trim() ?? process.env.TOOLPROOF_COMMIT_SHA?.trim() ?? "";
+  const [resolvedV1, resolvedV2, v1RawSource, v2RawSource, patch, changedNames] = await Promise.all(
+    [
+      git(["rev-parse", "--verify", `${revision.v1AppCommit}^{commit}`]),
+      git(["rev-parse", "--verify", `${revision.v2AppCommit}^{commit}`]),
+      git(["show", `${revision.v1AppCommit}:${GATE5_SOURCE_DIFF_PATH}`]),
+      git(["show", `${revision.v2AppCommit}:${GATE5_SOURCE_DIFF_PATH}`]),
+      git(patchArguments(revision.v1AppCommit, revision.v2AppCommit)),
+      git([
+        "-c",
+        "core.quotePath=false",
+        "diff",
+        "--name-only",
+        "--no-ext-diff",
+        "--no-renames",
+        revision.v1AppCommit,
+        revision.v2AppCommit,
+        "--"
+      ])
+    ]
   );
-  const files = result.stdout
+  const changedPaths = changedNames
     .split(/\r?\n/u)
     .map((value) => value.trim())
     .filter(Boolean);
+  const rebuilt = await buildGate5SourceDiffProof({
+    changedPaths,
+    v1AppCommit: resolvedV1.trim(),
+    v2AppCommit: resolvedV2.trim(),
+    oldJsonStringLiteral: JSON.stringify(revision.oldDescription),
+    newJsonStringLiteral: JSON.stringify(revision.newDescription),
+    v1RawSource,
+    v2RawSource,
+    patch
+  });
   if (
-    files.length !== 1 ||
-    files[0] !== "lib/webmcp/checkout-request-tool.ts" ||
-    process.env.VERCEL_GIT_COMMIT_SHA !== revision.revision.v2AppCommit
+    activeCommit !== revision.v2AppCommit ||
+    resolvedV1.trim() !== revision.v1AppCommit ||
+    resolvedV2.trim() !== revision.v2AppCommit ||
+    canonicalJson(rebuilt) !== canonicalJson(revision.sourceDiffProof)
   ) {
-    throw new Error("gate5_source_diff_not_one_variable");
+    throw new Error("gate5_source_diff_not_exactly_one_description");
   }
   process.stdout.write(
     `${JSON.stringify({
       ok: true,
       mode: "gate5-one-variable",
       status: "verified",
-      changedField: revision.revision.changedField,
-      file: files[0],
-      v1AppCommit: revision.revision.v1AppCommit,
-      v2AppCommit: revision.revision.v2AppCommit,
-      revisionFreezeHash: revision.revision.revisionFreezeHash
+      changedField: revision.changedField,
+      file: GATE5_SOURCE_DIFF_PATH,
+      v1AppCommit: revision.v1AppCommit,
+      v2AppCommit: revision.v2AppCommit,
+      sourceDiffProofHash: revision.sourceDiffProof.proofHash,
+      revisionFreezeHash: revision.revisionFreezeHash
     })}\n`
   );
 }

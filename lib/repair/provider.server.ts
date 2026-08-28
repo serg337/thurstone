@@ -20,6 +20,8 @@ export const REPAIR_BUILDER_PROMPT_VERSION = "toolproof-repair-builder-prompt@1.
 export const REPAIR_BUILDER_SETTINGS_VERSION = "toolproof-repair-builder-settings@1.0.0";
 export const REPAIR_OPENAI_ENDPOINT = "https://api.openai.com/v1/responses";
 export const REPAIR_PROVIDER_TIMEOUT_MS = 20_000;
+/** Conservative fail-closed ceiling for the fixed English/JSON Repair projection. */
+export const REPAIR_MODEL_INPUT_MAX_BYTES = 10_500;
 
 export const REPAIR_BUILDER_PROMPT = [
   "You are a fresh, stateless ToolProof Repair Builder.",
@@ -65,6 +67,29 @@ export interface RepairProviderKnownReceipt {
   readonly promptHash: string;
   readonly settingsHash: string;
   readonly providerCallCount: 1;
+}
+
+function repairBuilderModelPackage(developmentPackage: RepairDevelopmentPackage) {
+  return Object.freeze({
+    version: developmentPackage.version,
+    evidenceLabel: developmentPackage.evidenceLabel,
+    changedField: developmentPackage.changedField,
+    currentDescription: developmentPackage.currentDescription,
+    taskBoundary: developmentPackage.taskBoundary,
+    liveManifest: developmentPackage.liveManifest,
+    developmentCaseCount: developmentPackage.developmentCaseCount,
+    developmentAggregate: developmentPackage.developmentAggregate,
+    meaningContractTupleSchema: developmentPackage.meaningContractTupleSchema,
+    meaningContracts: developmentPackage.meaningContracts,
+    rowTupleSchema: developmentPackage.rowTupleSchema,
+    traceTupleSchema: developmentPackage.traceTupleSchema,
+    rows: developmentPackage.rows,
+    holdoutDataIncluded: false as const
+  });
+}
+
+function postDispatchInvalid(code: string): RepairProviderError {
+  return new RepairProviderError(code, "after_dispatch_uncertain");
 }
 
 export class RepairProviderError extends Error {
@@ -126,7 +151,7 @@ export async function runRepairBuilder(input: {
   const body = {
     model: PROBE_MODEL,
     instructions: REPAIR_BUILDER_PROMPT,
-    input: canonicalJson(input.developmentPackage),
+    input: canonicalJson(repairBuilderModelPackage(input.developmentPackage)),
     reasoning: { effort: "low" },
     text: {
       format: {
@@ -151,6 +176,10 @@ export async function runRepairBuilder(input: {
     service_tier: "default",
     safety_identifier: input.safetyIdentifier
   };
+  const modelInputBytes = Buffer.byteLength(body.input, "utf8");
+  if (modelInputBytes > REPAIR_MODEL_INPUT_MAX_BYTES) {
+    throw new RepairProviderError("repair_model_input_too_large", "before_dispatch");
+  }
   const requestBytes = canonicalJson(body);
   if (Buffer.byteLength(requestBytes, "utf8") > 64 * 1_024) {
     throw new RepairProviderError("repair_request_too_large", "before_dispatch");
@@ -183,6 +212,8 @@ export async function runRepairBuilder(input: {
   let rawResponseBytes: string;
   try {
     rawResponseBytes = await response.text();
+  } catch {
+    throw postDispatchInvalid("repair_provider_body_unreadable");
   } finally {
     clearTimeout(timeout);
   }
@@ -195,7 +226,23 @@ export async function runRepairBuilder(input: {
   } catch {
     throw new RepairProviderError("repair_provider_response_invalid", "after_dispatch_uncertain");
   }
-  const proposal = repairOutputSchema.parse(JSON.parse(exactOutputText(parsed.output)));
+  if (
+    parsed.model !== PROBE_MODEL ||
+    parsed.usage.total_tokens !== parsed.usage.input_tokens + parsed.usage.output_tokens
+  ) {
+    throw postDispatchInvalid("repair_provider_identity_invalid");
+  }
+  let proposal: z.infer<typeof repairOutputSchema>;
+  try {
+    const candidate = repairOutputSchema.parse(JSON.parse(exactOutputText(parsed.output)));
+    proposal = repairOutputSchema.parse({
+      proposedDescription: candidate.proposedDescription.trim(),
+      rationale: candidate.rationale.trim()
+    });
+  } catch (error) {
+    if (error instanceof RepairProviderError) throw error;
+    throw postDispatchInvalid("repair_provider_output_invalid");
+  }
   const actualNanoUsd = calculateProbeCostNanoUsd({
     inputTokens: parsed.usage.input_tokens,
     outputTokens: parsed.usage.output_tokens
@@ -229,10 +276,15 @@ export async function runRepairBuilder(input: {
     rationale: proposal.rationale,
     createdAt: new Date(startedAt).toISOString()
   };
-  const repairBuilderReceipt = gate5RepairBuilderReceiptSchema.parse({
-    ...receiptPayload,
-    receiptHash: await canonicalSha256(receiptPayload)
-  });
+  let repairBuilderReceipt: Gate5RepairBuilderReceipt;
+  try {
+    repairBuilderReceipt = gate5RepairBuilderReceiptSchema.parse({
+      ...receiptPayload,
+      receiptHash: await canonicalSha256(receiptPayload)
+    });
+  } catch {
+    throw postDispatchInvalid("repair_provider_receipt_invalid");
+  }
   const usage = {
     inputTokens: parsed.usage.input_tokens,
     outputTokens: parsed.usage.output_tokens,

@@ -55,9 +55,11 @@ async function reveal() {
     frozenProtocolHash: "2".repeat(64),
     freezeCandidateHash: "3".repeat(64),
     phaseCallOffset: 0,
+    repairPhaseCallOffset: 0,
     predecessorProtocolHash: null,
     predecessorEvidenceDigest: null,
     predecessorRunId: null,
+    predecessorDisposition: null,
     status: "terminal-invalid" as const,
     completedCount: firstDevelopmentOrdinal,
     attemptCount: firstDevelopmentOrdinal + 1,
@@ -86,6 +88,27 @@ async function reveal() {
 }
 
 describe("baseline development-only reveal", () => {
+  it("verifies a legacy offset-zero bundle without rehashing new identity fields into it", async () => {
+    const current = await reveal();
+    const {
+      repairPhaseCallOffset: _repairPhaseCallOffset,
+      predecessorDisposition: _predecessorDisposition,
+      revealDigest: _revealDigest,
+      ...legacyPayload
+    } = current;
+    void _repairPhaseCallOffset;
+    void _predecessorDisposition;
+    void _revealDigest;
+    const legacy = {
+      ...legacyPayload,
+      revealDigest: await canonicalSha256(legacyPayload)
+    };
+    const verified = await verifyGate3BaselineRevealBundle(legacy);
+    expect(Object.hasOwn(verified, "repairPhaseCallOffset")).toBe(false);
+    expect(Object.hasOwn(verified, "predecessorDisposition")).toBe(false);
+    expect(verified.revealDigest).toBe(legacy.revealDigest);
+  });
+
   it("exposes development attempts plus only a holdout commitment", async () => {
     const verified = await verifyGate3BaselineRevealBundle(await reveal());
     expect(verified.developmentAttempts).toHaveLength(1);

@@ -1,16 +1,32 @@
+import { createCheckoutFixture } from "@/lib/domain/checkout";
 import { buildRepairDevelopmentPackage } from "@/lib/repair/development-package.server";
-import { runRepairBuilder } from "@/lib/repair/provider.server";
+import {
+  REPAIR_MODEL_INPUT_MAX_BYTES,
+  RepairProviderError,
+  runRepairBuilder
+} from "@/lib/repair/provider.server";
 import type { SemanticResultsState } from "@/lib/results/semantic-results.server";
+import { createCheckoutLiveManifest } from "@/lib/webmcp/live-manifest.server";
 import { describe, expect, it, vi } from "vitest";
 
-function results(): Extract<SemanticResultsState, { status: "baseline-development-only" }> {
+async function results(): Promise<
+  Extract<SemanticResultsState, { status: "baseline-development-only" }>
+> {
+  const baselineAppCommit = "f".repeat(40);
   return {
     status: "baseline-development-only",
     disclosure: "one-trial demonstration snapshot",
     baselineRunId: `run_${"b".repeat(22)}`,
     baselineEvidenceDigest: "a".repeat(64),
+    baselineAppCommit,
+    taskBoundary:
+      "One request permits one decision and at most one native call in a simulated checkout.",
+    currentDescription:
+      "Finalize the current cart by opening a simulated checkout request that remains pending for human approval when the user is ready to proceed.",
+    supersededEvidence: null,
     reviewPackageHash: "c".repeat(64),
     frozenProtocolHash: "d".repeat(64),
+    liveManifest: await createCheckoutLiveManifest(createCheckoutFixture(), baselineAppCommit),
     rows: Array.from({ length: 12 }, (_, index) => ({
       ordinal: index,
       caseId: `development_${index}`,
@@ -27,45 +43,27 @@ function results(): Extract<SemanticResultsState, { status: "baseline-developmen
     })),
     repairRows: Array.from({ length: 12 }, (_, index) => ({
       ordinal: index,
-      caseId: `development_${index}`,
       runnerCaseId: `case_${String(index).padStart(22, "0")}`,
-      family: "development-family",
+      meaningId: "meaning_checkout_pending",
       request: `Synthetic development request ${index}`,
-      evaluation: {
-        version: "toolproof-semantic-evaluator@1.0.0",
-        caseId: `development_${index}`,
-        runnerCaseId: `case_${String(index).padStart(22, "0")}`,
+      expected: {
+        approvedMeaning: "Open simulated checkout only after explicit user direction.",
         approvalClass: "human-gated-consequential-request",
-        expectedActionClass: "call",
-        observedActionClass: "clarify",
-        disposition: "scored",
-        infrastructureRetryEligible: false,
-        passed: false,
-        score: 0 as const,
-        checks: [
-          {
-            code: "decision_action_class",
-            passed: false,
-            path: null,
-            expected: "call",
-            actual: "clarify"
-          }
-        ],
-        failureCodes: ["decision_action_class"]
+        actionClass: "call",
+        tool: "checkout_request",
+        arguments: { additionalProperties: "forbidden", predicates: [] },
+        stateChange: "required",
+        allowedEffects: ["state-revision", "pending-checkout"],
+        forbiddenEffects: ["cart-quantities", "unmodeled-state"]
       },
-      provider: {
+      observed: {
+        actionClass: "clarify",
         decision: { kind: "clarify" as const, text: "Please confirm checkout." },
         decisionError: null,
         refusal: null,
-        outputText: '{"decision":{"kind":"clarify","text":"Please confirm checkout."}}',
-        usage: {
-          inputTokens: 100,
-          outputTokens: 20,
-          totalTokens: 120,
-          accountedNanoUsd: 1_000_000,
-          costBasis: "frozen-list-price-plus-10pct-uplift" as const
-        },
-        rawResponseHash: "f".repeat(64)
+        passed: false,
+        score: 0 as const,
+        failureCodes: ["decision_action_class"]
       },
       trace: null
     })),
@@ -81,8 +79,24 @@ function results(): Extract<SemanticResultsState, { status: "baseline-developmen
 }
 
 describe("fresh isolated Repair Builder provider", () => {
-  it("sends development-only evidence and returns one hash-bound description proposal", async () => {
-    const developmentPackage = await buildRepairDevelopmentPackage(results());
+  it("reports same-origin boundary failures without entering the repair service", async () => {
+    const response = await repairRoute(
+      new Request("https://toolproof-rust.vercel.app/api/repair/run", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ capability: "x".repeat(43) })
+      })
+    );
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: "request_rejected",
+      inferencePerformed: false
+    });
+  });
+
+  it("sends compact development-only evidence and returns one hash-bound proposal", async () => {
+    const baselineResults = await results();
+    const developmentPackage = await buildRepairDevelopmentPackage(baselineResults);
     expect(JSON.stringify(developmentPackage)).not.toContain("commitmentDigest");
     expect(developmentPackage.holdout).toEqual({
       promptsIncluded: 0,
@@ -141,9 +155,96 @@ describe("fresh isolated Repair Builder provider", () => {
       proposedField: "checkout_request.description"
     });
     expect(receipt.repairBuilderReceipt.receiptHash).toMatch(/^[a-f0-9]{64}$/u);
-    expect(requestBody).not.toContain(results().holdout.commitmentDigest);
+    expect(requestBody).not.toContain(baselineResults.holdout.commitmentDigest);
     expect(requestBody).toContain("Synthetic development request 0");
     expect(requestBody).toContain("decision_action_class");
+    expect(requestBody).toContain("toolproof-probe-live-manifest@1.0.0");
+    const modelInput = JSON.parse(requestBody) as { readonly input: string };
+    const modelPackage = JSON.parse(modelInput.input) as {
+      readonly liveManifest: {
+        readonly tools: readonly { readonly name: string; readonly inputSchema: unknown }[];
+      };
+      readonly traceTupleSchema: readonly string[];
+    };
+    expect(
+      modelPackage.liveManifest.tools.find(({ name }) => name === "checkout_request")
+    ).toHaveProperty("inputSchema");
+    expect(modelPackage.traceTupleSchema).toEqual(["toolName", "canonicalArguments", "effect"]);
+    expect(Buffer.byteLength(modelInput.input, "utf8")).toBeLessThanOrEqual(
+      REPAIR_MODEL_INPUT_MAX_BYTES
+    );
     expect(Buffer.byteLength(requestBody, "utf8")).toBeLessThanOrEqual(64 * 1_024);
   });
+
+  it.each([
+    {
+      label: "wrong model",
+      model: "gpt-5.6-terra-impostor",
+      usage: { input_tokens: 1_000, output_tokens: 100, total_tokens: 1_100 },
+      output: {
+        proposedDescription:
+          "Open the simulated checkout request only after the user explicitly directs checkout.",
+        rationale: "This keeps the explicit commitment boundary precise and review-safe."
+      },
+      code: "repair_provider_identity_invalid"
+    },
+    {
+      label: "inconsistent usage",
+      model: "gpt-5.6-terra",
+      usage: { input_tokens: 1_000, output_tokens: 100, total_tokens: 1_099 },
+      output: {
+        proposedDescription:
+          "Open the simulated checkout request only after the user explicitly directs checkout.",
+        rationale: "This keeps the explicit commitment boundary precise and review-safe."
+      },
+      code: "repair_provider_identity_invalid"
+    },
+    {
+      label: "trim-invalid structured output",
+      model: "gpt-5.6-terra",
+      usage: { input_tokens: 1_000, output_tokens: 100, total_tokens: 1_100 },
+      output: {
+        proposedDescription: "                                        x",
+        rationale: "This rationale is long enough before trimming."
+      },
+      code: "repair_provider_output_invalid"
+    }
+  ])("marks $label as uncertain after dispatch", async ({ model, usage, output, code }) => {
+    const developmentPackage = await buildRepairDevelopmentPackage(await results());
+    const beforeDispatch = vi.fn(async () => undefined);
+    const fetchImplementation = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            id: "resp_repair_invalid",
+            object: "response",
+            model,
+            status: "completed",
+            output: [
+              {
+                type: "message",
+                content: [{ type: "output_text", text: JSON.stringify(output) }]
+              }
+            ],
+            usage
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+    );
+    await expect(
+      runRepairBuilder({
+        developmentPackage,
+        apiKey: "test-key",
+        contextId: `repair_${"r".repeat(22)}`,
+        safetyIdentifier: "f".repeat(64),
+        fetchImplementation: fetchImplementation as typeof fetch,
+        beforeDispatch
+      })
+    ).rejects.toMatchObject({
+      code,
+      dispatch: "after_dispatch_uncertain"
+    } satisfies Partial<RepairProviderError>);
+    expect(beforeDispatch).toHaveBeenCalledOnce();
+  });
 });
+import { POST as repairRoute } from "@/app/api/repair/run/route";

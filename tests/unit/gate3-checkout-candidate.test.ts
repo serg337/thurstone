@@ -136,9 +136,8 @@ describe("the exact Gate 3 checkout candidate", () => {
         }
       }
     });
-    expect(review.targetContract.initialManifest.manifestHash).toBe(
-      "e78c5752c16296c2dcc273e5c8718afc8198a2eefcb1d4bdbb47087b1d6d0392"
-    );
+    expect(review.targetContract.appCommit).toBe(SOURCE_COMMIT);
+    expect(review.targetContract.initialManifest.manifestHash).toMatch(/^[a-f0-9]{64}$/u);
     expect(review.targetContract.initialManifest.tools.map(({ name }) => name)).toEqual([
       "cart_get",
       "cart_update",

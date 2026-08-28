@@ -2,7 +2,10 @@ import "server-only";
 
 import { canonicalJson, canonicalSha256 } from "@/lib/evidence/digest";
 import { openProbeArtifact, sealProbeArtifact } from "@/lib/probe/server-artifact";
-import type { Gate5RevisionFreeze } from "@/lib/semantic/revision-freeze.server";
+import {
+  type Gate5RevisionFreeze,
+  verifyGate5RevisionFreezeIntegrity
+} from "@/lib/semantic/revision-freeze.server";
 
 export const GATE5_REVISION_STORE_VERSION = "toolproof-gate5-revision-store@1.0.0";
 
@@ -52,10 +55,7 @@ function parseReply(value: unknown): unknown[] {
 }
 
 async function verifyDigest(value: Gate5RevisionFreeze): Promise<void> {
-  const { revisionFreezeHash, ...payload } = value;
-  if ((await canonicalSha256(payload)) !== revisionFreezeHash) {
-    throw new Error("gate5_revision_digest_invalid");
-  }
+  await verifyGate5RevisionFreezeIntegrity(value);
 }
 
 export async function putGate5RevisionFreeze(

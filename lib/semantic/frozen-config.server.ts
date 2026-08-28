@@ -5,6 +5,7 @@ import {
   type Gate3FrozenProtocol
 } from "@/lib/semantic/human-freeze.server";
 import { configuredGate3ReviewPackage } from "@/lib/semantic/review-package-config.server";
+import type { Gate3HumanReviewPackage } from "@/lib/semantic/checkout-candidate.server";
 import { createProbeRedis } from "@/lib/probe/ledger";
 import { readGate3Freeze } from "@/lib/semantic/freeze-store.server";
 
@@ -17,6 +18,7 @@ type EnvironmentLike = Readonly<Record<string, string | undefined>>;
 export interface Gate3FrozenConfiguration {
   readonly status: "frozen" | "awaiting-human" | "invalid";
   readonly protocol: Gate3FrozenProtocol | null;
+  readonly reviewPackage: Gate3HumanReviewPackage | null;
   readonly issue: string | null;
 }
 
@@ -47,12 +49,18 @@ export async function configuredGate3FrozenProtocol(
         artifactSecret
       });
       if (stored) {
-        return Object.freeze({ status: "frozen", protocol: stored.frozenProtocol, issue: null });
+        return Object.freeze({
+          status: "frozen",
+          protocol: stored.frozenProtocol,
+          reviewPackage: stored.reviewPackage,
+          issue: null
+        });
       }
     } catch (error) {
       return Object.freeze({
         status: "invalid",
         protocol: null,
+        reviewPackage: null,
         issue: error instanceof Error ? error.message : "gate3_stored_freeze_invalid"
       });
     }
@@ -62,35 +70,50 @@ export async function configuredGate3FrozenProtocol(
     return Object.freeze({
       status: review.status === "invalid" ? "invalid" : "awaiting-human",
       protocol: null,
+      reviewPackage: null,
       issue: review.issue
     });
   }
   const human = environment[GATE3_HUMAN_REVIEW_RECEIPT_ENV]?.trim();
   const termination = environment[GATE3_AUTHORING_TERMINATION_ENV]?.trim();
-  if (!human && !termination) {
-    return Object.freeze({ status: "awaiting-human", protocol: null, issue: null });
+  const successor = review.reviewPackage.successorLineage !== undefined;
+  if (!human && (successor || !termination)) {
+    return Object.freeze({
+      status: "awaiting-human",
+      protocol: null,
+      reviewPackage: review.reviewPackage,
+      issue: null
+    });
   }
-  if (!human || !termination) {
+  if (!human || (!successor && !termination)) {
     return Object.freeze({
       status: "invalid",
       protocol: null,
+      reviewPackage: null,
       issue: "gate3_frozen_configuration_partial"
     });
   }
   try {
+    const protocol = await finalizeGate3HumanFreeze({
+      reviewPackage: review.reviewPackage,
+      humanReviewReceipt: decodeBoundedJson(human, "gate3_human_review_receipt"),
+      ...(termination
+        ? {
+            authoringTermination: decodeBoundedJson(termination, "gate3_authoring_termination")
+          }
+        : {})
+    });
     return Object.freeze({
       status: "frozen",
-      protocol: await finalizeGate3HumanFreeze({
-        reviewPackage: review.reviewPackage,
-        humanReviewReceipt: decodeBoundedJson(human, "gate3_human_review_receipt"),
-        authoringTermination: decodeBoundedJson(termination, "gate3_authoring_termination")
-      }),
+      protocol,
+      reviewPackage: review.reviewPackage,
       issue: null
     });
   } catch (error) {
     return Object.freeze({
       status: "invalid",
       protocol: null,
+      reviewPackage: null,
       issue: error instanceof Error ? error.message : "gate3_frozen_configuration_invalid"
     });
   }

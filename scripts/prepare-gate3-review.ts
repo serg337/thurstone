@@ -9,6 +9,10 @@ import {
   buildGate3HumanReviewPackage,
   gate3ReviewPackageCanonicalJson
 } from "@/lib/semantic/checkout-candidate.server";
+import {
+  GATE3_SUCCESSOR_LINEAGE_ENV,
+  decodeGate3SuccessorLineageBase64Url
+} from "@/lib/semantic/gate3-successor-lineage.server";
 import { verifyGate3HumanReviewPackage } from "@/lib/semantic/human-freeze.server";
 
 const execFile = promisify(execFileCallback);
@@ -24,6 +28,8 @@ const GROUPS = Object.freeze({
     "lib/semantic/checkout-candidate.server.ts",
     "lib/semantic/protocol-freeze.server.ts",
     "lib/semantic/human-freeze.server.ts",
+    "lib/semantic/gate3-successor-lineage.server.ts",
+    "lib/semantic/review-package-config.server.ts",
     "lib/studio/meta-tools.ts",
     "scripts/prepare-gate3-review.ts"
   ],
@@ -84,11 +90,13 @@ const GROUPS = Object.freeze({
     "lib/scored/local-recovery.ts",
     "lib/scored/retry-policy.ts",
     "lib/repair/development-package.server.ts",
+    "lib/repair/identity.server.ts",
     "lib/repair/provider.server.ts",
     "lib/repair/store.server.ts",
     "lib/repair/service.server.ts",
     "lib/results/semantic-results.server.ts",
     "lib/results/meta-tools.ts",
+    "lib/semantic/gate5-source-diff-proof.ts",
     "lib/semantic/revision-freeze.server.ts",
     "lib/semantic/revision-config.server.ts",
     "lib/semantic/revision-store.server.ts",
@@ -146,6 +154,7 @@ const GROUPS = Object.freeze({
     "scripts/clean-next-dev-types.mjs",
     "scripts/gate3-freeze-bootstrap.ts",
     "scripts/gate5-revision-bootstrap.ts",
+    "scripts/prepare-gate5-source-diff.ts",
     "scripts/verify-gate5-one-variable.ts",
     "scripts/verify-probe-no-leakage.mjs",
     "scripts/gate3-leakage-sentinels.json",
@@ -170,8 +179,10 @@ const GROUPS = Object.freeze({
     "tests/browser/studio.spec.ts",
     "tests/unit/gate3-checkout-candidate.test.ts",
     "tests/unit/gate3-freeze-store.test.ts",
+    "tests/unit/gate3-successor-lineage.test.ts",
     "tests/unit/gate3-semantic-core.test.ts",
     "tests/unit/gate5-revision-freeze.test.ts",
+    "tests/unit/gate5-source-diff-proof.test.ts",
     "tests/unit/probe-no-leakage-script.test.ts",
     "tests/unit/repair-ledger-recovery.test.ts",
     "tests/unit/repair-provider.test.ts",
@@ -241,6 +252,10 @@ async function main(): Promise<void> {
   ]);
   if (status !== "") throw new Error("gate3_review_requires_clean_worktree");
   if (!/^[a-f0-9]{40}$/u.test(commit)) throw new Error("gate3_review_commit_invalid");
+  const encodedSuccessorLineage = process.env[GATE3_SUCCESSOR_LINEAGE_ENV]?.trim();
+  const successorLineage = encodedSuccessorLineage
+    ? await decodeGate3SuccessorLineageBase64Url(encodedSuccessorLineage)
+    : undefined;
   const [contract, cases, fixture, manifest, runner, evaluator, canonicalizer] = await Promise.all([
     groupHash("contract", GROUPS.contract),
     groupHash("cases", GROUPS.cases),
@@ -260,7 +275,8 @@ async function main(): Promise<void> {
       runnerSourceSha256: runner.hash,
       evaluatorSourceSha256: evaluator.hash
     },
-    canonicalizerSourceSha256: canonicalizer.hash
+    canonicalizerSourceSha256: canonicalizer.hash,
+    ...(successorLineage ? { successorLineage } : {})
   };
   const review = await buildGate3HumanReviewPackage(bindings);
   await verifyGate3HumanReviewPackage(review);
@@ -279,6 +295,15 @@ async function main(): Promise<void> {
     commit,
     groups: { contract, cases, fixture, manifest, runner, evaluator, canonicalizer },
     sourceBindingHash: await canonicalSha256(bindings),
+    successorLineageHash: successorLineage?.lineageHash ?? null,
+    authoringContinuityHash: successorLineage
+      ? await canonicalSha256(successorLineage.authoringContinuity)
+      : null,
+    semanticContinuityHash: successorLineage
+      ? await canonicalSha256(successorLineage.semanticContinuity)
+      : null,
+    targetContractSemanticProjectionHash:
+      successorLineage?.semanticContinuity.targetContractSemanticProjectionHash ?? null,
     reviewPackageHash: review.packageHash,
     freezeHash: review.freezeHash
   };
@@ -296,6 +321,7 @@ async function main(): Promise<void> {
       reviewRawSha256: rawSha256(reviewBytes),
       reviewPackageHash: review.packageHash,
       freezeHash: review.freezeHash,
+      successorLineageHash: successorLineage?.lineageHash ?? null,
       sourceBindingPath,
       inventoryPath
     })}\n`

@@ -8,10 +8,33 @@ import {
 import {
   GATE5_REPAIR_BUILDER_RECEIPT_VERSION,
   GATE5_REVISION_APPROVAL_VERSION,
-  buildGate5RevisionFreeze
+  buildGate5RevisionFreeze,
+  verifyGate5RevisionFreezeIntegrity
 } from "@/lib/semantic/revision-freeze.server";
 import { assertStoredGate5RevisionLineage } from "@/lib/semantic/revision-config.server";
+import { buildGate5SourceDiffProof } from "@/lib/semantic/gate5-source-diff-proof";
 import { describe, expect, it } from "vitest";
+
+function source(description: string): string {
+  return `export const CHECKOUT_REQUEST_METADATA = {\n  description:\n    ${JSON.stringify(description)},\n  inputSchema: CHECKOUT_OPERATION_JSON_SCHEMA\n} as const;\n`;
+}
+
+function patch(oldDescription: string, newDescription: string): string {
+  return `diff --git a/lib/webmcp/checkout-request-tool.ts b/lib/webmcp/checkout-request-tool.ts\nindex ${"1".repeat(40)}..${"2".repeat(40)} 100644\n--- a/lib/webmcp/checkout-request-tool.ts\n+++ b/lib/webmcp/checkout-request-tool.ts\n@@ -1,5 +1,5 @@\n export const CHECKOUT_REQUEST_METADATA = {\n   description:\n-    ${JSON.stringify(oldDescription)},\n+    ${JSON.stringify(newDescription)},\n   inputSchema: CHECKOUT_OPERATION_JSON_SCHEMA\n } as const;\n`;
+}
+
+async function sourceDiffProof(oldDescription: string, newDescription: string) {
+  return buildGate5SourceDiffProof({
+    changedPaths: ["lib/webmcp/checkout-request-tool.ts"],
+    v1AppCommit: "a".repeat(40),
+    v2AppCommit: "b".repeat(40),
+    oldJsonStringLiteral: JSON.stringify(oldDescription),
+    newJsonStringLiteral: JSON.stringify(newDescription),
+    v1RawSource: source(oldDescription),
+    v2RawSource: source(newDescription),
+    patch: patch(oldDescription, newDescription)
+  });
+}
 
 async function gate3() {
   const review = await buildGate3HumanReviewPackage({
@@ -121,6 +144,10 @@ describe("Gate 5 one-variable revision freeze", () => {
       reviewedAt: "2026-08-29T11:00:00.000Z",
       approvalText: "Synthetic unit-test approval only."
     };
+    const oldDescription = review.targetContract.initialManifest.tools.find(
+      ({ name }) => name === "checkout_request"
+    )!.description;
+    const exactSourceDiffProof = await sourceDiffProof(oldDescription, proposedDescription);
     const revision = await buildGate5RevisionFreeze({
       gate3ReviewPackage: review,
       gate3FrozenProtocol: frozen,
@@ -128,7 +155,8 @@ describe("Gate 5 one-variable revision freeze", () => {
       baselineEvidenceDigest: repairBuilderReceipt.baselineEvidenceDigest,
       repairBuilderReceipt,
       revisionApproval,
-      v2TargetContract
+      v2TargetContract,
+      sourceDiffProof: exactSourceDiffProof
     });
     expect(revision).toMatchObject({
       status: "frozen",
@@ -141,6 +169,23 @@ describe("Gate 5 one-variable revision freeze", () => {
       v2AppCommit: "b".repeat(40)
     });
     expect(revision.revisionFreezeHash).toMatch(/^[a-f0-9]{64}$/u);
+    await expect(verifyGate5RevisionFreezeIntegrity(revision)).resolves.toBeUndefined();
+    const tamperedSourceProof = {
+      ...revision.sourceDiffProof,
+      patchSha256: "0".repeat(64)
+    };
+    const { revisionFreezeHash: _ignored, ...revisionWithoutDigest } = revision;
+    void _ignored;
+    const tamperedWithoutDigest = {
+      ...revisionWithoutDigest,
+      sourceDiffProof: tamperedSourceProof
+    };
+    await expect(
+      verifyGate5RevisionFreezeIntegrity({
+        ...tamperedWithoutDigest,
+        revisionFreezeHash: await canonicalSha256(tamperedWithoutDigest)
+      } as typeof revision)
+    ).rejects.toThrow(/gate5_source_diff_proof_hash_mismatch/u);
     expect(() =>
       assertStoredGate5RevisionLineage({
         stored: revision,
@@ -170,6 +215,7 @@ describe("Gate 5 one-variable revision freeze", () => {
         baselineEvidenceDigest: repairBuilderReceipt.baselineEvidenceDigest,
         repairBuilderReceipt,
         revisionApproval,
+        sourceDiffProof: exactSourceDiffProof,
         v2TargetContract: {
           ...v2TargetContract,
           domainVersion: "changed-domain@2"

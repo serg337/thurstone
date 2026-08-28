@@ -1,4 +1,5 @@
 import {
+  SCORED_RUN_SCHEDULE_VERSION,
   SCORED_RUN_ATTEMPT_VERSION,
   SCORED_RUN_CASE_COUNT,
   SCORED_RUN_OWNER_LEASE_SECONDS,
@@ -18,6 +19,7 @@ import {
   type ScoredRunAttempt,
   type ScoredRunRedisClient
 } from "@/lib/scored/run-store.server";
+import { sealProbeArtifact } from "@/lib/probe/server-artifact";
 import { describe, expect, it } from "vitest";
 
 const SECRET = Buffer.alloc(32, 13).toString("base64url");
@@ -38,9 +40,11 @@ async function identity(phase: "baseline" | "revised" = "baseline") {
     runId: `run_${"r".repeat(22)}`,
     actorHash: "4".repeat(64),
     phaseCallOffset: 0,
+    repairPhaseCallOffset: 0,
     predecessorProtocolHash: null,
     predecessorEvidenceDigest: null,
     predecessorRunId: null,
+    predecessorDisposition: null,
     orderedRunnerCaseIds: Array.from({ length: SCORED_RUN_CASE_COUNT }, (_, index) =>
       runnerCaseId(index)
     )
@@ -382,6 +386,68 @@ class MemoryScoredRedis implements ScoredRunRedisClient {
 }
 
 describe("scored durable run store", () => {
+  it("reads a permanent legacy schedule with its original identity hash", async () => {
+    const redis = new MemoryScoredRedis();
+    const current = await identity();
+    const {
+      repairPhaseCallOffset: _repairPhaseCallOffset,
+      predecessorDisposition: _predecessorDisposition,
+      ...legacy
+    } = current;
+    void _repairPhaseCallOffset;
+    void _predecessorDisposition;
+    const identityHash = await scoredRunIdentityHash(legacy);
+    Object.assign(redis.anchor, {
+      status: "acknowledged",
+      phase: "baseline",
+      identity_hash: identityHash,
+      attempt_count: "0",
+      completed_count: "0",
+      transport_failure_count: "0",
+      current_ordinal: "0",
+      current_attempt: "0",
+      created_at_ms: String(redis.nowMs),
+      terminal_status: "terminal-invalid",
+      terminal_reason: "legacy-fixture",
+      evidence_digest: "e".repeat(64),
+      attempt_manifest_digest: "d".repeat(64)
+    });
+    Object.assign(redis.evidence, {
+      status: "acknowledged",
+      identity_hash: identityHash,
+      evidence_digest: "e".repeat(64),
+      attempt_manifest_digest: "d".repeat(64),
+      attempt_count: "0",
+      completed_count: "0",
+      transport_failure_count: "0",
+      terminal_status: "terminal-invalid",
+      schedule_token: sealProbeArtifact(
+        "scored_schedule",
+        {
+          version: SCORED_RUN_SCHEDULE_VERSION,
+          identity: legacy,
+          createdAt: new Date(redis.nowMs).toISOString()
+        },
+        SECRET
+      )
+    });
+    const opened = await readPermanentScoredRun(
+      redis,
+      { identity: legacy, artifactSecret: SECRET },
+      KEYSPACE
+    );
+    expect(opened).toMatchObject({
+      status: "acknowledged",
+      terminalStatus: "terminal-invalid",
+      identity: {
+        repairPhaseCallOffset: 0,
+        predecessorDisposition: null
+      }
+    });
+    expect(await scoredRunIdentityHash(legacy)).toBe(identityHash);
+    expect(await scoredRunIdentityHash(opened?.identity)).not.toBe(identityHash);
+  });
+
   it("binds one 24-case schedule, encrypts attempts, admits one pre-decision replacement, and deletes only data on ACK", async () => {
     const redis = new MemoryScoredRedis();
     const run = await identity();
