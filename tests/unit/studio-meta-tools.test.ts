@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { readFile } from "node:fs/promises";
 import { studioAuthoringIsLocked } from "@/components/studio/studio-client";
 
 import {
@@ -75,6 +76,15 @@ describe("Studio phase-specific meta-tools", () => {
       })
     ).toBe(true);
     expect(studioAuthoringIsLocked({ status: "frozen", successorLineage: null })).toBe(true);
+  });
+
+  it("uses the permanent stored review when its transitional source binding is absent", async () => {
+    const source = await readFile("app/studio/page.tsx", "utf8");
+    expect(source).toContain('configured.status === "missing"');
+    expect(source).toContain("frozenConfiguration.reviewPackage : configured.reviewPackage");
+    expect(source).toContain(
+      "frozenConfiguration.protocol?.reviewPackageHash === exactPackage?.packageHash"
+    );
   });
 
   it("exposes only the cumulative authoring tools required by each phase", () => {

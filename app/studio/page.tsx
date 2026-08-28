@@ -305,13 +305,15 @@ export default async function StudioPage() {
     configuredGate3ReviewPackage(),
     configuredGate3FrozenProtocol()
   ]);
+  const exactPackage =
+    configured.status === "missing" ? frozenConfiguration.reviewPackage : configured.reviewPackage;
   const frozen =
     frozenConfiguration.status === "frozen" &&
-    frozenConfiguration.protocol?.reviewPackageHash === configured.reviewPackage?.packageHash
+    frozenConfiguration.protocol?.reviewPackageHash === exactPackage?.packageHash
       ? frozenConfiguration.protocol
       : null;
-  const reviewPackage = configured.reviewPackage
-    ? exactReviewPackage(configured.reviewPackage, frozen)
+  const reviewPackage = exactPackage
+    ? exactReviewPackage(exactPackage, frozen)
     : configured.status === "invalid"
       ? Object.freeze({
           ...PREPARING_REVIEW_PACKAGE,
