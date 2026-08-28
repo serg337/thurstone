@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { canonicalSha256 } from "@/lib/evidence/digest";
+import { canonicalJson, canonicalSha256 } from "@/lib/evidence/digest";
 import { fallbackRunnerContractHash } from "@/lib/fallback/runner-contract";
 import {
   PROBE_V04_MIGRATED_LEDGER_SCRIPT_HASH,
@@ -63,6 +63,7 @@ import {
   PROBE_V05_POLICY_MIGRATION_PROGRAM_HASH,
   PROBE_V05_POLICY_MIGRATION_SCRIPTS,
   buildProbeV05PolicyMigrationArguments,
+  decodeProbeV05StoredMigrationManifest,
   probeV05PreservedIssuedAuthorizationDigests,
   probeV05PolicyMigrationProgramHash,
   validateProbeV05PreservedIssuedAuthorization
@@ -311,6 +312,19 @@ describe("Probe v0.4 -> v0.5 fallback attempt-2 policy migration", () => {
     expect(first.footprintDigest).toMatch(/^[a-f0-9]{64}$/u);
     expect(changed.recordDigest).toBe(first.recordDigest);
     expect(changed.footprintDigest).not.toBe(first.footprintDigest);
+  });
+
+  it("accepts both raw and Upstash-auto-decoded stored migration manifests", async () => {
+    const next = await manifest();
+    expect(decodeProbeV05StoredMigrationManifest(canonicalJson(next))).toEqual(next);
+    expect(
+      decodeProbeV05StoredMigrationManifest(JSON.parse(canonicalJson(next)) as typeof next)
+    ).toEqual(next);
+    for (const invalid of ["{", null, [], 1]) {
+      expect(() => decodeProbeV05StoredMigrationManifest(invalid)).toThrow(
+        /V05_MIGRATION_MANIFEST_INVALID/u
+      );
+    }
   });
 
   it("accepts only the exact expired permanent issuance footprint", async () => {

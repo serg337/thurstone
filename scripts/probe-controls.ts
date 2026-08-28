@@ -112,6 +112,7 @@ import {
   discoverProbeV05PolicyMigrationSource,
   migrateProbeGuardPolicyV05,
   probeV05PolicyMigrationProgramHash,
+  readProbeV05PolicyMigrationReceipt,
   type ProbeV05PreservedIssuedAuthorization
 } from "../lib/probe/policy-v05-migration.server";
 import {
@@ -250,7 +251,8 @@ async function productionStatus(): Promise<void> {
     throw new ProbeLedgerError("MISSING_GUARD_IDENTITY");
   }
   const expected = await identity(guardInstanceId, initializedCommit);
-  const status = await readProbeGuardStatus(createProbeRedis());
+  const redis = createProbeRedis();
+  const status = await readProbeGuardStatus(redis);
   const current = isProbeGuardStatusConsistent(status, expected);
   const migrationRequired =
     !process.env.TOOLPROOF_PROBE_ACTIVATION_MODE &&
@@ -258,6 +260,7 @@ async function productionStatus(): Promise<void> {
   if (!current && !migrationRequired) {
     throw new ProbeLedgerError("GUARD_IDENTITY_MISMATCH");
   }
+  const migration = current ? await readProbeV05PolicyMigrationReceipt(redis) : null;
   safeReceipt({
     ok: true,
     mode: migrationRequired ? "migration-required" : "status",
@@ -268,7 +271,13 @@ async function productionStatus(): Promise<void> {
     committedNanoUsd: status.committedNanoUsd,
     pendingCount: status.pendingCount,
     knownCount: status.knownCount,
-    uncertainCount: status.uncertainCount
+    uncertainCount: status.uncertainCount,
+    ...(migration
+      ? {
+          migrationReceiptHash: migration.receiptHash,
+          authorizationInventory: migration.authorizationInventory
+        }
+      : {})
   });
 }
 

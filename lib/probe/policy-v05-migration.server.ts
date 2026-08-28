@@ -440,6 +440,22 @@ export function probeV05PolicyMigrationProgramHash() {
   return canonicalSha256(PROBE_V05_POLICY_MIGRATION_SCRIPTS);
 }
 
+export function decodeProbeV05StoredMigrationManifest(
+  value: unknown
+): ProbeV05PolicyMigrationManifest {
+  let decoded: unknown = value;
+  if (typeof value === "string") {
+    try {
+      decoded = JSON.parse(value);
+    } catch {
+      throw new Error("V05_MIGRATION_MANIFEST_INVALID");
+    }
+  }
+  if (!decoded || typeof decoded !== "object" || Array.isArray(decoded))
+    throw new Error("V05_MIGRATION_MANIFEST_INVALID");
+  return decoded as ProbeV05PolicyMigrationManifest;
+}
+
 function opaque(value: string, field: string): string {
   if (!/^[A-Za-z0-9_-]{16,128}$/u.test(value)) throw new Error(`INVALID_${field}`);
   return value;
@@ -809,13 +825,7 @@ export async function readProbeV05PolicyMigrationReceipt(
     String(result[2]) !== PROBE_V05_POLICY_MIGRATION_ID
   )
     throw new Error("V05_MIGRATION_RECEIPT_IDENTITY_MISMATCH");
-  let stored: unknown;
-  try {
-    stored = JSON.parse(String(result[4]));
-  } catch {
-    throw new Error("V05_MIGRATION_MANIFEST_INVALID");
-  }
-  const storedManifest = stored as ProbeV05PolicyMigrationManifest;
+  const storedManifest = decodeProbeV05StoredMigrationManifest(result[4]);
   const sourceReceipt: ProbeV05PolicyMigrationSourceReceipt = {
     version: PROBE_V05_POLICY_MIGRATION_SOURCE_VERSION,
     migrationId: storedManifest.migrationId,
