@@ -1,11 +1,15 @@
 import "server-only";
 
-import { canonicalSha256 } from "@/lib/evidence/digest";
+import { canonicalJson, canonicalSha256 } from "@/lib/evidence/digest";
+import { probeLiveManifestSchema, type ProbeLiveManifest } from "@/lib/probe/calibration-envelope";
 import { createProbeRedis } from "@/lib/probe/ledger";
 import { readPermanentScoredRunById, type ScoredRunSnapshot } from "@/lib/scored/run-store.server";
 import { configuredGate3FrozenProtocol } from "@/lib/semantic/frozen-config.server";
 import { configuredGate5Revision } from "@/lib/semantic/revision-config.server";
-import { GATE3_SEMANTIC_SUITE } from "@/lib/semantic/checkout-candidate.server";
+import {
+  GATE3_SEMANTIC_SUITE,
+  meaningForScoredCase
+} from "@/lib/semantic/checkout-candidate.server";
 import type { Gate3ScoredEvidenceRow } from "@/lib/semantic/scored-evaluation.server";
 
 export const BASELINE_RUN_ID_ENV = "TOOLPROOF_BASELINE_RUN_ID";
@@ -32,18 +36,27 @@ export interface SemanticDevelopmentResultRow {
 
 export interface SemanticDevelopmentRepairRow {
   readonly ordinal: number;
-  readonly caseId: string;
   readonly runnerCaseId: string;
-  readonly family: string;
+  readonly meaningId: string;
   readonly request: string;
-  readonly evaluation: Gate3ScoredEvidenceRow["evaluation"];
-  readonly provider: {
+  readonly expected: {
+    readonly approvedMeaning: string;
+    readonly approvalClass: string;
+    readonly actionClass: string;
+    readonly tool: string | null;
+    readonly arguments: unknown;
+    readonly stateChange: string;
+    readonly allowedEffects: readonly string[];
+    readonly forbiddenEffects: readonly string[];
+  };
+  readonly observed: {
+    readonly actionClass: string;
     readonly decision: Gate3ScoredEvidenceRow["providerReceipt"]["decision"];
     readonly decisionError: string | null;
     readonly refusal: string | null;
-    readonly outputText: string | null;
-    readonly usage: Gate3ScoredEvidenceRow["providerReceipt"]["usage"];
-    readonly rawResponseHash: string;
+    readonly passed: boolean;
+    readonly score: 0 | 1;
+    readonly failureCodes: readonly string[];
   };
   readonly trace: {
     readonly eventId: string;
@@ -51,10 +64,19 @@ export interface SemanticDevelopmentRepairRow {
     readonly status: string;
     readonly commitDisposition: string;
     readonly canonicalArguments: unknown;
-    readonly canonicalResult: unknown;
+    readonly canonicalResultSha256: string;
     readonly stateBeforeSha256: string;
     readonly stateAfterSha256: string;
-    readonly effect: unknown;
+    readonly effect: {
+      readonly stateChanged: boolean;
+      readonly revisionDelta: number;
+      readonly changedQuantities: readonly {
+        readonly itemId: string;
+        readonly delta: number;
+      }[];
+      readonly pendingCheckoutChanged: boolean;
+      readonly unmodeledStateChanged: boolean;
+    };
   } | null;
 }
 
@@ -68,8 +90,10 @@ export type SemanticResultsState =
       readonly disclosure: "one-trial demonstration snapshot";
       readonly baselineRunId: string;
       readonly baselineEvidenceDigest: string;
+      readonly baselineAppCommit: string;
       readonly reviewPackageHash: string;
       readonly frozenProtocolHash: string;
+      readonly liveManifest: ProbeLiveManifest;
       readonly rows: readonly SemanticDevelopmentResultRow[];
       readonly repairRows: readonly SemanticDevelopmentRepairRow[];
       readonly development: {
@@ -179,6 +203,8 @@ function repairRows(
     if (!definition || row.evaluation.score === null) {
       throw new Error("semantic_repair_row_invalid");
     }
+    const approved = meaningForScoredCase(definition);
+    const expectation = approved.expectation;
     const trace = Array.isArray(row.trialEvidence.currentTraces)
       ? (row.trialEvidence.currentTraces[0] as
           | {
@@ -187,7 +213,7 @@ function repairRows(
               readonly status?: unknown;
               readonly commitDisposition?: unknown;
               readonly canonicalArguments?: { readonly value?: unknown };
-              readonly canonicalResult?: { readonly value?: unknown };
+              readonly canonicalResult?: { readonly sha256?: unknown };
               readonly stateBefore?: { readonly sha256?: unknown };
               readonly stateAfter?: { readonly sha256?: unknown };
               readonly effect?: unknown;
@@ -201,27 +227,60 @@ function repairRows(
           status: String(trace.status ?? ""),
           commitDisposition: String(trace.commitDisposition ?? ""),
           canonicalArguments: trace.canonicalArguments?.value ?? null,
-          canonicalResult: trace.canonicalResult?.value ?? null,
+          canonicalResultSha256: String(trace.canonicalResult?.sha256 ?? ""),
           stateBeforeSha256: String(trace.stateBefore?.sha256 ?? ""),
           stateAfterSha256: String(trace.stateAfter?.sha256 ?? ""),
-          effect: trace.effect ?? null
+          effect: (() => {
+            const effect = trace.effect as {
+              readonly stateChanged?: unknown;
+              readonly revision?: { readonly delta?: unknown };
+              readonly quantities?: readonly {
+                readonly itemId?: unknown;
+                readonly delta?: unknown;
+                readonly changed?: unknown;
+              }[];
+              readonly pendingCheckout?: { readonly changed?: unknown };
+              readonly unmodeledStateChanged?: unknown;
+            };
+            return {
+              stateChanged: effect.stateChanged === true,
+              revisionDelta: Number(effect.revision?.delta ?? 0),
+              changedQuantities: (effect.quantities ?? [])
+                .filter(({ changed }) => changed === true)
+                .map(({ itemId, delta }) => ({
+                  itemId: String(itemId ?? ""),
+                  delta: Number(delta)
+                })),
+              pendingCheckoutChanged: effect.pendingCheckout?.changed === true,
+              unmodeledStateChanged: effect.unmodeledStateChanged === true
+            };
+          })()
         }
       : null;
     rows.push(
       Object.freeze({
         ordinal: attempt.ordinal,
-        caseId: definition.caseId,
         runnerCaseId: definition.runnerCaseId,
-        family: definition.family,
+        meaningId: definition.meaningId,
         request: definition.naturalLanguageRequest,
-        evaluation: row.evaluation,
-        provider: Object.freeze({
+        expected: Object.freeze({
+          approvedMeaning: approved.approvedMeaning,
+          approvalClass: approved.approvalClass,
+          actionClass: expectation.kind,
+          tool: expectation.kind === "call" ? expectation.tool : null,
+          arguments: expectation.kind === "call" ? expectation.arguments : null,
+          stateChange: expectation.stateChange,
+          allowedEffects: approved.allowedEffects,
+          forbiddenEffects: approved.forbiddenEffects
+        }),
+        observed: Object.freeze({
+          actionClass: row.evaluation.observedActionClass,
           decision: row.providerReceipt.decision,
           decisionError: row.providerReceipt.decisionError,
           refusal: row.providerReceipt.refusal,
-          outputText: row.providerReceipt.outputText,
-          usage: row.providerReceipt.usage,
-          rawResponseHash: row.providerReceipt.rawResponseHash
+          passed: row.evaluation.passed,
+          score: row.evaluation.score,
+          failureCodes: row.evaluation.failureCodes
         }),
         trace: projectedTrace ? Object.freeze(projectedTrace) : null
       })
@@ -230,6 +289,25 @@ function repairRows(
   rows.sort((left, right) => left.ordinal - right.ordinal);
   if (rows.length !== 12) throw new Error("semantic_repair_denominator_invalid");
   return Object.freeze(rows);
+}
+
+function baselineLiveManifest(snapshot: ScoredRunSnapshot): ProbeLiveManifest {
+  let selected: ProbeLiveManifest | null = null;
+  for (const attempt of snapshot.attempts) {
+    if (attempt.disposition !== "scored") continue;
+    const evidence = attempt.evidence as Record<string, unknown>;
+    const row = evidence.row as Gate3ScoredEvidenceRow;
+    const envelope = row.envelope as { readonly liveManifest?: unknown };
+    const manifest = probeLiveManifestSchema.parse(envelope.liveManifest);
+    if (selected && canonicalJson(selected) !== canonicalJson(manifest)) {
+      throw new Error("baseline_results_manifest_drift");
+    }
+    selected = manifest;
+  }
+  if (!selected) {
+    throw new Error("baseline_results_manifest_missing");
+  }
+  return selected;
 }
 
 export async function readSemanticResults(
@@ -277,6 +355,7 @@ export async function readSemanticResults(
   );
   const rows = baselineRows.filter(({ runnerCaseId }) => developmentIds.has(runnerCaseId));
   const developmentRepairRows = repairRows(snapshot, developmentIds);
+  const liveManifest = baselineLiveManifest(snapshot);
   const holdoutAttempts = snapshot.attempts.filter(
     ({ runnerCaseId }) => !developmentIds.has(runnerCaseId)
   );
@@ -362,8 +441,10 @@ export async function readSemanticResults(
     disclosure: "one-trial demonstration snapshot",
     baselineRunId: runId!,
     baselineEvidenceDigest: evidenceDigest!,
+    baselineAppCommit: snapshot.identity.appCommit,
     reviewPackageHash: frozen.protocol.reviewPackageHash,
     frozenProtocolHash: frozen.protocol.frozenProtocolHash,
+    liveManifest,
     rows: Object.freeze(rows),
     repairRows: developmentRepairRows,
     development: Object.freeze({

@@ -1,16 +1,23 @@
+import { createCheckoutFixture } from "@/lib/domain/checkout";
 import { buildRepairDevelopmentPackage } from "@/lib/repair/development-package.server";
 import { runRepairBuilder } from "@/lib/repair/provider.server";
 import type { SemanticResultsState } from "@/lib/results/semantic-results.server";
+import { createCheckoutLiveManifest } from "@/lib/webmcp/live-manifest.server";
 import { describe, expect, it, vi } from "vitest";
 
-function results(): Extract<SemanticResultsState, { status: "baseline-development-only" }> {
+async function results(): Promise<
+  Extract<SemanticResultsState, { status: "baseline-development-only" }>
+> {
+  const baselineAppCommit = "f".repeat(40);
   return {
     status: "baseline-development-only",
     disclosure: "one-trial demonstration snapshot",
     baselineRunId: `run_${"b".repeat(22)}`,
     baselineEvidenceDigest: "a".repeat(64),
+    baselineAppCommit,
     reviewPackageHash: "c".repeat(64),
     frozenProtocolHash: "d".repeat(64),
+    liveManifest: await createCheckoutLiveManifest(createCheckoutFixture(), baselineAppCommit),
     rows: Array.from({ length: 12 }, (_, index) => ({
       ordinal: index,
       caseId: `development_${index}`,
@@ -27,45 +34,27 @@ function results(): Extract<SemanticResultsState, { status: "baseline-developmen
     })),
     repairRows: Array.from({ length: 12 }, (_, index) => ({
       ordinal: index,
-      caseId: `development_${index}`,
       runnerCaseId: `case_${String(index).padStart(22, "0")}`,
-      family: "development-family",
+      meaningId: "meaning_checkout_pending",
       request: `Synthetic development request ${index}`,
-      evaluation: {
-        version: "toolproof-semantic-evaluator@1.0.0",
-        caseId: `development_${index}`,
-        runnerCaseId: `case_${String(index).padStart(22, "0")}`,
+      expected: {
+        approvedMeaning: "Open simulated checkout only after explicit user direction.",
         approvalClass: "human-gated-consequential-request",
-        expectedActionClass: "call",
-        observedActionClass: "clarify",
-        disposition: "scored",
-        infrastructureRetryEligible: false,
-        passed: false,
-        score: 0 as const,
-        checks: [
-          {
-            code: "decision_action_class",
-            passed: false,
-            path: null,
-            expected: "call",
-            actual: "clarify"
-          }
-        ],
-        failureCodes: ["decision_action_class"]
+        actionClass: "call",
+        tool: "checkout_request",
+        arguments: { additionalProperties: "forbidden", predicates: [] },
+        stateChange: "required",
+        allowedEffects: ["state-revision", "pending-checkout"],
+        forbiddenEffects: ["cart-quantities", "unmodeled-state"]
       },
-      provider: {
+      observed: {
+        actionClass: "clarify",
         decision: { kind: "clarify" as const, text: "Please confirm checkout." },
         decisionError: null,
         refusal: null,
-        outputText: '{"decision":{"kind":"clarify","text":"Please confirm checkout."}}',
-        usage: {
-          inputTokens: 100,
-          outputTokens: 20,
-          totalTokens: 120,
-          accountedNanoUsd: 1_000_000,
-          costBasis: "frozen-list-price-plus-10pct-uplift" as const
-        },
-        rawResponseHash: "f".repeat(64)
+        passed: false,
+        score: 0 as const,
+        failureCodes: ["decision_action_class"]
       },
       trace: null
     })),
@@ -81,8 +70,9 @@ function results(): Extract<SemanticResultsState, { status: "baseline-developmen
 }
 
 describe("fresh isolated Repair Builder provider", () => {
-  it("sends development-only evidence and returns one hash-bound description proposal", async () => {
-    const developmentPackage = await buildRepairDevelopmentPackage(results());
+  it("sends compact development-only evidence and returns one hash-bound proposal", async () => {
+    const baselineResults = await results();
+    const developmentPackage = await buildRepairDevelopmentPackage(baselineResults);
     expect(JSON.stringify(developmentPackage)).not.toContain("commitmentDigest");
     expect(developmentPackage.holdout).toEqual({
       promptsIncluded: 0,
@@ -141,9 +131,12 @@ describe("fresh isolated Repair Builder provider", () => {
       proposedField: "checkout_request.description"
     });
     expect(receipt.repairBuilderReceipt.receiptHash).toMatch(/^[a-f0-9]{64}$/u);
-    expect(requestBody).not.toContain(results().holdout.commitmentDigest);
+    expect(requestBody).not.toContain(baselineResults.holdout.commitmentDigest);
     expect(requestBody).toContain("Synthetic development request 0");
     expect(requestBody).toContain("decision_action_class");
+    expect(requestBody).toContain("toolproof-probe-live-manifest@1.0.0");
+    const modelInput = JSON.parse(requestBody) as { readonly input: string };
+    expect(Buffer.byteLength(modelInput.input, "utf8")).toBeLessThanOrEqual(9_000);
     expect(Buffer.byteLength(requestBody, "utf8")).toBeLessThanOrEqual(64 * 1_024);
   });
 });
