@@ -45,6 +45,34 @@ export const PROBE_V05_PRIOR_REPRODUCER_EVIDENCE_DIGEST =
   "b3db37326d81cee044ac258d60b0b35809fcbc2111ae17c42c6c4784c0f36a17";
 export const PROBE_V05_PRESERVED_KNOWN_CALLS_DIGEST =
   "03c4632b3fc75914f107528965c11959c9e39bed8354f7c9a46d599cc34a3e2b";
+export const PROBE_V05_AUTHORIZATION_INVENTORY_VERSION =
+  "toolproof-probe-authorization-inventory@1.0.0";
+export const PROBE_V05_PRESERVED_ISSUED_AUTHORIZATION_COUNT = 1;
+export const PROBE_V05_PRESERVED_ISSUED_AUTHORIZATION_DIGEST =
+  "d1314f7253800ede4a804f264638b24ea9947d6a2709b07d44c9129a220f1e99";
+export const PROBE_V05_PRESERVED_ISSUED_AUTHORIZATION_FOOTPRINT_DIGEST =
+  "b46063f356d9f6bcbfa858c4623c387452757cd52531f54b0baecd110b1ae8b0";
+export const PROBE_V05_AUTHORIZATION_INVENTORY = Object.freeze({
+  version: PROBE_V05_AUTHORIZATION_INVENTORY_VERSION,
+  total: 14,
+  known: 13,
+  providerResponses: 13,
+  ungrantedExpired: PROBE_V05_PRESERVED_ISSUED_AUTHORIZATION_COUNT,
+  tombstone: Object.freeze({
+    recordDigest: PROBE_V05_PRESERVED_ISSUED_AUTHORIZATION_DIGEST,
+    footprintDigest: PROBE_V05_PRESERVED_ISSUED_AUTHORIZATION_FOOTPRINT_DIGEST,
+    storedState: "ISSUED",
+    temporalDisposition: "expired",
+    purpose: "calibration",
+    fieldCount: 11,
+    permanent: true,
+    countedAsCall: false,
+    providerRecordPresent: false,
+    dispatchFieldsPresent: false,
+    subjectReplayBindingPresent: true,
+    issuanceRateBindingPresent: true
+  })
+});
 
 export const PROBE_V05_PREVIOUS_POLICY_VERSION = PROBE_V04_MIGRATED_POLICY_VERSION;
 export const PROBE_V05_PREVIOUS_POLICY_HASH = PROBE_V04_MIGRATED_POLICY_HASH;
@@ -248,6 +276,7 @@ export interface ProbeV05PolicyMigrationSourceReceipt {
   readonly previousRunnerHash: typeof PROBE_V05_PREVIOUS_RUNNER_CONTRACT_HASH;
   readonly preserved: typeof PROBE_V05_POLICY_MIGRATION_FIXED_PRESERVED_STATE;
   readonly knownCalls: readonly ProbePolicyMigrationKnownCall[];
+  readonly authorizationInventory: typeof PROBE_V05_AUTHORIZATION_INVENTORY;
   readonly ackAnchor: ProbeV05AckAnchor;
 }
 
@@ -371,6 +400,7 @@ export async function parseProbeV05PolicyMigrationSourceReceipt(
       "previousRunnerHash",
       "preserved",
       "knownCalls",
+      "authorizationInventory",
       "ackAnchor"
     ],
     "invalid_v05_source_receipt_shape"
@@ -406,6 +436,11 @@ export async function parseProbeV05PolicyMigrationSourceReceipt(
     "v05_preserved_state_mismatch"
   );
   exact(value.knownCalls, PROBE_V05_PRESERVED_KNOWN_CALLS, "v05_known_call_lineage_mismatch");
+  exact(
+    value.authorizationInventory,
+    PROBE_V05_AUTHORIZATION_INVENTORY,
+    "v05_authorization_inventory_mismatch"
+  );
   if ((await canonicalSha256(value.knownCalls)) !== PROBE_V05_PRESERVED_KNOWN_CALLS_DIGEST)
     fail("v05_known_call_digest_mismatch");
   exact(

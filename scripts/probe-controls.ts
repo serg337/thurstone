@@ -76,6 +76,7 @@ import {
   buildProbeV04PolicyMigrationArguments
 } from "../lib/probe/policy-v04-migration.server";
 import {
+  PROBE_V05_AUTHORIZATION_INVENTORY,
   PROBE_V05_ACK_ANCHOR_FIXED,
   PROBE_V05_MIGRATED_LEDGER_SCRIPT_HASH,
   PROBE_V05_MIGRATED_POLICY_HASH,
@@ -98,6 +99,7 @@ import {
   PROBE_V05_PRIOR_EVIDENCE_RAW_SHA256,
   PROBE_V05_PRIOR_REPRODUCER_EVIDENCE_DIGEST,
   PROBE_V05_PRIOR_REPRODUCER_RAW_SHA256,
+  ProbeV05PolicyMigrationContractError,
   createProbeV05PolicyMigrationManifest,
   isProbeV05PolicyMigrationSourceStatus,
   probeV05PolicyMigrationDigest,
@@ -109,7 +111,8 @@ import {
   buildProbeV05PolicyMigrationArguments,
   discoverProbeV05PolicyMigrationSource,
   migrateProbeGuardPolicyV05,
-  probeV05PolicyMigrationProgramHash
+  probeV05PolicyMigrationProgramHash,
+  type ProbeV05PreservedIssuedAuthorization
 } from "../lib/probe/policy-v05-migration.server";
 import {
   PROBE_CHALLENGE_CLOSES_AT,
@@ -393,6 +396,7 @@ async function preflightProductionPolicyV05(): Promise<void> {
     scriptHash: prepared.nextScriptHash,
     runnerHash: prepared.nextRunnerHash,
     migrationProgramHash: prepared.migrationProgramHash,
+    authorizationInventory: prepared.discovered.sourceReceipt.authorizationInventory,
     confirmation: prepared.expectedConfirmation
   });
 }
@@ -411,7 +415,8 @@ async function migrateProductionPolicyV05(): Promise<void> {
   const result = await migrateProbeGuardPolicyV05(prepared.redis, {
     sourceReceipt: prepared.discovered.sourceReceipt,
     predecessorReceipt: prepared.discovered.predecessorReceipt,
-    migrationCommit: prepared.sourceCommit
+    migrationCommit: prepared.sourceCommit,
+    issuedAuthorization: prepared.discovered.issuedAuthorization
   });
   const status = await readProbeGuardStatus(prepared.redis);
   const expected: ProbeGuardIdentity = {
@@ -456,6 +461,7 @@ async function migrateProductionPolicyV05(): Promise<void> {
     scriptHash: status.scriptHash,
     runnerHash: result.receipt.nextRunnerHash,
     migrationProgramHash: result.receipt.migrationProgramHash,
+    authorizationInventory: result.receipt.authorizationInventory,
     claimedCalls: status.claimedCalls,
     knownCalls: status.knownCount,
     committedNanoUsd: status.committedNanoUsd,
@@ -928,6 +934,7 @@ async function integrationV05Fixture(testId: string): Promise<{
   readonly manifest: ProbeV05PolicyMigrationManifest;
   readonly predecessor: ProbeV04PolicyMigrationReceipt;
   readonly migrationDigest: string;
+  readonly issuedAuthorization: ProbeV05PreservedIssuedAuthorization;
 }> {
   const hash = (label: string) => sha256Hex(`v05-${label}:${testId}`);
   const ackAnchor = Object.freeze({
@@ -947,6 +954,17 @@ async function integrationV05Fixture(testId: string): Promise<{
     migrationCommit: "a".repeat(40),
     migrationProgramHash: PROBE_V04_POLICY_MIGRATION_PROGRAM_HASH
   } as unknown as ProbeV04PolicyMigrationReceipt;
+  const issuedAt = 1_700_000_000;
+  const issuedAuthorization = Object.freeze({
+    jti: `jti_v05_issued_${testId}`,
+    claimsHash: await hash("issued-claims"),
+    subjectHash: await hash("issued-subject"),
+    actorHash: await hash("issued-actor"),
+    issuedAt,
+    expiresAt: issuedAt + 120,
+    issueRateBucket: Math.floor(issuedAt / 3_600),
+    issueRateCount: 5
+  });
   const manifest = Object.freeze({
     version: PROBE_V05_POLICY_MIGRATION_VERSION,
     migrationId: PROBE_V05_POLICY_MIGRATION_ID,
@@ -966,6 +984,7 @@ async function integrationV05Fixture(testId: string): Promise<{
     previousRunnerHash: PROBE_V05_PREVIOUS_RUNNER_CONTRACT_HASH,
     preserved: PROBE_V05_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
     knownCalls: PROBE_V05_PRESERVED_KNOWN_CALLS,
+    authorizationInventory: PROBE_V05_AUTHORIZATION_INVENTORY,
     ackAnchor,
     migrationCommit: "b".repeat(40),
     nextPolicyVersion: PROBE_V05_MIGRATED_POLICY_VERSION,
@@ -979,7 +998,12 @@ async function integrationV05Fixture(testId: string): Promise<{
     lifetimeSpendCeilingNanoUsd: PROBE_LIFETIME_SPEND_CEILING_NANO_USD,
     perCallReservationNanoUsd: PROBE_PER_CALL_RESERVATION_NANO_USD
   }) satisfies ProbeV05PolicyMigrationManifest;
-  return { manifest, predecessor, migrationDigest: await canonicalSha256(manifest) };
+  return {
+    manifest,
+    predecessor,
+    issuedAuthorization,
+    migrationDigest: await canonicalSha256(manifest)
+  };
 }
 
 async function seedIntegrationV05Source(
@@ -989,6 +1013,7 @@ async function seedIntegrationV05Source(
   cleanupKeys: Set<string>,
   options: {
     readonly tamperKnownCall?: boolean;
+    readonly tamperIssuedAuthorization?: boolean;
     readonly tamperAckAnchor?: boolean;
     readonly retainEncryptedData?: boolean;
   } = {}
@@ -1012,7 +1037,10 @@ async function seedIntegrationV05Source(
     ...manifest.knownCalls.flatMap((call) => [
       `${keyspace.namespace}:auth:${call.jti}`,
       `${keyspace.namespace}:provider:${call.providerResponseHash}`
-    ])
+    ]),
+    `${keyspace.namespace}:auth:${fixture.issuedAuthorization.jti}`,
+    `${keyspace.namespace}:subject:${fixture.issuedAuthorization.subjectHash}`,
+    `${keyspace.namespace}:issue-rate:calibration:${fixture.issuedAuthorization.actorHash}`
   ];
   for (const key of keys) cleanupKeys.add(key);
   await redis.hset(keyspace.config, {
@@ -1110,7 +1138,49 @@ async function seedIntegrationV05Source(
     });
     await redis.set(`${keyspace.namespace}:provider:${call.providerResponseHash}`, call.jti);
   }
+  const issued = fixture.issuedAuthorization;
+  await redis.hset(`${keyspace.namespace}:auth:${issued.jti}`, {
+    state: "ISSUED",
+    jti: issued.jti,
+    claims_hash: options.tamperIssuedAuthorization ? "0".repeat(64) : issued.claimsHash,
+    purpose: "calibration",
+    subject_hash: issued.subjectHash,
+    actor_hash: issued.actorHash,
+    issued_at: issued.issuedAt,
+    expires_at: issued.expiresAt,
+    guard_instance_id: manifest.guardInstanceId,
+    policy_hash: manifest.previousPolicyHash,
+    script_hash: manifest.previousScriptHash
+  });
+  await redis.set(`${keyspace.namespace}:subject:${issued.subjectHash}`, issued.jti);
+  await redis.hset(`${keyspace.namespace}:issue-rate:calibration:${issued.actorHash}`, {
+    [String(issued.issueRateBucket)]: issued.issueRateCount
+  });
   return keys;
+}
+
+async function integrationV05IssuedFootprintSnapshot(
+  redis: ReturnType<typeof createProbeRedis>,
+  keys: readonly string[]
+): Promise<string> {
+  const auth = keys.at(-3);
+  const subject = keys.at(-2);
+  const rate = keys.at(-1);
+  if (!auth || !subject || !rate) throw new ProbeLedgerError("V05_ISSUED_TEST_KEYS_MISSING");
+  const [authValue, subjectValue, rateValue, authTtl, subjectTtl, rateTtl] = await Promise.all([
+    redis.hgetall(auth),
+    redis.get(subject),
+    redis.hgetall(rate),
+    redis.pttl(auth),
+    redis.pttl(subject),
+    redis.pttl(rate)
+  ]);
+  return canonicalJson({
+    auth: authValue,
+    subject: subjectValue,
+    rate: rateValue,
+    ttl: { auth: authTtl, subject: subjectTtl, rate: rateTtl }
+  });
 }
 
 function schedule(): ProbePurpose[] {
@@ -1152,6 +1222,12 @@ async function integrationTest(): Promise<void> {
   const v05TamperKeyspace = createProbeLedgerKeyspace(
     `tp:{webmcp26}:migration_v05_tamper_${testId}`
   );
+  const v05IssuedTamperKeyspace = createProbeLedgerKeyspace(
+    `tp:{webmcp26}:migration_v05_issued_tamper_${testId}`
+  );
+  const v05InventoryRaceKeyspace = createProbeLedgerKeyspace(
+    `tp:{webmcp26}:migration_v05_inventory_race_${testId}`
+  );
   const v05AckTamperKeyspace = createProbeLedgerKeyspace(
     `tp:{webmcp26}:migration_v05_ack_tamper_${testId}`
   );
@@ -1164,6 +1240,8 @@ async function integrationTest(): Promise<void> {
   const v04TamperFixture = await integrationV04Fixture(`${testId}_tamper`);
   const v05Fixture = await integrationV05Fixture(testId);
   const v05TamperFixture = await integrationV05Fixture(`${testId}_tamper`);
+  const v05IssuedTamperFixture = await integrationV05Fixture(`${testId}_issued_tamper`);
+  const v05InventoryRaceFixture = await integrationV05Fixture(`${testId}_inventory_race`);
   const v05AckTamperFixture = await integrationV05Fixture(`${testId}_ack_tamper`);
   const v05DataPresentFixture = await integrationV05Fixture(`${testId}_data_present`);
   const guard = await identity(`guard_integration_${testId}`, "f".repeat(40));
@@ -1540,10 +1618,12 @@ async function integrationTest(): Promise<void> {
     }
 
     const v05Keys = await seedIntegrationV05Source(redis, v05MigrationKeyspace, v05Fixture, keys);
+    const v05IssuedFootprintBefore = await integrationV05IssuedFootprintSnapshot(redis, v05Keys);
     const v05Arguments = buildProbeV05PolicyMigrationArguments(
       v05Fixture.manifest,
       v05Fixture.predecessor,
-      v05Fixture.migrationDigest
+      v05Fixture.migrationDigest,
+      v05Fixture.issuedAuthorization
     );
     const v05NewReply = await redis.eval<string[], unknown>(
       PROBE_V05_POLICY_MIGRATION_SCRIPTS.migrate,
@@ -1556,6 +1636,7 @@ async function integrationTest(): Promise<void> {
       v05Arguments
     );
     const v05Status = await readProbeGuardStatus(redis, v05MigrationKeyspace);
+    const v05IssuedFootprintAfter = await integrationV05IssuedFootprintSnapshot(redis, v05Keys);
     if (
       !Array.isArray(v05NewReply) ||
       Number(v05NewReply[0]) !== 1 ||
@@ -1580,7 +1661,8 @@ async function integrationTest(): Promise<void> {
       v05Status.purposeLimits.judge !== 1 ||
       (await redis.exists(v05Keys[6]!)) !== 1 ||
       (await redis.exists(v05Keys[8]!)) !== 0 ||
-      (await redis.exists(...v05Keys.slice(9))) !== 26
+      (await redis.exists(...v05Keys.slice(9))) !== 29 ||
+      v05IssuedFootprintAfter !== v05IssuedFootprintBefore
     ) {
       throw new ProbeLedgerError("V05_MIGRATION_TEST_NEW_STATUS_MISMATCH");
     }
@@ -1612,7 +1694,8 @@ async function integrationTest(): Promise<void> {
       buildProbeV05PolicyMigrationArguments(
         v05TamperFixture.manifest,
         v05TamperFixture.predecessor,
-        v05TamperFixture.migrationDigest
+        v05TamperFixture.migrationDigest,
+        v05TamperFixture.issuedAuthorization
       )
     );
     const v05TamperedStatus = await readProbeGuardStatus(redis, v05TamperKeyspace);
@@ -1625,6 +1708,111 @@ async function integrationTest(): Promise<void> {
       (await redis.exists(v05TamperKeys[6]!)) !== 0
     ) {
       throw new ProbeLedgerError("V05_MIGRATION_TEST_TAMPER_MUTATED_STATE");
+    }
+
+    const v05IssuedTamperKeys = await seedIntegrationV05Source(
+      redis,
+      v05IssuedTamperKeyspace,
+      v05IssuedTamperFixture,
+      keys,
+      { tamperIssuedAuthorization: true }
+    );
+    const v05IssuedTamperBefore = await integrationV05IssuedFootprintSnapshot(
+      redis,
+      v05IssuedTamperKeys
+    );
+    const v05IssuedTamperReply = await redis.eval<string[], unknown>(
+      PROBE_V05_POLICY_MIGRATION_SCRIPTS.migrate,
+      [...v05IssuedTamperKeys],
+      buildProbeV05PolicyMigrationArguments(
+        v05IssuedTamperFixture.manifest,
+        v05IssuedTamperFixture.predecessor,
+        v05IssuedTamperFixture.migrationDigest,
+        v05IssuedTamperFixture.issuedAuthorization
+      )
+    );
+    const v05IssuedTamperedStatus = await readProbeGuardStatus(redis, v05IssuedTamperKeyspace);
+    const v05IssuedTamperAfter = await integrationV05IssuedFootprintSnapshot(
+      redis,
+      v05IssuedTamperKeys
+    );
+    const v05IssuedAuthKey = v05IssuedTamperKeys.at(-3);
+    if (
+      !v05IssuedAuthKey ||
+      !Array.isArray(v05IssuedTamperReply) ||
+      Number(v05IssuedTamperReply[0]) !== 0 ||
+      v05IssuedTamperReply[1] !== "V05_ISSUED_AUTHORIZATION_MISMATCH" ||
+      v05IssuedTamperedStatus.policyHash !== PROBE_V05_PREVIOUS_POLICY_HASH ||
+      v05IssuedTamperedStatus.purposeLimits.calibration !== 13 ||
+      (await redis.exists(v05IssuedTamperKeys[6]!)) !== 0 ||
+      (await redis.hget(v05IssuedAuthKey, "claims_hash")) !== "0".repeat(64) ||
+      v05IssuedTamperAfter !== v05IssuedTamperBefore
+    ) {
+      throw new ProbeLedgerError("V05_MIGRATION_TEST_ISSUED_TAMPER_MUTATED_STATE");
+    }
+
+    const v05InventoryRaceKeys = await seedIntegrationV05Source(
+      redis,
+      v05InventoryRaceKeyspace,
+      v05InventoryRaceFixture,
+      keys
+    );
+    const v05InventoryRaceArguments = buildProbeV05PolicyMigrationArguments(
+      v05InventoryRaceFixture.manifest,
+      v05InventoryRaceFixture.predecessor,
+      v05InventoryRaceFixture.migrationDigest,
+      v05InventoryRaceFixture.issuedAuthorization
+    );
+    const v05InventoryRaceFootprintBefore = await integrationV05IssuedFootprintSnapshot(
+      redis,
+      v05InventoryRaceKeys
+    );
+    const raceJti = `jti_v05_race_${testId}`;
+    const raceClaims = await sha256Hex(`v05-race-claims:${testId}`);
+    const raceSubject = await sha256Hex(`v05-race-subject:${testId}`);
+    const raceActor = await sha256Hex(`v05-race-actor:${testId}`);
+    const raceAuthKey = `${v05InventoryRaceKeyspace.namespace}:auth:${raceJti}`;
+    keys.add(raceAuthKey);
+    keys.add(`${v05InventoryRaceKeyspace.namespace}:subject:${raceSubject}`);
+    keys.add(`${v05InventoryRaceKeyspace.namespace}:issue-rate:calibration:${raceActor}`);
+    await issueProbeAuthorization(
+      redis,
+      {
+        guardInstanceId: v05InventoryRaceFixture.manifest.guardInstanceId,
+        policyHash: v05InventoryRaceFixture.manifest.previousPolicyHash,
+        scriptHash: v05InventoryRaceFixture.manifest.previousScriptHash,
+        initializedCommit: v05InventoryRaceFixture.manifest.initializedCommit,
+        jti: raceJti,
+        claimsHash: raceClaims,
+        purpose: "calibration",
+        subjectHash: raceSubject,
+        actorHash: raceActor
+      },
+      v05InventoryRaceKeyspace
+    );
+    const v05InventoryRaceReply = await redis.eval<string[], unknown>(
+      PROBE_V05_POLICY_MIGRATION_SCRIPTS.migrate,
+      [...v05InventoryRaceKeys],
+      v05InventoryRaceArguments
+    );
+    const v05InventoryRaceStatus = await readProbeGuardStatus(redis, v05InventoryRaceKeyspace);
+    const v05InventoryRaceFootprintAfter = await integrationV05IssuedFootprintSnapshot(
+      redis,
+      v05InventoryRaceKeys
+    );
+    if (
+      !Array.isArray(v05InventoryRaceReply) ||
+      Number(v05InventoryRaceReply[0]) !== 0 ||
+      v05InventoryRaceReply[1] !== "V05_AUTHORIZATION_INVENTORY_MISMATCH" ||
+      v05InventoryRaceStatus.policyHash !== PROBE_V05_PREVIOUS_POLICY_HASH ||
+      v05InventoryRaceStatus.claimedCalls !== 13 ||
+      v05InventoryRaceStatus.knownCount !== 13 ||
+      v05InventoryRaceStatus.sequence !== 13 ||
+      (await redis.exists(v05InventoryRaceKeys[6]!)) !== 0 ||
+      (await redis.hget(raceAuthKey, "state")) !== "ISSUED" ||
+      v05InventoryRaceFootprintAfter !== v05InventoryRaceFootprintBefore
+    ) {
+      throw new ProbeLedgerError("V05_MIGRATION_TEST_INVENTORY_RACE_MUTATED_STATE");
     }
 
     const v05AckTamperKeys = await seedIntegrationV05Source(
@@ -1640,7 +1828,8 @@ async function integrationTest(): Promise<void> {
       buildProbeV05PolicyMigrationArguments(
         v05AckTamperFixture.manifest,
         v05AckTamperFixture.predecessor,
-        v05AckTamperFixture.migrationDigest
+        v05AckTamperFixture.migrationDigest,
+        v05AckTamperFixture.issuedAuthorization
       )
     );
     if (
@@ -1665,7 +1854,8 @@ async function integrationTest(): Promise<void> {
       buildProbeV05PolicyMigrationArguments(
         v05DataPresentFixture.manifest,
         v05DataPresentFixture.predecessor,
-        v05DataPresentFixture.migrationDigest
+        v05DataPresentFixture.migrationDigest,
+        v05DataPresentFixture.issuedAuthorization
       )
     );
     if (
@@ -1955,6 +2145,9 @@ async function integrationTest(): Promise<void> {
       policyV05MigrationReplayVerified: true,
       policyV05MigrationConflictRejected: true,
       policyV05MigrationTamperRejected: true,
+      policyV05IssuedAuthorizationPreserved: true,
+      policyV05IssuedAuthorizationTamperRejected: true,
+      policyV05AuthorizationInventoryRaceRejected: true,
       policyV05AckAnchorVerified: true,
       policyV05EncryptedDataAbsent: true,
       policyV05KnownRecordsVerified: 13
@@ -2024,9 +2217,13 @@ try {
   const code =
     error instanceof ProbeLedgerError
       ? error.code
-      : error instanceof Error
-        ? error.name
-        : "unknown";
+      : error instanceof ProbeV05PolicyMigrationContractError
+        ? error.code
+        : error instanceof Error && /^V05_[A-Z0-9_]+$/u.test(error.message)
+          ? error.message
+          : error instanceof Error
+            ? error.name
+            : "unknown";
   process.stderr.write(`${JSON.stringify({ ok: false, mode: mode ?? null, error: code })}\n`);
   process.exit(1);
 }

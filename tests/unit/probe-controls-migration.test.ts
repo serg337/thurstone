@@ -69,11 +69,16 @@ describe("Probe policy migration operator boundary", () => {
     expect(source).toContain("policyV05MigrationReplayVerified: true");
     expect(source).toContain("policyV05MigrationConflictRejected: true");
     expect(source).toContain("policyV05MigrationTamperRejected: true");
+    expect(source).toContain("policyV05IssuedAuthorizationPreserved: true");
+    expect(source).toContain("policyV05IssuedAuthorizationTamperRejected: true");
+    expect(source).toContain("policyV05AuthorizationInventoryRaceRejected: true");
     expect(source).toContain("policyV05AckAnchorVerified: true");
     expect(source).toContain("policyV05EncryptedDataAbsent: true");
     expect(source).toContain("policyV05KnownRecordsVerified: 13");
     expect(source).toContain("migration_v05_${testId}");
     expect(source).toContain("migration_v05_tamper_${testId}");
+    expect(source).toContain("migration_v05_issued_tamper_${testId}");
+    expect(source).toContain("migration_v05_inventory_race_${testId}");
   });
 
   it("requires exact Production/project/commit/guard context before discovery", async () => {

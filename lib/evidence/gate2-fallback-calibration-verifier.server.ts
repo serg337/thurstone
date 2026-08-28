@@ -60,6 +60,7 @@ import {
 } from "@/lib/probe/policy-v04-migration-contract";
 import { PROBE_V04_POLICY_MIGRATION_PROGRAM_HASH } from "@/lib/probe/policy-v04-migration.server";
 import {
+  PROBE_V05_AUTHORIZATION_INVENTORY,
   PROBE_V05_ACK_ANCHOR_FIXED,
   PROBE_V05_MIGRATED_LEDGER_SCRIPT_HASH,
   PROBE_V05_MIGRATED_POLICY_HASH,
@@ -371,6 +372,8 @@ async function verifyMigration(
       migration.previousRunnerHash === PROBE_V05_PREVIOUS_RUNNER_CONTRACT_HASH &&
       canonicalJson(migration.previousPurposeLimits) ===
         canonicalJson(PROBE_V05_PREVIOUS_PURPOSE_CALL_LIMITS) &&
+      canonicalJson(migration.authorizationInventory) ===
+        canonicalJson(PROBE_V05_AUTHORIZATION_INVENTORY) &&
       migration.nextPolicyVersion === PROBE_V05_MIGRATED_POLICY_VERSION);
   if (
     migration.version !== expected.version ||

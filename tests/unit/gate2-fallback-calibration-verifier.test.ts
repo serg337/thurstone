@@ -54,6 +54,7 @@ import { probeContinuationScriptHash } from "@/lib/probe/continuation-store";
 import { probeFunctionToolDefinitionsHash } from "@/lib/probe/decision";
 import { probeLedgerScriptHash } from "@/lib/probe/ledger";
 import {
+  PROBE_V05_AUTHORIZATION_INVENTORY,
   PROBE_V05_ACK_ANCHOR_FIXED,
   PROBE_V05_MIGRATED_POLICY_VERSION,
   PROBE_V05_MIGRATED_PURPOSE_CALL_LIMITS,
@@ -279,6 +280,7 @@ async function migrationFixture(input: {
     previousRunnerHash: PROBE_V05_PREVIOUS_RUNNER_CONTRACT_HASH,
     preserved: PROBE_V05_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
     knownCalls: PROBE_V05_PRESERVED_KNOWN_CALLS,
+    authorizationInventory: PROBE_V05_AUTHORIZATION_INVENTORY,
     ackAnchor: {
       ...PROBE_V05_ACK_ANCHOR_FIXED,
       recoveryHash: "1".repeat(64),
@@ -638,6 +640,18 @@ describe("Gate 2 pinned fallback calibration bundle verifier", () => {
     if (!first) throw new Error("Missing v2 migration fixture call.");
     first.actualNanoUsd = Number(first.actualNanoUsd) + 1;
     migration.knownCalls = calls;
+    await rehashMigrationAndBundle(bundle);
+    await expect(verifyGate2FallbackCalibrationBundleServer(bundle)).rejects.toThrow(
+      /fallback_bundle_migration_mismatch/u
+    );
+  });
+
+  it("rejects a fully rehashed v2 authorization-inventory substitution", async () => {
+    const bundle = clone(await bundleFixture());
+    const migration = bundle["policyMigration"] as Record<string, unknown>;
+    const inventory = migration.authorizationInventory as Record<string, unknown>;
+    const tombstone = inventory.tombstone as Record<string, unknown>;
+    tombstone.countedAsCall = true;
     await rehashMigrationAndBundle(bundle);
     await expect(verifyGate2FallbackCalibrationBundleServer(bundle)).rejects.toThrow(
       /fallback_bundle_migration_mismatch/u

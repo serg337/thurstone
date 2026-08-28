@@ -202,6 +202,7 @@ import {
   PROBE_V04_PRIOR_ATTEMPT3_RAW_SHA256
 } from "@/lib/probe/policy-v04-migration-contract";
 import {
+  PROBE_V05_AUTHORIZATION_INVENTORY,
   PROBE_V05_ACK_ANCHOR_FIXED,
   PROBE_V05_MIGRATED_POLICY_VERSION,
   PROBE_V05_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
@@ -219,6 +220,7 @@ import {
   PROBE_V05_PRIOR_REPRODUCER_EVIDENCE_DIGEST,
   PROBE_V05_PRIOR_REPRODUCER_RAW_SHA256
 } from "@/lib/probe/policy-v05-migration-contract";
+import { PROBE_V05_POLICY_MIGRATION_PROGRAM_HASH } from "@/lib/probe/policy-v05-migration.server";
 import {
   PROBE_GLOBAL_CALL_LIMIT,
   PROBE_LIFETIME_SPEND_CEILING_NANO_USD,
@@ -814,6 +816,7 @@ async function migrationFixture(): Promise<ProbeActivationContext["migration"]> 
     previousRunnerHash: PROBE_V05_PREVIOUS_RUNNER_CONTRACT_HASH,
     preserved: PROBE_V05_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
     knownCalls: v05Calls,
+    authorizationInventory: PROBE_V05_AUTHORIZATION_INVENTORY,
     ackAnchor: {
       ...PROBE_V05_ACK_ANCHOR_FIXED,
       recoveryHash: "1".repeat(64),
@@ -829,7 +832,7 @@ async function migrationFixture(): Promise<ProbeActivationContext["migration"]> 
     nextPolicyHash: policyHash,
     nextScriptHash: scriptHash,
     nextRunnerHash: "6c44eb19479e460cdef51bca52b577526170eb455d26066b97ec81fe1d7b5230",
-    migrationProgramHash: "f5cf62fc0d10ea1a7c7e5aaafa93baf5c243dce40b18df5b82ac987a473a29cf",
+    migrationProgramHash: PROBE_V05_POLICY_MIGRATION_PROGRAM_HASH,
     previousPurposeLimits: PROBE_V05_PREVIOUS_PURPOSE_CALL_LIMITS,
     nextPurposeLimits: PROBE_PURPOSE_CALL_LIMITS,
     globalCallLimit: 160,

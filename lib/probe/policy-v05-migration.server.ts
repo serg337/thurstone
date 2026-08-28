@@ -22,6 +22,7 @@ import {
   readProbeV04PolicyMigrationReceipt
 } from "@/lib/probe/policy-v04-migration.server";
 import {
+  PROBE_V05_AUTHORIZATION_INVENTORY,
   PROBE_V05_MIGRATED_LEDGER_SCRIPT_HASH,
   PROBE_V05_MIGRATED_POLICY_HASH,
   PROBE_V05_MIGRATED_RUNNER_CONTRACT_HASH,
@@ -33,6 +34,8 @@ import {
   PROBE_V05_POLICY_MIGRATION_VERSION,
   PROBE_V05_PREDECESSOR_MIGRATION_ID,
   PROBE_V05_PREDECESSOR_MIGRATION_RECEIPT_HASH,
+  PROBE_V05_PRESERVED_ISSUED_AUTHORIZATION_DIGEST,
+  PROBE_V05_PRESERVED_ISSUED_AUTHORIZATION_FOOTPRINT_DIGEST,
   PROBE_V05_PREVIOUS_LEDGER_SCRIPT_HASH,
   PROBE_V05_PREVIOUS_POLICY_HASH,
   PROBE_V05_PREVIOUS_POLICY_VERSION,
@@ -54,9 +57,11 @@ import {
 import {
   PROBE_CHALLENGE_CLOSES_AT,
   PROBE_GLOBAL_CALL_LIMIT,
+  PROBE_ISSUE_RATE_WINDOW_SECONDS,
   PROBE_MAX_CONCURRENCY,
   PROBE_MODEL,
   PROBE_PER_CALL_RESERVATION_NANO_USD,
+  PROBE_TOKEN_TTL_SECONDS,
   probePolicyHash
 } from "@/lib/probe/policy";
 import {
@@ -68,6 +73,133 @@ import {
   type ProbeRedisDiscoveryClient
 } from "@/lib/probe/ledger";
 import { PRODUCTION_PROBE_RUN_INDEX_KEYSPACE, probeRunIndexKeys } from "@/lib/probe/run-index";
+
+export interface ProbeV05PreservedIssuedAuthorization {
+  readonly jti: string;
+  readonly claimsHash: string;
+  readonly subjectHash: string;
+  readonly actorHash: string;
+  readonly issuedAt: number;
+  readonly expiresAt: number;
+  readonly issueRateBucket: number;
+  readonly issueRateCount: number;
+}
+
+function preservedIssuedAuthorizationRecord(
+  value: ProbeV05PreservedIssuedAuthorization,
+  guardInstanceId: string
+): Readonly<Record<string, string>> {
+  return Object.freeze({
+    actor_hash: value.actorHash,
+    claims_hash: value.claimsHash,
+    expires_at: String(value.expiresAt),
+    guard_instance_id: guardInstanceId,
+    issued_at: String(value.issuedAt),
+    jti: value.jti,
+    policy_hash: PROBE_V05_PREVIOUS_POLICY_HASH,
+    purpose: "calibration",
+    script_hash: PROBE_V05_PREVIOUS_LEDGER_SCRIPT_HASH,
+    state: "ISSUED",
+    subject_hash: value.subjectHash
+  });
+}
+
+export async function probeV05PreservedIssuedAuthorizationDigests(
+  value: ProbeV05PreservedIssuedAuthorization,
+  guardInstanceId: string
+): Promise<{ readonly recordDigest: string; readonly footprintDigest: string }> {
+  const authorization = preservedIssuedAuthorizationRecord(value, guardInstanceId);
+  const [recordDigest, footprintDigest] = await Promise.all([
+    canonicalSha256(authorization),
+    canonicalSha256({
+      authorization,
+      issueRate: {
+        bucket: String(value.issueRateBucket),
+        count: String(value.issueRateCount),
+        permanent: true
+      },
+      subject: { jti: value.jti, permanent: true }
+    })
+  ]);
+  return Object.freeze({ recordDigest, footprintDigest });
+}
+
+export async function validateProbeV05PreservedIssuedAuthorization(input: {
+  readonly auth: Record<string, unknown>;
+  readonly authKey: string;
+  readonly expectedAuthKey: string;
+  readonly authTtl: number;
+  readonly subjectTtl: number;
+  readonly subjectJti: unknown;
+  readonly rateTtl: number;
+  readonly rate: Record<string, unknown> | null;
+  readonly guardInstanceId: string;
+  readonly nowMs: number;
+  readonly expectedRecordDigest: string;
+  readonly expectedFootprintDigest: string;
+}): Promise<ProbeV05PreservedIssuedAuthorization> {
+  const expectedFields = [
+    "actor_hash",
+    "claims_hash",
+    "expires_at",
+    "guard_instance_id",
+    "issued_at",
+    "jti",
+    "policy_hash",
+    "purpose",
+    "script_hash",
+    "state",
+    "subject_hash"
+  ];
+  const actualFields = Object.keys(input.auth).sort();
+  if (
+    actualFields.length !== expectedFields.length ||
+    actualFields.some((field, index) => field !== expectedFields[index])
+  )
+    throw new Error("V05_DISCOVERY_ISSUED_AUTHORIZATION_SHAPE_MISMATCH");
+  const issuedAt = integer(input.auth.issued_at, "V05_DISCOVERY_ISSUED_AT");
+  const expiresAt = integer(input.auth.expires_at, "V05_DISCOVERY_EXPIRES_AT");
+  const issueRateBucket = Math.floor(issuedAt / PROBE_ISSUE_RATE_WINDOW_SECONDS);
+  const rateFields = input.rate ? Object.keys(input.rate).sort() : [];
+  const issueRateCount = input.rate
+    ? integer(input.rate[String(issueRateBucket)], "V05_DISCOVERY_ISSUED_AUTHORIZATION_RATE_COUNT")
+    : 0;
+  const candidate = Object.freeze({
+    jti: opaque(String(input.auth.jti ?? ""), "V05_DISCOVERY_ISSUED_JTI"),
+    claimsHash: hash(String(input.auth.claims_hash ?? ""), "V05_DISCOVERY_ISSUED_CLAIMS_HASH"),
+    subjectHash: hash(String(input.auth.subject_hash ?? ""), "V05_DISCOVERY_ISSUED_SUBJECT_HASH"),
+    actorHash: hash(String(input.auth.actor_hash ?? ""), "V05_DISCOVERY_ISSUED_ACTOR_HASH"),
+    issuedAt,
+    expiresAt,
+    issueRateBucket,
+    issueRateCount
+  });
+  const digests = await probeV05PreservedIssuedAuthorizationDigests(
+    candidate,
+    input.guardInstanceId
+  );
+  if (
+    input.authKey !== input.expectedAuthKey ||
+    input.authTtl !== -1 ||
+    String(input.auth.state ?? "") !== "ISSUED" ||
+    String(input.auth.guard_instance_id ?? "") !== input.guardInstanceId ||
+    String(input.auth.policy_hash ?? "") !== PROBE_V05_PREVIOUS_POLICY_HASH ||
+    String(input.auth.script_hash ?? "") !== PROBE_V05_PREVIOUS_LEDGER_SCRIPT_HASH ||
+    String(input.auth.purpose ?? "") !== "calibration" ||
+    expiresAt - issuedAt !== PROBE_TOKEN_TTL_SECONDS ||
+    expiresAt * 1000 > input.nowMs ||
+    input.subjectTtl !== -1 ||
+    input.subjectJti !== candidate.jti ||
+    input.rateTtl !== -1 ||
+    rateFields.length !== 1 ||
+    rateFields[0] !== String(issueRateBucket) ||
+    issueRateCount < 1 ||
+    digests.recordDigest !== input.expectedRecordDigest ||
+    digests.footprintDigest !== input.expectedFootprintDigest
+  )
+    throw new Error("V05_DISCOVERY_ISSUED_AUTHORIZATION_MISMATCH");
+  return candidate;
+}
 
 const MIGRATE_POLICY_V05_SCRIPT = `
 local receipt_exists = redis.call("EXISTS", KEYS[7])
@@ -184,6 +316,67 @@ local function calls_match()
   return actual_sum == tonumber(ARGV[17])
 end
 
+local function issued_authorization_matches()
+  local now = redis.call("TIME")
+  local now_seconds = tonumber(now[1])
+  return redis.call("EXISTS", KEYS[36]) == 1
+    and redis.call("PTTL", KEYS[36]) == -1
+    and redis.call("HLEN", KEYS[36]) == 11
+    and redis.call("HGET", KEYS[36], "state") == "ISSUED"
+    and redis.call("HGET", KEYS[36], "jti") == ARGV[170]
+    and redis.call("HGET", KEYS[36], "claims_hash") == ARGV[171]
+    and redis.call("HGET", KEYS[36], "purpose") == "calibration"
+    and redis.call("HGET", KEYS[36], "subject_hash") == ARGV[172]
+    and redis.call("HGET", KEYS[36], "actor_hash") == ARGV[173]
+    and redis.call("HGET", KEYS[36], "issued_at") == ARGV[174]
+    and redis.call("HGET", KEYS[36], "expires_at") == ARGV[175]
+    and redis.call("HGET", KEYS[36], "guard_instance_id") == ARGV[168]
+    and redis.call("HGET", KEYS[36], "policy_hash") == ARGV[6]
+    and redis.call("HGET", KEYS[36], "script_hash") == ARGV[7]
+    and tonumber(ARGV[175]) - tonumber(ARGV[174]) == 120
+    and tonumber(ARGV[175]) <= now_seconds
+    and redis.call("EXISTS", KEYS[37]) == 1
+    and redis.call("PTTL", KEYS[37]) == -1
+    and redis.call("GET", KEYS[37]) == ARGV[170]
+    and redis.call("EXISTS", KEYS[38]) == 1
+    and redis.call("PTTL", KEYS[38]) == -1
+    and redis.call("HLEN", KEYS[38]) == 1
+    and redis.call("HGET", KEYS[38], ARGV[176]) == ARGV[177]
+end
+
+local function scan_exact(pattern, expected, expected_count)
+  local cursor = "0"
+  local seen = {}
+  local count = 0
+  for _ = 1, 32 do
+    local page = redis.call("SCAN", cursor, "MATCH", pattern, "COUNT", 100)
+    cursor = tostring(page[1])
+    for _, key in ipairs(page[2]) do
+      if not expected[key] then return false end
+      if not seen[key] then
+        seen[key] = true
+        count = count + 1
+      end
+    end
+    if cursor == "0" then return count == expected_count end
+  end
+  return false
+end
+
+local function authorization_inventory_matches()
+  local suffix = ":config"
+  if string.sub(KEYS[1], -string.len(suffix)) ~= suffix then return false end
+  local namespace = string.sub(KEYS[1], 1, string.len(KEYS[1]) - string.len(suffix))
+  local expected_auth = { [KEYS[36]] = true }
+  local expected_provider = {}
+  for ordinal = 0, 12 do
+    expected_auth[KEYS[10 + ordinal * 2]] = true
+    expected_provider[KEYS[11 + ordinal * 2]] = true
+  end
+  return scan_exact(namespace .. ":auth:*", expected_auth, 14)
+    and scan_exact(namespace .. ":provider:*", expected_provider, 13)
+end
+
 local function receipt_matches()
   return redis.call("PTTL", KEYS[7]) == -1
     and redis.call("HGET", KEYS[7], "version") == ARGV[2]
@@ -196,6 +389,12 @@ end
 
 if receipt_exists == 1 then
   if not receipt_matches() then return {0, "V05_MIGRATION_RECEIPT_CONFLICT"} end
+  if not authorization_inventory_matches() then
+    return {0, "V05_AUTHORIZATION_INVENTORY_MISMATCH"}
+  end
+  if not issued_authorization_matches() then
+    return {0, "V05_ISSUED_AUTHORIZATION_MISMATCH"}
+  end
   if not core_matches(ARGV[8], ARGV[9], ARGV[10], ARGV[24], ARGV[25], ARGV[26], ARGV[27], ARGV[28])
     or not predecessor_matches() or not ack_matches() or not calls_match()
   then return {0, "V05_MIGRATION_REPLAY_STATE_MISMATCH"} end
@@ -207,6 +406,8 @@ then return {0, "V05_MIGRATION_STATE_MISMATCH"} end
 if not predecessor_matches() then return {0, "V05_PREDECESSOR_RECEIPT_MISMATCH"} end
 if not ack_matches() then return {0, "V05_ACK_ANCHOR_MISMATCH"} end
 if not calls_match() then return {0, "V05_MIGRATION_KNOWN_CALL_MISMATCH"} end
+if not authorization_inventory_matches() then return {0, "V05_AUTHORIZATION_INVENTORY_MISMATCH"} end
+if not issued_authorization_matches() then return {0, "V05_ISSUED_AUTHORIZATION_MISMATCH"} end
 local now = redis.call("TIME")
 local migrated_at_ms = tonumber(now[1]) * 1000 + math.floor(tonumber(now[2]) / 1000)
 if migrated_at_ms >= tonumber(ARGV[11]) then return {0, "CHALLENGE_CLOSED"} end
@@ -234,7 +435,7 @@ export const PROBE_V05_POLICY_MIGRATION_SCRIPTS = Object.freeze({
   read: READ_POLICY_V05_MIGRATION_SCRIPT
 });
 export const PROBE_V05_POLICY_MIGRATION_PROGRAM_HASH =
-  "f5cf62fc0d10ea1a7c7e5aaafa93baf5c243dce40b18df5b82ac987a473a29cf";
+  "19a2514477b8f58f68bf50d4d1b194b1526bedfb0162df169140fdcf6f5abdd9";
 export function probeV05PolicyMigrationProgramHash() {
   return canonicalSha256(PROBE_V05_POLICY_MIGRATION_SCRIPTS);
 }
@@ -267,6 +468,12 @@ function migrationKey(keyspace: ProbeLedgerKeyspace, id: string) {
 function authKey(keyspace: ProbeLedgerKeyspace, jti: string) {
   return `${keyspace.namespace}:auth:${opaque(jti, "JTI")}`;
 }
+function subjectKey(keyspace: ProbeLedgerKeyspace, subjectHash: string) {
+  return `${keyspace.namespace}:subject:${hash(subjectHash, "SUBJECT_HASH")}`;
+}
+function issueRateKey(keyspace: ProbeLedgerKeyspace, actorHash: string) {
+  return `${keyspace.namespace}:issue-rate:calibration:${hash(actorHash, "ACTOR_HASH")}`;
+}
 function providerKey(keyspace: ProbeLedgerKeyspace, response: string) {
   return `${keyspace.namespace}:provider:${hash(response, "PROVIDER_RESPONSE_HASH")}`;
 }
@@ -295,9 +502,18 @@ function historicalIdentity(ordinal: number) {
 export function buildProbeV05PolicyMigrationArguments(
   manifest: ProbeV05PolicyMigrationManifest,
   predecessor: Awaited<ReturnType<typeof readProbeV04PolicyMigrationReceipt>>,
-  digest: string
+  digest: string,
+  issuedAuthorization: ProbeV05PreservedIssuedAuthorization
 ): string[] {
   const ack = manifest.ackAnchor;
+  opaque(issuedAuthorization.jti, "ISSUED_AUTHORIZATION_JTI");
+  hash(issuedAuthorization.claimsHash, "ISSUED_AUTHORIZATION_CLAIMS_HASH");
+  hash(issuedAuthorization.subjectHash, "ISSUED_AUTHORIZATION_SUBJECT_HASH");
+  hash(issuedAuthorization.actorHash, "ISSUED_AUTHORIZATION_ACTOR_HASH");
+  integer(issuedAuthorization.issuedAt, "ISSUED_AUTHORIZATION_ISSUED_AT");
+  integer(issuedAuthorization.expiresAt, "ISSUED_AUTHORIZATION_EXPIRES_AT");
+  integer(issuedAuthorization.issueRateBucket, "ISSUED_AUTHORIZATION_RATE_BUCKET");
+  integer(issuedAuthorization.issueRateCount, "ISSUED_AUTHORIZATION_RATE_COUNT");
   return [
     canonicalJson(manifest),
     manifest.version,
@@ -364,7 +580,15 @@ export function buildProbeV05PolicyMigrationArguments(
     ack.launchHash,
     ack.payloadBinding,
     manifest.guardInstanceId,
-    manifest.initializedCommit
+    manifest.initializedCommit,
+    issuedAuthorization.jti,
+    issuedAuthorization.claimsHash,
+    issuedAuthorization.subjectHash,
+    issuedAuthorization.actorHash,
+    String(issuedAuthorization.issuedAt),
+    String(issuedAuthorization.expiresAt),
+    String(issuedAuthorization.issueRateBucket),
+    String(issuedAuthorization.issueRateCount)
   ];
 }
 
@@ -412,6 +636,7 @@ export async function discoverProbeV05PolicyMigrationSource(
 ): Promise<{
   readonly predecessorReceipt: Awaited<ReturnType<typeof readProbeV04PolicyMigrationReceipt>>;
   readonly sourceReceipt: ProbeV05PolicyMigrationSourceReceipt;
+  readonly issuedAuthorization: ProbeV05PreservedIssuedAuthorization;
 }> {
   opaque(input.guardInstanceId, "GUARD_INSTANCE");
   commit(input.initializedCommit);
@@ -437,13 +662,51 @@ export async function discoverProbeV05PolicyMigrationSource(
   };
   const authKeys = await scan(`${keyspace.namespace}:auth:*`);
   const providerKeys = await scan(`${keyspace.namespace}:provider:*`);
-  if (authKeys.size !== 13 || providerKeys.size !== 13)
+  if (
+    authKeys.size !== PROBE_V05_AUTHORIZATION_INVENTORY.total ||
+    providerKeys.size !== PROBE_V05_AUTHORIZATION_INVENTORY.providerResponses
+  )
     throw new Error("V05_DISCOVERY_KNOWN_SET_MISMATCH");
   const calls = new Map<number, ProbePolicyMigrationKnownCall>();
+  let issuedAuthorization: ProbeV05PreservedIssuedAuthorization | null = null;
   for (const key of authKeys) {
     const auth = await redis.hgetall<Record<string, unknown>>(key);
-    if (!auth || String(auth.state ?? "") !== "KNOWN")
-      throw new Error("V05_DISCOVERY_ORPHAN_AUTH_RECORD");
+    if (!auth) throw new Error("V05_DISCOVERY_ORPHAN_AUTH_RECORD");
+    const state = String(auth.state ?? "");
+    if (state === "ISSUED") {
+      if (issuedAuthorization) throw new Error("V05_DISCOVERY_ISSUED_AUTHORIZATION_DUPLICATE");
+      const jti = opaque(String(auth.jti ?? ""), "V05_DISCOVERY_ISSUED_JTI");
+      const subjectHash = hash(
+        String(auth.subject_hash ?? ""),
+        "V05_DISCOVERY_ISSUED_SUBJECT_HASH"
+      );
+      const actorHash = hash(String(auth.actor_hash ?? ""), "V05_DISCOVERY_ISSUED_ACTOR_HASH");
+      const skey = subjectKey(keyspace, subjectHash);
+      const rkey = issueRateKey(keyspace, actorHash);
+      const [authTtl, subjectTtl, subjectJti, rateTtl, rate] = await Promise.all([
+        redis.pttl(key),
+        redis.pttl(skey),
+        redis.get(skey),
+        redis.pttl(rkey),
+        redis.hgetall<Record<string, unknown>>(rkey)
+      ]);
+      issuedAuthorization = await validateProbeV05PreservedIssuedAuthorization({
+        auth,
+        authKey: key,
+        expectedAuthKey: authKey(keyspace, jti),
+        authTtl,
+        subjectTtl,
+        subjectJti,
+        rateTtl,
+        rate,
+        guardInstanceId: input.guardInstanceId,
+        nowMs: Date.now(),
+        expectedRecordDigest: PROBE_V05_PRESERVED_ISSUED_AUTHORIZATION_DIGEST,
+        expectedFootprintDigest: PROBE_V05_PRESERVED_ISSUED_AUTHORIZATION_FOOTPRINT_DIGEST
+      });
+      continue;
+    }
+    if (state !== "KNOWN") throw new Error("V05_DISCOVERY_ORPHAN_AUTH_RECORD");
     const sequence = integer(auth.dispatch_sequence, "V05_DISCOVERY_SEQUENCE");
     const ordinal = sequence - 1;
     const identity = historicalIdentity(ordinal);
@@ -489,6 +752,7 @@ export async function discoverProbeV05PolicyMigrationSource(
       "03c4632b3fc75914f107528965c11959c9e39bed8354f7c9a46d599cc34a3e2b"
   )
     throw new Error("V05_DISCOVERY_CALL_DIGEST_MISMATCH");
+  if (!issuedAuthorization) throw new Error("V05_DISCOVERY_ISSUED_AUTHORIZATION_MISSING");
   const expectedProviders = new Set(
     knownCalls.map((call) => providerKey(keyspace, call.providerResponseHash))
   );
@@ -515,11 +779,12 @@ export async function discoverProbeV05PolicyMigrationSource(
       previousRunnerHash: PROBE_V05_PREVIOUS_RUNNER_CONTRACT_HASH,
       preserved: PROBE_V05_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
       knownCalls,
+      authorizationInventory: PROBE_V05_AUTHORIZATION_INVENTORY,
       ackAnchor
     },
     predecessorReceipt
   );
-  return Object.freeze({ predecessorReceipt, sourceReceipt });
+  return Object.freeze({ predecessorReceipt, sourceReceipt, issuedAuthorization });
 }
 
 export async function readProbeV05PolicyMigrationReceipt(
@@ -570,6 +835,7 @@ export async function readProbeV05PolicyMigrationReceipt(
     previousRunnerHash: storedManifest.previousRunnerHash,
     preserved: storedManifest.preserved,
     knownCalls: storedManifest.knownCalls,
+    authorizationInventory: storedManifest.authorizationInventory,
     ackAnchor: storedManifest.ackAnchor
   };
   const manifest = await createProbeV05PolicyMigrationManifest({
@@ -597,6 +863,7 @@ export async function migrateProbeGuardPolicyV05(
     readonly sourceReceipt: ProbeV05PolicyMigrationSourceReceipt;
     readonly predecessorReceipt: Awaited<ReturnType<typeof readProbeV04PolicyMigrationReceipt>>;
     readonly migrationCommit: string;
+    readonly issuedAuthorization: ProbeV05PreservedIssuedAuthorization;
   },
   keyspace: ProbeLedgerKeyspace = PRODUCTION_PROBE_KEYSPACE
 ): Promise<{
@@ -606,6 +873,23 @@ export async function migrateProbeGuardPolicyV05(
   const actualProgramHash = await probeV05PolicyMigrationProgramHash();
   if (actualProgramHash !== PROBE_V05_POLICY_MIGRATION_PROGRAM_HASH)
     throw new Error("V05_MIGRATION_PROGRAM_DRIFT");
+  const issuedAuthorizationDigests = await probeV05PreservedIssuedAuthorizationDigests(
+    input.issuedAuthorization,
+    input.sourceReceipt.guardInstanceId
+  );
+  if (
+    input.issuedAuthorization.expiresAt - input.issuedAuthorization.issuedAt !==
+      PROBE_TOKEN_TTL_SECONDS ||
+    input.issuedAuthorization.expiresAt * 1000 > Date.now() ||
+    input.issuedAuthorization.issueRateBucket !==
+      Math.floor(input.issuedAuthorization.issuedAt / PROBE_ISSUE_RATE_WINDOW_SECONDS) ||
+    input.issuedAuthorization.issueRateCount < 1 ||
+    issuedAuthorizationDigests.recordDigest !==
+      input.sourceReceipt.authorizationInventory.tombstone.recordDigest ||
+    issuedAuthorizationDigests.footprintDigest !==
+      input.sourceReceipt.authorizationInventory.tombstone.footprintDigest
+  )
+    throw new Error("V05_ISSUED_AUTHORIZATION_SOURCE_MISMATCH");
   const manifest = await createProbeV05PolicyMigrationManifest({
     sourceReceipt: input.sourceReceipt,
     predecessorReceipt: input.predecessorReceipt,
@@ -633,13 +917,21 @@ export async function migrateProbeGuardPolicyV05(
     ...manifest.knownCalls.flatMap((call) => [
       authKey(keyspace, call.jti),
       providerKey(keyspace, call.providerResponseHash)
-    ])
+    ]),
+    authKey(keyspace, input.issuedAuthorization.jti),
+    subjectKey(keyspace, input.issuedAuthorization.subjectHash),
+    issueRateKey(keyspace, input.issuedAuthorization.actorHash)
   ];
   const result = reply(
     await redis.eval<string[], unknown>(
       MIGRATE_POLICY_V05_SCRIPT,
       keys,
-      buildProbeV05PolicyMigrationArguments(manifest, input.predecessorReceipt, digest)
+      buildProbeV05PolicyMigrationArguments(
+        manifest,
+        input.predecessorReceipt,
+        digest,
+        input.issuedAuthorization
+      )
     )
   );
   if (result[1] !== "V05_MIGRATED_NEW" && result[1] !== "V05_MIGRATED_EXISTING")

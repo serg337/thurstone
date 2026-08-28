@@ -73,6 +73,7 @@ import {
 } from "@/lib/probe/policy-v04-migration-contract";
 import { PROBE_V04_POLICY_MIGRATION_PROGRAM_HASH } from "@/lib/probe/policy-v04-migration.server";
 import {
+  PROBE_V05_AUTHORIZATION_INVENTORY,
   PROBE_V05_ACK_ANCHOR_FIXED,
   PROBE_V05_MIGRATED_POLICY_VERSION,
   PROBE_V05_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
@@ -329,6 +330,7 @@ async function validFixture() {
     previousRunnerHash: PROBE_V05_PREVIOUS_RUNNER_CONTRACT_HASH,
     preserved: PROBE_V05_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
     knownCalls: v05Calls,
+    authorizationInventory: PROBE_V05_AUTHORIZATION_INVENTORY,
     ackAnchor,
     migrationCommit: activeCommit,
     nextPolicyVersion: PROBE_V05_MIGRATED_POLICY_VERSION,
@@ -630,6 +632,29 @@ describe("Probe activation", () => {
     const migration = await repinMigration(fixture, {
       ...core,
       nextRunnerHash: "c".repeat(64)
+    });
+    await expect(
+      requireProbeActivation({
+        environment: fixture.environment,
+        guard: fixture.liveGuard,
+        predecessorMigration: fixture.predecessorMigration,
+        migration,
+        expectedPredecessorMigrationReceiptHash: fixture.predecessorMigration.receiptHash,
+        nowMs
+      })
+    ).rejects.toMatchObject({ code: "activation_migration_invalid" });
+  });
+
+  it("rejects a self-consistent receipt that counts the expired authorization as a call", async () => {
+    const fixture = await validFixture();
+    const { receiptHash: _receiptHash, ...core } = fixture.migration;
+    void _receiptHash;
+    const migration = await repinMigration(fixture, {
+      ...core,
+      authorizationInventory: {
+        ...core.authorizationInventory,
+        tombstone: { ...core.authorizationInventory.tombstone, countedAsCall: true }
+      } as unknown as typeof core.authorizationInventory
     });
     await expect(
       requireProbeActivation({

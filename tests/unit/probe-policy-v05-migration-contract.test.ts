@@ -26,6 +26,7 @@ import {
   type ProbeV04PolicyMigrationReceipt
 } from "@/lib/probe/policy-v04-migration-contract";
 import {
+  PROBE_V05_AUTHORIZATION_INVENTORY,
   PROBE_V05_ACK_ANCHOR_FIXED,
   PROBE_V05_MIGRATED_POLICY_HASH,
   PROBE_V05_MIGRATED_POLICY_VERSION,
@@ -62,7 +63,9 @@ import {
   PROBE_V05_POLICY_MIGRATION_PROGRAM_HASH,
   PROBE_V05_POLICY_MIGRATION_SCRIPTS,
   buildProbeV05PolicyMigrationArguments,
-  probeV05PolicyMigrationProgramHash
+  probeV05PreservedIssuedAuthorizationDigests,
+  probeV05PolicyMigrationProgramHash,
+  validateProbeV05PreservedIssuedAuthorization
 } from "@/lib/probe/policy-v05-migration.server";
 import { PROBE_V04_POLICY_MIGRATION_PROGRAM_HASH } from "@/lib/probe/policy-v04-migration.server";
 import {
@@ -125,6 +128,17 @@ const ackAnchor = Object.freeze({
   encryptedDataPresent: false as const
 });
 
+const issuedAuthorization = Object.freeze({
+  jti: "jti_v05_preserved_issued_fixture",
+  claimsHash: "7".repeat(64),
+  subjectHash: "8".repeat(64),
+  actorHash: "9".repeat(64),
+  issuedAt: 1_700_000_000,
+  expiresAt: 1_700_000_120,
+  issueRateBucket: Math.floor(1_700_000_000 / 3_600),
+  issueRateCount: 5
+});
+
 function source(): ProbeV05PolicyMigrationSourceReceipt {
   return {
     version: PROBE_V05_POLICY_MIGRATION_SOURCE_VERSION,
@@ -145,6 +159,7 @@ function source(): ProbeV05PolicyMigrationSourceReceipt {
     previousRunnerHash: PROBE_V05_PREVIOUS_RUNNER_CONTRACT_HASH,
     preserved: PROBE_V05_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
     knownCalls: PROBE_V05_PRESERVED_KNOWN_CALLS,
+    authorizationInventory: PROBE_V05_AUTHORIZATION_INVENTORY,
     ackAnchor
   };
 }
@@ -194,12 +209,38 @@ describe("Probe v0.4 -> v0.5 fallback attempt-2 policy migration", () => {
       }
     });
     const digest = await probeV05PolicyMigrationDigest(next);
-    const args = buildProbeV05PolicyMigrationArguments(next, predecessor, digest);
-    expect(args).toHaveLength(169);
+    const args = buildProbeV05PolicyMigrationArguments(
+      next,
+      predecessor,
+      digest,
+      issuedAuthorization
+    );
+    expect(args).toHaveLength(177);
     expect(args[28]).toBe("13");
     expect(args[146]).toBe(PROBE_V04_POLICY_MIGRATION_VERSION);
     expect(args[151]).toBe(PROBE_V05_POLICY_MIGRATION_PRIOR_ACTIVATION_HASH);
     expect(args[160]).toBe(String(PROBE_V05_ACK_ANCHOR_FIXED.acknowledgedAtMs));
+    expect(args[169]).toBe(issuedAuthorization.jti);
+    expect(args[176]).toBe(String(issuedAuthorization.issueRateCount));
+    expect(PROBE_V05_POLICY_MIGRATION_SCRIPTS.migrate).toContain(
+      'redis.call("HLEN", KEYS[36]) == 11'
+    );
+    expect(PROBE_V05_POLICY_MIGRATION_SCRIPTS.migrate).toContain(
+      'redis.call("GET", KEYS[37]) == ARGV[170]'
+    );
+    expect(PROBE_V05_POLICY_MIGRATION_SCRIPTS.migrate).toContain(
+      'redis.call("HGET", KEYS[38], ARGV[176]) == ARGV[177]'
+    );
+    expect(PROBE_V05_POLICY_MIGRATION_SCRIPTS.migrate).toContain(
+      'scan_exact(namespace .. ":auth:*", expected_auth, 14)'
+    );
+    expect(PROBE_V05_POLICY_MIGRATION_SCRIPTS.migrate).toContain(
+      'scan_exact(namespace .. ":provider:*", expected_provider, 13)'
+    );
+    expect(PROBE_V05_POLICY_MIGRATION_SCRIPTS.migrate).toContain("if not seen[key] then");
+    expect(PROBE_V05_POLICY_MIGRATION_SCRIPTS.migrate).not.toMatch(
+      /(?:HSET|DEL|UNLINK|EXPIRE|PEXPIRE|RENAME)", KEYS\[3[678]\]/u
+    );
     const receipt = await createProbeV05PolicyMigrationReceipt(next, digest, 1_800_000_000_000);
     await expect(probeV05PolicyMigrationReceiptHash(receipt)).resolves.toBe(receipt.receiptHash);
   });
@@ -216,7 +257,14 @@ describe("Probe v0.4 -> v0.5 fallback attempt-2 policy migration", () => {
         )
       },
       { ...base, ackAnchor: { ...base.ackAnchor, confirmation: "0".repeat(64) } },
-      { ...base, ackAnchor: { ...base.ackAnchor, encryptedDataPresent: true } }
+      { ...base, ackAnchor: { ...base.ackAnchor, encryptedDataPresent: true } },
+      {
+        ...base,
+        authorizationInventory: {
+          ...base.authorizationInventory,
+          tombstone: { ...base.authorizationInventory.tombstone, countedAsCall: true }
+        }
+      }
     ]) {
       await expect(
         parseProbeV05PolicyMigrationSourceReceipt(
@@ -247,6 +295,74 @@ describe("Probe v0.4 -> v0.5 fallback attempt-2 policy migration", () => {
           ...changed
         })
       ).rejects.toThrow(/v05_next_policy_not_frozen/u);
+    }
+  });
+
+  it("keeps private issued-authorization values behind stable record and footprint digests", async () => {
+    const first = await probeV05PreservedIssuedAuthorizationDigests(
+      issuedAuthorization,
+      guardInstanceId
+    );
+    const changed = await probeV05PreservedIssuedAuthorizationDigests(
+      { ...issuedAuthorization, issueRateCount: issuedAuthorization.issueRateCount + 1 },
+      guardInstanceId
+    );
+    expect(first.recordDigest).toMatch(/^[a-f0-9]{64}$/u);
+    expect(first.footprintDigest).toMatch(/^[a-f0-9]{64}$/u);
+    expect(changed.recordDigest).toBe(first.recordDigest);
+    expect(changed.footprintDigest).not.toBe(first.footprintDigest);
+  });
+
+  it("accepts only the exact expired permanent issuance footprint", async () => {
+    const digests = await probeV05PreservedIssuedAuthorizationDigests(
+      issuedAuthorization,
+      guardInstanceId
+    );
+    const auth = {
+      state: "ISSUED",
+      jti: issuedAuthorization.jti,
+      claims_hash: issuedAuthorization.claimsHash,
+      purpose: "calibration",
+      subject_hash: issuedAuthorization.subjectHash,
+      actor_hash: issuedAuthorization.actorHash,
+      issued_at: issuedAuthorization.issuedAt,
+      expires_at: issuedAuthorization.expiresAt,
+      guard_instance_id: guardInstanceId,
+      policy_hash: PROBE_V05_PREVIOUS_POLICY_HASH,
+      script_hash: PROBE_V05_PREVIOUS_LEDGER_SCRIPT_HASH
+    };
+    const base = {
+      auth,
+      authKey: `namespace:auth:${issuedAuthorization.jti}`,
+      expectedAuthKey: `namespace:auth:${issuedAuthorization.jti}`,
+      authTtl: -1,
+      subjectTtl: -1,
+      subjectJti: issuedAuthorization.jti,
+      rateTtl: -1,
+      rate: { [String(issuedAuthorization.issueRateBucket)]: issuedAuthorization.issueRateCount },
+      guardInstanceId,
+      nowMs: issuedAuthorization.expiresAt * 1000 + 1,
+      expectedRecordDigest: digests.recordDigest,
+      expectedFootprintDigest: digests.footprintDigest
+    };
+    await expect(validateProbeV05PreservedIssuedAuthorization(base)).resolves.toEqual(
+      issuedAuthorization
+    );
+    for (const changed of [
+      { auth: { ...auth, extra: "forbidden" } },
+      { auth: { ...auth, state: "EXPIRED" } },
+      { authTtl: 1 },
+      { nowMs: issuedAuthorization.expiresAt * 1000 - 1 },
+      { subjectTtl: 1 },
+      { subjectJti: "jti_other_subject_pointer" },
+      { rateTtl: 1 },
+      { rate: null },
+      { expectedRecordDigest: "0".repeat(64) },
+      { expectedFootprintDigest: "0".repeat(64) }
+    ]) {
+      await expect(
+        validateProbeV05PreservedIssuedAuthorization({ ...base, ...changed })
+      ).rejects.toThrow(/V05_DISCOVERY_ISSUED_AUTHORIZATION/u);
     }
   });
 

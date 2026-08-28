@@ -21,6 +21,7 @@ import {
 } from "@/lib/probe/policy-v04-migration-contract";
 import { readProbeV04PolicyMigrationReceipt } from "@/lib/probe/policy-v04-migration.server";
 import {
+  PROBE_V05_AUTHORIZATION_INVENTORY,
   PROBE_V05_MIGRATED_RUNNER_CONTRACT_HASH,
   PROBE_V05_POLICY_MIGRATION_FIXED_PRESERVED_STATE,
   PROBE_V05_POLICY_MIGRATION_ID,
@@ -485,6 +486,8 @@ export async function requireProbeActivation(
       canonicalJson(migration.previousPurposeLimits) !==
         canonicalJson(PROBE_V05_PREVIOUS_PURPOSE_CALL_LIMITS) ||
       canonicalJson(migration.nextPurposeLimits) !== canonicalJson(PROBE_PURPOSE_CALL_LIMITS) ||
+      canonicalJson(migration.authorizationInventory) !==
+        canonicalJson(PROBE_V05_AUTHORIZATION_INVENTORY) ||
       migration.globalCallLimit !== PROBE_GLOBAL_CALL_LIMIT ||
       migration.lifetimeSpendCeilingNanoUsd !== PROBE_LIFETIME_SPEND_CEILING_NANO_USD ||
       migration.perCallReservationNanoUsd !== PROBE_PER_CALL_RESERVATION_NANO_USD ||
