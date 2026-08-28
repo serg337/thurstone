@@ -20,11 +20,11 @@ import {
   type ProbeGuardStatus
 } from "@/lib/probe/ledger";
 import { requireProbeActivation } from "@/lib/probe/activation";
-import { isProbeV03PolicyMigrationSourceStatus } from "@/lib/probe/policy-v03-migration-contract";
 import {
-  PROBE_CALIBRATION_BASE_CALLS,
-  PROBE_CALIBRATION_TERMINAL_CALLS
+  FALLBACK_PROBE_CALIBRATION_BASE_CALLS,
+  FALLBACK_PROBE_CALIBRATION_TERMINAL_CALLS
 } from "@/lib/probe/service-contract";
+import { isProbeV04PolicyMigrationSourceStatus } from "@/lib/probe/policy-v04-migration-contract";
 
 interface EnvironmentLike {
   readonly [key: string]: string | undefined;
@@ -115,16 +115,16 @@ export async function readPublicProbeControlStatus(environment: EnvironmentLike 
         const activation = await requireProbeActivation({ environment, guard });
         const calibrationStartable =
           activation.guard.phase === "idle" &&
-          activation.guard.claimedCalls === PROBE_CALIBRATION_BASE_CALLS &&
-          activation.guard.knownCalls === PROBE_CALIBRATION_BASE_CALLS &&
-          activation.guard.calibrationCalls === PROBE_CALIBRATION_BASE_CALLS &&
+          activation.guard.claimedCalls === FALLBACK_PROBE_CALIBRATION_BASE_CALLS &&
+          activation.guard.knownCalls === FALLBACK_PROBE_CALIBRATION_BASE_CALLS &&
+          activation.guard.calibrationCalls === FALLBACK_PROBE_CALIBRATION_BASE_CALLS &&
           activation.guard.pendingCalls === 0 &&
           activation.guard.uncertainCalls === 0;
         const calibrationTerminal =
           activation.guard.phase === "idle" &&
-          activation.guard.claimedCalls === PROBE_CALIBRATION_TERMINAL_CALLS &&
-          activation.guard.knownCalls === PROBE_CALIBRATION_TERMINAL_CALLS &&
-          activation.guard.calibrationCalls === PROBE_CALIBRATION_TERMINAL_CALLS;
+          activation.guard.claimedCalls === FALLBACK_PROBE_CALIBRATION_TERMINAL_CALLS &&
+          activation.guard.knownCalls === FALLBACK_PROBE_CALIBRATION_TERMINAL_CALLS &&
+          activation.guard.calibrationCalls === FALLBACK_PROBE_CALIBRATION_TERMINAL_CALLS;
         return {
           status: "controls-ready" as const,
           enabled: true,
@@ -132,10 +132,10 @@ export async function readPublicProbeControlStatus(environment: EnvironmentLike 
           calibrationStartable,
           policy,
           reason: calibrationStartable
-            ? "The separately versioned third and final four-case calibration is ready for this exact build."
+            ? "The exact pinned four-case fallback calibration is ready for this build."
             : calibrationTerminal
-              ? "The third and final four-case calibration is terminal; another run is not admitted."
-              : "The third and final calibration session is active or requires exact recovery.",
+              ? "The pinned fallback calibration is terminal; another run is not admitted."
+              : "The pinned fallback calibration is active or requires exact recovery.",
           commit,
           guard: {
             phase: activation.guard.phase,
@@ -157,7 +157,7 @@ export async function readPublicProbeControlStatus(environment: EnvironmentLike 
       }
     }
     const internallyConsistent = isProbeGuardStatusConsistent(guard, expectedIdentity);
-    const migrationRequired = isProbeV03PolicyMigrationSourceStatus(guard, {
+    const migrationRequired = isProbeV04PolicyMigrationSourceStatus(guard, {
       guardInstanceId: expectedIdentity.guardInstanceId,
       initializedCommit: expectedIdentity.initializedCommit
     });
@@ -179,7 +179,7 @@ export async function readPublicProbeControlStatus(environment: EnvironmentLike 
       activation: "disabled" as const,
       policy,
       reason: migrationRequired
-        ? "The exact five-call v0.2 guard is verified and awaits the approved atomic v0.3 migration."
+        ? "The exact terminal-nine v0.3 guard is verified and awaits the approved atomic v0.4 migration."
         : "The lifetime guard is verified; the Probe lane remains disabled until Gate 2.",
       ...(migrationRequired ? { migration: "required" as const } : {}),
       commit
