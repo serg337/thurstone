@@ -22,27 +22,40 @@ test("Studio keeps historical target truth and human authority explicit", async 
     page.getByRole("heading", { name: "Exact v1 checkout_request description" })
   ).toBeVisible();
 
-  await expect(page.getByRole("button", { name: "Approve semantic package" })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Freeze Gate 3" })).toBeDisabled();
-  await expect(page.getByText("awaiting-human", { exact: true })).toBeVisible();
   await expect(page.locator(".studio-case-list > li")).toHaveCount(24);
   await expect(page.getByRole("button", { name: "Copy exact review package" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "Download exact review package" })).toBeEnabled();
 
-  await expect(page.getByText("toolproof_inspect", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Inspect snapshot and open drafting" }).click();
-  await expect(page.getByText("toolproof_inspect, toolproof_draft_contract")).toBeVisible();
+  if (process.env.TOOLPROOF_BASE_URL) {
+    await expect(page.getByRole("button", { name: "Semantic package approved" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Gate 3 frozen" })).toBeDisabled();
+    await expect(page.getByText("Human-approved protocol frozen", { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Authoring context permanently terminated" })
+    ).toBeVisible();
+    await expect(page.getByText("No authoring tools exposed", { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Inspect snapshot and open drafting" })
+    ).toHaveCount(0);
+  } else {
+    await expect(page.getByRole("button", { name: "Approve semantic package" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Freeze Gate 3" })).toBeDisabled();
+    await expect(page.getByText("awaiting-human", { exact: true })).toBeVisible();
+    await expect(page.getByText("toolproof_inspect", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Inspect snapshot and open drafting" }).click();
+    await expect(page.getByText("toolproof_inspect, toolproof_draft_contract")).toBeVisible();
 
-  await page.getByLabel("Contract title").fill("Human draft candidate");
-  await page.getByRole("button", { name: "Save structured draft for human review" }).click();
-  await expect(
-    page.getByText("toolproof_inspect, toolproof_draft_contract, toolproof_submit_review")
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Present draft to human UI" }).click();
-  await expect(page.getByText("Presented—not approved.")).toBeVisible();
-  await expect(
-    page.getByText(/No semantic decision, review receipt, provider call, or freeze/iu)
-  ).toBeVisible();
+    await page.getByLabel("Contract title").fill("Human draft candidate");
+    await page.getByRole("button", { name: "Save structured draft for human review" }).click();
+    await expect(
+      page.getByText("toolproof_inspect, toolproof_draft_contract, toolproof_submit_review")
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Present draft to human UI" }).click();
+    await expect(page.getByText("Presented—not approved.")).toBeVisible();
+    await expect(
+      page.getByText(/No semantic decision, review receipt, provider call, or freeze/iu)
+    ).toBeVisible();
+  }
 
   const { violations } = await new AxeBuilder({ page }).analyze();
   expect(

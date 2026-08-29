@@ -13,6 +13,11 @@ async function results(): Promise<
   Extract<SemanticResultsState, { status: "baseline-development-only" }>
 > {
   const baselineAppCommit = "f".repeat(40);
+  const liveManifest = await createCheckoutLiveManifest(createCheckoutFixture(), baselineAppCommit);
+  const currentDescription = liveManifest.tools.find(
+    ({ name }) => name === "checkout_request"
+  )?.description;
+  if (!currentDescription) throw new Error("test_checkout_request_description_missing");
   return {
     status: "baseline-development-only",
     disclosure: "one-trial demonstration snapshot",
@@ -21,12 +26,11 @@ async function results(): Promise<
     baselineAppCommit,
     taskBoundary:
       "One request permits one decision and at most one native call in a simulated checkout.",
-    currentDescription:
-      "Finalize the current cart by opening a simulated checkout request that remains pending for human approval when the user is ready to proceed.",
+    currentDescription,
     supersededEvidence: null,
     reviewPackageHash: "c".repeat(64),
     frozenProtocolHash: "d".repeat(64),
-    liveManifest: await createCheckoutLiveManifest(createCheckoutFixture(), baselineAppCommit),
+    liveManifest,
     rows: Array.from({ length: 12 }, (_, index) => ({
       ordinal: index,
       caseId: `development_${index}`,

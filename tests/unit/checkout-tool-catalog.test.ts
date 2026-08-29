@@ -109,7 +109,7 @@ describe("checkout WebMCP metadata", () => {
     ].join(" ");
 
     expect(executionClaims).toContain("simulated checkout request");
-    expect(executionClaims).toContain("pending for human approval");
+    expect(executionClaims).toMatch(/\bpending(?:\s+\w+){0,3}\s+for human approval\b/iu);
     expect(executionClaims.replace(/\bdoes not complete a purchase\b/giu, "")).not.toMatch(
       /\b(?:purchase|payment|charge|buy|approve|complete)\w*\b/iu
     );

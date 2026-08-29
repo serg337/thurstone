@@ -15,7 +15,12 @@ test("judge shell is honest, navigable, and permanently marks the simulation", a
 
   await page.getByRole("link", { name: "Results" }).click();
   await expect(page).toHaveURL(/\/results$/);
-  await expect(page.getByRole("heading", { name: "No run yet" })).toBeVisible();
+  if (process.env.TOOLPROOF_BASE_URL) {
+    await expect(page.getByRole("heading", { name: "Baseline versus revised" })).toBeVisible();
+    await expect(page.getByText("24 / 24 paired", { exact: true })).toBeVisible();
+  } else {
+    await expect(page.getByRole("heading", { name: "No run yet" })).toBeVisible();
+  }
   expect(pageErrors).toEqual([]);
 });
 
