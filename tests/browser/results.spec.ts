@@ -30,7 +30,11 @@ test("paired Results exposes exact metrics, filters, traces, provenance, and can
   await page.getByRole("button", { name: "Builder-blinded holdout" }).click();
   await page.getByLabel("Outcome").selectOption("fail");
   await expect(page.locator(".gate6-matrix .matrix-row:not(.matrix-header)")).toHaveCount(1);
-  await expect(page.getByText("commitment_holdout_anchor", { exact: true })).toBeVisible();
+  await expect(
+    page
+      .locator(".gate6-matrix .matrix-row:not(.matrix-header)")
+      .getByText("commitment_holdout_anchor", { exact: true })
+  ).toBeVisible();
   await page.getByLabel("Version").selectOption("revised");
   await expect(page.getByRole("columnheader", { name: "Baseline outcome" })).toHaveCount(0);
   await expect(page.getByRole("columnheader", { name: "Revised outcome" })).toBeVisible();

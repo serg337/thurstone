@@ -428,7 +428,9 @@ export function SemanticPairedResults({ results }: { readonly results: Paired })
                   <dd>{trace.failureCodes.join(", ") || "none"}</dd>
                 </div>
               </dl>
-              <pre>{compact(trace.model.decision)}</pre>
+              <pre tabIndex={0} aria-label="Model decision JSON">
+                {compact(trace.model.decision)}
+              </pre>
             </article>
             <article>
               <h4>Live catalog and native execution</h4>
@@ -450,7 +452,7 @@ export function SemanticPairedResults({ results }: { readonly results: Paired })
                   <dd>{trace.hashes.traceResultHash ?? "no native call"}</dd>
                 </div>
               </dl>
-              <pre>
+              <pre tabIndex={0} aria-label="Canonical arguments and native result JSON">
                 {compact({
                   arguments: trace.execution.canonicalArguments,
                   result: trace.execution.nativeResult
@@ -459,7 +461,7 @@ export function SemanticPairedResults({ results }: { readonly results: Paired })
             </article>
             <article>
               <h4>State and effect</h4>
-              <pre>
+              <pre tabIndex={0} aria-label="State and effect JSON">
                 {compact({
                   before: trace.execution.stateBefore,
                   after: trace.execution.stateAfter,
