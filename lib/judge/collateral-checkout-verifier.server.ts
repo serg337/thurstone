@@ -11,10 +11,14 @@ import {
   JUDGE_DEMO_CI_TIMEOUT_PATH,
   JUDGE_DEMO_COLLATERAL_FIELD_PREFIXES,
   JUDGE_DEMO_CRITICAL_PATHS,
+  JUDGE_DEMO_RECOVERY_CI_FINALIZATION_COMMIT,
+  JUDGE_DEMO_RECOVERY_CI_FINALIZATION_PATHS,
+  JUDGE_DEMO_RECOVERY_CI_FINALIZATION_TREE,
   JUDGE_DEMO_RECOVERY_FINALIZATION_PATHS,
   JUDGE_DEMO_RECOVERY_IMPLEMENTATION_COMMIT,
   JUDGE_DEMO_RECOVERY_IMPLEMENTATION_TREE,
   JUDGE_DEMO_RECOVERY_PATHS,
+  JUDGE_DEMO_TRUTH_STATUS_FINALIZATION_PATHS,
   type JudgeDemoCollateralField,
   type JudgeDemoCollateralPath,
   type JudgeDemoPresentationTransition
@@ -220,6 +224,7 @@ async function verifyRecoveryFinalization(input: {
     { kind: "sealed-reader-compatibility-recovery" }
   >;
   readonly firstParentChain: readonly string[];
+  readonly terminalActiveCommit: string;
 }): Promise<void> {
   const validation = input.transition.recoveryContract.ciTimeoutValidation ?? null;
   if (validation === null) {
@@ -228,16 +233,35 @@ async function verifyRecoveryFinalization(input: {
     }
     return;
   }
+  const truthStatus = validation.truthStatusFinalization ?? null;
+  const expectedChain =
+    truthStatus === null
+      ? [
+          input.transition.predecessorCommit,
+          JUDGE_DEMO_RECOVERY_IMPLEMENTATION_COMMIT,
+          JUDGE_DEMO_RECOVERY_CI_FINALIZATION_COMMIT
+        ]
+      : [
+          input.transition.predecessorCommit,
+          JUDGE_DEMO_RECOVERY_IMPLEMENTATION_COMMIT,
+          JUDGE_DEMO_RECOVERY_CI_FINALIZATION_COMMIT,
+          input.transition.successorCommit
+        ];
   if (
-    input.firstParentChain.length !== 3 ||
-    input.firstParentChain[0] !== input.transition.predecessorCommit ||
-    input.firstParentChain[1] !== JUDGE_DEMO_RECOVERY_IMPLEMENTATION_COMMIT ||
-    input.firstParentChain[2] !== input.transition.successorCommit ||
+    canonicalJson(input.firstParentChain) !== canonicalJson(expectedChain) ||
     validation.implementationCommit !== JUDGE_DEMO_RECOVERY_IMPLEMENTATION_COMMIT ||
     validation.implementationTree !== JUDGE_DEMO_RECOVERY_IMPLEMENTATION_TREE ||
     commitTree(input.cwd, validation.implementationCommit) !== validation.implementationTree ||
     validation.activeCommit !== input.transition.successorCommit ||
-    commitTree(input.cwd, validation.activeCommit) !== validation.activeTree
+    commitTree(input.cwd, validation.activeCommit) !== validation.activeTree ||
+    (truthStatus === null
+      ? validation.activeCommit !== JUDGE_DEMO_RECOVERY_CI_FINALIZATION_COMMIT ||
+        validation.activeTree !== JUDGE_DEMO_RECOVERY_CI_FINALIZATION_TREE
+      : truthStatus.predecessorCommit !== JUDGE_DEMO_RECOVERY_CI_FINALIZATION_COMMIT ||
+        truthStatus.predecessorTree !== JUDGE_DEMO_RECOVERY_CI_FINALIZATION_TREE ||
+        commitTree(input.cwd, truthStatus.predecessorCommit) !== truthStatus.predecessorTree ||
+        truthStatus.activeCommit !== validation.activeCommit ||
+        truthStatus.activeTree !== validation.activeTree)
   ) {
     throw new Error("judge_demo_presentation_recovery_finalization_identity_invalid");
   }
@@ -248,13 +272,52 @@ async function verifyRecoveryFinalization(input: {
     validation.activeCommit
   );
   const actualPaths = actualChanges.map(({ path }) => path);
+  const expectedFinalizationPaths =
+    truthStatus === null
+      ? JUDGE_DEMO_RECOVERY_CI_FINALIZATION_PATHS
+      : JUDGE_DEMO_RECOVERY_FINALIZATION_PATHS;
   if (
-    canonicalJson(actualPaths) !== canonicalJson(JUDGE_DEMO_RECOVERY_FINALIZATION_PATHS) ||
+    canonicalJson(actualPaths) !== canonicalJson(expectedFinalizationPaths) ||
     canonicalJson(validation.changedPaths) !== canonicalJson(actualPaths) ||
     canonicalJson(validation.treeChanges) !== canonicalJson(actualChanges) ||
     (await canonicalSha256(actualChanges)) !== validation.gitTreeProjectionHash
   ) {
     throw new Error("judge_demo_presentation_recovery_finalization_tree_invalid");
+  }
+
+  if (truthStatus !== null) {
+    const truthStatusChanges = gitTreeChanges(
+      input.cwd,
+      truthStatus.predecessorCommit,
+      truthStatus.activeCommit
+    );
+    if (
+      canonicalJson(truthStatusChanges.map(({ path }) => path)) !==
+        canonicalJson(JUDGE_DEMO_TRUTH_STATUS_FINALIZATION_PATHS) ||
+      canonicalJson(truthStatus.changedPaths) !==
+        canonicalJson(JUDGE_DEMO_TRUTH_STATUS_FINALIZATION_PATHS) ||
+      canonicalJson(truthStatus.treeChanges) !== canonicalJson(truthStatusChanges) ||
+      (await canonicalSha256(truthStatusChanges)) !== truthStatus.gitTreeProjectionHash
+    ) {
+      throw new Error("judge_demo_presentation_truth_status_tree_invalid");
+    }
+    const expectedReadme = treeEntry(input.cwd, input.terminalActiveCommit, "README.md");
+    const checkedOutReadme = await checkoutEntry(input.cwd, "README.md");
+    if (
+      expectedReadme === null ||
+      checkedOutReadme === null ||
+      expectedReadme.mode !== checkedOutReadme.mode ||
+      expectedReadme.blobOid !== blobOid(checkedOutReadme.bytes)
+    ) {
+      throw new Error("judge_demo_presentation_truth_status_readme_checkout_invalid");
+    }
+    const readme = new TextDecoder("utf-8", { fatal: true }).decode(checkedOutReadme.bytes);
+    if (
+      !readme.includes(truthStatus.expectedReadmeSentence) ||
+      readme.includes(truthStatus.forbiddenReadmePhrase)
+    ) {
+      throw new Error("judge_demo_presentation_truth_status_readme_invalid");
+    }
   }
 
   const expectedTest = treeEntry(input.cwd, validation.activeCommit, JUDGE_DEMO_CI_TIMEOUT_PATH);
@@ -357,7 +420,8 @@ async function verifyTransitionGit(input: {
     await verifyRecoveryFinalization({
       cwd: input.cwd,
       transition: input.transition,
-      firstParentChain: actualFirstParentChain
+      firstParentChain: actualFirstParentChain,
+      terminalActiveCommit: input.activeCommit
     });
   } else if (actualFirstParentChain.length !== 2) {
     throw new Error("judge_demo_presentation_transition_not_direct_child");

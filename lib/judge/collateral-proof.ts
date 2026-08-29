@@ -11,11 +11,20 @@ export const JUDGE_DEMO_COLLATERAL_PROOF_VERSION = JUDGE_DEMO_PRESENTATION_TRANS
 
 export const JUDGE_DEMO_CI_TIMEOUT_VALIDATION_VERSION =
   "toolproof-judge-demo-ci-timeout-validation@1.0.0";
+export const JUDGE_DEMO_TRUTH_STATUS_FINALIZATION_VERSION =
+  "toolproof-judge-demo-truth-status-finalization@1.0.0";
 export const JUDGE_DEMO_RECOVERY_IMPLEMENTATION_COMMIT = "6211ebc63efe1e65992cfd04e36ebc438b545c9a";
 export const JUDGE_DEMO_RECOVERY_IMPLEMENTATION_TREE = "239082df68b195bc6f901e51dfcd90b2dd5bec6b";
+export const JUDGE_DEMO_RECOVERY_CI_FINALIZATION_COMMIT =
+  "4443650f5513840dd1bf64b9378cc984bb5a706b";
+export const JUDGE_DEMO_RECOVERY_CI_FINALIZATION_TREE = "248068b833fcb17cf28d6801553167412bdbe3be";
 export const JUDGE_DEMO_CI_TIMEOUT_PATH = "tests/integration/judge-presentation.test.ts" as const;
 export const JUDGE_DEMO_CI_TIMEOUT_MS = 20_000 as const;
 export const JUDGE_DEMO_CI_TIMEOUT_COUNT = 3 as const;
+export const JUDGE_DEMO_TRUTH_STATUS_EXPECTED_README_SENTENCE =
+  "Its sole provider decision remains sealed on evidence root `e2cf8d47375abfeeb4f32bd6f5973918acf4c091`; recovery and native completion are deployment-bound and recorded by the live receipt and release manifest, not preclaimed by source." as const;
+export const JUDGE_DEMO_TRUTH_STATUS_FORBIDDEN_README_PHRASE =
+  "while the archive-presentation recovery and a fresh current-build native replay remain required before Gate 7 can be called complete" as const;
 
 export const JUDGE_DEMO_CRITICAL_PATHS = Object.freeze(
   [
@@ -118,11 +127,29 @@ export const JUDGE_DEMO_RECOVERY_PATHS = Object.freeze(
  * The bounded provider-free finalization after the reviewed recovery implementation.
  * Every path already belongs to the aggregate e2 -> recovery boundary above.
  */
+export const JUDGE_DEMO_RECOVERY_CI_FINALIZATION_PATHS = Object.freeze([
+  "lib/judge/collateral-checkout-verifier.server.ts",
+  "lib/judge/collateral-proof.ts",
+  "lib/judge/contract.ts",
+  "lib/judge/presentation-binding.server.ts",
+  JUDGE_DEMO_CI_TIMEOUT_PATH
+] as const);
+
+export const JUDGE_DEMO_TRUTH_STATUS_FINALIZATION_PATHS = Object.freeze([
+  "lib/judge/collateral-checkout-verifier.server.ts",
+  "lib/judge/collateral-proof.ts",
+  "lib/judge/contract.ts",
+  "README.md",
+  JUDGE_DEMO_CI_TIMEOUT_PATH
+] as const);
+
+/** The complete 6211 -> current recovery-finalization boundary. */
 export const JUDGE_DEMO_RECOVERY_FINALIZATION_PATHS = Object.freeze([
   "lib/judge/collateral-checkout-verifier.server.ts",
   "lib/judge/collateral-proof.ts",
   "lib/judge/contract.ts",
   "lib/judge/presentation-binding.server.ts",
+  "README.md",
   JUDGE_DEMO_CI_TIMEOUT_PATH
 ] as const);
 
@@ -146,7 +173,8 @@ const gitMode = z
   .string()
   .regex(/^[0-7]{6}$/u)
   .nullable();
-const finalizationPath = z.enum(JUDGE_DEMO_RECOVERY_FINALIZATION_PATHS);
+const recoveryFinalizationPath = z.enum(JUDGE_DEMO_RECOVERY_FINALIZATION_PATHS);
+const truthStatusFinalizationPath = z.enum(JUDGE_DEMO_TRUTH_STATUS_FINALIZATION_PATHS);
 const collateralPath = z.enum(JUDGE_DEMO_COLLATERAL_PATHS);
 const collateralField = z.enum(
   Object.keys(JUDGE_DEMO_COLLATERAL_FIELD_PREFIXES) as [
@@ -162,12 +190,34 @@ const successorUrl = z
 
 const recoveryFinalizationTreeChangeSchema = z
   .object({
-    path: finalizationPath,
+    path: recoveryFinalizationPath,
     status: z.enum(["A", "D", "M", "T"]),
     predecessorMode: gitMode,
     successorMode: gitMode,
     predecessorBlobOid: gitOid.nullable(),
     successorBlobOid: gitOid.nullable()
+  })
+  .strict();
+
+const truthStatusFinalizationSchema = z
+  .object({
+    version: z.literal(JUDGE_DEMO_TRUTH_STATUS_FINALIZATION_VERSION),
+    kind: z.literal("truth-status-finalization"),
+    predecessorCommit: commit,
+    predecessorTree: gitOid,
+    activeCommit: commit,
+    activeTree: gitOid,
+    changedPaths: z
+      .array(truthStatusFinalizationPath)
+      .length(JUDGE_DEMO_TRUTH_STATUS_FINALIZATION_PATHS.length),
+    treeChanges: z
+      .array(recoveryFinalizationTreeChangeSchema)
+      .length(JUDGE_DEMO_TRUTH_STATUS_FINALIZATION_PATHS.length),
+    gitTreeProjectionHash: sha256,
+    expectedReadmeSentence: z.literal(JUDGE_DEMO_TRUTH_STATUS_EXPECTED_README_SENTENCE),
+    forbiddenReadmePhrase: z.literal(JUDGE_DEMO_TRUTH_STATUS_FORBIDDEN_README_PHRASE),
+    providerCallsPerformed: z.literal(0),
+    storeWritesPerformed: z.literal(0)
   })
   .strict();
 
@@ -179,14 +229,19 @@ const ciTimeoutValidationSchema = z
     implementationTree: gitOid,
     activeCommit: commit,
     activeTree: gitOid,
-    changedPaths: z.array(finalizationPath).length(JUDGE_DEMO_RECOVERY_FINALIZATION_PATHS.length),
+    changedPaths: z
+      .array(recoveryFinalizationPath)
+      .min(JUDGE_DEMO_RECOVERY_CI_FINALIZATION_PATHS.length)
+      .max(JUDGE_DEMO_RECOVERY_FINALIZATION_PATHS.length),
     treeChanges: z
       .array(recoveryFinalizationTreeChangeSchema)
-      .length(JUDGE_DEMO_RECOVERY_FINALIZATION_PATHS.length),
+      .min(JUDGE_DEMO_RECOVERY_CI_FINALIZATION_PATHS.length)
+      .max(JUDGE_DEMO_RECOVERY_FINALIZATION_PATHS.length),
     gitTreeProjectionHash: sha256,
     timeoutPath: z.literal(JUDGE_DEMO_CI_TIMEOUT_PATH),
     timeoutMs: z.literal(JUDGE_DEMO_CI_TIMEOUT_MS),
     timeoutCount: z.literal(JUDGE_DEMO_CI_TIMEOUT_COUNT),
+    truthStatusFinalization: truthStatusFinalizationSchema.nullable().optional(),
     providerCallsPerformed: z.literal(0),
     storeWritesPerformed: z.literal(0)
   })
@@ -365,6 +420,11 @@ export async function verifyJudgeDemoPresentationTransition(
 
   if (proof.kind === "sealed-reader-compatibility-recovery") {
     const validation = proof.recoveryContract.ciTimeoutValidation ?? null;
+    const truthStatus = validation?.truthStatusFinalization ?? null;
+    const expectedFinalizationPaths =
+      truthStatus === null
+        ? JUDGE_DEMO_RECOVERY_CI_FINALIZATION_PATHS
+        : JUDGE_DEMO_RECOVERY_FINALIZATION_PATHS;
     if (
       proof.ordinal !== 0 ||
       proof.predecessorCommit !== proof.rootEvidenceCommit ||
@@ -373,15 +433,33 @@ export async function verifyJudgeDemoPresentationTransition(
         (validation.implementationCommit !== JUDGE_DEMO_RECOVERY_IMPLEMENTATION_COMMIT ||
           validation.implementationTree !== JUDGE_DEMO_RECOVERY_IMPLEMENTATION_TREE ||
           validation.activeCommit !== proof.successorCommit ||
-          canonicalJson(validation.changedPaths) !==
-            canonicalJson(JUDGE_DEMO_RECOVERY_FINALIZATION_PATHS) ||
+          canonicalJson(validation.changedPaths) !== canonicalJson(expectedFinalizationPaths) ||
           canonicalJson(validation.treeChanges.map(({ path }) => path)) !==
-            canonicalJson(JUDGE_DEMO_RECOVERY_FINALIZATION_PATHS) ||
+            canonicalJson(expectedFinalizationPaths) ||
           canonicalJson(validation.treeChanges) !==
             canonicalJson(
               [...validation.treeChanges].sort((left, right) => left.path.localeCompare(right.path))
             ) ||
-          (await canonicalSha256(validation.treeChanges)) !== validation.gitTreeProjectionHash))
+          (await canonicalSha256(validation.treeChanges)) !== validation.gitTreeProjectionHash ||
+          (truthStatus === null
+            ? validation.activeCommit !== JUDGE_DEMO_RECOVERY_CI_FINALIZATION_COMMIT ||
+              validation.activeTree !== JUDGE_DEMO_RECOVERY_CI_FINALIZATION_TREE
+            : truthStatus.predecessorCommit !== JUDGE_DEMO_RECOVERY_CI_FINALIZATION_COMMIT ||
+              truthStatus.predecessorTree !== JUDGE_DEMO_RECOVERY_CI_FINALIZATION_TREE ||
+              truthStatus.activeCommit !== validation.activeCommit ||
+              truthStatus.activeTree !== validation.activeTree ||
+              canonicalJson(truthStatus.changedPaths) !==
+                canonicalJson(JUDGE_DEMO_TRUTH_STATUS_FINALIZATION_PATHS) ||
+              canonicalJson(truthStatus.treeChanges.map(({ path }) => path)) !==
+                canonicalJson(JUDGE_DEMO_TRUTH_STATUS_FINALIZATION_PATHS) ||
+              canonicalJson(truthStatus.treeChanges) !==
+                canonicalJson(
+                  [...truthStatus.treeChanges].sort((left, right) =>
+                    left.path.localeCompare(right.path)
+                  )
+                ) ||
+              (await canonicalSha256(truthStatus.treeChanges)) !==
+                truthStatus.gitTreeProjectionHash)))
     ) {
       throw new Error("judge_demo_recovery_transition_invalid");
     }

@@ -14,10 +14,16 @@ import {
   JUDGE_DEMO_CI_TIMEOUT_VALIDATION_VERSION,
   JUDGE_DEMO_CRITICAL_PATHS,
   JUDGE_DEMO_PRESENTATION_TRANSITION_VERSION,
+  JUDGE_DEMO_RECOVERY_CI_FINALIZATION_COMMIT,
+  JUDGE_DEMO_RECOVERY_CI_FINALIZATION_TREE,
   JUDGE_DEMO_RECOVERY_FINALIZATION_PATHS,
   JUDGE_DEMO_RECOVERY_IMPLEMENTATION_COMMIT,
   JUDGE_DEMO_RECOVERY_IMPLEMENTATION_TREE,
   JUDGE_DEMO_RECOVERY_PATHS,
+  JUDGE_DEMO_TRUTH_STATUS_EXPECTED_README_SENTENCE,
+  JUDGE_DEMO_TRUTH_STATUS_FINALIZATION_PATHS,
+  JUDGE_DEMO_TRUTH_STATUS_FINALIZATION_VERSION,
+  JUDGE_DEMO_TRUTH_STATUS_FORBIDDEN_README_PHRASE,
   judgeDemoImmutableProjectionHash,
   verifyJudgeDemoPresentationTransition,
   type JudgeDemoCollateralTransition,
@@ -215,6 +221,11 @@ async function recoveryTransition(input: {
 async function ciTimeoutValidation(input: {
   cwd: string;
   activeCommit: string;
+  truthStatusFinalization?: NonNullable<
+    NonNullable<
+      JudgeDemoRecoveryTransition["recoveryContract"]["ciTimeoutValidation"]
+    >["truthStatusFinalization"]
+  >;
 }): Promise<NonNullable<JudgeDemoRecoveryTransition["recoveryContract"]["ciTimeoutValidation"]>> {
   const treeChanges = rawTreeChanges(
     input.cwd,
@@ -238,6 +249,47 @@ async function ciTimeoutValidation(input: {
     timeoutPath: JUDGE_DEMO_CI_TIMEOUT_PATH,
     timeoutMs: JUDGE_DEMO_CI_TIMEOUT_MS,
     timeoutCount: JUDGE_DEMO_CI_TIMEOUT_COUNT,
+    ...(input.truthStatusFinalization === undefined
+      ? {}
+      : { truthStatusFinalization: input.truthStatusFinalization }),
+    providerCallsPerformed: 0,
+    storeWritesPerformed: 0
+  };
+}
+
+async function truthStatusFinalization(input: {
+  cwd: string;
+  activeCommit: string;
+}): Promise<
+  NonNullable<
+    NonNullable<
+      JudgeDemoRecoveryTransition["recoveryContract"]["ciTimeoutValidation"]
+    >["truthStatusFinalization"]
+  >
+> {
+  const treeChanges = rawTreeChanges(
+    input.cwd,
+    JUDGE_DEMO_RECOVERY_CI_FINALIZATION_COMMIT,
+    input.activeCommit
+  );
+  return {
+    version: JUDGE_DEMO_TRUTH_STATUS_FINALIZATION_VERSION,
+    kind: "truth-status-finalization",
+    predecessorCommit: JUDGE_DEMO_RECOVERY_CI_FINALIZATION_COMMIT,
+    predecessorTree: JUDGE_DEMO_RECOVERY_CI_FINALIZATION_TREE,
+    activeCommit: input.activeCommit,
+    activeTree: git(input.cwd, ["rev-parse", `${input.activeCommit}^{tree}`]),
+    changedPaths: treeChanges.map(
+      ({ path }) => path
+    ) as (typeof JUDGE_DEMO_TRUTH_STATUS_FINALIZATION_PATHS)[number][],
+    treeChanges: treeChanges as NonNullable<
+      NonNullable<
+        JudgeDemoRecoveryTransition["recoveryContract"]["ciTimeoutValidation"]
+      >["truthStatusFinalization"]
+    >["treeChanges"],
+    gitTreeProjectionHash: await canonicalSha256(treeChanges),
+    expectedReadmeSentence: JUDGE_DEMO_TRUTH_STATUS_EXPECTED_README_SENTENCE,
+    forbiddenReadmePhrase: JUDGE_DEMO_TRUTH_STATUS_FORBIDDEN_README_PHRASE,
     providerCallsPerformed: 0,
     storeWritesPerformed: 0
   };
@@ -398,13 +450,8 @@ async function recoveryFinalizationFixture() {
   const cwd = await mkdtemp(join(tmpdir(), "toolproof-judge-finalization-"));
   temporaryRoots.push(cwd);
   git(cwd, ["clone", "-q", "--no-hardlinks", resolve("."), "."]);
-  git(cwd, ["checkout", "-q", JUDGE_DEMO_RECOVERY_IMPLEMENTATION_COMMIT]);
-  for (const path of JUDGE_DEMO_RECOVERY_FINALIZATION_PATHS) {
-    await writeFile(join(cwd, path), await readFile(resolve(path)));
-  }
-  git(cwd, ["add", "--", ...JUDGE_DEMO_RECOVERY_FINALIZATION_PATHS]);
-  git(cwd, ["commit", "-q", "-m", "finalize recovery CI validation"]);
-  const activeCommit = git(cwd, ["rev-parse", "HEAD"]);
+  git(cwd, ["checkout", "-q", JUDGE_DEMO_RECOVERY_CI_FINALIZATION_COMMIT]);
+  const activeCommit = JUDGE_DEMO_RECOVERY_CI_FINALIZATION_COMMIT;
   const validation = await ciTimeoutValidation({ cwd, activeCommit });
   const recovery = await recoveryTransition({
     cwd,
@@ -418,6 +465,53 @@ async function recoveryFinalizationFixture() {
     implementationCommit: JUDGE_DEMO_RECOVERY_IMPLEMENTATION_COMMIT,
     activeCommit,
     validation,
+    recovery
+  };
+}
+
+async function truthStatusFinalizationFixture(options: { staleReadme?: boolean } = {}) {
+  const cwd = await mkdtemp(join(tmpdir(), "toolproof-judge-truth-status-"));
+  temporaryRoots.push(cwd);
+  git(cwd, ["clone", "-q", "--no-hardlinks", resolve("."), "."]);
+  git(cwd, ["checkout", "-q", JUDGE_DEMO_RECOVERY_CI_FINALIZATION_COMMIT]);
+  for (const path of JUDGE_DEMO_TRUTH_STATUS_FINALIZATION_PATHS) {
+    const bytes = await readFile(resolve(path));
+    const nextBytes =
+      path === "README.md" && options.staleReadme
+        ? Buffer.from(
+            bytes
+              .toString("utf8")
+              .replace(
+                JUDGE_DEMO_TRUTH_STATUS_EXPECTED_README_SENTENCE,
+                `${JUDGE_DEMO_TRUTH_STATUS_EXPECTED_README_SENTENCE} ${JUDGE_DEMO_TRUTH_STATUS_FORBIDDEN_README_PHRASE}.`
+              )
+          )
+        : bytes;
+    await writeFile(join(cwd, path), nextBytes);
+  }
+  git(cwd, ["add", "--", ...JUDGE_DEMO_TRUTH_STATUS_FINALIZATION_PATHS]);
+  git(cwd, ["commit", "-q", "-m", "finalize recovery truth status"]);
+  const activeCommit = git(cwd, ["rev-parse", "HEAD"]);
+  const truthStatus = await truthStatusFinalization({ cwd, activeCommit });
+  const validation = await ciTimeoutValidation({
+    cwd,
+    activeCommit,
+    truthStatusFinalization: truthStatus
+  });
+  const recovery = await recoveryTransition({
+    cwd,
+    rootCommit: rootEvidenceCommit,
+    recoveryCommit: activeCommit,
+    ciTimeoutValidation: validation
+  });
+  return {
+    cwd,
+    rootCommit: rootEvidenceCommit,
+    implementationCommit: JUDGE_DEMO_RECOVERY_IMPLEMENTATION_COMMIT,
+    ciFinalizationCommit: JUDGE_DEMO_RECOVERY_CI_FINALIZATION_COMMIT,
+    activeCommit,
+    validation,
+    truthStatus,
     recovery
   };
 }
@@ -530,10 +624,30 @@ describe("judge provider-free presentation lineage", () => {
       providerCallsPerformed: 0,
       storeWritesPerformed: 0
     });
+
+    const truthFinalized = await truthStatusFinalizationFixture();
+    const truthFinalizedBinding = await bindingFor({
+      rootCommit: truthFinalized.rootCommit,
+      activeCommit: truthFinalized.activeCommit,
+      transitions: [truthFinalized.recovery]
+    });
+    await expect(
+      verifyJudgeDemoPresentationCheckout({
+        cwd: truthFinalized.cwd,
+        binding: truthFinalizedBinding
+      })
+    ).resolves.toMatchObject({
+      transitionCount: 1,
+      changedPathCount: JUDGE_DEMO_RECOVERY_PATHS.length
+    });
+    expect(
+      publicJudgeDemoPresentationBinding(truthFinalizedBinding).transitions[0]?.ciTimeoutValidation
+        ?.truthStatusFinalization
+    ).toEqual(truthFinalized.truthStatus);
   }, 20_000);
 
   it("verifies ordered recovery then collateral links without changing critical bytes", async () => {
-    const value = await recoveryFinalizationFixture();
+    const value = await truthStatusFinalizationFixture();
     const predecessorValue = "reserved for the verified Gate 9 link-only release commit";
     const successorValue = "https://github.com/serg337/toolproof";
     for (const path of ["README.md", "submission/devpost.md"] as const) {
@@ -645,28 +759,58 @@ describe("judge provider-free presentation lineage", () => {
       })
     ).rejects.toThrow(/judge_demo_presentation_recovery_finalization_tree_invalid/u);
 
-    const directWithValidation = await recoveryTransition({
-      cwd: finalized.cwd,
-      rootCommit: finalized.rootCommit,
-      recoveryCommit: finalized.implementationCommit,
+    await expect(
+      recoveryTransition({
+        cwd: finalized.cwd,
+        rootCommit: finalized.rootCommit,
+        recoveryCommit: finalized.implementationCommit,
+        ciTimeoutValidation: {
+          ...finalized.validation,
+          activeCommit: finalized.implementationCommit,
+          activeTree: JUDGE_DEMO_RECOVERY_IMPLEMENTATION_TREE
+        }
+      })
+    ).rejects.toThrow(/judge_demo_recovery_transition_invalid/u);
+
+    const truthFinalized = await truthStatusFinalizationFixture();
+    const tamperedTruthChanges = truthFinalized.truthStatus.treeChanges.map((change, index) =>
+      index === 0 ? { ...change, successorBlobOid: "f".repeat(40) } : change
+    );
+    const tamperedTruth = {
+      ...truthFinalized.truthStatus,
+      treeChanges: tamperedTruthChanges,
+      gitTreeProjectionHash: await canonicalSha256(tamperedTruthChanges)
+    };
+    const tamperedTruthRecovery = await recoveryTransition({
+      cwd: truthFinalized.cwd,
+      rootCommit: truthFinalized.rootCommit,
+      recoveryCommit: truthFinalized.activeCommit,
       ciTimeoutValidation: {
-        ...finalized.validation,
-        activeCommit: finalized.implementationCommit,
-        activeTree: JUDGE_DEMO_RECOVERY_IMPLEMENTATION_TREE
+        ...truthFinalized.validation,
+        truthStatusFinalization: tamperedTruth
       }
     });
-    const directWithValidationBinding = await bindingFor({
-      rootCommit: finalized.rootCommit,
-      activeCommit: finalized.implementationCommit,
-      transitions: [directWithValidation]
+    const tamperedTruthBinding = await bindingFor({
+      rootCommit: truthFinalized.rootCommit,
+      activeCommit: truthFinalized.activeCommit,
+      transitions: [tamperedTruthRecovery]
     });
-    git(finalized.cwd, ["reset", "--hard", "-q", finalized.implementationCommit]);
     await expect(
       verifyJudgeDemoPresentationCheckout({
-        cwd: finalized.cwd,
-        binding: directWithValidationBinding
+        cwd: truthFinalized.cwd,
+        binding: tamperedTruthBinding
       })
-    ).rejects.toThrow(/judge_demo_presentation_recovery_finalization_identity_invalid/u);
+    ).rejects.toThrow(/judge_demo_presentation_truth_status_tree_invalid/u);
+
+    const stale = await truthStatusFinalizationFixture({ staleReadme: true });
+    const staleBinding = await bindingFor({
+      rootCommit: stale.rootCommit,
+      activeCommit: stale.activeCommit,
+      transitions: [stale.recovery]
+    });
+    await expect(
+      verifyJudgeDemoPresentationCheckout({ cwd: stale.cwd, binding: staleBinding })
+    ).rejects.toThrow(/judge_demo_presentation_truth_status_readme_invalid/u);
 
     await expect(
       verifyJudgeDemoPresentationTransition({ ...value.recovery, storeWritesPerformed: 1 })

@@ -11,14 +11,70 @@ const gitCommit = z.string().regex(/^[a-f0-9]{40}$/u);
 const gitOid = z.string().regex(/^[a-f0-9]{40}$/u);
 const judgeEvidenceRootCommit = "e2cf8d47375abfeeb4f32bd6f5973918acf4c091";
 const judgeRecoveryImplementationCommit = "6211ebc63efe1e65992cfd04e36ebc438b545c9a";
-const recoveryFinalizationPaths = [
+const judgeRecoveryCiFinalizationCommit = "4443650f5513840dd1bf64b9378cc984bb5a706b";
+const judgeRecoveryCiFinalizationTree = "248068b833fcb17cf28d6801553167412bdbe3be";
+const recoveryCiFinalizationPaths = [
   "lib/judge/collateral-checkout-verifier.server.ts",
   "lib/judge/collateral-proof.ts",
   "lib/judge/contract.ts",
   "lib/judge/presentation-binding.server.ts",
   "tests/integration/judge-presentation.test.ts"
 ] as const;
+const truthStatusFinalizationPaths = [
+  "lib/judge/collateral-checkout-verifier.server.ts",
+  "lib/judge/collateral-proof.ts",
+  "lib/judge/contract.ts",
+  "README.md",
+  "tests/integration/judge-presentation.test.ts"
+] as const;
+const recoveryFinalizationPaths = [
+  "lib/judge/collateral-checkout-verifier.server.ts",
+  "lib/judge/collateral-proof.ts",
+  "lib/judge/contract.ts",
+  "lib/judge/presentation-binding.server.ts",
+  "README.md",
+  "tests/integration/judge-presentation.test.ts"
+] as const;
 const recoveryFinalizationPath = z.enum(recoveryFinalizationPaths);
+const publicRecoveryTreeChangeSchema = z
+  .object({
+    path: recoveryFinalizationPath,
+    status: z.enum(["A", "D", "M", "T"]),
+    predecessorMode: z
+      .string()
+      .regex(/^[0-7]{6}$/u)
+      .nullable(),
+    successorMode: z
+      .string()
+      .regex(/^[0-7]{6}$/u)
+      .nullable(),
+    predecessorBlobOid: gitOid.nullable(),
+    successorBlobOid: gitOid.nullable()
+  })
+  .strict();
+const publicTruthStatusFinalizationSchema = z
+  .object({
+    version: z.literal("toolproof-judge-demo-truth-status-finalization@1.0.0"),
+    kind: z.literal("truth-status-finalization"),
+    predecessorCommit: gitCommit,
+    predecessorTree: gitOid,
+    activeCommit: gitCommit,
+    activeTree: gitOid,
+    changedPaths: z.array(recoveryFinalizationPath).length(truthStatusFinalizationPaths.length),
+    treeChanges: z
+      .array(publicRecoveryTreeChangeSchema)
+      .length(truthStatusFinalizationPaths.length),
+    gitTreeProjectionHash: sha256,
+    expectedReadmeSentence: z.literal(
+      "Its sole provider decision remains sealed on evidence root `e2cf8d47375abfeeb4f32bd6f5973918acf4c091`; recovery and native completion are deployment-bound and recorded by the live receipt and release manifest, not preclaimed by source."
+    ),
+    forbiddenReadmePhrase: z.literal(
+      "while the archive-presentation recovery and a fresh current-build native replay remain required before Gate 7 can be called complete"
+    ),
+    providerCallsPerformed: z.literal(0),
+    storeWritesPerformed: z.literal(0)
+  })
+  .strict();
 const publicCiTimeoutValidationSchema = z
   .object({
     version: z.literal("toolproof-judge-demo-ci-timeout-validation@1.0.0"),
@@ -27,37 +83,28 @@ const publicCiTimeoutValidationSchema = z
     implementationTree: gitOid,
     activeCommit: gitCommit,
     activeTree: gitOid,
-    changedPaths: z.array(recoveryFinalizationPath).length(recoveryFinalizationPaths.length),
+    changedPaths: z
+      .array(recoveryFinalizationPath)
+      .min(recoveryCiFinalizationPaths.length)
+      .max(recoveryFinalizationPaths.length),
     treeChanges: z
-      .array(
-        z
-          .object({
-            path: recoveryFinalizationPath,
-            status: z.enum(["A", "D", "M", "T"]),
-            predecessorMode: z
-              .string()
-              .regex(/^[0-7]{6}$/u)
-              .nullable(),
-            successorMode: z
-              .string()
-              .regex(/^[0-7]{6}$/u)
-              .nullable(),
-            predecessorBlobOid: gitOid.nullable(),
-            successorBlobOid: gitOid.nullable()
-          })
-          .strict()
-      )
-      .length(recoveryFinalizationPaths.length),
+      .array(publicRecoveryTreeChangeSchema)
+      .min(recoveryCiFinalizationPaths.length)
+      .max(recoveryFinalizationPaths.length),
     gitTreeProjectionHash: sha256,
     timeoutPath: z.literal("tests/integration/judge-presentation.test.ts"),
     timeoutMs: z.literal(20_000),
     timeoutCount: z.literal(3),
+    truthStatusFinalization: publicTruthStatusFinalizationSchema.nullable().optional(),
     providerCallsPerformed: z.literal(0),
     storeWritesPerformed: z.literal(0)
   })
   .strict()
   .superRefine((validation, context) => {
-    const exactPaths = recoveryFinalizationPaths.every(
+    const truthStatus = validation.truthStatusFinalization ?? null;
+    const expectedPaths =
+      truthStatus === null ? recoveryCiFinalizationPaths : recoveryFinalizationPaths;
+    const exactPaths = expectedPaths.every(
       (path, index) =>
         validation.changedPaths[index] === path && validation.treeChanges[index]?.path === path
     );
@@ -65,6 +112,20 @@ const publicCiTimeoutValidationSchema = z
       validation.implementationCommit !== "6211ebc63efe1e65992cfd04e36ebc438b545c9a" ||
       validation.implementationTree !== "239082df68b195bc6f901e51dfcd90b2dd5bec6b" ||
       validation.activeCommit === validation.implementationCommit ||
+      validation.changedPaths.length !== expectedPaths.length ||
+      validation.treeChanges.length !== expectedPaths.length ||
+      (truthStatus === null
+        ? validation.activeCommit !== judgeRecoveryCiFinalizationCommit ||
+          validation.activeTree !== judgeRecoveryCiFinalizationTree
+        : truthStatus.predecessorCommit !== judgeRecoveryCiFinalizationCommit ||
+          truthStatus.predecessorTree !== judgeRecoveryCiFinalizationTree ||
+          truthStatus.activeCommit !== validation.activeCommit ||
+          truthStatus.activeTree !== validation.activeTree ||
+          !truthStatusFinalizationPaths.every(
+            (path, index) =>
+              truthStatus.changedPaths[index] === path &&
+              truthStatus.treeChanges[index]?.path === path
+          )) ||
       !exactPaths
     ) {
       context.addIssue({
