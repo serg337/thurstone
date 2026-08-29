@@ -1,45 +1,130 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
-import { execFileSync } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { execFileSync, spawnSync } from "node:child_process";
+import { lstat, readFile } from "node:fs/promises";
 
-import { canonicalJson } from "@/lib/evidence/digest";
+import { canonicalJson, canonicalSha256 } from "@/lib/evidence/digest";
 import {
   JUDGE_DEMO_COLLATERAL_FIELD_PREFIXES,
+  JUDGE_DEMO_CRITICAL_PATHS,
+  JUDGE_DEMO_RECOVERY_PATHS,
   type JudgeDemoCollateralField,
   type JudgeDemoCollateralPath,
-  type JudgeDemoCollateralProof
+  type JudgeDemoPresentationTransition
 } from "@/lib/judge/collateral-proof";
+import type { JudgeDemoPresentationBinding } from "@/lib/judge/presentation-binding.server";
 import { dependencyProjectionHash } from "@/lib/results/presentation-proof";
 
-function gitFile(cwd: string, commit: string, path: string): string | null {
-  try {
-    return execFileSync("git", ["show", `${commit}:${path}`], {
+const MAX_GIT_BYTES = 8_388_608;
+const ZERO_OID = "0".repeat(40);
+const DEPLOYMENT_EXCLUDED_CONFIG_PATHS = new Set([
+  "eslint.config.mjs",
+  "playwright.config.ts",
+  "tsconfig.typecheck.json",
+  "vitest.config.ts"
+]);
+
+interface GitTreeEntry {
+  readonly mode: string;
+  readonly blobOid: string;
+}
+
+interface GitTreeChange {
+  readonly path: string;
+  readonly status: "A" | "D" | "M" | "T";
+  readonly predecessorMode: string | null;
+  readonly successorMode: string | null;
+  readonly predecessorBlobOid: string | null;
+  readonly successorBlobOid: string | null;
+}
+
+interface CriticalTreeEntry {
+  readonly path: string;
+  readonly predecessorBlobOid: string;
+  readonly successorBlobOid: string;
+}
+
+interface VerifiedTransitionGit {
+  readonly transition: JudgeDemoPresentationTransition;
+  readonly treeChanges: readonly GitTreeChange[];
+  readonly criticalEntries: readonly CriticalTreeEntry[];
+}
+
+export function judgeDemoPathExcludedFromDeployment(path: string): boolean {
+  return (
+    path.startsWith(".env") ||
+    path === ".gitignore" ||
+    path.startsWith(".github/") ||
+    DEPLOYMENT_EXCLUDED_CONFIG_PATHS.has(path)
+  );
+}
+
+function sha256(bytes: Buffer | string): string {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+function blobOid(bytes: Buffer): string {
+  return createHash("sha1").update(`blob ${bytes.length}\0`).update(bytes).digest("hex");
+}
+
+function treeEntry(cwd: string, commit: string, path: string): GitTreeEntry | null {
+  const result = spawnSync("git", ["ls-tree", "-z", commit, "--", path], {
+    cwd,
+    encoding: null,
+    maxBuffer: 1_048_576
+  });
+  if (result.status !== 0 || !Buffer.isBuffer(result.stdout)) {
+    throw new Error(`judge_demo_presentation_git_tree_unavailable:${commit}:${path}`);
+  }
+  if (result.stdout.length === 0) return null;
+  const text = new TextDecoder("utf-8", { fatal: true }).decode(result.stdout);
+  const match = /^([0-7]{6}) blob ([a-f0-9]{40})\t([^\0]+)\0$/u.exec(text);
+  if (!match || match[3] !== path) {
+    throw new Error(`judge_demo_presentation_git_tree_entry_invalid:${path}`);
+  }
+  return Object.freeze({ mode: match[1]!, blobOid: match[2]! });
+}
+
+function gitBlobBytes(cwd: string, commit: string, path: string): Buffer | null {
+  if (treeEntry(cwd, commit, path) === null) return null;
+  const result = spawnSync("git", ["show", `${commit}:${path}`], {
+    cwd,
+    encoding: null,
+    maxBuffer: MAX_GIT_BYTES
+  });
+  if (result.status !== 0 || !Buffer.isBuffer(result.stdout)) {
+    throw new Error(`judge_demo_presentation_referenced_blob_missing:${commit}:${path}`);
+  }
+  return result.stdout;
+}
+
+function gitText(cwd: string, commit: string, path: string): string | null {
+  const bytes = gitBlobBytes(cwd, commit, path);
+  return bytes === null ? null : new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+}
+
+function firstParentCommitChain(cwd: string, ancestor: string, descendant: string): string[] {
+  const reversed = [descendant];
+  let cursor = descendant;
+  for (let depth = 0; depth < 64; depth += 1) {
+    if (cursor === ancestor) return reversed.reverse();
+    const result = spawnSync("git", ["cat-file", "-p", cursor], {
       cwd,
       encoding: "utf8",
       maxBuffer: 1_048_576
     });
-  } catch {
-    return null;
-  }
-}
-
-function assertFirstParentAncestor(cwd: string, ancestor: string, descendant: string): void {
-  let cursor = descendant;
-  for (let depth = 0; depth <= 64; depth += 1) {
-    if (cursor === ancestor) return;
-    const parents = execFileSync("git", ["cat-file", "-p", cursor], {
-      cwd,
-      encoding: "utf8",
-      maxBuffer: 1_048_576
-    })
+    if (result.status !== 0) {
+      throw new Error("judge_demo_presentation_commit_object_missing");
+    }
+    const parents = result.stdout
       .split(/\r?\n/u)
       .flatMap((line) => (/^parent ([a-f0-9]{40})$/u.exec(line)?.[1] ? [line.slice(7)] : []));
     if (parents.length !== 1) {
       throw new Error("judge_demo_presentation_non_linear_ancestry");
     }
     cursor = parents[0]!;
+    reversed.push(cursor);
   }
   throw new Error("judge_demo_presentation_ancestry_depth_exceeded");
 }
@@ -69,62 +154,64 @@ function collateralFields(source: string | null): {
   return Object.freeze({ remainder: remainder.join("\n"), values: Object.freeze(values) });
 }
 
-export async function verifyJudgeDemoCollateralCheckout(input: {
-  readonly proof: JudgeDemoCollateralProof;
-  readonly cwd: string;
-}): Promise<{
-  readonly changedPathCount: number;
-  readonly criticalFileCount: number;
-  readonly dependencyProjectionHash: string;
-}> {
-  const predecessor = execFileSync(
-    "git",
-    ["rev-parse", "--verify", `${input.proof.predecessorCommit}^{commit}`],
-    { cwd: input.cwd, encoding: "utf8", maxBuffer: 1_048_576 }
-  ).trim();
-  const successor = execFileSync(
-    "git",
-    ["rev-parse", "--verify", `${input.proof.successorCommit}^{commit}`],
-    { cwd: input.cwd, encoding: "utf8", maxBuffer: 1_048_576 }
-  ).trim();
-  if (predecessor !== input.proof.predecessorCommit || successor !== input.proof.successorCommit) {
-    throw new Error("judge_demo_presentation_git_identity_invalid");
-  }
-  assertFirstParentAncestor(input.cwd, input.proof.predecessorCommit, input.proof.successorCommit);
-  const changedPaths = execFileSync(
+function gitTreeChanges(
+  cwd: string,
+  transition: JudgeDemoPresentationTransition
+): readonly GitTreeChange[] {
+  const result = spawnSync(
     "git",
     [
-      "diff",
-      "--name-only",
-      "--no-ext-diff",
+      "diff-tree",
+      "--raw",
+      "-r",
       "--no-renames",
-      input.proof.predecessorCommit,
-      input.proof.successorCommit,
+      "--no-commit-id",
+      "--abbrev=40",
+      transition.predecessorCommit,
+      transition.successorCommit,
       "--"
     ],
-    { cwd: input.cwd, encoding: "utf8", maxBuffer: 1_048_576 }
-  )
+    { cwd, encoding: "utf8", maxBuffer: 1_048_576 }
+  );
+  if (result.status !== 0) throw new Error("judge_demo_presentation_git_tree_diff_unavailable");
+  return result.stdout
     .split(/\r?\n/u)
-    .map((value) => value.trim())
     .filter(Boolean)
-    .sort();
-  if (canonicalJson(changedPaths) !== canonicalJson(input.proof.changedPaths)) {
-    throw new Error("judge_demo_presentation_actual_diff_mismatch");
-  }
+    .map((line) => {
+      const match = /^:([0-7]{6}) ([0-7]{6}) ([a-f0-9]{40}) ([a-f0-9]{40}) ([ADMT])\t(.+)$/u.exec(
+        line
+      );
+      if (!match) throw new Error("judge_demo_presentation_git_tree_diff_invalid");
+      return {
+        path: match[6]!,
+        status: match[5]! as "A" | "D" | "M" | "T",
+        predecessorMode: match[1] === "000000" ? null : match[1]!,
+        successorMode: match[2] === "000000" ? null : match[2]!,
+        predecessorBlobOid: match[3] === ZERO_OID ? null : match[3]!,
+        successorBlobOid: match[4] === ZERO_OID ? null : match[4]!
+      };
+    })
+    .sort((left, right) => left.path.localeCompare(right.path));
+}
 
-  const actualCollateralChanges: JudgeDemoCollateralProof["collateralChanges"][number][] = [];
-  for (const path of input.proof.changedPaths) {
-    const collateralPath = path as JudgeDemoCollateralPath;
-    const predecessorSource = gitFile(input.cwd, input.proof.predecessorCommit, path);
-    const successorSource = gitFile(input.cwd, input.proof.successorCommit, path);
-    if (successorSource === null) {
+async function verifyCollateralChanges(
+  cwd: string,
+  transition: Extract<JudgeDemoPresentationTransition, { kind: "collateral-links" }>,
+  activeCommit: string
+): Promise<void> {
+  if (transition.successorCommit !== activeCommit) {
+    throw new Error("judge_demo_presentation_collateral_not_terminal");
+  }
+  const actual: (typeof transition.collateralChanges)[number][] = [];
+  const changedPaths = [...new Set(transition.collateralChanges.map(({ path }) => path))].sort();
+  for (const path of changedPaths) {
+    const predecessorFields = collateralFields(gitText(cwd, transition.predecessorCommit, path));
+    let successorSource: string;
+    try {
+      successorSource = await readFile(`${cwd}/${path}`, "utf8");
+    } catch {
       throw new Error("judge_demo_presentation_collateral_successor_missing");
     }
-    const currentSource = await readFile(`${input.cwd}/${path}`, "utf8");
-    if (currentSource !== successorSource) {
-      throw new Error("judge_demo_presentation_collateral_checkout_mismatch");
-    }
-    const predecessorFields = collateralFields(predecessorSource);
     const successorFields = collateralFields(successorSource);
     if (predecessorFields.remainder !== successorFields.remainder) {
       throw new Error("judge_demo_presentation_non_link_change");
@@ -138,45 +225,245 @@ export async function verifyJudgeDemoCollateralCheckout(input: {
       if (successorValue === null) {
         throw new Error("judge_demo_presentation_collateral_successor_missing");
       }
-      actualCollateralChanges.push({
-        path: collateralPath,
+      actual.push({
+        path: path as JudgeDemoCollateralPath,
         field,
         predecessorValue,
         successorValue
       });
     }
   }
-  actualCollateralChanges.sort((left, right) =>
+  actual.sort((left, right) =>
     left.path === right.path
       ? left.field.localeCompare(right.field)
       : left.path.localeCompare(right.path)
   );
-  if (canonicalJson(actualCollateralChanges) !== canonicalJson(input.proof.collateralChanges)) {
+  if (canonicalJson(actual) !== canonicalJson(transition.collateralChanges)) {
     throw new Error("judge_demo_presentation_collateral_change_mismatch");
   }
+}
 
-  for (const file of input.proof.criticalFiles) {
-    const bytes = await readFile(`${input.cwd}/${file.path}`);
-    if (createHash("sha256").update(bytes).digest("hex") !== file.sha256) {
-      throw new Error(`judge_demo_presentation_critical_file_mismatch:${file.path}`);
+async function verifyTransitionGit(input: {
+  readonly transition: JudgeDemoPresentationTransition;
+  readonly activeCommit: string;
+  readonly cwd: string;
+}): Promise<{
+  readonly treeChanges: readonly GitTreeChange[];
+  readonly criticalEntries: readonly CriticalTreeEntry[];
+}> {
+  const predecessor = execFileSync(
+    "git",
+    ["rev-parse", "--verify", `${input.transition.predecessorCommit}^{commit}`],
+    { cwd: input.cwd, encoding: "utf8", maxBuffer: 1_048_576 }
+  ).trim();
+  const successor = execFileSync(
+    "git",
+    ["rev-parse", "--verify", `${input.transition.successorCommit}^{commit}`],
+    { cwd: input.cwd, encoding: "utf8", maxBuffer: 1_048_576 }
+  ).trim();
+  if (
+    predecessor !== input.transition.predecessorCommit ||
+    successor !== input.transition.successorCommit
+  ) {
+    throw new Error("judge_demo_presentation_git_identity_invalid");
+  }
+  const actualFirstParentChain = firstParentCommitChain(input.cwd, predecessor, successor);
+  if (actualFirstParentChain.length !== 2) {
+    throw new Error("judge_demo_presentation_transition_not_direct_child");
+  }
+  if ((await canonicalSha256(actualFirstParentChain)) !== input.transition.firstParentChainHash) {
+    throw new Error("judge_demo_presentation_first_parent_chain_mismatch");
+  }
+  const actualTreeChanges = gitTreeChanges(input.cwd, input.transition);
+  if ((await canonicalSha256(actualTreeChanges)) !== input.transition.gitTreeProjectionHash) {
+    throw new Error("judge_demo_presentation_git_tree_projection_mismatch");
+  }
+  const actualChangedPaths = actualTreeChanges.map(({ path }) => path).sort();
+  const expectedChangedPaths =
+    input.transition.kind === "sealed-reader-compatibility-recovery"
+      ? JUDGE_DEMO_RECOVERY_PATHS
+      : [...new Set(input.transition.collateralChanges.map(({ path }) => path))].sort();
+  if (canonicalJson(actualChangedPaths) !== canonicalJson(expectedChangedPaths)) {
+    throw new Error("judge_demo_presentation_actual_diff_mismatch");
+  }
+
+  const criticalEntries = JUDGE_DEMO_CRITICAL_PATHS.map((path) => {
+    const predecessorEntry = treeEntry(input.cwd, predecessor, path);
+    const successorEntry = treeEntry(input.cwd, successor, path);
+    if (predecessorEntry === null || successorEntry === null) {
+      throw new Error(`judge_demo_presentation_critical_file_missing:${path}`);
+    }
+    return {
+      path,
+      predecessorBlobOid: predecessorEntry.blobOid,
+      successorBlobOid: successorEntry.blobOid
+    };
+  });
+  const changedCriticalPaths = criticalEntries
+    .filter(({ predecessorBlobOid, successorBlobOid }) => predecessorBlobOid !== successorBlobOid)
+    .map(({ path }) => path);
+  if (
+    (input.transition.kind === "sealed-reader-compatibility-recovery" &&
+      changedCriticalPaths.some((path) => !JUDGE_DEMO_RECOVERY_PATHS.includes(path))) ||
+    (input.transition.kind === "collateral-links" && changedCriticalPaths.length !== 0)
+  ) {
+    throw new Error("judge_demo_presentation_critical_invariant_mismatch");
+  }
+  if (input.transition.kind === "collateral-links") {
+    await verifyCollateralChanges(input.cwd, input.transition, input.activeCommit);
+  }
+  return Object.freeze({ treeChanges: actualTreeChanges, criticalEntries });
+}
+
+async function checkoutEntry(
+  cwd: string,
+  path: string
+): Promise<{
+  readonly bytes: Buffer;
+  readonly mode: string;
+} | null> {
+  try {
+    const [bytes, metadata] = await Promise.all([
+      readFile(`${cwd}/${path}`),
+      lstat(`${cwd}/${path}`)
+    ]);
+    if (!metadata.isFile()) throw new Error(`judge_demo_presentation_active_checkout_type:${path}`);
+    return Object.freeze({
+      bytes,
+      mode: (metadata.mode & 0o111) === 0 ? "100644" : "100755"
+    });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
+  }
+}
+
+async function assertCheckoutMatchesActive(input: {
+  readonly binding: JudgeDemoPresentationBinding;
+  readonly verifiedTransitions: readonly VerifiedTransitionGit[];
+  readonly cwd: string;
+}): Promise<string> {
+  const paths = [
+    ...new Set([
+      ...JUDGE_DEMO_CRITICAL_PATHS,
+      ...input.verifiedTransitions.flatMap(({ treeChanges: changes }) =>
+        changes.map(({ path }) => path)
+      )
+    ])
+  ].sort();
+  const activeCriticalSha256 = new Map<string, string>();
+  for (const path of paths) {
+    const expected = treeEntry(input.cwd, input.binding.activeCommit, path);
+    const isCritical = JUDGE_DEMO_CRITICAL_PATHS.includes(path);
+    const excluded = judgeDemoPathExcludedFromDeployment(path);
+    if (excluded && !isCritical) continue;
+    const actual = excluded
+      ? (() => {
+          const bytes = gitBlobBytes(input.cwd, input.binding.activeCommit, path);
+          return bytes === null ? null : { bytes, mode: expected?.mode ?? "" };
+        })()
+      : await checkoutEntry(input.cwd, path);
+    if (
+      (expected === null && actual !== null) ||
+      (expected !== null && actual === null) ||
+      (expected !== null &&
+        actual !== null &&
+        (expected.mode !== actual.mode || expected.blobOid !== blobOid(actual.bytes)))
+    ) {
+      throw new Error(`judge_demo_presentation_active_checkout_mismatch:${path}`);
+    }
+    if (actual !== null && isCritical) {
+      activeCriticalSha256.set(path, sha256(actual.bytes));
     }
   }
-  const packageJson = JSON.parse(await readFile(`${input.cwd}/package.json`, "utf8")) as {
+
+  for (const verified of input.verifiedTransitions) {
+    const criticalProjection = verified.criticalEntries.map((file) => {
+      const activeEntry = treeEntry(input.cwd, input.binding.activeCommit, file.path);
+      const activeSha256 = activeCriticalSha256.get(file.path);
+      if (activeEntry === null || !activeSha256 || file.successorBlobOid !== activeEntry.blobOid) {
+        throw new Error(`judge_demo_presentation_active_critical_mismatch:${file.path}`);
+      }
+      return { ...file, successorSha256: activeSha256 };
+    });
+    if (
+      (await canonicalSha256(criticalProjection)) !== verified.transition.criticalProjectionHash
+    ) {
+      throw new Error("judge_demo_presentation_critical_projection_mismatch");
+    }
+  }
+
+  const packageSource = await readFile(`${input.cwd}/package.json`, "utf8");
+  const packageJson = JSON.parse(packageSource) as {
     readonly dependencies?: unknown;
     readonly devDependencies?: unknown;
     readonly engines?: unknown;
   };
-  const dependenciesHash = await dependencyProjectionHash({
+  const currentDependencyHash = await dependencyProjectionHash({
     dependencies: packageJson.dependencies ?? null,
     devDependencies: packageJson.devDependencies ?? null,
     engines: packageJson.engines ?? null
   });
-  if (dependenciesHash !== input.proof.dependencyProjectionHash) {
+  if (
+    input.binding.transitions.some(
+      ({ dependencyProjectionHash: expected }) => expected !== currentDependencyHash
+    )
+  ) {
     throw new Error("judge_demo_presentation_dependency_mismatch");
   }
+  return currentDependencyHash;
+}
+
+export async function verifyJudgeDemoPresentationCheckout(input: {
+  readonly binding: JudgeDemoPresentationBinding;
+  readonly cwd: string;
+}): Promise<{
+  readonly transitionCount: number;
+  readonly changedPathCount: number;
+  readonly criticalFileCount: number;
+  readonly dependencyProjectionHash: string;
+}> {
+  const verifiedTransitions: VerifiedTransitionGit[] = [];
+  for (const transition of input.binding.transitions) {
+    const result = await verifyTransitionGit({
+      transition,
+      activeCommit: input.binding.activeCommit,
+      cwd: input.cwd
+    });
+    verifiedTransitions.push({ transition, ...result });
+  }
+  const currentDependencyHash = await assertCheckoutMatchesActive({
+    ...input,
+    verifiedTransitions
+  });
   return Object.freeze({
-    changedPathCount: changedPaths.length,
-    criticalFileCount: input.proof.criticalFiles.length,
-    dependencyProjectionHash: dependenciesHash
+    transitionCount: input.binding.transitions.length,
+    changedPathCount: verifiedTransitions.reduce(
+      (sum, { treeChanges: changes }) => sum + changes.length,
+      0
+    ),
+    criticalFileCount: JUDGE_DEMO_CRITICAL_PATHS.length,
+    dependencyProjectionHash: currentDependencyHash
+  });
+}
+
+/** Compatibility helper for focused transition tests. */
+export async function verifyJudgeDemoCollateralCheckout(input: {
+  readonly proof: JudgeDemoPresentationTransition;
+  readonly cwd: string;
+}): Promise<{
+  readonly changedPathCount: number;
+  readonly criticalFileCount: number;
+  readonly dependencyProjectionHash: string;
+}> {
+  const result = await verifyTransitionGit({
+    transition: input.proof,
+    activeCommit: input.proof.successorCommit,
+    cwd: input.cwd
+  });
+  return Object.freeze({
+    changedPathCount: result.treeChanges.length,
+    criticalFileCount: result.criticalEntries.length,
+    dependencyProjectionHash: input.proof.dependencyProjectionHash
   });
 }

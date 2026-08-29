@@ -100,6 +100,7 @@ const allowedExact = new Set([
   "tests/integration/judge-presentation.test.ts",
   "tests/unit/gate7-adversarial-matrix.test.ts",
   "tests/unit/judge-envelope.test.ts",
+  "tests/unit/judge-store-reader.test.ts",
   "tests/unit/repair-provider.test.ts",
   "tests/unit/results-evidence-package.test.ts",
   "tests/unit/results-presentation-proof.test.ts"

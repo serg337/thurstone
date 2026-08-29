@@ -428,9 +428,12 @@ async function presentedProjection(input: {
   }
   const binding = await configuredJudgeDemoPresentationBinding({
     environment: input.active.environment,
-    predecessorEnvelope: input.artifact.envelope,
-    successorEnvelope: input.active.envelope,
-    predecessorReceiptDigest: input.baseProjection.receiptDigest
+    rootEnvelope: input.artifact.envelope,
+    activeEnvelope: input.active.envelope,
+    rootReceiptDigest: input.baseProjection.receiptDigest,
+    rootArtifactDigest: await canonicalSha256(input.artifact),
+    rootStoredProjectionDigest: await canonicalSha256(input.baseProjection),
+    rootCapturedAt: input.artifact.capturedAt
   });
   const base = { ...input.baseProjection };
   delete (base as Partial<JudgeDemoProjection>).receiptDigest;

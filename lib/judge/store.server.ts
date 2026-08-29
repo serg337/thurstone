@@ -180,6 +180,25 @@ function reply(value: unknown): unknown[] {
   return value;
 }
 
+function storedProjectionValue(value: unknown): Record<string, unknown> {
+  let decoded: unknown = value;
+  if (typeof value === "string") {
+    try {
+      decoded = JSON.parse(value) as unknown;
+    } catch {
+      throw new JudgeDemoStoreError("judge_store_projection_invalid");
+    }
+  }
+  if (decoded === null || typeof decoded !== "object" || Array.isArray(decoded)) {
+    throw new JudgeDemoStoreError("judge_store_projection_invalid");
+  }
+  const prototype = Object.getPrototypeOf(decoded);
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new JudgeDemoStoreError("judge_store_projection_invalid");
+  }
+  return decoded as Record<string, unknown>;
+}
+
 export type JudgeDemoStoredRecord =
   | { readonly state: "empty" }
   | {
@@ -224,13 +243,7 @@ export async function readJudgeDemoStore(
     throw new JudgeDemoStoreError("judge_store_state_invalid");
   }
   const artifact = judgeDemoReceiptArtifactSchema.parse(opened);
-  let projectionValue: unknown;
-  try {
-    projectionValue = JSON.parse(String(data[6])) as unknown;
-  } catch {
-    throw new JudgeDemoStoreError("judge_store_projection_invalid");
-  }
-  const projection = judgeDemoProjectionSchema.parse(projectionValue);
+  const projection = judgeDemoProjectionSchema.parse(storedProjectionValue(data[6]));
   if (
     (await canonicalSha256(artifact)) !== artifactDigest ||
     (await canonicalSha256(projection)) !== String(data[7]) ||

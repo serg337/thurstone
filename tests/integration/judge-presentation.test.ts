@@ -6,30 +6,55 @@ import { dirname, join, resolve } from "node:path";
 import { gzipSync } from "node:zlib";
 
 import { canonicalJson, canonicalSha256 } from "@/lib/evidence/digest";
-import { verifyJudgeDemoCollateralCheckout } from "@/lib/judge/collateral-checkout-verifier.server";
+import { verifyJudgeDemoPresentationCheckout } from "@/lib/judge/collateral-checkout-verifier.server";
 import {
-  JUDGE_DEMO_COLLATERAL_PROOF_VERSION,
   JUDGE_DEMO_CRITICAL_PATHS,
+  JUDGE_DEMO_PRESENTATION_TRANSITION_VERSION,
+  JUDGE_DEMO_RECOVERY_PATHS,
   judgeDemoImmutableProjectionHash,
-  verifyJudgeDemoCollateralProof
+  verifyJudgeDemoPresentationTransition,
+  type JudgeDemoCollateralTransition,
+  type JudgeDemoPresentationTransition,
+  type JudgeDemoRecoveryTransition
 } from "@/lib/judge/collateral-proof";
 import { createJudgeDemoEnvelope } from "@/lib/judge/envelope";
 import {
+  JUDGE_DEMO_GIT_PACK_ENV,
   JUDGE_DEMO_PRESENTATION_BINDING_ENV,
   JUDGE_DEMO_PRESENTATION_BINDING_HASH_ENV,
-  JUDGE_DEMO_PRESENTATION_BINDING_VERSION
+  JUDGE_DEMO_PRESENTATION_BINDING_VERSION,
+  JUDGE_DEMO_SHARED_GIT_PACK_ENV,
+  verifyJudgeDemoPresentationBinding,
+  type JudgeDemoPresentationBinding
 } from "@/lib/judge/presentation-binding.server";
 import { dependencyProjectionHash } from "@/lib/results/presentation-proof";
 import { afterEach, describe, expect, it } from "vitest";
 
 const temporaryRoots: string[] = [];
+const rootReceiptDigest = "b".repeat(64);
+const rootArtifactDigest = "c".repeat(64);
+const rootStoredProjectionDigest = "d".repeat(64);
+const rootCapturedAt = "2026-08-29T14:24:37.377Z";
 
 function git(cwd: string, args: readonly string[]): string {
   return execFileSync(
     "git",
     ["-c", "user.name=ToolProof Test", "-c", "user.email=test@example.invalid", ...args],
-    { cwd, encoding: "utf8", maxBuffer: 1_048_576 }
+    { cwd, encoding: "utf8", maxBuffer: 8_388_608 }
   ).trim();
+}
+
+function gitFile(cwd: string, commit: string, path: string): Buffer | null {
+  const result = spawnSync("git", ["show", `${commit}:${path}`], {
+    cwd,
+    encoding: null,
+    maxBuffer: 8_388_608
+  });
+  return result.status === 0 && Buffer.isBuffer(result.stdout) ? result.stdout : null;
+}
+
+function sha256(bytes: Buffer | string): string {
+  return createHash("sha256").update(bytes).digest("hex");
 }
 
 async function write(cwd: string, path: string, contents: string): Promise<void> {
@@ -38,12 +63,228 @@ async function write(cwd: string, path: string, contents: string): Promise<void>
   await writeFile(target, contents);
 }
 
-async function fixture(nonLinkChange = false) {
+async function dependencyHashAt(cwd: string, commit: string): Promise<string> {
+  const source = gitFile(cwd, commit, "package.json");
+  if (source === null) throw new Error("missing_package_json");
+  const parsed = JSON.parse(source.toString("utf8")) as {
+    dependencies?: unknown;
+    devDependencies?: unknown;
+    engines?: unknown;
+  };
+  return dependencyProjectionHash({
+    dependencies: parsed.dependencies ?? null,
+    devDependencies: parsed.devDependencies ?? null,
+    engines: parsed.engines ?? null
+  });
+}
+
+async function transitionCommon(input: {
+  cwd: string;
+  rootCommit: string;
+  predecessorCommit: string;
+  successorCommit: string;
+  ordinal: 0 | 1;
+}) {
+  const [rootEnvelope, predecessorEnvelope, successorEnvelope] = await Promise.all([
+    createJudgeDemoEnvelope(input.rootCommit),
+    createJudgeDemoEnvelope(input.predecessorCommit),
+    createJudgeDemoEnvelope(input.successorCommit)
+  ]);
+  const gitTreeChanges = git(input.cwd, [
+    "diff-tree",
+    "--raw",
+    "-r",
+    "--no-renames",
+    "--no-commit-id",
+    "--abbrev=40",
+    input.predecessorCommit,
+    input.successorCommit,
+    "--"
+  ])
+    .split(/\r?\n/u)
+    .filter(Boolean)
+    .map((line) => {
+      const match = /^:([0-7]{6}) ([0-7]{6}) ([a-f0-9]{40}) ([a-f0-9]{40}) ([ADMT])\t(.+)$/u.exec(
+        line
+      );
+      if (!match) throw new Error("invalid_test_tree_projection");
+      return {
+        path: match[6]!,
+        status: match[5]! as "A" | "D" | "M" | "T",
+        predecessorMode: match[1] === "000000" ? null : match[1]!,
+        successorMode: match[2] === "000000" ? null : match[2]!,
+        predecessorBlobOid: match[3] === "0".repeat(40) ? null : match[3]!,
+        successorBlobOid: match[4] === "0".repeat(40) ? null : match[4]!
+      };
+    })
+    .sort((left, right) => left.path.localeCompare(right.path));
+  const criticalFiles = JUDGE_DEMO_CRITICAL_PATHS.map((path) => {
+    const predecessor = gitFile(input.cwd, input.predecessorCommit, path);
+    const successor = gitFile(input.cwd, input.successorCommit, path);
+    if (predecessor === null || successor === null) throw new Error(`missing_critical:${path}`);
+    return {
+      path,
+      predecessorBlobOid: git(input.cwd, ["rev-parse", `${input.predecessorCommit}:${path}`]),
+      successorBlobOid: git(input.cwd, ["rev-parse", `${input.successorCommit}:${path}`]),
+      successorSha256: sha256(successor)
+    };
+  });
+  const firstParentCommitChain = [
+    input.predecessorCommit,
+    ...git(input.cwd, [
+      "rev-list",
+      "--first-parent",
+      "--reverse",
+      `${input.predecessorCommit}..${input.successorCommit}`
+    ])
+      .split(/\r?\n/u)
+      .filter(Boolean)
+  ];
+  return {
+    version: JUDGE_DEMO_PRESENTATION_TRANSITION_VERSION,
+    ordinal: input.ordinal,
+    predecessorCommit: input.predecessorCommit,
+    successorCommit: input.successorCommit,
+    predecessorEnvelopeHash: predecessorEnvelope.envelopeHash,
+    successorEnvelopeHash: successorEnvelope.envelopeHash,
+    rootEvidenceCommit: input.rootCommit,
+    rootEnvelopeHash: rootEnvelope.envelopeHash,
+    rootReceiptDigest,
+    rootArtifactDigest,
+    rootStoredProjectionDigest,
+    rootCapturedAt,
+    immutableProjectionHash: await judgeDemoImmutableProjectionHash(rootEnvelope),
+    firstParentChainHash: await canonicalSha256(firstParentCommitChain),
+    gitTreeProjectionHash: await canonicalSha256(gitTreeChanges),
+    criticalProjectionHash: await canonicalSha256(criticalFiles),
+    dependencyProjectionHash: await dependencyHashAt(input.cwd, input.predecessorCommit),
+    providerCallsPerformed: 0 as const,
+    storeWritesPerformed: 0 as const,
+    replayOnly: true as const
+  };
+}
+
+async function recoveryTransition(input: {
+  cwd: string;
+  rootCommit: string;
+  recoveryCommit: string;
+}): Promise<JudgeDemoRecoveryTransition> {
+  const common = await transitionCommon({
+    cwd: input.cwd,
+    rootCommit: input.rootCommit,
+    predecessorCommit: input.rootCommit,
+    successorCommit: input.recoveryCommit,
+    ordinal: 0
+  });
+  const payload = {
+    ...common,
+    kind: "sealed-reader-compatibility-recovery" as const,
+    recoveryContract: {
+      failureMode: "redis-json-auto-deserialization" as const,
+      acceptedProjectionRepresentations: ["json-string" as const, "preparsed-json-value" as const],
+      strictSchemaValidationPreserved: true as const,
+      projectionDigestValidationPreserved: true as const,
+      permanentReceiptMutation: "none" as const
+    }
+  };
+  return (await verifyJudgeDemoPresentationTransition({
+    ...payload,
+    proofHash: await canonicalSha256(payload)
+  })) as JudgeDemoRecoveryTransition;
+}
+
+async function collateralTransition(input: {
+  cwd: string;
+  rootCommit: string;
+  recoveryCommit: string;
+  releaseCommit: string;
+}): Promise<JudgeDemoCollateralTransition> {
+  const common = await transitionCommon({
+    cwd: input.cwd,
+    rootCommit: input.rootCommit,
+    predecessorCommit: input.recoveryCommit,
+    successorCommit: input.releaseCommit,
+    ordinal: 1
+  });
+  const collateralChanges = [
+    {
+      path: "README.md" as const,
+      field: "live_app" as const,
+      predecessorValue: "pending",
+      successorValue: "https://toolproof.example"
+    },
+    {
+      path: "submission/devpost.md" as const,
+      field: "live_app" as const,
+      predecessorValue: "pending",
+      successorValue: "https://toolproof.example"
+    }
+  ];
+  const payload = {
+    ...common,
+    kind: "collateral-links" as const,
+    collateralChanges,
+    collateralChangesHash: await canonicalSha256(collateralChanges)
+  };
+  return (await verifyJudgeDemoPresentationTransition({
+    ...payload,
+    proofHash: await canonicalSha256(payload)
+  })) as JudgeDemoCollateralTransition;
+}
+
+async function bindingFor(input: {
+  rootCommit: string;
+  activeCommit: string;
+  transitions: readonly JudgeDemoPresentationTransition[];
+}): Promise<JudgeDemoPresentationBinding> {
+  const [rootEnvelope, activeEnvelope] = await Promise.all([
+    createJudgeDemoEnvelope(input.rootCommit),
+    createJudgeDemoEnvelope(input.activeCommit)
+  ]);
+  const payload = {
+    version: JUDGE_DEMO_PRESENTATION_BINDING_VERSION,
+    rootEvidenceCommit: input.rootCommit,
+    activeCommit: input.activeCommit,
+    rootEnvelopeHash: rootEnvelope.envelopeHash,
+    activeEnvelopeHash: activeEnvelope.envelopeHash,
+    rootReceiptDigest,
+    rootArtifactDigest,
+    rootStoredProjectionDigest,
+    rootCapturedAt,
+    immutableProjectionHash: await judgeDemoImmutableProjectionHash(rootEnvelope),
+    transitions: input.transitions,
+    gitProofPackSha256: "a".repeat(64),
+    providerCallsPerformed: 0 as const,
+    storeWritesPerformed: 0 as const,
+    replayOnly: true as const
+  };
+  const lineageHash = await canonicalSha256(payload);
+  return verifyJudgeDemoPresentationBinding({
+    value: { ...payload, lineageHash, bindingHash: lineageHash },
+    rootEnvelope,
+    activeEnvelope,
+    rootReceiptDigest,
+    rootArtifactDigest,
+    rootStoredProjectionDigest,
+    rootCapturedAt
+  });
+}
+
+async function fixture(
+  options: { nonLinkReleaseChange?: boolean; hiddenIntermediateChange?: boolean } = {}
+) {
   const cwd = await mkdtemp(join(tmpdir(), "toolproof-judge-presentation-"));
   temporaryRoots.push(cwd);
   git(cwd, ["init", "-q"]);
   for (const [index, path] of JUDGE_DEMO_CRITICAL_PATHS.entries()) {
     await write(cwd, path, `critical:${index}:${path}\n`);
+  }
+  for (const path of JUDGE_DEMO_RECOVERY_PATHS) {
+    try {
+      await readFile(join(cwd, path));
+    } catch {
+      await write(cwd, path, `recovery-source:${path}\n`);
+    }
   }
   const packageProjection = {
     dependencies: { zod: "4.4.3" },
@@ -52,92 +293,75 @@ async function fixture(nonLinkChange = false) {
   };
   await write(cwd, "package.json", `${JSON.stringify(packageProjection)}\n`);
   await write(cwd, "README.md", "ToolProof\nLive app: pending\n");
+  await write(cwd, "submission/devpost.md", "Submission\nLive app: pending\n");
   git(cwd, ["add", "--", "."]);
   git(cwd, ["commit", "-q", "-m", "judge evidence build"]);
-  const predecessorCommit = git(cwd, ["rev-parse", "HEAD"]);
+  const rootCommit = git(cwd, ["rev-parse", "HEAD"]);
+
+  if (options.hiddenIntermediateChange) {
+    await write(
+      cwd,
+      "package.json",
+      `${JSON.stringify({ ...packageProjection, dependencies: { zod: "0.0.0-forbidden" } })}\n`
+    );
+    git(cwd, ["add", "--", "package.json"]);
+    git(cwd, ["commit", "-q", "-m", "forbidden transient dependency drift"]);
+    await write(cwd, "package.json", `${JSON.stringify(packageProjection)}\n`);
+    git(cwd, ["add", "--", "package.json"]);
+  }
+
+  for (const path of JUDGE_DEMO_RECOVERY_PATHS) {
+    const source = await readFile(join(cwd, path), "utf8");
+    await write(cwd, path, `${source}sealed-reader-recovery:${path}\n`);
+  }
+  git(cwd, ["add", "--", ...JUDGE_DEMO_RECOVERY_PATHS]);
+  git(cwd, ["commit", "-q", "-m", "recover sealed judge receipt"]);
+  const recoveryCommit = git(cwd, ["rev-parse", "HEAD"]);
+  const recovery = await recoveryTransition({ cwd, rootCommit, recoveryCommit });
+
   await write(
     cwd,
     "README.md",
-    `${nonLinkChange ? "ToolProof changed" : "ToolProof"}\nLive app: https://toolproof.example\n`
+    `${options.nonLinkReleaseChange ? "Changed ToolProof" : "ToolProof"}\nLive app: https://toolproof.example\nsealed-reader-recovery:README.md\n`
   );
-  git(cwd, ["add", "--", "README.md"]);
+  await write(
+    cwd,
+    "submission/devpost.md",
+    "Submission\nLive app: https://toolproof.example\nsealed-reader-recovery:submission/devpost.md\n"
+  );
+  git(cwd, ["add", "--", "README.md", "submission/devpost.md"]);
   git(cwd, ["commit", "-q", "-m", "release collateral"]);
-  const successorCommit = git(cwd, ["rev-parse", "HEAD"]);
-  const [predecessorEnvelope, successorEnvelope] = await Promise.all([
-    createJudgeDemoEnvelope(predecessorCommit),
-    createJudgeDemoEnvelope(successorCommit)
-  ]);
-  const criticalFiles = await Promise.all(
-    JUDGE_DEMO_CRITICAL_PATHS.map(async (path) => ({
-      path,
-      sha256: createHash("sha256")
-        .update(await readFile(join(cwd, path)))
-        .digest("hex")
-    }))
-  );
-  const collateralChanges = [
-    {
-      path: "README.md" as const,
-      field: "live_app" as const,
-      predecessorValue: "pending",
-      successorValue: "https://toolproof.example"
-    }
-  ];
-  const payload = {
-    version: JUDGE_DEMO_COLLATERAL_PROOF_VERSION,
-    predecessorCommit,
-    successorCommit,
-    changedPaths: ["README.md"],
-    collateralChanges,
-    collateralChangesHash: await canonicalSha256(collateralChanges),
-    criticalFiles,
-    criticalProjectionHash: await canonicalSha256(criticalFiles),
-    dependencyProjectionHash: await dependencyProjectionHash(packageProjection),
-    gitProofPackSha256: "a".repeat(64),
-    predecessorEnvelopeHash: predecessorEnvelope.envelopeHash,
-    successorEnvelopeHash: successorEnvelope.envelopeHash,
-    predecessorReceiptDigest: "b".repeat(64),
-    immutableProjectionHash: await judgeDemoImmutableProjectionHash(predecessorEnvelope),
-    providerCallsPerformed: 0 as const,
-    replayOnly: true as const
-  };
-  const proof = await verifyJudgeDemoCollateralProof({
-    ...payload,
-    proofHash: await canonicalSha256(payload)
+  const releaseCommit = git(cwd, ["rev-parse", "HEAD"]);
+  const collateral = await collateralTransition({
+    cwd,
+    rootCommit,
+    recoveryCommit,
+    releaseCommit
   });
-  return { cwd, proof, predecessorEnvelope, successorEnvelope };
+  return { cwd, rootCommit, recoveryCommit, releaseCommit, recovery, collateral };
 }
 
 afterEach(async () => {
   await Promise.all(temporaryRoots.splice(0).map((path) => rm(path, { recursive: true })));
 });
 
-describe("judge collateral checkout verification", () => {
-  it("verifies actual ancestry, exact diff, critical bytes, and dependency projection", async () => {
-    const { cwd, proof, predecessorEnvelope, successorEnvelope } = await fixture();
-    await expect(verifyJudgeDemoCollateralCheckout({ cwd, proof })).resolves.toEqual({
-      changedPathCount: 1,
-      criticalFileCount: JUDGE_DEMO_CRITICAL_PATHS.length,
-      dependencyProjectionHash: proof.dependencyProjectionHash
+describe("judge provider-free presentation lineage", () => {
+  it("verifies the exact e2-style sealed-reader recovery and active checkout", async () => {
+    const value = await fixture();
+    git(value.cwd, ["reset", "--hard", "-q", value.recoveryCommit]);
+    await rm(join(value.cwd, ".env.example"), { force: true });
+    const binding = await bindingFor({
+      rootCommit: value.rootCommit,
+      activeCommit: value.recoveryCommit,
+      transitions: [value.recovery]
+    });
+    await expect(
+      verifyJudgeDemoPresentationCheckout({ cwd: value.cwd, binding })
+    ).resolves.toMatchObject({
+      transitionCount: 1,
+      changedPathCount: JUDGE_DEMO_RECOVERY_PATHS.length
     });
 
-    const bindingPayload = {
-      version: JUDGE_DEMO_PRESENTATION_BINDING_VERSION,
-      predecessorCommit: proof.predecessorCommit,
-      successorCommit: proof.successorCommit,
-      predecessorEnvelopeHash: predecessorEnvelope.envelopeHash,
-      successorEnvelopeHash: successorEnvelope.envelopeHash,
-      predecessorReceiptDigest: proof.predecessorReceiptDigest,
-      immutableProjectionHash: proof.immutableProjectionHash,
-      collateralProof: proof,
-      collateralProofHash: proof.proofHash,
-      providerCallsPerformed: 0 as const,
-      replayOnly: true as const
-    };
-    const binding = {
-      ...bindingPayload,
-      bindingHash: await canonicalSha256(bindingPayload)
-    };
     const script = spawnSync(
       resolve("node_modules/.bin/tsx"),
       [
@@ -146,103 +370,149 @@ describe("judge collateral checkout verification", () => {
         resolve("scripts/verify-judge-presentation.ts")
       ],
       {
-        cwd,
+        cwd: value.cwd,
         env: {
           ...process.env,
           TOOLPROOF_JUDGE_LANE_MODE: "enabled",
           TOOLPROOF_JUDGE_PRESENTATION_MODE: "successor",
-          TOOLPROOF_JUDGE_ACTIVE_COMMIT: proof.successorCommit,
-          TOOLPROOF_COMMIT_SHA: proof.successorCommit,
-          VERCEL_GIT_COMMIT_SHA: proof.successorCommit,
+          TOOLPROOF_JUDGE_ACTIVE_COMMIT: value.recoveryCommit,
+          TOOLPROOF_COMMIT_SHA: value.recoveryCommit,
+          VERCEL_GIT_COMMIT_SHA: value.recoveryCommit,
           [JUDGE_DEMO_PRESENTATION_BINDING_ENV]: gzipSync(
             Buffer.from(canonicalJson(binding))
           ).toString("base64url"),
           [JUDGE_DEMO_PRESENTATION_BINDING_HASH_ENV]: binding.bindingHash
         },
         encoding: "utf8",
-        maxBuffer: 1_048_576
+        maxBuffer: 8_388_608
       }
     );
     expect(script.status, script.stderr).toBe(0);
-    expect(script.stdout).toContain('"gitProofTransport":"full-local-history"');
+    expect(script.stdout).toContain('"status":"verified-provider-free-lineage"');
+    expect(script.stdout).toContain('"storeWritesPerformed":0');
 
-    await write(cwd, "lib/judge/service.server.ts", "tampered after approved release\n");
-    await expect(verifyJudgeDemoCollateralCheckout({ cwd, proof })).rejects.toThrow(
-      /judge_demo_presentation_critical_file_mismatch/u
-    );
-  });
-
-  it("rejects unallowlisted claims and a claimed diff that differs from Git", async () => {
-    const { cwd, proof } = await fixture();
-    const base = { ...proof };
-    delete (base as Partial<typeof proof>).proofHash;
-    const forbiddenPayload = { ...base, changedPaths: ["lib/judge/service.server.ts"] };
-    await expect(
-      verifyJudgeDemoCollateralProof({
-        ...forbiddenPayload,
-        proofHash: await canonicalSha256(forbiddenPayload)
-      })
-    ).rejects.toThrow(/judge_demo_collateral_proof_invalid/u);
-
-    const wrongCollateralChanges = [
-      {
-        path: "submission/devpost.md" as const,
-        field: "release" as const,
-        predecessorValue: "pending",
-        successorValue: "https://devpost.example/submission"
-      }
-    ];
-    const wrongDiffPayload = {
-      ...base,
-      changedPaths: ["submission/devpost.md"],
-      collateralChanges: wrongCollateralChanges,
-      collateralChangesHash: await canonicalSha256(wrongCollateralChanges)
-    };
-    const wrongDiff = await verifyJudgeDemoCollateralProof({
-      ...wrongDiffPayload,
-      proofHash: await canonicalSha256(wrongDiffPayload)
-    });
-    await expect(verifyJudgeDemoCollateralCheckout({ cwd, proof: wrongDiff })).rejects.toThrow(
-      /judge_demo_presentation_actual_diff_mismatch/u
-    );
-
-    const nonLink = await fixture(true);
-    await expect(
-      verifyJudgeDemoCollateralCheckout({ cwd: nonLink.cwd, proof: nonLink.proof })
-    ).rejects.toThrow(/judge_demo_presentation_non_link_change/u);
-  });
-
-  it("requires explicit predecessor/successor mode only when the judge lane is enabled", () => {
-    const baseEnvironment = { ...process.env };
-    for (const name of [
-      "TOOLPROOF_JUDGE_LANE_MODE",
-      "TOOLPROOF_JUDGE_PRESENTATION_MODE",
-      "TOOLPROOF_JUDGE_PRESENTATION_BINDING_B64",
-      "TOOLPROOF_JUDGE_PRESENTATION_BINDING_HASH",
-      "TOOLPROOF_JUDGE_GIT_PACK_B64"
-    ]) {
-      delete baseEnvironment[name];
-    }
-    const run = (environment: NodeJS.ProcessEnv) =>
-      spawnSync(
-        "npx",
-        ["tsx", "--tsconfig", "tsconfig.operator.json", "scripts/verify-judge-presentation.ts"],
-        { cwd: process.cwd(), env: environment, encoding: "utf8", maxBuffer: 1_048_576 }
+    for (const judgePack of [undefined, "AA"] as const) {
+      const production = spawnSync(
+        resolve("node_modules/.bin/tsx"),
+        [
+          "--tsconfig",
+          resolve("tsconfig.operator.json"),
+          resolve("scripts/verify-judge-presentation.ts")
+        ],
+        {
+          cwd: value.cwd,
+          env: {
+            ...process.env,
+            VERCEL: "1",
+            TOOLPROOF_JUDGE_LANE_MODE: "enabled",
+            TOOLPROOF_JUDGE_PRESENTATION_MODE: "successor",
+            TOOLPROOF_JUDGE_ACTIVE_COMMIT: value.recoveryCommit,
+            TOOLPROOF_COMMIT_SHA: value.recoveryCommit,
+            VERCEL_GIT_COMMIT_SHA: value.recoveryCommit,
+            [JUDGE_DEMO_PRESENTATION_BINDING_ENV]: gzipSync(
+              Buffer.from(canonicalJson(binding))
+            ).toString("base64url"),
+            [JUDGE_DEMO_PRESENTATION_BINDING_HASH_ENV]: binding.bindingHash,
+            [JUDGE_DEMO_SHARED_GIT_PACK_ENV]: "",
+            [JUDGE_DEMO_GIT_PACK_ENV]: judgePack ?? ""
+          },
+          encoding: "utf8",
+          maxBuffer: 8_388_608
+        }
       );
-    const ordinary = run(baseEnvironment);
-    expect(ordinary.status).toBe(0);
-    expect(ordinary.stdout).toContain('"status":"not-configured"');
+      expect(production.status).not.toBe(0);
+      expect(production.stderr).toContain("judge_demo_presentation_shared_git_pack_required");
+    }
+  });
 
-    const predecessor = run({
-      ...baseEnvironment,
-      TOOLPROOF_JUDGE_LANE_MODE: "enabled",
-      TOOLPROOF_JUDGE_PRESENTATION_MODE: "predecessor"
+  it("verifies ordered recovery then collateral links without changing critical bytes", async () => {
+    const value = await fixture();
+    const binding = await bindingFor({
+      rootCommit: value.rootCommit,
+      activeCommit: value.releaseCommit,
+      transitions: [value.recovery, value.collateral]
     });
-    expect(predecessor.status).toBe(0);
-    expect(predecessor.stdout).toContain('"status":"verified-predecessor"');
+    await expect(
+      verifyJudgeDemoPresentationCheckout({ cwd: value.cwd, binding })
+    ).resolves.toMatchObject({ transitionCount: 2 });
 
-    const missingMode = run({ ...baseEnvironment, TOOLPROOF_JUDGE_LANE_MODE: "enabled" });
-    expect(missingMode.status).not.toBe(0);
-    expect(missingMode.stderr).toContain("judge_demo_presentation_mode_configuration_invalid");
+    await write(value.cwd, "lib/judge/service.server.ts", "tampered active checkout\n");
+    await expect(verifyJudgeDemoPresentationCheckout({ cwd: value.cwd, binding })).rejects.toThrow(
+      /judge_demo_presentation_active_checkout_mismatch/u
+    );
+  });
+
+  it("rejects tree substitution, chain discontinuity, writes, and non-link release edits", async () => {
+    const value = await fixture();
+    const recoveryBase = { ...value.recovery };
+    delete (recoveryBase as Partial<typeof value.recovery>).proofHash;
+    const wrongTreePayload = {
+      ...recoveryBase,
+      gitTreeProjectionHash: "f".repeat(64)
+    };
+    const wrongTree = (await verifyJudgeDemoPresentationTransition({
+      ...wrongTreePayload,
+      proofHash: await canonicalSha256(wrongTreePayload)
+    })) as JudgeDemoRecoveryTransition;
+    const wrongTreeBinding = await bindingFor({
+      rootCommit: value.rootCommit,
+      activeCommit: value.recoveryCommit,
+      transitions: [wrongTree]
+    });
+    git(value.cwd, ["reset", "--hard", "-q", value.recoveryCommit]);
+    await expect(
+      verifyJudgeDemoPresentationCheckout({ cwd: value.cwd, binding: wrongTreeBinding })
+    ).rejects.toThrow(/judge_demo_presentation_git_tree_projection_mismatch/u);
+
+    await expect(
+      verifyJudgeDemoPresentationTransition({ ...value.recovery, storeWritesPerformed: 1 })
+    ).rejects.toThrow();
+
+    const collateralBase = { ...value.collateral };
+    delete (collateralBase as Partial<typeof value.collateral>).proofHash;
+    const discontinuousPayload = {
+      ...collateralBase,
+      predecessorCommit: value.rootCommit
+    };
+    await expect(
+      verifyJudgeDemoPresentationTransition({
+        ...discontinuousPayload,
+        proofHash: await canonicalSha256(discontinuousPayload)
+      })
+    ).resolves.toBeDefined();
+    await expect(
+      bindingFor({
+        rootCommit: value.rootCommit,
+        activeCommit: value.releaseCommit,
+        transitions: [
+          value.recovery,
+          {
+            ...discontinuousPayload,
+            proofHash: await canonicalSha256(discontinuousPayload)
+          } as JudgeDemoCollateralTransition
+        ]
+      })
+    ).rejects.toThrow(/judge_demo_presentation_transition_continuity_invalid/u);
+
+    const hidden = await fixture({ hiddenIntermediateChange: true });
+    const hiddenBinding = await bindingFor({
+      rootCommit: hidden.rootCommit,
+      activeCommit: hidden.recoveryCommit,
+      transitions: [hidden.recovery]
+    });
+    git(hidden.cwd, ["reset", "--hard", "-q", hidden.recoveryCommit]);
+    await expect(
+      verifyJudgeDemoPresentationCheckout({ cwd: hidden.cwd, binding: hiddenBinding })
+    ).rejects.toThrow(/judge_demo_presentation_transition_not_direct_child/u);
+
+    const nonLink = await fixture({ nonLinkReleaseChange: true });
+    const nonLinkBinding = await bindingFor({
+      rootCommit: nonLink.rootCommit,
+      activeCommit: nonLink.releaseCommit,
+      transitions: [nonLink.recovery, nonLink.collateral]
+    });
+    await expect(
+      verifyJudgeDemoPresentationCheckout({ cwd: nonLink.cwd, binding: nonLinkBinding })
+    ).rejects.toThrow(/judge_demo_presentation_non_link_change/u);
   });
 });

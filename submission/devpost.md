@@ -56,8 +56,8 @@ OpenAI Codex assisted with implementation, testing, audits, and collateral. Cont
 
 1. In Chrome 149+, enable `chrome://flags/#enable-webmcp-testing`, relaunch the browser, and open the live Lab signed out. Alternatively, use the latest ChatGPT desktop built-in browser with GPT-5.6 Sol or Terra. No ToolProof login, judge-supplied key, extension, or ToolProof-specific setup is required.
 2. Confirm `consumer-ready` and the clean four-tool catalog.
-3. In **One fixed decision, one verified native read**, run the bounded judge proof.
-4. Inspect the sealed model projection and native `cart_get` receipt, or download the complete JSON. The server accepts only its displayed judge-only request and can consume at most one challenge-lifetime judge call; the archive replays without another model request.
+3. In **One fixed decision, one verified native read**, load the already sealed bounded judge decision.
+4. Run the required fresh current-build native `cart_get`, then inspect or download the combined proof. The server accepts only its displayed judge-only request; its sole challenge-lifetime provider call was consumed on the evidence root, and archive recovery cannot make another model request.
 5. Open Results and inspect `23/24 → 23/24`, the one-line contract diff, the shared failure, exact state/effect hashes, and limitations.
 
 For the official Site Tools experience, open the same Lab in the latest ChatGPT desktop built-in browser with GPT-5.6 Sol or Terra and ask one of the documented fresh-chat requests. Those observations are reported separately from the scored experiment.
@@ -70,7 +70,7 @@ The hardest engineering work was browser lifecycle correctness rather than drawi
 
 The model-backed boundary is stateless (`store:false`), fixed to one provider/model/settings projection, and permits one decision plus at most one target call. A durable Redis policy caps the entire challenge lifetime at 160 calls and USD `$10`, independent of provider-window resets. Signed single-use authorization, replay/rate/concurrency controls, encrypted permanent receipts, conservative uncertain settlement, origin/body limits, security headers, no source maps, secret scanning, and a dedicated project hard limit keep the public surface narrow.
 
-The signed-out judge lane accepts no prompt, model, schema, URL, tool, or arguments from the browser. Its judge-only request and case identity are source-fixed. The browser executes only a digest-verified empty-argument `cart_get` on a clean, halt-free current catalog. A later release can present the one archived decision only through an actual Git predecessor/successor proof permitting exact HTTPS link fields and zero functional changes.
+The signed-out judge lane accepts no prompt, model, schema, URL, tool, or arguments from the browser. Its judge-only request and case identity are source-fixed. The sole provider decision is sealed on evidence root `e2cf8d47375abfeeb4f32bd6f5973918acf4c091` and selected `cart_get` with `{}`. Upstash's automatic JSON deserialization exposed a string-only archive-reader assumption after the permanent capture; the record, lifetime guard, and cost were unchanged. The recovery build repairs only archive presentation with zero provider retries and zero store rewrites. Because provider and native evidence remain separate, that build must execute its own digest-verified empty-argument `cart_get` on a clean, halt-free catalog. Gate 9 may later add one optional link-only release hop after the verified recovery transition.
 
 ## Impact
 
@@ -86,6 +86,7 @@ The useful artifact is not a flattering aggregate. It is the combination of a hu
 - The same tentative-checkout holdout failed in both versions.
 - Operational blinding is enforced by the product, not by an independent third party or cryptographic protocol.
 - Direct Site Tools observations demonstrate the intended experience but do not estimate a rate and are not merged with Custom Probe scores.
+- Gate 7 completion is deployment-bound: the live receipt must verify the recovery archive and a fresh current-build native replay; source prose is not used as a substitute.
 - Hashes establish internal consistency, not independent timestamping, model understanding, safety certification, or generality.
 - WebMCP and Site Tools availability remain evolving and client-dependent.
 

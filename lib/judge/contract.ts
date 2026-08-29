@@ -54,16 +54,44 @@ export const judgeDemoProjectionSchema = z
     capturedAt: z.string().datetime({ offset: true }),
     presentationBinding: z
       .object({
-        version: z.literal("toolproof-judge-demo-public-presentation-binding@1.0.0"),
-        predecessorCommit: gitCommit,
-        successorCommit: gitCommit,
-        predecessorEnvelopeHash: sha256,
-        successorEnvelopeHash: sha256,
-        predecessorReceiptDigest: sha256,
+        version: z.literal("toolproof-judge-demo-public-presentation-lineage@2.0.0"),
+        rootEvidenceCommit: gitCommit,
+        activeCommit: gitCommit,
+        rootEnvelopeHash: sha256,
+        activeEnvelopeHash: sha256,
+        rootReceiptDigest: sha256,
+        rootArtifactDigest: sha256,
+        rootStoredProjectionDigest: sha256,
+        rootCapturedAt: z.string().datetime({ offset: true }),
         immutableProjectionHash: sha256,
-        collateralProofHash: sha256,
+        transitions: z
+          .array(
+            z
+              .object({
+                kind: z.enum(["sealed-reader-compatibility-recovery", "collateral-links"]),
+                ordinal: z.number().int().min(0).max(1),
+                predecessorCommit: gitCommit,
+                successorCommit: gitCommit,
+                predecessorEnvelopeHash: sha256,
+                successorEnvelopeHash: sha256,
+                firstParentChainHash: sha256,
+                gitTreeProjectionHash: sha256,
+                criticalProjectionHash: sha256,
+                dependencyProjectionHash: sha256,
+                proofHash: sha256,
+                providerCallsPerformed: z.literal(0),
+                storeWritesPerformed: z.literal(0),
+                replayOnly: z.literal(true)
+              })
+              .strict()
+          )
+          .min(1)
+          .max(2),
+        gitProofPackSha256: sha256,
+        lineageHash: sha256,
         bindingHash: sha256,
         providerCallsPerformed: z.literal(0),
+        storeWritesPerformed: z.literal(0),
         replayOnly: z.literal(true)
       })
       .strict()
@@ -85,12 +113,31 @@ export const judgeDemoProjectionSchema = z
       }
       return;
     }
+    const binding = projection.presentationBinding;
+    const transitions = binding.transitions;
+    const continuityValid = transitions.every((transition, index) => {
+      const priorCommit =
+        index === 0 ? binding.rootEvidenceCommit : transitions[index - 1]!.successorCommit;
+      const priorEnvelopeHash =
+        index === 0 ? binding.rootEnvelopeHash : transitions[index - 1]!.successorEnvelopeHash;
+      return (
+        transition.ordinal === index &&
+        transition.predecessorCommit === priorCommit &&
+        transition.predecessorEnvelopeHash === priorEnvelopeHash &&
+        (index !== 0 || transition.kind === "sealed-reader-compatibility-recovery") &&
+        (index !== 1 || transition.kind === "collateral-links")
+      );
+    });
     if (
-      projection.presentationBinding.predecessorCommit !== projection.evidenceAppCommit ||
-      projection.presentationBinding.successorCommit !== projection.appCommit ||
-      projection.presentationBinding.predecessorEnvelopeHash !== projection.envelopeHash ||
-      projection.presentationBinding.predecessorCommit ===
-        projection.presentationBinding.successorCommit
+      binding.rootEvidenceCommit !== projection.evidenceAppCommit ||
+      binding.activeCommit !== projection.appCommit ||
+      binding.rootEnvelopeHash !== projection.envelopeHash ||
+      binding.rootCapturedAt !== projection.capturedAt ||
+      binding.rootEvidenceCommit === binding.activeCommit ||
+      binding.lineageHash !== binding.bindingHash ||
+      transitions.at(-1)?.successorCommit !== binding.activeCommit ||
+      transitions.at(-1)?.successorEnvelopeHash !== binding.activeEnvelopeHash ||
+      !continuityValid
     ) {
       context.addIssue({
         code: "custom",

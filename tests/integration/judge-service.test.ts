@@ -9,6 +9,7 @@ import { judgeDemoDecisionResponseSchema, judgeDemoStatusSchema } from "@/lib/ju
 import {
   JUDGE_DEMO_COLLATERAL_PROOF_VERSION,
   JUDGE_DEMO_CRITICAL_PATHS,
+  JUDGE_DEMO_RECOVERY_PATHS,
   judgeDemoImmutableProjectionHash
 } from "@/lib/judge/collateral-proof";
 import { JUDGE_DEMO_DISPATCH_RECOVERY_SCRIPTS } from "@/lib/judge/dispatch-recovery.server";
@@ -112,6 +113,7 @@ class JudgeRedisFake {
   leaseExpiresAt = Math.floor(nowMs / 1_000) + 45;
   uncertainSettlementDigest = "";
   uncertainReason = "";
+  writeEvalCount = 0;
 
   constructor(policyHash: string, scriptHash: string) {
     this.policyHash = policyHash;
@@ -222,6 +224,7 @@ class JudgeRedisFake {
     _keys: string[],
     rawArgs: TArgs
   ): Promise<TResult> {
+    this.writeEvalCount += 1;
     const args = rawArgs.map(String);
     if (script === PROBE_LEDGER_SCRIPTS.issue) {
       this.issueFootprints.push([...args]);
@@ -414,59 +417,85 @@ async function successorEnvironment(input: {
   readonly predecessorCommit: string;
   readonly successorCommit: string;
   readonly predecessorReceiptDigest: string;
+  readonly predecessorArtifactDigest: string;
+  readonly predecessorStoredProjectionDigest: string;
+  readonly predecessorCapturedAt: string;
 }): Promise<Record<string, string>> {
   const predecessorEnvelope = await createJudgeDemoEnvelope(input.predecessorCommit);
   const successorEnvelope = await createJudgeDemoEnvelope(input.successorCommit);
-  const judgeCriticalFiles = JUDGE_DEMO_CRITICAL_PATHS.map((path, index) => ({
+  const gitTreeChanges = JUDGE_DEMO_RECOVERY_PATHS.map((path, index) => ({
     path,
-    sha256: index.toString(16).padStart(64, "0")
+    status: "M" as const,
+    predecessorMode: "100644",
+    successorMode: "100644",
+    predecessorBlobOid: (index + 1).toString(16).padStart(40, "0"),
+    successorBlobOid: (index + 101).toString(16).padStart(40, "0")
   }));
-  const criticalFiles = judgeCriticalFiles;
+  const criticalFiles = JUDGE_DEMO_CRITICAL_PATHS.map((path, index) => {
+    const predecessorBlobOid = (index + 301).toString(16).padStart(40, "0");
+    return {
+      path,
+      predecessorBlobOid,
+      successorBlobOid: JUDGE_DEMO_RECOVERY_PATHS.includes(path)
+        ? (index + 601).toString(16).padStart(40, "0")
+        : predecessorBlobOid,
+      successorSha256: (index + 901).toString(16).padStart(64, "0")
+    };
+  });
   const immutableProjectionHash = await judgeDemoImmutableProjectionHash(predecessorEnvelope);
-  const collateralChanges = [
-    {
-      path: "README.md" as const,
-      field: "live_app" as const,
-      predecessorValue: "pending",
-      successorValue: "https://toolproof-rust.vercel.app"
-    }
-  ];
-  const collateralPayload = {
+  const transitionPayload = {
     version: JUDGE_DEMO_COLLATERAL_PROOF_VERSION,
+    kind: "sealed-reader-compatibility-recovery" as const,
+    ordinal: 0,
     predecessorCommit: input.predecessorCommit,
     successorCommit: input.successorCommit,
-    changedPaths: ["README.md"],
-    collateralChanges,
-    collateralChangesHash: await canonicalSha256(collateralChanges),
-    criticalFiles,
-    criticalProjectionHash: await canonicalSha256(criticalFiles),
-    dependencyProjectionHash: "d".repeat(64),
-    gitProofPackSha256: "e".repeat(64),
     predecessorEnvelopeHash: predecessorEnvelope.envelopeHash,
     successorEnvelopeHash: successorEnvelope.envelopeHash,
-    predecessorReceiptDigest: input.predecessorReceiptDigest,
+    rootEvidenceCommit: input.predecessorCommit,
+    rootEnvelopeHash: predecessorEnvelope.envelopeHash,
+    rootReceiptDigest: input.predecessorReceiptDigest,
+    rootArtifactDigest: input.predecessorArtifactDigest,
+    rootStoredProjectionDigest: input.predecessorStoredProjectionDigest,
+    rootCapturedAt: input.predecessorCapturedAt,
     immutableProjectionHash,
+    firstParentChainHash: await canonicalSha256([input.predecessorCommit, input.successorCommit]),
+    gitTreeProjectionHash: await canonicalSha256(gitTreeChanges),
+    criticalProjectionHash: await canonicalSha256(criticalFiles),
+    dependencyProjectionHash: "d".repeat(64),
+    recoveryContract: {
+      failureMode: "redis-json-auto-deserialization" as const,
+      acceptedProjectionRepresentations: ["json-string" as const, "preparsed-json-value" as const],
+      strictSchemaValidationPreserved: true as const,
+      projectionDigestValidationPreserved: true as const,
+      permanentReceiptMutation: "none" as const
+    },
     providerCallsPerformed: 0 as const,
+    storeWritesPerformed: 0 as const,
     replayOnly: true as const
   };
-  const collateralProof = {
-    ...collateralPayload,
-    proofHash: await canonicalSha256(collateralPayload)
+  const transition = {
+    ...transitionPayload,
+    proofHash: await canonicalSha256(transitionPayload)
   };
   const bindingPayload = {
     version: JUDGE_DEMO_PRESENTATION_BINDING_VERSION,
-    predecessorCommit: input.predecessorCommit,
-    successorCommit: input.successorCommit,
-    predecessorEnvelopeHash: predecessorEnvelope.envelopeHash,
-    successorEnvelopeHash: successorEnvelope.envelopeHash,
-    predecessorReceiptDigest: input.predecessorReceiptDigest,
+    rootEvidenceCommit: input.predecessorCommit,
+    activeCommit: input.successorCommit,
+    rootEnvelopeHash: predecessorEnvelope.envelopeHash,
+    activeEnvelopeHash: successorEnvelope.envelopeHash,
+    rootReceiptDigest: input.predecessorReceiptDigest,
+    rootArtifactDigest: input.predecessorArtifactDigest,
+    rootStoredProjectionDigest: input.predecessorStoredProjectionDigest,
+    rootCapturedAt: input.predecessorCapturedAt,
     immutableProjectionHash,
-    collateralProof,
-    collateralProofHash: collateralProof.proofHash,
+    transitions: [transition],
+    gitProofPackSha256: "e".repeat(64),
     providerCallsPerformed: 0 as const,
+    storeWritesPerformed: 0 as const,
     replayOnly: true as const
   };
-  const binding = { ...bindingPayload, bindingHash: await canonicalSha256(bindingPayload) };
+  const lineageHash = await canonicalSha256(bindingPayload);
+  const binding = { ...bindingPayload, lineageHash, bindingHash: lineageHash };
   return {
     ...environment(input.successorCommit),
     TOOLPROOF_JUDGE_PRESENTATION_MODE: "successor",
@@ -667,8 +696,8 @@ describe("single-use signed-out judge demo service", () => {
     expect(fetchImplementation).not.toHaveBeenCalled();
   });
 
-  it("replays a sealed predecessor only through an exact collateral successor binding", async () => {
-    const { fetchImplementation, dependencies, request } = await fixture();
+  it("replays a sealed predecessor only through an exact provider-free recovery lineage", async () => {
+    const { redis, fetchImplementation, dependencies, request } = await fixture();
     const fresh = await decideJudgeDemo(request, dependencies);
     const successorCommit = "9".repeat(40);
     const unbound = {
@@ -685,7 +714,10 @@ describe("single-use signed-out judge demo service", () => {
       environment: await successorEnvironment({
         predecessorCommit: commit,
         successorCommit,
-        predecessorReceiptDigest: fresh.projection.receiptDigest
+        predecessorReceiptDigest: fresh.projection.receiptDigest,
+        predecessorArtifactDigest: redis.store.artifact_digest!,
+        predecessorStoredProjectionDigest: await canonicalSha256(fresh.projection),
+        predecessorCapturedAt: fresh.projection.capturedAt
       })
     };
     const wrongSuccessor = {
@@ -701,6 +733,9 @@ describe("single-use signed-out judge demo service", () => {
       status: "unavailable",
       projection: null
     });
+    const redisBytesBeforeReplay = canonicalJson(redis);
+    const writeEvalCountBeforeReplay = redis.writeEvalCount;
+    const redisStateBeforeReplay = JSON.parse(redisBytesBeforeReplay) as unknown;
     const status = await readJudgeDemoStatus(bound);
     expect(status).toMatchObject({
       status: "sealed",
@@ -710,15 +745,57 @@ describe("single-use signed-out judge demo service", () => {
         evidenceAppCommit: commit,
         evidenceManifestHash: fresh.projection.manifestHash,
         presentationBinding: {
-          predecessorCommit: commit,
-          successorCommit,
-          predecessorReceiptDigest: fresh.projection.receiptDigest,
+          rootEvidenceCommit: commit,
+          activeCommit: successorCommit,
+          rootReceiptDigest: fresh.projection.receiptDigest,
+          rootArtifactDigest: redis.store.artifact_digest,
+          rootStoredProjectionDigest: await canonicalSha256(fresh.projection),
+          transitions: [{ kind: "sealed-reader-compatibility-recovery", ordinal: 0 }],
           providerCallsPerformed: 0,
+          storeWritesPerformed: 0,
           replayOnly: true
         }
       }
     });
     if (status.status !== "sealed") throw new Error("expected_sealed_successor");
+    const publicBinding = status.projection.presentationBinding!;
+    expect(() =>
+      judgeDemoStatusSchema.parse({
+        ...status,
+        projection: {
+          ...status.projection,
+          presentationBinding: { ...publicBinding, rootCapturedAt: "2026-01-01T00:00:00.000Z" }
+        }
+      })
+    ).toThrow();
+    expect(() =>
+      judgeDemoStatusSchema.parse({
+        ...status,
+        projection: {
+          ...status.projection,
+          presentationBinding: {
+            ...publicBinding,
+            transitions: [
+              { ...publicBinding.transitions[0]!, predecessorEnvelopeHash: "0".repeat(64) }
+            ]
+          }
+        }
+      })
+    ).toThrow();
+    expect(() =>
+      judgeDemoStatusSchema.parse({
+        ...status,
+        projection: {
+          ...status.projection,
+          presentationBinding: {
+            ...publicBinding,
+            transitions: [
+              { ...publicBinding.transitions[0]!, successorEnvelopeHash: "0".repeat(64) }
+            ]
+          }
+        }
+      })
+    ).toThrow();
     expect(status.projection.manifestHash).not.toBe(status.projection.evidenceManifestHash);
     const archived = await decideJudgeDemo(request, bound);
     expect(archived).toMatchObject({
@@ -726,6 +803,9 @@ describe("single-use signed-out judge demo service", () => {
       inferencePerformed: false,
       projection: { appCommit: successorCommit, evidenceAppCommit: commit }
     });
+    expect(canonicalJson(redis)).toBe(redisBytesBeforeReplay);
+    expect(redis.writeEvalCount).toBe(writeEvalCountBeforeReplay);
+    expect(JSON.parse(canonicalJson(redis))).toEqual(redisStateBeforeReplay);
     expect(fetchImplementation).toHaveBeenCalledTimes(1);
   });
 
