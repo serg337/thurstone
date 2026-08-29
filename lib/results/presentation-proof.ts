@@ -37,6 +37,7 @@ export type Gate6PresentationProof = z.infer<typeof presentationProofSchema>;
 const allowedExact = new Set([
   ".env.example",
   ".github/workflows/ci.yml",
+  ".vercelignore",
   "HACKATHON_BUILD.md",
   "README.md",
   "PLAN.md",

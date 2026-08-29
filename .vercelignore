@@ -31,9 +31,9 @@
 *.tsbuildinfo
 /next-env.d.ts
 
-# Source-only verification files not needed by the production build
-/tests/
-/tests
+# Source-only configuration not needed by the production build. Test source remains in the build
+# context because the Gate 7 verifier byte-checks its exact adversarial anchors before any external
+# state or provider command; Next.js does not include those files in the served runtime bundles.
 /playwright.config.ts
 /vitest.config.ts
 /eslint.config.mjs
