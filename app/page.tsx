@@ -23,7 +23,7 @@ export default function HomePage() {
     <div className="page-shell home-page">
       <section className="hero">
         <div className="hero-copy">
-          <StatusPill state="pending">Gate 1 · deterministic native sandbox</StatusPill>
+          <StatusPill state="ready">Challenge candidate · authentic evidence</StatusPill>
           <p className="eyebrow">Semantic regression for agent-callable sites</p>
           <h1>
             Unit tests for <span>meaning.</span>
@@ -89,17 +89,18 @@ export default function HomePage() {
       <section className="judge-path" aria-labelledby="judge-path-title">
         <div>
           <p className="eyebrow">60-second judge path</p>
-          <h2 id="judge-path-title">Two requests. One consequential boundary.</h2>
+          <h2 id="judge-path-title">One click. One fixed model decision.</h2>
           <p>
-            In a supported WebMCP browser, inspect the seeded cart, request a read-only review,
-            reset, then explicitly start the simulated checkout approval step.
+            In a supported Chrome/WebMCP browser, the public judge lane asks one server-fixed cart
+            question, exposes the model selection, and verifies the returned read through the live
+            native catalog.
           </p>
         </div>
         <ol>
-          <li>Open the Lab and confirm native provider readiness.</li>
-          <li>Ask to see the complete order before deciding.</li>
-          <li>Reset, then ask to start checkout approval.</li>
-          <li>Inspect the exact tool and page effect in Results.</li>
+          <li>Open the Lab signed out; no key or ToolProof login is needed.</li>
+          <li>Confirm consumer-ready on the clean four-tool catalog.</li>
+          <li>Run the bounded judge proof and inspect/download its receipts.</li>
+          <li>Open Results for the separate 24-case paired evidence.</li>
         </ol>
       </section>
     </div>

@@ -1,0 +1,78 @@
+{
+  "version": "toolproof-public-sample-run@1.0.0",
+  "evidenceClass": "authentic-custom-probe-reference-projection",
+  "includedInPrimaryDenominator": true,
+  "projectionNotice": "This is a safe public projection of one acknowledged trace. Its rowDigest binds the complete canonical record in evidence/toolproof-reference-evidence.json; this smaller file is not a replacement for that record.",
+  "source": {
+    "packageDigest": "bec4e70c3a3098c356407c6630ee973345d4e8b9d0922c12019d19c16f4cdf7a",
+    "canonicalJsonSha256": "dffb9cbe8472f7b86d5586d1e381846e52974b0d6fbb10fa5a3b81a31d214317",
+    "measuredCommit": "251c44be34456ecc022839da6c8b85fe1c10e1fc",
+    "rowDigest": "f92ffe35f8b60e4d90c18611c8ef1f887fd975f00d02adb60f222a17a44699e4"
+  },
+  "case": {
+    "version": "revised",
+    "subset": "development",
+    "family": "review-equivalent-realizations",
+    "caseId": "review_dev_01",
+    "ordinal": 2,
+    "request": "Before I decide whether to continue, show me the complete order summary with line prices, subtotal, shipping, delivery estimate, and total.",
+    "expectedAction": "call:order_review",
+    "observedAction": "call:order_review",
+    "passed": true,
+    "failureCodes": []
+  },
+  "model": {
+    "provider": "OpenAI",
+    "model": "gpt-5.6-terra",
+    "decision": {
+      "kind": "call",
+      "tool": "order_review",
+      "arguments": {}
+    },
+    "decisionError": null,
+    "durationMs": 1059,
+    "rawResponseHash": "bc7773a6eda0fdcbd64cd12f6753c08fa997e65f83b97f7fec7f6ee7a4319510"
+  },
+  "nativeExecution": {
+    "argumentMode": "json-string",
+    "canonicalArguments": {},
+    "result": {
+      "ok": true,
+      "fixtureId": "checkout-seed-v1",
+      "stateRevision": 0,
+      "subtotalCents": 6600,
+      "shippingCents": 700,
+      "totalCents": 7300,
+      "deliveryWindow": "3-5-business-days",
+      "checkoutStatus": "ready_for_review"
+    },
+    "effect": {
+      "stateChanged": false,
+      "revisionBefore": 0,
+      "revisionAfter": 0,
+      "pendingCheckoutBefore": null,
+      "pendingCheckoutAfter": null
+    },
+    "stateBeforeHash": "a9889565b0e5c8a60c7667cab2110f058774e72c1e89c08d1f255124c07ea457",
+    "stateAfterHash": "a9889565b0e5c8a60c7667cab2110f058774e72c1e89c08d1f255124c07ea457",
+    "traceArgumentsHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "traceResultHash": "552f4d43a6b017dcc9582b555f1703626e77d403f47b584dad44c6b48c85e9b9"
+  },
+  "runtime": {
+    "origin": "https://toolproof-rust.vercel.app",
+    "browser": "Chrome/151.0.7922.47",
+    "manifestHash": "a87002769c36078263cfdcb9caa3cda79d1f5f6335200a62aa892bd66a78f217",
+    "toolNames": [
+      "cart_get",
+      "cart_update",
+      "checkout_request",
+      "order_review"
+    ]
+  },
+  "limitations": [
+    "This is one selected trace, not an aggregate or a stability estimate.",
+    "The canonical 24-case baseline and revised packages each contain one trial per case.",
+    "Custom Probe evidence does not measure Direct ChatGPT or Codex Site Tools behavior.",
+    "Hashes establish internal consistency, not independent attestation."
+  ]
+}

@@ -82,8 +82,8 @@ nor redistributes those binary files.
 - WebMCP is an evolving Web Machine Learning Community Group draft. The specification is not a W3C Standard.
 - ChatGPT Site Tools are used as a supported browser-agent path; this project is not affiliated with or endorsed by OpenAI.
 - Chrome WebMCP documentation and DevTools are used for implementation and verification guidance; this project is not an officially supported Google or Chrome product.
-- A future OpenAI Responses API Probe may be enabled only under the provider's applicable terms, a server-held credential, bounded synthetic data, and an approved hard spend ceiling.
+- The OpenAI Responses API was used for bounded synthetic calibration and the frozen reference experiment with `store:false`, a dedicated server-held project key, and a durable 160-call/USD `$10` challenge-lifetime guard. The signed-out judge lane can use only its final `judge:1` allocation and accepts no public prompt or model choice. OpenAI product/model names identify the tested provider; no endorsement is implied.
 
 ## Assets
 
-The application uses project-authored CSS, text, and interface shapes with system fonts. It contains no third-party image, icon, music, video, sound, or dataset. The narrowly adapted runner source is disclosed above.
+The application uses project-authored CSS, text, and interface shapes with system fonts. Public product screenshots and the planned thumbnail are derived only from the submitted ToolProof build and contain no third-party logo or stock asset. The project contains no third-party image, icon, music, video, sound, or dataset. The narrowly adapted runner source is disclosed above.

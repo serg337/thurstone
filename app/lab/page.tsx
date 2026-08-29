@@ -92,7 +92,7 @@ export default async function LabPage() {
             initial fixture; cancellation appears only while simulated checkout is pending.
           </p>
         </div>
-        <StatusPill state="pending">Gate 1 · native plumbing proof</StatusPill>
+        <StatusPill state="ready">Gate 7 · live judge and Site Tools proof</StatusPill>
       </header>
       <LabClient />
       <ProbeLaunchPanel />

@@ -1,0 +1,260 @@
+{
+  "version": "toolproof-gate7-adversarial-matrix@1.0.0",
+  "status": "verified",
+  "scope": "current-source-set",
+  "modelSemanticOutcomesRecorded": 0,
+  "providerCallsMade": 0,
+  "coverageCount": 21,
+  "classificationInvariant": "Infrastructure, interruption, timeout, cancellation, runtime, quota, refusal, and malformed-output outcomes are excluded from semantic model scores and retain distinct failure classes; after-dispatch uncertainty refers only to conservative spend settlement.",
+  "verificationCommand": "npx vitest run tests/integration/registry-manager.test.ts tests/unit/checkout-reset.test.ts tests/unit/checkout-session.test.ts tests/unit/gate2-attempt-lineage.test.ts tests/unit/gate7-adversarial-matrix.test.ts tests/unit/probe-client-runner.test.ts tests/unit/probe-http.test.ts tests/unit/probe-ledger.test.ts tests/unit/probe-openai.test.ts tests/unit/probe-run-index.test.ts tests/unit/probe-token.test.ts tests/unit/readiness.test.ts tests/unit/scored-run-store.test.ts tests/unit/webmcp-runtime.test.ts",
+  "sourceSetDigest": "7754ca2f1a2dac3c8b2f22c07067eb80ff8ba4969688e26f54e7a1512de5a1a3",
+  "sourceFiles": [
+    {
+      "path": "tests/integration/registry-manager.test.ts",
+      "sha256": "787cdfe98a051b990e60ef00b3c7fc6bc95f76f7f55d0a535cca2b480249c1b1"
+    },
+    {
+      "path": "tests/unit/checkout-reset.test.ts",
+      "sha256": "cb6bcdcff37d56be21233715e6fbe87d1e0cb22b29972d2e005bb061fc5d643f"
+    },
+    {
+      "path": "tests/unit/checkout-session.test.ts",
+      "sha256": "598c41eff0164ea3667ed5af4eabc4a5677b1fde6d3fd95559658f30eafcd62c"
+    },
+    {
+      "path": "tests/unit/gate2-attempt-lineage.test.ts",
+      "sha256": "a0125de3b1789779fd69414d40dc867f16e9fe37f1769c0c863ff159187755aa"
+    },
+    {
+      "path": "tests/unit/gate7-adversarial-matrix.test.ts",
+      "sha256": "0f0246a9ae4c16a06da9ac561d383441c42a1323d689e03301ae8986a15a56fe"
+    },
+    {
+      "path": "tests/unit/probe-client-runner.test.ts",
+      "sha256": "94596ff0ee992dd8a693eb6081f7221b899a07fd04daf608e741f02cd7716ab5"
+    },
+    {
+      "path": "tests/unit/probe-http.test.ts",
+      "sha256": "074d3f315eb0da5b37849f91318eadd5363306d19bbf6139e13ae218e182dfe5"
+    },
+    {
+      "path": "tests/unit/probe-ledger.test.ts",
+      "sha256": "40b27050a1021eb9d26cf579bac99aec650b88227b813ba1a54d504a98d464e5"
+    },
+    {
+      "path": "tests/unit/probe-openai.test.ts",
+      "sha256": "f0d4730a6df783bf3aabe55c7412d21fb3ffe45b5e0ec8b96ccc8b78bf558509"
+    },
+    {
+      "path": "tests/unit/probe-run-index.test.ts",
+      "sha256": "dec423b013909ed49a45205374b104e1a939def2889f6e6e2303410019fb3ffe"
+    },
+    {
+      "path": "tests/unit/probe-token.test.ts",
+      "sha256": "0284406c941b020ca4e816c35dbd27b41905b7dfc58ec1d906929a555b06ce5b"
+    },
+    {
+      "path": "tests/unit/readiness.test.ts",
+      "sha256": "3b2cc441d8bc084193e7924df635e260ef0ab93239c9730dc4adffa90376be9f"
+    },
+    {
+      "path": "tests/unit/scored-run-store.test.ts",
+      "sha256": "a3cbdd879a99ff7f599147e6305aced217b39baf93cbaf6802da1cdae17a600d"
+    },
+    {
+      "path": "tests/unit/webmcp-runtime.test.ts",
+      "sha256": "a2c87a8f5d7fc83dac200a33b7b39cbce9ed0b403bd7e66e7f983b884410a50e"
+    }
+  ],
+  "coverage": [
+    {
+      "id": "forged_token",
+      "contractThreat": "A caller changes a signed authorization token.",
+      "failureClass": "authorization_rejected",
+      "expectedDisposition": "invalid_signature before admission",
+      "spendAccounting": "known_no_provider_call",
+      "semanticAccounting": "excluded_from_model_scores",
+      "testFile": "tests/unit/probe-token.test.ts"
+    },
+    {
+      "id": "replayed_token",
+      "contractThreat": "A previously granted single-use authorization is presented again.",
+      "failureClass": "authorization_rejected",
+      "expectedDisposition": "ambiguous existing grant rejected; never redispatched",
+      "spendAccounting": "known_no_provider_call",
+      "semanticAccounting": "excluded_from_model_scores",
+      "testFile": "tests/unit/probe-ledger.test.ts"
+    },
+    {
+      "id": "expired_token",
+      "contractThreat": "A short-lived authorization is used after its expiry.",
+      "failureClass": "authorization_rejected",
+      "expectedDisposition": "expired_token before admission",
+      "spendAccounting": "known_no_provider_call",
+      "semanticAccounting": "excluded_from_model_scores",
+      "testFile": "tests/unit/probe-token.test.ts"
+    },
+    {
+      "id": "modified_case_id",
+      "contractThreat": "An attempt substitutes a different frozen case identity.",
+      "failureClass": "binding_rejected",
+      "expectedDisposition": "ATTEMPT_RUNNER_CASE_MISMATCH",
+      "spendAccounting": "known_no_provider_call",
+      "semanticAccounting": "excluded_from_model_scores",
+      "testFile": "tests/unit/scored-run-store.test.ts"
+    },
+    {
+      "id": "modified_manifest_hash",
+      "contractThreat": "The live manifest changes between decision and native admission.",
+      "failureClass": "binding_rejected",
+      "expectedDisposition": "boundary_drift with zero native dispatches",
+      "spendAccounting": "not_applicable",
+      "semanticAccounting": "excluded_from_model_scores",
+      "testFile": "tests/unit/probe-client-runner.test.ts"
+    },
+    {
+      "id": "duplicate_mutation",
+      "contractThreat": "Two concurrent mutations reuse one operation identity.",
+      "failureClass": "domain_idempotent_replay",
+      "expectedDisposition": "one effect and one replayed receipt",
+      "spendAccounting": "not_applicable",
+      "semanticAccounting": "excluded_from_model_scores",
+      "testFile": "tests/unit/checkout-session.test.ts"
+    },
+    {
+      "id": "invalid_arguments",
+      "contractThreat": "Malformed, accessor-bearing, or undeclared tool arguments are supplied.",
+      "failureClass": "schema_rejected",
+      "expectedDisposition": "rejected before native dispatch or state change",
+      "spendAccounting": "not_applicable",
+      "semanticAccounting": "excluded_from_model_scores",
+      "testFile": "tests/unit/webmcp-runtime.test.ts"
+    },
+    {
+      "id": "oversized_arguments",
+      "contractThreat": "A caller exceeds declared or streamed request-body limits.",
+      "failureClass": "schema_rejected",
+      "expectedDisposition": "HTTP 413 body_too_large",
+      "spendAccounting": "known_no_provider_call",
+      "semanticAccounting": "excluded_from_model_scores",
+      "testFile": "tests/unit/probe-http.test.ts"
+    },
+    {
+      "id": "stale_fixture_or_version",
+      "contractThreat": "The fixed fixture identity or version is replaced.",
+      "failureClass": "binding_rejected",
+      "expectedDisposition": "strict fixture synopsis parse failure",
+      "spendAccounting": "known_no_provider_call",
+      "semanticAccounting": "excluded_from_model_scores",
+      "testFile": "tests/unit/gate7-adversarial-matrix.test.ts"
+    },
+    {
+      "id": "concurrent_trial",
+      "contractThreat": "A second provider trial starts while the one-call lease is held.",
+      "failureClass": "authorization_rejected",
+      "expectedDisposition": "CONCURRENCY_LIMIT before provider dispatch",
+      "spendAccounting": "known_no_provider_call",
+      "semanticAccounting": "excluded_from_model_scores",
+      "testFile": "tests/unit/gate7-adversarial-matrix.test.ts"
+    },
+    {
+      "id": "duplicate_tab",
+      "contractThreat": "Two browser documents contend for the same durable run owner.",
+      "failureClass": "authorization_rejected",
+      "expectedDisposition": "RUN_INDEX_CONFLICT",
+      "spendAccounting": "known_no_provider_call",
+      "semanticAccounting": "excluded_from_model_scores",
+      "testFile": "tests/unit/probe-run-index.test.ts"
+    },
+    {
+      "id": "interrupted_request",
+      "contractThreat": "The upstream connection fails after dispatch.",
+      "failureClass": "infrastructure_failure",
+      "expectedDisposition": "provider_dispatch_uncertain; no semantic model outcome",
+      "spendAccounting": "uncertain_after_dispatch",
+      "semanticAccounting": "excluded_from_model_scores",
+      "testFile": "tests/unit/probe-openai.test.ts"
+    },
+    {
+      "id": "timeout",
+      "contractThreat": "Provider delivery exceeds the fixed timeout.",
+      "failureClass": "infrastructure_failure",
+      "expectedDisposition": "provider_dispatch_uncertain and exactly one fetch",
+      "spendAccounting": "uncertain_after_dispatch",
+      "semanticAccounting": "excluded_from_model_scores",
+      "testFile": "tests/unit/probe-openai.test.ts"
+    },
+    {
+      "id": "cancellation",
+      "contractThreat": "Consumer cancellation reaches native execution.",
+      "failureClass": "canceled",
+      "expectedDisposition": "execution_canceled with no retry",
+      "spendAccounting": "not_applicable",
+      "semanticAccounting": "excluded_from_model_scores",
+      "testFile": "tests/unit/webmcp-runtime.test.ts"
+    },
+    {
+      "id": "reset_failure",
+      "contractThreat": "Reset evidence is stale or reset completion is disrupted.",
+      "failureClass": "infrastructure_failure",
+      "expectedDisposition": "invalid reset receipt; Lab remains unverified",
+      "spendAccounting": "not_applicable",
+      "semanticAccounting": "excluded_from_model_scores",
+      "testFile": "tests/unit/checkout-reset.test.ts"
+    },
+    {
+      "id": "registration_failure",
+      "contractThreat": "One staged Site Tool registration fails partway through a catalog transition.",
+      "failureClass": "infrastructure_failure",
+      "expectedDisposition": "atomic rollback to the prior verified catalog",
+      "spendAccounting": "not_applicable",
+      "semanticAccounting": "excluded_from_model_scores",
+      "testFile": "tests/integration/registry-manager.test.ts"
+    },
+    {
+      "id": "partial_mutation",
+      "contractThreat": "A view/subscriber failure occurs after the domain mutation commits.",
+      "failureClass": "domain_partial_failure",
+      "expectedDisposition": "committed effect retained, trace partial, session halted",
+      "spendAccounting": "not_applicable",
+      "semanticAccounting": "excluded_from_model_scores",
+      "testFile": "tests/unit/checkout-session.test.ts"
+    },
+    {
+      "id": "upstream_refusal",
+      "contractThreat": "The model provider returns an explicit refusal.",
+      "failureClass": "provider_refusal",
+      "expectedDisposition": "provider_refusal retained as a known non-decision",
+      "spendAccounting": "not_applicable",
+      "semanticAccounting": "excluded_from_model_scores",
+      "testFile": "tests/unit/probe-openai.test.ts"
+    },
+    {
+      "id": "malformed_model_output",
+      "contractThreat": "The provider returns output outside the frozen decision schema.",
+      "failureClass": "model_output_invalid",
+      "expectedDisposition": "invalid_structured_decision retained as a failed decision",
+      "spendAccounting": "not_applicable",
+      "semanticAccounting": "excluded_from_model_scores",
+      "testFile": "tests/unit/probe-openai.test.ts"
+    },
+    {
+      "id": "unsupported_runtime",
+      "contractThreat": "Consumer discovery/execution APIs are unavailable.",
+      "failureClass": "runtime_unsupported",
+      "expectedDisposition": "provider-ready only; execution stays unverified",
+      "spendAccounting": "known_no_provider_call",
+      "semanticAccounting": "excluded_from_model_scores",
+      "testFile": "tests/unit/readiness.test.ts"
+    },
+    {
+      "id": "depleted_quota",
+      "contractThreat": "A call would exceed a purpose, lifetime-call, or spend ceiling.",
+      "failureClass": "quota_rejected",
+      "expectedDisposition": "PURPOSE_CALL_LIMIT, GLOBAL_CALL_LIMIT, or SPEND_LIMIT before dispatch",
+      "spendAccounting": "known_no_provider_call",
+      "semanticAccounting": "excluded_from_model_scores",
+      "testFile": "tests/unit/gate7-adversarial-matrix.test.ts"
+    }
+  ]
+}

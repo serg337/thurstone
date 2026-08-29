@@ -10,6 +10,7 @@ import {
 } from "react";
 import { flushSync } from "react-dom";
 
+import { JudgeDemoPanel, type JudgeBrowserRuntimeBinding } from "@/components/lab/judge-demo-panel";
 import {
   cartGet,
   orderReview,
@@ -44,6 +45,7 @@ import {
   type Gate1ProofBundle
 } from "@/lib/evidence/gate1-proof-bundle";
 import type { OperationTrace } from "@/lib/evidence/operation-trace";
+import type { JudgeDemoProjection } from "@/lib/judge/contract";
 import { detectWebMcpCapabilities, type WebMcpCapabilities } from "@/lib/webmcp/capabilities";
 import {
   INITIAL_CHECKOUT_TOOL_NAMES,
@@ -399,6 +401,7 @@ export function LabClient() {
   const [busy, setBusy] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [proofExporting, setProofExporting] = useState(false);
+  const [judgeBusy, setJudgeBusy] = useState(false);
   const [proofExportStatus, setProofExportStatus] = useState<string>();
   const [proofExportError, setProofExportError] = useState<Readonly<Record<string, unknown>>>();
   const [automatedProofStatus, setAutomatedProofStatus] = useState<AutomatedProofStatus>(() => ({
@@ -422,9 +425,9 @@ export function LabClient() {
   const [nativeCancelId, setNativeCancelId] = useState("native_cancel_0001");
   const [lastNativeMutation, setLastNativeMutation] = useState<LastNativeMutation>();
   const readinessEpoch = useRef(0);
-  const operationAdmission = useRef<"idle" | "ui" | "native" | "reset" | "export" | "automation">(
-    "idle"
-  );
+  const operationAdmission = useRef<
+    "idle" | "ui" | "native" | "reset" | "export" | "automation" | "judge"
+  >("idle");
   const automatedProofStarted = useRef(false);
   const automatedStepInFlight = useRef(false);
   const runtimeView = useRef<LabRuntimeView | null>(null);
@@ -937,7 +940,7 @@ export function LabClient() {
   async function runNative(
     toolName: CheckoutToolName,
     input: Readonly<Record<string, unknown>>,
-    admission: "manual" | "automation" = "manual"
+    admission: "manual" | "automation" | "judge" = "manual"
   ): Promise<NativeRunOutcome> {
     const view = runtimeView.current;
     const admissionReady =
@@ -946,7 +949,12 @@ export function LabClient() {
           !view?.busy &&
           !view?.resetting &&
           !view?.proofExporting
-        : operationAdmission.current === "automation" && !automatedStepInFlight.current;
+        : admission === "automation"
+          ? operationAdmission.current === "automation" && !automatedStepInFlight.current
+          : operationAdmission.current === "judge" &&
+            !view?.busy &&
+            !view?.resetting &&
+            !view?.proofExporting;
     if (!view?.capabilitiesChecked || !admissionReady) {
       const error = Object.freeze({
         name: "OperationNotAdmitted",
@@ -990,7 +998,7 @@ export function LabClient() {
       return { status: "error", error };
     }
     if (admission === "manual") operationAdmission.current = "native";
-    else automatedStepInFlight.current = true;
+    else if (admission === "automation") automatedStepInFlight.current = true;
     const executionId = operationId("plumbing");
     const traceCountBefore = environment.ledger.snapshot().totalTraceCount;
     let releaseConsumerCall: () => void;
@@ -1004,7 +1012,7 @@ export function LabClient() {
       environment.proofJournal.recordNativeControlError({ toolName, input, error: receipt });
       setNativeError(receipt);
       if (admission === "manual") operationAdmission.current = "idle";
-      else automatedStepInFlight.current = false;
+      else if (admission === "automation") automatedStepInFlight.current = false;
       return { status: "error", error: receipt };
     }
 
@@ -1060,9 +1068,82 @@ export function LabClient() {
     } finally {
       releaseConsumerCall();
       if (admission === "manual") operationAdmission.current = "idle";
-      else automatedStepInFlight.current = false;
+      else if (admission === "automation") automatedStepInFlight.current = false;
       setBusy(false);
     }
+  }
+
+  function beginJudgeSequence(): boolean {
+    const view = runtimeView.current;
+    if (
+      operationAdmission.current !== "idle" ||
+      !view?.capabilitiesChecked ||
+      view.busy ||
+      view.resetting ||
+      view.proofExporting ||
+      view.session.haltedReason !== null ||
+      judgeBusy
+    ) {
+      return false;
+    }
+    operationAdmission.current = "judge";
+    setJudgeBusy(true);
+    return true;
+  }
+
+  function endJudgeSequence(): void {
+    if (operationAdmission.current === "judge") operationAdmission.current = "idle";
+    setJudgeBusy(false);
+  }
+
+  async function executeVerifiedJudgeDecision(
+    projection: JudgeDemoProjection
+  ): Promise<ExecuteOnceResult> {
+    const view = runtimeView.current;
+    const decision = projection.decision;
+    const { receiptDigest, ...projectionCore } = projection;
+    if (
+      operationAdmission.current !== "judge" ||
+      !view?.readiness?.runtimeCatalog ||
+      view.readiness.status !== "consumer-ready" ||
+      view.readinessError ||
+      view.registryStatus.phase !== "ready" ||
+      !sameNames(view.registryStatus.toolNames, INITIAL_CHECKOUT_TOOL_NAMES) ||
+      view.session.state.revision !== 0 ||
+      view.session.state.pendingCheckout !== null ||
+      view.session.haltedReason !== null ||
+      view.readiness.stateHash !== CHECKOUT_FIXTURE_STATE_HASH ||
+      view.readiness.fixtureRevision !== 0 ||
+      view.readiness.manifest.catalogState !== "initial" ||
+      projection.appCommit !== APP_COMMIT ||
+      projection.fixtureHash !== CHECKOUT_FIXTURE_STATE_HASH ||
+      projection.manifestHash !== view.readiness.manifestHash ||
+      projection.nativeExecutionIncluded !== false ||
+      (await canonicalSha256(projectionCore)) !== receiptDigest ||
+      projection.decisionError !== null ||
+      decision?.kind !== "call" ||
+      decision.tool !== "cart_get" ||
+      Object.keys(decision.arguments).length !== 0
+    ) {
+      throw new Error(
+        "The sealed judge decision does not match this clean build, fixture, catalog, or cart_get contract."
+      );
+    }
+
+    const outcome = await runNative("cart_get", {}, "judge");
+    if (outcome.status !== "receipt") {
+      throw new Error("The native cart_get verification failed after the sealed judge decision.");
+    }
+    const expectedResultDigest = await canonicalSha256(cartGet(view.session.state));
+    if (
+      outcome.receipt.toolName !== "cart_get" ||
+      outcome.receipt.resultDigest !== expectedResultDigest ||
+      outcome.receipt.stateBeforeDigest !== outcome.receipt.stateAfterDigest ||
+      outcome.receipt.manifestHash !== projection.manifestHash
+    ) {
+      throw new Error("The native cart_get receipt did not preserve the declared fixture.");
+    }
+    return outcome.receipt;
   }
 
   async function runNativeCancellationProbe(
@@ -1777,6 +1858,7 @@ export function LabClient() {
     automatedProofStatus.phase === "reloading" || automatedProofStatus.phase === "running";
   const controlsDisabled =
     busy ||
+    judgeBusy ||
     resetting ||
     proofExporting ||
     automatedProofActive ||
@@ -1793,11 +1875,31 @@ export function LabClient() {
   const replayAvailable =
     !!lastNativeMutation &&
     !!readiness?.runtimeCatalog?.tools.some(({ name }) => name === lastNativeMutation.toolName);
+  const judgeRuntimeBinding: JudgeBrowserRuntimeBinding | null =
+    nativeControlsReady &&
+    readiness?.runtimeCatalog &&
+    readiness.argumentMode !== "unverified" &&
+    !pending &&
+    session.haltedReason === null &&
+    sameNames(registryStatus.toolNames, INITIAL_CHECKOUT_TOOL_NAMES)
+      ? Object.freeze({
+          appCommit: APP_COMMIT,
+          readinessStatus: "consumer-ready",
+          manifestHash: readiness.manifestHash,
+          stateHash: readiness.stateHash,
+          fixtureRevision: 0,
+          catalogState: "initial",
+          registrationGeneration: readiness.runtimeCatalog.generation,
+          argumentMode: readiness.argumentMode,
+          toolNames: INITIAL_CHECKOUT_TOOL_NAMES,
+          haltFree: true
+        })
+      : null;
 
   return (
     <div
       className="lab-layout"
-      aria-busy={busy || resetting || proofExporting || automatedProofActive}
+      aria-busy={busy || judgeBusy || resetting || proofExporting || automatedProofActive}
     >
       <section className="panel cart-panel" aria-labelledby="cart-title">
         <div className="panel-heading">
@@ -1931,7 +2033,7 @@ export function LabClient() {
           </button>
         </div>
 
-        <div className="receipt-line">
+        <div className="receipt-line" aria-live="polite">
           <span>UI receipt</span>
           {uiReceipt ? (
             <pre tabIndex={0}>{JSON.stringify(uiReceipt, null, 2)}</pre>
@@ -2023,6 +2125,21 @@ export function LabClient() {
           </pre>
         ) : null}
       </section>
+
+      <JudgeDemoPanel
+        runtimeBinding={judgeRuntimeBinding}
+        cleanFixture={
+          !pending &&
+          session.state.revision === 0 &&
+          session.haltedReason === null &&
+          readiness?.stateHash === CHECKOUT_FIXTURE_STATE_HASH &&
+          readiness.manifest.catalogState === "initial"
+        }
+        admissionReady={!controlsDisabled}
+        beginSequence={beginJudgeSequence}
+        endSequence={endJudgeSequence}
+        executeVerifiedDecision={executeVerifiedJudgeDecision}
+      />
 
       <section className="panel trace-panel" aria-labelledby="native-title">
         <div className="panel-heading">

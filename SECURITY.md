@@ -48,6 +48,14 @@ The fallback runner is bound to GoogleChromeLabs `webmcp-tools` commit `bcb6e939
 
 Public status/readiness receipts are CDN-cached briefly to protect the free durable-store command quota. They are diagnostics only and never authorize a call; the future decision path must revalidate Redis atomically for every dispatch.
 
+### Signed-out judge lane
+
+The public judge lane consumes only the final `judge:1` allocation. Its strict POST body contains one fixed intent token and no prompt, arguments, model, settings, manifest, schema, URL, or tool choice. Same-origin fetch metadata, exact JSON media type, streamed 128-byte limit, Production project/commit binding, the immutable primary-count boundary, and the complete lifetime call/spend policy are revalidated before issuance and dispatch.
+
+A permanent AES-GCM singleton authorization anchor is written before common-ledger issuance, so a concurrent public burst can materialize only one JTI, subject, actor, claims hash, and rate-key footprint. Atomic `BEGIN` then records the sole in-flight JTI and bounded lease in the existing guard. The complete encrypted provider receipt is captured without TTL before known settlement. Captured known receipts settle and seal idempotently without another request. A lost process with an expired in-flight lease is conservatively settled uncertain and permanently closes the lane; no browser retry can redispatch. Public errors are allowlisted codes, and the sanitized archive omits authorization IDs, safety identifiers, raw request/response bytes, provider request IDs, and secrets.
+
+The browser can execute only a digest-verified `cart_get` decision on the exact clean, halt-free initial fixture and current consumer-ready native catalog. Provider evidence survives a wrong/no-call or native failure without being relabeled as a completed browser proof. The later collateral-only release may present a predecessor archive only through an exact Git-derived immutable-projection proof; it never receives another provider grant.
+
 Only synthetic challenge text and minimal fixture state may reach the disclosed provider. Preview deployments must not receive production provider, Redis-write, signing, or activation credentials.
 
 ## Reporting a vulnerability

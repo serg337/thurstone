@@ -20,6 +20,54 @@ function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
+function createJudgeProjection(
+  manifestHash: string,
+  decision: Readonly<Record<string, unknown>> = {
+    kind: "call",
+    tool: "cart_get",
+    arguments: {}
+  }
+) {
+  const core = {
+    version: "toolproof-judge-demo-public-receipt@1.0.0",
+    lane: "signed-out-fixed-read-only-judge-demo",
+    evidenceClass: "non-scored-model-selection",
+    sourceFixed: true,
+    arbitraryPromptAccepted: false,
+    globalProviderCall: 1,
+    nativeExecutionIncluded: false,
+    replayPolicy: "archived-decision-may-be-executed-locally-without-model-call",
+    appCommit: "e".repeat(40),
+    evidenceAppCommit: "e".repeat(40),
+    caseId: "judge_cart_inventory_v1",
+    naturalLanguageRequest:
+      "Before discussing checkout, produce a two-column inventory of the simulated cart: product name and unit count only.",
+    fixtureHash: "a9889565b0e5c8a60c7667cab2110f058774e72c1e89c08d1f255124c07ea457",
+    manifestHash,
+    evidenceManifestHash: manifestHash,
+    envelopeHash: "1".repeat(64),
+    runnerHash: "2".repeat(64),
+    provider: "OpenAI",
+    model: "gpt-5.6-terra",
+    providerResponseHash: "3".repeat(64),
+    requestBodyHash: "4".repeat(64),
+    usageHash: "5".repeat(64),
+    usage: {
+      inputTokens: 800,
+      outputTokens: 40,
+      totalTokens: 840,
+      accountedNanoUsd: 3_000_000,
+      costBasis: "frozen-list-price-plus-10pct-uplift"
+    },
+    decision,
+    decisionError: null,
+    responseStatus: "completed",
+    capturedAt: "2026-08-29T12:00:00.000Z",
+    presentationBinding: null
+  } as const;
+  return { ...core, receiptDigest: sha256(canonicalize(core)) };
+}
+
 function resealDownloadedBundle(bundle: Gate1ProofBundle): void {
   const mutable = bundle as unknown as {
     evidenceDigest: string;
@@ -511,6 +559,225 @@ test("JSON-string emulated consumer serializes once and supports omitted handler
   expect(canceledTrace.status).toBe("canceled");
   expect(canceledTrace.stateAfter.sha256).toBe(canceledTrace.stateBefore.sha256);
   expect(canceledTrace.effect.stateChanged).toBe(false);
+});
+
+test("fixed judge lane accepts no prompt and binds the sealed decision to native cart_get", async ({
+  page
+}) => {
+  const manifestHash = await page.evaluate(() =>
+    (
+      window as typeof window & {
+        __toolProofLabEnvironment: { readonly binding: { getRegistryHash(): string } };
+      }
+    ).__toolProofLabEnvironment.binding.getRegistryHash()
+  );
+  const projection = createJudgeProjection(manifestHash);
+  const postedBodies: unknown[] = [];
+  let sealed = false;
+  await page.route("**/api/judge-demo**", async (route) => {
+    const request = route.request();
+    if (request.method() === "POST") {
+      postedBodies.push(request.postDataJSON());
+      const wasSealed = sealed;
+      sealed = true;
+      await route.fulfill({
+        status: wasSealed ? 200 : 201,
+        contentType: "application/json",
+        body: JSON.stringify({
+          version: "toolproof-judge-demo-api@1.0.0",
+          lane: "signed-out-fixed-read-only-judge-demo",
+          status: wasSealed ? "archived" : "fresh",
+          inferencePerformed: !wasSealed,
+          projection
+        })
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        version: "toolproof-judge-demo-api@1.0.0",
+        lane: "signed-out-fixed-read-only-judge-demo",
+        status: sealed ? "sealed" : "available",
+        sourceFixed: true,
+        arbitraryPromptAccepted: false,
+        remainingModelCalls: sealed ? 0 : 1,
+        inferencePerformed: false,
+        reason: sealed ? "The decision is sealed." : "One decision remains.",
+        projection: sealed ? projection : null
+      })
+    });
+  });
+
+  await page.getByRole("button", { name: "Refresh judge status" }).click();
+  await expect(page.getByText("available", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Run bounded model decision + native cart_get" }).click();
+  const proof = page.locator("article").filter({ hasText: "Current browser judge proof" });
+  await expect(proof).toContainText('"evidenceClass": "non-scored-judge-path"');
+  await expect(proof).toContainText('"toolName": "cart_get"');
+  await expect(proof).toContainText('"readinessStatus": "consumer-ready"');
+  await expect(proof).toContainText('"haltFree": true');
+  const modelEvidence = page
+    .locator("article")
+    .filter({ hasText: "Sealed model-selection evidence" });
+  await expect(modelEvidence).toContainText('"inferencePerformedByThisRequest": true');
+  expect(postedBodies).toEqual([{ intent: "run-fixed-read-only-judge-demo" }]);
+  expect(JSON.stringify(postedBodies)).not.toContain("items and quantities");
+  await expect(page.getByText("sealed", { exact: true })).toBeVisible();
+  await page
+    .getByRole("button", { name: "Replay sealed decision through native cart_get" })
+    .click();
+  await expect(modelEvidence).toContainText('"inferencePerformedByThisRequest": false');
+  expect(postedBodies).toEqual([
+    { intent: "run-fixed-read-only-judge-demo" },
+    { intent: "run-fixed-read-only-judge-demo" }
+  ]);
+});
+
+test("judge lane preserves a sealed no-call outcome without fabricating native proof", async ({
+  page
+}) => {
+  const manifestHash = await page.evaluate(() =>
+    (
+      window as typeof window & {
+        __toolProofLabEnvironment: { readonly binding: { getRegistryHash(): string } };
+      }
+    ).__toolProofLabEnvironment.binding.getRegistryHash()
+  );
+  const projection = createJudgeProjection(manifestHash, {
+    kind: "abstain",
+    reason: "I will not select a tool."
+  });
+  let sealed = false;
+  await page.route("**/api/judge-demo**", async (route) => {
+    if (route.request().method() === "POST") {
+      sealed = true;
+      await route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({
+          version: "toolproof-judge-demo-api@1.0.0",
+          lane: "signed-out-fixed-read-only-judge-demo",
+          status: "fresh",
+          inferencePerformed: true,
+          projection
+        })
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        version: "toolproof-judge-demo-api@1.0.0",
+        lane: "signed-out-fixed-read-only-judge-demo",
+        status: sealed ? "sealed" : "available",
+        sourceFixed: true,
+        arbitraryPromptAccepted: false,
+        remainingModelCalls: sealed ? 0 : 1,
+        inferencePerformed: false,
+        reason: sealed ? "The decision is sealed." : "One decision remains.",
+        projection: sealed ? projection : null
+      })
+    });
+  });
+  const nativeCountBefore = await page.evaluate(
+    () =>
+      (
+        window as typeof window & {
+          __toolProofNativeObservations: readonly { readonly toolName: string }[];
+        }
+      ).__toolProofNativeObservations.length
+  );
+
+  await page.getByRole("button", { name: "Refresh judge status" }).click();
+  await page.getByRole("button", { name: "Run bounded model decision + native cart_get" }).click();
+  const modelEvidence = page
+    .locator("article")
+    .filter({ hasText: "Sealed model-selection evidence" });
+  await expect(modelEvidence).toContainText('"kind": "abstain"');
+  await expect(modelEvidence).toContainText('"inferencePerformedByThisRequest": true');
+  await expect(
+    page.locator("article").filter({ hasText: "Current browser judge proof" })
+  ).toHaveCount(0);
+  await expect(page.locator(".error-text[role='alert']")).toHaveCount(0);
+  await expect(page.getByText(/will not fabricate or repeatedly retry/iu)).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Sealed model decision has no native replay" })
+  ).toBeDisabled();
+  const nativeCountAfter = await page.evaluate(
+    () =>
+      (
+        window as typeof window & {
+          __toolProofNativeObservations: readonly { readonly toolName: string }[];
+        }
+      ).__toolProofNativeObservations.length
+  );
+  expect(nativeCountAfter).toBe(nativeCountBefore);
+  await expect(page.getByText("sealed", { exact: true })).toBeVisible();
+});
+
+test("halted revision-zero Lab cannot consume the one judge allocation", async ({ page }) => {
+  let postCount = 0;
+  await page.route("**/api/judge-demo**", async (route) => {
+    if (route.request().method() === "POST") postCount += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        version: "toolproof-judge-demo-api@1.0.0",
+        lane: "signed-out-fixed-read-only-judge-demo",
+        status: "available",
+        sourceFixed: true,
+        arbitraryPromptAccepted: false,
+        remainingModelCalls: 1,
+        inferencePerformed: false,
+        reason: "One decision remains.",
+        projection: null
+      })
+    });
+  });
+  const snapshot = await page.evaluate(async () => {
+    const store = (
+      window as typeof window & {
+        __toolProofLabEnvironment: {
+          readonly store: {
+            subscribe(listener: () => void): () => void;
+            cartUpdate(input: Record<string, unknown>): Promise<unknown>;
+            hardReset(): Promise<unknown>;
+            getSnapshot(): {
+              readonly state: { readonly revision: number };
+              readonly haltedReason: { readonly code: string } | null;
+            };
+          };
+        };
+      }
+    ).__toolProofLabEnvironment.store;
+    store.subscribe(() => {
+      throw new Error("synthetic halted-r0 view failure");
+    });
+    await store.cartUpdate({
+      operationId: "halted_revision_zero_0001",
+      operation: "set_quantity",
+      itemId: "stoneware-mug",
+      quantity: 3
+    });
+    await store.hardReset();
+    return store.getSnapshot();
+  });
+  expect(snapshot).toMatchObject({
+    state: { revision: 0 },
+    haltedReason: { code: "subscriber_failure" }
+  });
+  await expect(page.getByText(/Session halted after subscriber_failure/iu)).toBeVisible();
+  await page.getByRole("button", { name: "Refresh judge status" }).click();
+  const runButton = page.getByRole("button", {
+    name: "Run bounded model decision + native cart_get"
+  });
+  await expect(runButton).toBeDisabled();
+  await runButton.click({ force: true });
+  expect(postCount).toBe(0);
 });
 
 test("JSON-string one download preserves the complete Gate 1 journal and trace history", async ({

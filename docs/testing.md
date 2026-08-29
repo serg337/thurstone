@@ -11,7 +11,10 @@ npm run typecheck
 npm run test
 npm run test:integration
 npm run test:browser:safe
+npm run gate7:verify-adversarial
 npm run build
+npm audit --audit-level=high
+npm audit --omit=dev --audit-level=high
 npm run durable-store:check
 npm run probe-controls:integration
 npm run probe-controls:preflight-v05
@@ -21,9 +24,14 @@ npm run fallback:smoke:native
 npm run verify:probe-no-leakage
 npm run verify:publication
 npm run verify:evidence
+npm run verify:sample-evidence
 ```
 
 `verify:evidence` fails closed unless the canonical JSON and Markdown reference exports both exist. It verifies canonical bytes, the package digest, all seven recomputed metric denominators, baseline/revised `23/24` identities, namespace/privacy sentinels, export parity, and a package-seeded trace sample spanning every family, subset, and version plus each failure outcome. Paid model calls never run in ordinary CI.
+
+`verify:sample-evidence` binds the compact public sample and report back to one exact row in the canonical package, including request, decision, arguments, result, effect, runtime, row digest, package digest, and the honest aggregate limitation. It fails if the sample drifts or is presented as an independent aggregate.
+
+`gate7:verify-adversarial` byte-verifies the retained current-source matrix and its exact source hashes. The matrix maps and executes 21 fail-closed cases covering forged/replayed/expired authorization, case/manifest drift, duplicate mutation and tabs, invalid/oversized input, stale fixtures, concurrency, interruption, timeout, cancellation, reset/registration/partial-mutation failures, refusal, malformed model output, unsupported runtime, and depleted call/spend ceilings. Infrastructure, provider, runtime, cancellation, and quota outcomes remain excluded from semantic model scores; the verifier itself makes zero provider calls. CI also fails on high/critical vulnerabilities in both the full and production dependency trees.
 
 The deployed Results browser check independently exercises the Development/Holdout views, family/case/version/outcome/error filters, the residual Fail→Fail row, trace inspector, contract diff, provenance, evidence namespaces, and both browser downloads. The server builds the UI, read-only Results Site Tool, JSON, and Markdown from one safe projection of the acknowledged permanent snapshots; authorization identifiers and local paths never enter that projection.
 
@@ -37,7 +45,9 @@ The deployed Results browser check independently exercises the Development/Holdo
 
 `probe-continuation:integration` creates random isolated Redis namespaces, exercises encrypted idempotent issue/decision/native/completion recovery plus fixed-expiry monotonic run-index create/advance/recovery through the real Lua scripts, and deletes and verifies deletion of only those temporary keys. It never touches the immutable production guard namespace and never calls the model provider.
 
-The Vercel production build runs the durable-store check, isolated real Redis suite, encrypted-continuation suite, confirmed guard bootstrap/status-or-migration check, zero-token provider metadata check, application build, and client-leakage scan in that order. Preview has no production credentials and therefore fails closed before any provider request. Initialization, migration, and reaping are mutually exclusive operator intents and each requires Vercel's independently supplied Git commit/project identity plus its own exact one-time confirmation.
+The signed-out judge route has its own provider-free envelope, service, store, and browser tests. They prove a strict fixed request body, same-origin and 128-byte request limits, exact build/fixture/manifest/runner binding, one `judge` reservation at the existing 91-call boundary, one stateless provider dispatch in fake tests, encrypted permanent capture before settlement, captured-receipt recovery, hard-interruption quarantine, safe error redaction, archived replay without another call, collateral-only successor binding, and native `cart_get` execution only on a clean halt-free fixture. The real global call is never executed by CI, build, preview, or a local test.
+
+The Vercel production build verifies the measured-to-presentation Git proof and retained Gate 7 adversarial matrix before the durable-store check, isolated real Redis suite, encrypted-continuation suite, confirmed guard bootstrap/status-or-migration check, zero-token provider metadata check, application build, and client-leakage scan. Preview has no production credentials and therefore fails closed before any provider request. Initialization, migration, and reaping are mutually exclusive operator intents and each requires Vercel's independently supplied Git commit/project identity plus its own exact one-time confirmation.
 
 The production Vercel project is linked to `serg337/toolproof` on branch `main`. Vercel's system-provided `VERCEL_GIT_COMMIT_SHA` is the authoritative deployment-source identity for guard initialization and confirmed reaping; a manually claimed commit variable cannot substitute for it.
 

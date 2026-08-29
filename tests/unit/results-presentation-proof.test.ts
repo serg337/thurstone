@@ -38,6 +38,8 @@ describe("Gate 6 terminal presentation proof", () => {
       verifyGate6PresentationProof(await proof(["lib/domain/checkout.ts"]))
     ).rejects.toThrow(/gate6_presentation_proof_projection_invalid/u);
     expect(gate6PresentationPathAllowed("lib/results/evidence-package.ts")).toBe(true);
+    expect(gate6PresentationPathAllowed("lib/judge/service.server.ts")).toBe(true);
+    expect(gate6PresentationPathAllowed("app/api/judge-demo/route.ts")).toBe(true);
     expect(gate6PresentationPathAllowed("lib/scored/service.server.ts")).toBe(false);
     expect(canonicalJson((await proof()).changedPaths)).toBe('["app/results/page.tsx"]');
     const encoded = gzipSync(Buffer.from(canonicalJson(await proof()))).toString("base64url");

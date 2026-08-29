@@ -35,11 +35,24 @@ const presentationProofSchema = z
 export type Gate6PresentationProof = z.infer<typeof presentationProofSchema>;
 
 const allowedExact = new Set([
+  ".env.example",
+  ".github/workflows/ci.yml",
+  "HACKATHON_BUILD.md",
   "README.md",
   "PLAN.md",
+  "SECURITY.md",
+  "THIRD_PARTY_NOTICES.md",
+  "app/api/readiness/route.ts",
   "app/globals.css",
+  "app/lab/page.tsx",
+  "app/page.tsx",
   "app/results/page.tsx",
+  "components/lab/judge-demo-panel.tsx",
+  "components/lab/lab-client.tsx",
   "components/results/semantic-paired-results.tsx",
+  "docs/OFFICIAL_SOURCE_CHECK.md",
+  "docs/architecture.md",
+  "docs/demo-script.md",
   "docs/methodology.md",
   "docs/testing.md",
   "lib/semantic/revision-config.server.ts",
@@ -47,17 +60,33 @@ const allowedExact = new Set([
   "scripts/verify-evidence.mjs",
   "scripts/verify-evidence.ts",
   "scripts/verify-gate6-presentation.ts",
+  "scripts/verify-gate7-adversarial-matrix.ts",
   "scripts/verify-gate5-one-variable.ts",
+  "scripts/verify-judge-presentation.ts",
+  "scripts/verify-sample-evidence.ts",
+  "submission/devpost.md",
+  "tests/browser/gate7-browser.spec.ts",
+  "tests/browser/lab-sandbox.spec.ts",
   "tests/browser/results.spec.ts",
   "tests/browser/shell.spec.ts",
   "tests/browser/studio.spec.ts",
   "tests/unit/checkout-tool-catalog.test.ts",
   "tests/unit/gate5-revision-freeze.test.ts",
+  "tests/integration/judge-service.test.ts",
+  "tests/integration/judge-presentation.test.ts",
+  "tests/unit/gate7-adversarial-matrix.test.ts",
+  "tests/unit/judge-envelope.test.ts",
   "tests/unit/repair-provider.test.ts",
   "tests/unit/results-evidence-package.test.ts",
   "tests/unit/results-presentation-proof.test.ts"
 ]);
-const allowedPrefixes = ["app/api/evidence/", "evidence/", "lib/results/"] as const;
+const allowedPrefixes = [
+  "app/api/evidence/",
+  "app/api/judge-demo/",
+  "evidence/",
+  "lib/judge/",
+  "lib/results/"
+] as const;
 
 export function gate6PresentationPathAllowed(path: string): boolean {
   return allowedExact.has(path) || allowedPrefixes.some((prefix) => path.startsWith(prefix));
