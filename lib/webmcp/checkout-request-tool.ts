@@ -13,7 +13,7 @@ export const CHECKOUT_REQUEST_METADATA = {
   name: CHECKOUT_REQUEST_TOOL_NAME,
   title: "Request simulated checkout",
   description:
-    "Finalize the current cart by opening a simulated checkout request that remains pending for human approval when the user is ready to proceed.",
+    "Open a simulated checkout request for the current cart only when the user explicitly directs checkout to begin; it creates a pending request for human approval and does not complete a purchase.",
   inputSchema: CHECKOUT_OPERATION_JSON_SCHEMA,
   annotations: { readOnlyHint: false }
 } as const;
