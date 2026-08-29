@@ -8,6 +8,71 @@ export const JUDGE_DEMO_RUN_INTENT = "run-fixed-read-only-judge-demo" as const;
 
 const sha256 = z.string().regex(/^[a-f0-9]{64}$/u);
 const gitCommit = z.string().regex(/^[a-f0-9]{40}$/u);
+const gitOid = z.string().regex(/^[a-f0-9]{40}$/u);
+const judgeEvidenceRootCommit = "e2cf8d47375abfeeb4f32bd6f5973918acf4c091";
+const judgeRecoveryImplementationCommit = "6211ebc63efe1e65992cfd04e36ebc438b545c9a";
+const recoveryFinalizationPaths = [
+  "lib/judge/collateral-checkout-verifier.server.ts",
+  "lib/judge/collateral-proof.ts",
+  "lib/judge/contract.ts",
+  "lib/judge/presentation-binding.server.ts",
+  "tests/integration/judge-presentation.test.ts"
+] as const;
+const recoveryFinalizationPath = z.enum(recoveryFinalizationPaths);
+const publicCiTimeoutValidationSchema = z
+  .object({
+    version: z.literal("toolproof-judge-demo-ci-timeout-validation@1.0.0"),
+    kind: z.literal("recovery-finalization"),
+    implementationCommit: gitCommit,
+    implementationTree: gitOid,
+    activeCommit: gitCommit,
+    activeTree: gitOid,
+    changedPaths: z.array(recoveryFinalizationPath).length(recoveryFinalizationPaths.length),
+    treeChanges: z
+      .array(
+        z
+          .object({
+            path: recoveryFinalizationPath,
+            status: z.enum(["A", "D", "M", "T"]),
+            predecessorMode: z
+              .string()
+              .regex(/^[0-7]{6}$/u)
+              .nullable(),
+            successorMode: z
+              .string()
+              .regex(/^[0-7]{6}$/u)
+              .nullable(),
+            predecessorBlobOid: gitOid.nullable(),
+            successorBlobOid: gitOid.nullable()
+          })
+          .strict()
+      )
+      .length(recoveryFinalizationPaths.length),
+    gitTreeProjectionHash: sha256,
+    timeoutPath: z.literal("tests/integration/judge-presentation.test.ts"),
+    timeoutMs: z.literal(20_000),
+    timeoutCount: z.literal(3),
+    providerCallsPerformed: z.literal(0),
+    storeWritesPerformed: z.literal(0)
+  })
+  .strict()
+  .superRefine((validation, context) => {
+    const exactPaths = recoveryFinalizationPaths.every(
+      (path, index) =>
+        validation.changedPaths[index] === path && validation.treeChanges[index]?.path === path
+    );
+    if (
+      validation.implementationCommit !== "6211ebc63efe1e65992cfd04e36ebc438b545c9a" ||
+      validation.implementationTree !== "239082df68b195bc6f901e51dfcd90b2dd5bec6b" ||
+      validation.activeCommit === validation.implementationCommit ||
+      !exactPaths
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "The recovery finalization identity must match the frozen bounded transition."
+      });
+    }
+  });
 
 export const judgeDemoRunBodySchema = z
   .object({ intent: z.literal(JUDGE_DEMO_RUN_INTENT) })
@@ -79,6 +144,7 @@ export const judgeDemoProjectionSchema = z
                 criticalProjectionHash: sha256,
                 dependencyProjectionHash: sha256,
                 proofHash: sha256,
+                ciTimeoutValidation: publicCiTimeoutValidationSchema.nullable(),
                 providerCallsPerformed: z.literal(0),
                 storeWritesPerformed: z.literal(0),
                 replayOnly: z.literal(true)
@@ -125,7 +191,20 @@ export const judgeDemoProjectionSchema = z
         transition.predecessorCommit === priorCommit &&
         transition.predecessorEnvelopeHash === priorEnvelopeHash &&
         (index !== 0 || transition.kind === "sealed-reader-compatibility-recovery") &&
-        (index !== 1 || transition.kind === "collateral-links")
+        (index !== 1 || transition.kind === "collateral-links") &&
+        (transition.kind === "sealed-reader-compatibility-recovery" ||
+          transition.ciTimeoutValidation === null) &&
+        (binding.rootEvidenceCommit !== judgeEvidenceRootCommit ||
+          transition.kind !== "sealed-reader-compatibility-recovery" ||
+          (transition.successorCommit === judgeRecoveryImplementationCommit
+            ? transition.ciTimeoutValidation === null
+            : transition.ciTimeoutValidation !== null)) &&
+        (transition.ciTimeoutValidation === null ||
+          (transition.ciTimeoutValidation.implementationCommit ===
+            judgeRecoveryImplementationCommit &&
+            transition.ciTimeoutValidation.implementationTree ===
+              "239082df68b195bc6f901e51dfcd90b2dd5bec6b" &&
+            transition.ciTimeoutValidation.activeCommit === transition.successorCommit))
       );
     });
     if (

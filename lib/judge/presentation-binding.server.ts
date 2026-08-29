@@ -213,6 +213,10 @@ export function publicJudgeDemoPresentationBinding(binding: JudgeDemoPresentatio
         criticalProjectionHash: transition.criticalProjectionHash,
         dependencyProjectionHash: transition.dependencyProjectionHash,
         proofHash: transition.proofHash,
+        ciTimeoutValidation:
+          transition.kind === "sealed-reader-compatibility-recovery"
+            ? (transition.recoveryContract.ciTimeoutValidation ?? null)
+            : null,
         providerCallsPerformed: 0 as const,
         storeWritesPerformed: 0 as const,
         replayOnly: true as const

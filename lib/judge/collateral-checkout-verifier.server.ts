@@ -6,8 +6,14 @@ import { lstat, readFile } from "node:fs/promises";
 
 import { canonicalJson, canonicalSha256 } from "@/lib/evidence/digest";
 import {
+  JUDGE_DEMO_CI_TIMEOUT_COUNT,
+  JUDGE_DEMO_CI_TIMEOUT_MS,
+  JUDGE_DEMO_CI_TIMEOUT_PATH,
   JUDGE_DEMO_COLLATERAL_FIELD_PREFIXES,
   JUDGE_DEMO_CRITICAL_PATHS,
+  JUDGE_DEMO_RECOVERY_FINALIZATION_PATHS,
+  JUDGE_DEMO_RECOVERY_IMPLEMENTATION_COMMIT,
+  JUDGE_DEMO_RECOVERY_IMPLEMENTATION_TREE,
   JUDGE_DEMO_RECOVERY_PATHS,
   type JudgeDemoCollateralField,
   type JudgeDemoCollateralPath,
@@ -156,7 +162,8 @@ function collateralFields(source: string | null): {
 
 function gitTreeChanges(
   cwd: string,
-  transition: JudgeDemoPresentationTransition
+  predecessorCommit: string,
+  successorCommit: string
 ): readonly GitTreeChange[] {
   const result = spawnSync(
     "git",
@@ -167,8 +174,8 @@ function gitTreeChanges(
       "--no-renames",
       "--no-commit-id",
       "--abbrev=40",
-      transition.predecessorCommit,
-      transition.successorCommit,
+      predecessorCommit,
+      successorCommit,
       "--"
     ],
     { cwd, encoding: "utf8", maxBuffer: 1_048_576 }
@@ -192,6 +199,84 @@ function gitTreeChanges(
       };
     })
     .sort((left, right) => left.path.localeCompare(right.path));
+}
+
+function commitTree(cwd: string, commit: string): string {
+  const result = spawnSync("git", ["rev-parse", "--verify", `${commit}^{tree}`], {
+    cwd,
+    encoding: "utf8",
+    maxBuffer: 1_048_576
+  });
+  if (result.status !== 0 || !/^[a-f0-9]{40}\n?$/u.test(result.stdout)) {
+    throw new Error("judge_demo_presentation_git_tree_unavailable");
+  }
+  return result.stdout.trim();
+}
+
+async function verifyRecoveryFinalization(input: {
+  readonly cwd: string;
+  readonly transition: Extract<
+    JudgeDemoPresentationTransition,
+    { kind: "sealed-reader-compatibility-recovery" }
+  >;
+  readonly firstParentChain: readonly string[];
+}): Promise<void> {
+  const validation = input.transition.recoveryContract.ciTimeoutValidation ?? null;
+  if (validation === null) {
+    if (input.firstParentChain.length !== 2) {
+      throw new Error("judge_demo_presentation_transition_not_direct_child");
+    }
+    return;
+  }
+  if (
+    input.firstParentChain.length !== 3 ||
+    input.firstParentChain[0] !== input.transition.predecessorCommit ||
+    input.firstParentChain[1] !== JUDGE_DEMO_RECOVERY_IMPLEMENTATION_COMMIT ||
+    input.firstParentChain[2] !== input.transition.successorCommit ||
+    validation.implementationCommit !== JUDGE_DEMO_RECOVERY_IMPLEMENTATION_COMMIT ||
+    validation.implementationTree !== JUDGE_DEMO_RECOVERY_IMPLEMENTATION_TREE ||
+    commitTree(input.cwd, validation.implementationCommit) !== validation.implementationTree ||
+    validation.activeCommit !== input.transition.successorCommit ||
+    commitTree(input.cwd, validation.activeCommit) !== validation.activeTree
+  ) {
+    throw new Error("judge_demo_presentation_recovery_finalization_identity_invalid");
+  }
+
+  const actualChanges = gitTreeChanges(
+    input.cwd,
+    validation.implementationCommit,
+    validation.activeCommit
+  );
+  const actualPaths = actualChanges.map(({ path }) => path);
+  if (
+    canonicalJson(actualPaths) !== canonicalJson(JUDGE_DEMO_RECOVERY_FINALIZATION_PATHS) ||
+    canonicalJson(validation.changedPaths) !== canonicalJson(actualPaths) ||
+    canonicalJson(validation.treeChanges) !== canonicalJson(actualChanges) ||
+    (await canonicalSha256(actualChanges)) !== validation.gitTreeProjectionHash
+  ) {
+    throw new Error("judge_demo_presentation_recovery_finalization_tree_invalid");
+  }
+
+  const expectedTest = treeEntry(input.cwd, validation.activeCommit, JUDGE_DEMO_CI_TIMEOUT_PATH);
+  const checkedOutTest = await checkoutEntry(input.cwd, JUDGE_DEMO_CI_TIMEOUT_PATH);
+  if (
+    expectedTest === null ||
+    checkedOutTest === null ||
+    expectedTest.mode !== checkedOutTest.mode ||
+    expectedTest.blobOid !== blobOid(checkedOutTest.bytes)
+  ) {
+    throw new Error("judge_demo_presentation_recovery_finalization_test_missing");
+  }
+  const testSource = new TextDecoder("utf-8", { fatal: true }).decode(checkedOutTest.bytes);
+  const timeoutCount = testSource.match(/\}, 20_000\);/gu)?.length ?? 0;
+  if (
+    validation.timeoutPath !== JUDGE_DEMO_CI_TIMEOUT_PATH ||
+    validation.timeoutMs !== JUDGE_DEMO_CI_TIMEOUT_MS ||
+    validation.timeoutCount !== JUDGE_DEMO_CI_TIMEOUT_COUNT ||
+    timeoutCount !== JUDGE_DEMO_CI_TIMEOUT_COUNT
+  ) {
+    throw new Error("judge_demo_presentation_recovery_finalization_timeout_invalid");
+  }
 }
 
 async function verifyCollateralChanges(
@@ -268,13 +353,19 @@ async function verifyTransitionGit(input: {
     throw new Error("judge_demo_presentation_git_identity_invalid");
   }
   const actualFirstParentChain = firstParentCommitChain(input.cwd, predecessor, successor);
-  if (actualFirstParentChain.length !== 2) {
+  if (input.transition.kind === "sealed-reader-compatibility-recovery") {
+    await verifyRecoveryFinalization({
+      cwd: input.cwd,
+      transition: input.transition,
+      firstParentChain: actualFirstParentChain
+    });
+  } else if (actualFirstParentChain.length !== 2) {
     throw new Error("judge_demo_presentation_transition_not_direct_child");
   }
   if ((await canonicalSha256(actualFirstParentChain)) !== input.transition.firstParentChainHash) {
     throw new Error("judge_demo_presentation_first_parent_chain_mismatch");
   }
-  const actualTreeChanges = gitTreeChanges(input.cwd, input.transition);
+  const actualTreeChanges = gitTreeChanges(input.cwd, predecessor, successor);
   if ((await canonicalSha256(actualTreeChanges)) !== input.transition.gitTreeProjectionHash) {
     throw new Error("judge_demo_presentation_git_tree_projection_mismatch");
   }
