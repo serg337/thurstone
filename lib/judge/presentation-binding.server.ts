@@ -137,11 +137,12 @@ async function envelopeFor(
   input: {
     readonly rootEnvelope: JudgeDemoEnvelope;
     readonly activeEnvelope: JudgeDemoEnvelope;
-  }
+  },
+  historicalPresentation: boolean
 ): Promise<JudgeDemoEnvelope> {
   if (commitValue === input.rootEnvelope.buildCommit) return input.rootEnvelope;
   if (commitValue === input.activeEnvelope.buildCommit) return input.activeEnvelope;
-  return createJudgeDemoEnvelope(commitValue);
+  return createJudgeDemoEnvelope(commitValue, { historicalPresentation });
 }
 
 export async function verifyJudgeDemoPresentationBinding(input: {
@@ -225,8 +226,8 @@ export async function verifyJudgeDemoPresentationBinding(input: {
     let legacyEnvelopeProjectionValid = true;
     if (parsed.version !== JUDGE_DEMO_INVOCATION_INTEGRITY_BINDING_VERSION) {
       const [predecessorEnvelope, successorEnvelope] = await Promise.all([
-        envelopeFor(transition.predecessorCommit, input),
-        envelopeFor(transition.successorCommit, input)
+        envelopeFor(transition.predecessorCommit, input, true),
+        envelopeFor(transition.successorCommit, input, true)
       ]);
       const [predecessorProjectionHash, successorProjectionHash] = await Promise.all([
         judgeDemoImmutableProjectionHash(predecessorEnvelope),

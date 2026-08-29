@@ -171,9 +171,9 @@ async function transitionCommon(input: {
     | typeof JUDGE_DEMO_PRESENTATION_REBRAND_TRANSITION_VERSION;
 }) {
   const [rootEnvelope, predecessorEnvelope, successorEnvelope] = await Promise.all([
-    createJudgeDemoEnvelope(input.rootCommit),
-    createJudgeDemoEnvelope(input.predecessorCommit),
-    createJudgeDemoEnvelope(input.successorCommit)
+    createJudgeDemoEnvelope(input.rootCommit, { historicalPresentation: true }),
+    createJudgeDemoEnvelope(input.predecessorCommit, { historicalPresentation: true }),
+    createJudgeDemoEnvelope(input.successorCommit, { historicalPresentation: true })
   ]);
   const gitTreeChanges = rawTreeChanges(input.cwd, input.predecessorCommit, input.successorCommit);
   const criticalFiles = JUDGE_DEMO_CRITICAL_PATHS.map((path) => {
@@ -490,8 +490,8 @@ async function bindingFor(input: {
     | typeof JUDGE_DEMO_PRESENTATION_REBRAND_BINDING_VERSION;
 }): Promise<JudgeDemoPresentationBinding> {
   const [rootEnvelope, activeEnvelope] = await Promise.all([
-    createJudgeDemoEnvelope(input.rootCommit),
-    createJudgeDemoEnvelope(input.activeCommit)
+    createJudgeDemoEnvelope(input.rootCommit, { historicalPresentation: true }),
+    createJudgeDemoEnvelope(input.activeCommit, { historicalPresentation: true })
   ]);
   const payload = {
     version: input.version ?? JUDGE_DEMO_PRESENTATION_BINDING_VERSION,
@@ -934,6 +934,12 @@ afterEach(async () => {
 });
 
 describe("judge provider-free presentation lineage", () => {
+  it("keeps the production presentation verifier inside the prospective protocol boundary", () => {
+    expect(JUDGE_DEMO_INVOCATION_INTEGRITY_PROTOCOL_PATHS).toContain(
+      "scripts/verify-judge-presentation.ts"
+    );
+  });
+
   it("preserves v2/v3 order and accepts only the exact v4 material/evidence/collateral order", () => {
     const recovery = { kind: "sealed-reader-compatibility-recovery" as const };
     const rebrand = { kind: "presentation-rebrand" as const };
@@ -1297,8 +1303,8 @@ describe("judge provider-free presentation lineage", () => {
       criticalFileCount: JUDGE_DEMO_CRITICAL_PATHS.length
     });
     const [rootEnvelope, activeEnvelope] = await Promise.all([
-      createJudgeDemoEnvelope(value.rootCommit),
-      createJudgeDemoEnvelope(value.rebrandCommit)
+      createJudgeDemoEnvelope(value.rootCommit, { historicalPresentation: true }),
+      createJudgeDemoEnvelope(value.rebrandCommit, { historicalPresentation: true })
     ]);
     const configuredEnvironment = {
       [JUDGE_DEMO_PRESENTATION_BINDING_ENV]: gzipSync(Buffer.from(canonicalJson(binding))).toString(

@@ -178,7 +178,10 @@ async function historicalLiveManifest(appCommit: string) {
   });
 }
 
-export async function createJudgeDemoEnvelope(appCommit: string): Promise<JudgeDemoEnvelope> {
+export async function createJudgeDemoEnvelope(
+  appCommit: string,
+  options: { readonly historicalPresentation?: boolean } = {}
+): Promise<JudgeDemoEnvelope> {
   if (!/^[a-f0-9]{40}$/u.test(appCommit)) throw new TypeError("judge_demo_commit_invalid");
   const identitySeed = await canonicalSha256({
     version: JUDGE_DEMO_ENVELOPE_VERSION,
@@ -193,9 +196,11 @@ export async function createJudgeDemoEnvelope(appCommit: string): Promise<JudgeD
     trialId: id("trial", await canonicalSha256({ identitySeed, kind: "trial" }))
   };
   const fixture = createCheckoutFixture();
-  const liveManifest = JUDGE_DEMO_HISTORICAL_PRESENTATION_COMMITS.has(appCommit)
-    ? await historicalLiveManifest(appCommit)
-    : await createCheckoutLiveManifest(fixture, appCommit);
+  const liveManifest =
+    options.historicalPresentation === true ||
+    JUDGE_DEMO_HISTORICAL_PRESENTATION_COMMITS.has(appCommit)
+      ? await historicalLiveManifest(appCommit)
+      : await createCheckoutLiveManifest(fixture, appCommit);
   const transport = await createProbeTransportBinding(identity);
   const [promptHash, settingsHash, toolDefinitionsHash, noCallSchemaHash, runnerHash] =
     await Promise.all([

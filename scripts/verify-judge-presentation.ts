@@ -7,6 +7,7 @@ import {
   JUDGE_DEMO_GIT_PACK_ENV,
   JUDGE_DEMO_PRESENTATION_BINDING_ENV,
   JUDGE_DEMO_PRESENTATION_BINDING_HASH_ENV,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_BINDING_VERSION,
   JUDGE_DEMO_PRESENTATION_MODE_ENV,
   JUDGE_DEMO_SHARED_GIT_PACK_ENV,
   decodeJudgeDemoPresentationBinding,
@@ -47,9 +48,10 @@ if (!laneEnabled && !presentationMode && !encoded && !bindingHash && !judgePackE
   const parsed = judgeDemoPresentationBindingSchema.parse(
     await decodeJudgeDemoPresentationBinding(encoded)
   );
+  const historicalPresentation = parsed.version !== JUDGE_DEMO_INVOCATION_INTEGRITY_BINDING_VERSION;
   const [rootEnvelope, activeEnvelope] = await Promise.all([
-    createJudgeDemoEnvelope(parsed.rootEvidenceCommit),
-    createJudgeDemoEnvelope(parsed.activeCommit)
+    createJudgeDemoEnvelope(parsed.rootEvidenceCommit, { historicalPresentation }),
+    createJudgeDemoEnvelope(parsed.activeCommit, { historicalPresentation })
   ]);
   const binding = await verifyJudgeDemoPresentationBinding({
     value: parsed,

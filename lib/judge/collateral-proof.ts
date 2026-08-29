@@ -82,6 +82,7 @@ export const JUDGE_DEMO_INVOCATION_INTEGRITY_PROTOCOL_PATHS = Object.freeze(
     "lib/judge/presentation-binding.server.ts",
     "lib/results/presentation-proof.ts",
     "scripts/verify-direct-observation-presentation.ts",
+    "scripts/verify-judge-presentation.ts",
     "tests/integration/judge-presentation.test.ts",
     "tests/integration/judge-service.test.ts",
     "tests/unit/judge-envelope.test.ts",
