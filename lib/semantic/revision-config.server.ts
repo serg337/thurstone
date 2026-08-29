@@ -26,7 +26,8 @@ import {
 } from "@/lib/results/presentation-proof";
 import {
   buildGate5RevisionFreeze,
-  type Gate5RevisionFreeze
+  type Gate5RevisionFreeze,
+  verifyGate5RevisionFreezeIntegrity
 } from "@/lib/semantic/revision-freeze.server";
 import { readGate5RevisionFreeze } from "@/lib/semantic/revision-store.server";
 
@@ -36,6 +37,26 @@ export const GATE5_PRESENTATION_COMMIT_ENV = "TOOLPROOF_GATE5_PRESENTATION_COMMI
 const SCORED_OPERATOR_PHASE_ENV = "TOOLPROOF_SCORED_OPERATOR_PHASE";
 
 type EnvironmentLike = Readonly<Record<string, string | undefined>>;
+
+export interface Gate5RevisionDependencies {
+  readonly createProbeRedis: typeof createProbeRedis;
+  readonly readRepairProviderReceipt: typeof readRepairProviderReceipt;
+  readonly readPermanentScoredRunById: typeof readPermanentScoredRunById;
+  readonly createGate3TargetContractBinding: typeof createGate3TargetContractBinding;
+  readonly configuredGate3FrozenProtocol: typeof configuredGate3FrozenProtocol;
+  readonly readGate3Freeze: typeof readGate3Freeze;
+  readonly readGate5RevisionFreeze: typeof readGate5RevisionFreeze;
+}
+
+const DEFAULT_DEPENDENCIES: Gate5RevisionDependencies = Object.freeze({
+  createProbeRedis,
+  readRepairProviderReceipt,
+  readPermanentScoredRunById,
+  createGate3TargetContractBinding,
+  configuredGate3FrozenProtocol,
+  readGate3Freeze,
+  readGate5RevisionFreeze
+});
 
 export interface Gate5RevisionConfiguration {
   readonly status: "awaiting-repair" | "awaiting-human" | "ready" | "invalid";
@@ -97,7 +118,8 @@ function decode(value: string): unknown {
 }
 
 export async function configuredGate5Revision(
-  environment: EnvironmentLike = process.env
+  environment: EnvironmentLike = process.env,
+  dependencies: Gate5RevisionDependencies = DEFAULT_DEPENDENCIES
 ): Promise<Gate5RevisionConfiguration> {
   try {
     const artifactSecret = environment.TOOLPROOF_SIGNING_SECRET?.trim();
@@ -105,7 +127,7 @@ export async function configuredGate5Revision(
     if (!artifactSecret || !/^[a-f0-9]{64}$/u.test(gate3Hash ?? "")) {
       return Object.freeze({ status: "awaiting-repair", revision: null, issue: null });
     }
-    const redis = createProbeRedis(environment as NodeJS.ProcessEnv);
+    const redis = dependencies.createProbeRedis(environment as NodeJS.ProcessEnv);
     const baselineRunId = environment[BASELINE_RUN_ID_ENV]?.trim();
     const baselineEvidenceDigest = environment[BASELINE_EVIDENCE_DIGEST_ENV]?.trim();
     if (
@@ -115,15 +137,15 @@ export async function configuredGate5Revision(
       return Object.freeze({ status: "awaiting-repair", revision: null, issue: null });
     }
     const [gate3, frozen, baseline, repair] = await Promise.all([
-      readGate3Freeze(redis, { frozenProtocolHash: gate3Hash!, artifactSecret }),
-      configuredGate3FrozenProtocol(environment),
-      readPermanentScoredRunById(redis, {
+      dependencies.readGate3Freeze(redis, { frozenProtocolHash: gate3Hash!, artifactSecret }),
+      dependencies.configuredGate3FrozenProtocol(environment),
+      dependencies.readPermanentScoredRunById(redis, {
         phase: "baseline",
         frozenProtocolHash: gate3Hash!,
         runId: baselineRunId!,
         artifactSecret
       }),
-      readRepairProviderReceipt(redis, {
+      dependencies.readRepairProviderReceipt(redis, {
         baselineEvidenceDigest: baselineEvidenceDigest!,
         artifactSecret
       })
@@ -136,24 +158,22 @@ export async function configuredGate5Revision(
       gate3.frozenProtocol.frozenProtocolHash !== gate3Hash ||
       !baseline ||
       baseline.status !== "acknowledged" ||
+      baseline.terminalStatus !== "terminal-complete" ||
       baseline.completedCount !== 24 ||
       baseline.evidenceDigest !== baselineEvidenceDigest ||
       baseline.identity.runId !== baselineRunId ||
+      baseline.identity.appCommit !== gate3.reviewPackage.targetContract.appCommit ||
       baseline.identity.frozenProtocolHash !== gate3Hash ||
-      baseline.identity.reviewPackageHash !== gate3.reviewPackage.packageHash
+      baseline.identity.reviewPackageHash !== gate3.reviewPackage.packageHash ||
+      baseline.identity.freezeCandidateHash !== gate3.reviewPackage.freezeHash
     ) {
       throw new Error("gate5_gate3_predecessor_missing");
     }
     if (!repair) return Object.freeze({ status: "awaiting-repair", revision: null, issue: null });
-    const approval = environment[GATE5_REVISION_APPROVAL_ENV]?.trim();
-    if (!approval) return Object.freeze({ status: "awaiting-human", revision: null, issue: null });
-    const sourceDiffProof = environment[GATE5_SOURCE_DIFF_ENV]?.trim();
-    if (!sourceDiffProof) throw new Error("gate5_source_diff_proof_missing");
-    const revisionApproval = decode(approval);
     const currentAppCommit = activeCommit(environment);
     const storedRevisionHash = environment[GATE5_REVISION_FREEZE_HASH_ENV]?.trim();
     const stored = storedRevisionHash
-      ? await readGate5RevisionFreeze(redis, {
+      ? await dependencies.readGate5RevisionFreeze(redis, {
           revisionFreezeHash: storedRevisionHash,
           artifactSecret
         })
@@ -162,7 +182,7 @@ export async function configuredGate5Revision(
     const terminalPresentation = Boolean(stored && stored.v2AppCommit !== currentAppCommit);
     const revisedRunId = environment[REVISED_RUN_ID_ENV]?.trim();
     const revisedEvidenceDigest = environment[REVISED_EVIDENCE_DIGEST_ENV]?.trim();
-    if (terminalPresentation) {
+    if (terminalPresentation && stored) {
       assertGate5TerminalPresentationBinding({
         currentAppCommit,
         allowedPresentationCommit: environment[GATE5_PRESENTATION_COMMIT_ENV]?.trim(),
@@ -185,7 +205,51 @@ export async function configuredGate5Revision(
       ) {
         throw new Error("gate6_presentation_proof_binding_invalid");
       }
+      await verifyGate5RevisionFreezeIntegrity(stored);
+      const rebuiltStored = await buildGate5RevisionFreeze({
+        gate3ReviewPackage: gate3.reviewPackage,
+        gate3FrozenProtocol: gate3.frozenProtocol,
+        baselineRunId: baselineRunId!,
+        baselineEvidenceDigest: baselineEvidenceDigest!,
+        repairBuilderReceipt: repair.repairBuilderReceipt,
+        revisionApproval: stored.revisionApproval,
+        v2TargetContract: stored.v2TargetContract,
+        sourceDiffProof: stored.sourceDiffProof
+      });
+      assertStoredGate5RevisionLineage({
+        stored,
+        rebuilt: rebuiltStored,
+        activeCommit: stored.v2AppCommit,
+        gate3FrozenProtocolHash: gate3Hash!,
+        baselineRunId: baselineRunId!,
+        baselineEvidenceDigest: baselineEvidenceDigest!
+      });
+      const revised = await dependencies.readPermanentScoredRunById(redis, {
+        phase: "revised",
+        frozenProtocolHash: stored.revisionFreezeHash,
+        runId: revisedRunId!,
+        artifactSecret
+      });
+      if (
+        !revised ||
+        revised.status !== "acknowledged" ||
+        revised.terminalStatus !== "terminal-complete" ||
+        revised.completedCount !== 24 ||
+        revised.evidenceDigest !== revisedEvidenceDigest ||
+        revised.identity.appCommit !== stored.v2AppCommit ||
+        revised.identity.frozenProtocolHash !== stored.revisionFreezeHash ||
+        revised.identity.reviewPackageHash !== stored.gate3ReviewPackageHash ||
+        revised.identity.freezeCandidateHash !== gate3.reviewPackage.freezeHash
+      ) {
+        throw new Error("gate5_terminal_presentation_evidence_mismatch");
+      }
+      return Object.freeze({ status: "ready", revision: stored, issue: null });
     }
+
+    const approval = environment[GATE5_REVISION_APPROVAL_ENV]?.trim();
+    if (!approval) return Object.freeze({ status: "awaiting-human", revision: null, issue: null });
+    const sourceDiffProof = environment[GATE5_SOURCE_DIFF_ENV]?.trim();
+    if (!sourceDiffProof) throw new Error("gate5_source_diff_proof_missing");
     const measuredV2Commit = stored?.v2AppCommit ?? currentAppCommit;
     const rebuilt = await buildGate5RevisionFreeze({
       gate3ReviewPackage: gate3.reviewPackage,
@@ -193,11 +257,11 @@ export async function configuredGate5Revision(
       baselineRunId: baselineRunId!,
       baselineEvidenceDigest: baselineEvidenceDigest!,
       repairBuilderReceipt: repair.repairBuilderReceipt,
-      revisionApproval,
-      v2TargetContract: await createGate3TargetContractBinding(measuredV2Commit),
+      revisionApproval: decode(approval),
+      v2TargetContract: await dependencies.createGate3TargetContractBinding(measuredV2Commit),
       sourceDiffProof: await decodeGate5SourceDiffProofBase64Url(sourceDiffProof)
     });
-    if (storedRevisionHash && stored) {
+    if (stored) {
       assertStoredGate5RevisionLineage({
         stored,
         rebuilt,
@@ -206,27 +270,6 @@ export async function configuredGate5Revision(
         baselineRunId: baselineRunId!,
         baselineEvidenceDigest: baselineEvidenceDigest!
       });
-      if (terminalPresentation) {
-        const revised = await readPermanentScoredRunById(redis, {
-          phase: "revised",
-          frozenProtocolHash: stored.revisionFreezeHash,
-          runId: revisedRunId!,
-          artifactSecret
-        });
-        if (
-          !revised ||
-          revised.status !== "acknowledged" ||
-          revised.terminalStatus !== "terminal-complete" ||
-          revised.completedCount !== 24 ||
-          revised.evidenceDigest !== revisedEvidenceDigest ||
-          revised.identity.appCommit !== stored.v2AppCommit ||
-          revised.identity.frozenProtocolHash !== stored.revisionFreezeHash ||
-          revised.identity.reviewPackageHash !== stored.gate3ReviewPackageHash ||
-          revised.identity.freezeCandidateHash !== gate3.reviewPackage.freezeHash
-        ) {
-          throw new Error("gate5_terminal_presentation_evidence_mismatch");
-        }
-      }
       return Object.freeze({ status: "ready", revision: stored, issue: null });
     }
     return Object.freeze({ status: "ready", revision: rebuilt, issue: null });

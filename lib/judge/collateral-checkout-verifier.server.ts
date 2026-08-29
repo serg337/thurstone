@@ -10,7 +10,15 @@ import {
   JUDGE_DEMO_CI_TIMEOUT_MS,
   JUDGE_DEMO_CI_TIMEOUT_PATH,
   JUDGE_DEMO_COLLATERAL_FIELD_PREFIXES,
+  JUDGE_DEMO_COLLATERAL_PATHS,
   JUDGE_DEMO_CRITICAL_PATHS,
+  JUDGE_DEMO_REBRAND_BRANDING_PATHS,
+  JUDGE_DEMO_REBRAND_PREDECESSOR_BINDING_HASH,
+  JUDGE_DEMO_REBRAND_PREDECESSOR_COMMIT,
+  JUDGE_DEMO_REBRAND_PREDECESSOR_TRANSITION_PROOF_HASH,
+  JUDGE_DEMO_REBRAND_PREDECESSOR_TREE,
+  JUDGE_DEMO_REBRAND_PRESERVED_ARTIFACTS,
+  JUDGE_DEMO_REBRAND_PROTOCOL_PATHS,
   JUDGE_DEMO_RECOVERY_CI_FINALIZATION_COMMIT,
   JUDGE_DEMO_RECOVERY_CI_FINALIZATION_PATHS,
   JUDGE_DEMO_RECOVERY_CI_FINALIZATION_TREE,
@@ -21,9 +29,11 @@ import {
   JUDGE_DEMO_TRUTH_STATUS_FINALIZATION_PATHS,
   type JudgeDemoCollateralField,
   type JudgeDemoCollateralPath,
-  type JudgeDemoPresentationTransition
+  type JudgeDemoPresentationTransition,
+  type JudgeDemoRebrandTransition
 } from "@/lib/judge/collateral-proof";
 import type { JudgeDemoPresentationBinding } from "@/lib/judge/presentation-binding.server";
+import { PROBE_PRODUCTION_ORIGIN } from "@/lib/probe/policy";
 import { dependencyProjectionHash } from "@/lib/results/presentation-proof";
 
 const MAX_GIT_BYTES = 8_388_608;
@@ -139,29 +149,25 @@ function firstParentCommitChain(cwd: string, ancestor: string, descendant: strin
   throw new Error("judge_demo_presentation_ancestry_depth_exceeded");
 }
 
-function collateralFields(source: string | null): {
-  readonly remainder: string;
-  readonly values: Readonly<Partial<Record<JudgeDemoCollateralField, string>>>;
-} {
-  const values: Partial<Record<JudgeDemoCollateralField, string>> = {};
-  const remainder: string[] = [];
-  for (const line of source?.split(/\r?\n/u) ?? []) {
-    const match = Object.entries(JUDGE_DEMO_COLLATERAL_FIELD_PREFIXES).find(([, prefix]) =>
-      line.startsWith(prefix)
-    ) as [JudgeDemoCollateralField, string] | undefined;
-    if (!match) {
-      remainder.push(line);
-      continue;
-    }
-    const [field, prefix] = match;
-    if (values[field] !== undefined) {
-      throw new Error("judge_demo_presentation_collateral_field_duplicate");
-    }
-    const value = line.slice(prefix.length).trim();
-    if (!value) throw new Error("judge_demo_presentation_collateral_field_empty");
-    values[field] = value;
+function replaceCollateralFieldLineExactlyOnce(input: {
+  readonly source: string;
+  readonly field: JudgeDemoCollateralField;
+  readonly predecessorValue: string | null;
+  readonly successorValue: string;
+}): string {
+  if (input.predecessorValue === null) {
+    throw new Error("judge_demo_presentation_collateral_predecessor_field_missing");
   }
-  return Object.freeze({ remainder: remainder.join("\n"), values: Object.freeze(values) });
+  const prefix = JUDGE_DEMO_COLLATERAL_FIELD_PREFIXES[input.field];
+  const predecessorLine = `${prefix}${input.predecessorValue}`;
+  const successorLine = `${prefix}${input.successorValue}`;
+  const lines = input.source.split("\n");
+  const indexes = lines.flatMap((line, index) => (line === predecessorLine ? [index] : []));
+  if (indexes.length !== 1) {
+    throw new Error("judge_demo_presentation_collateral_field_not_exactly_once");
+  }
+  lines[indexes[0]!] = successorLine;
+  return lines.join("\n");
 }
 
 function gitTreeChanges(
@@ -225,6 +231,7 @@ async function verifyRecoveryFinalization(input: {
   >;
   readonly firstParentChain: readonly string[];
   readonly terminalActiveCommit: string;
+  readonly predecessorBindingAnchored: boolean;
 }): Promise<void> {
   const validation = input.transition.recoveryContract.ciTimeoutValidation ?? null;
   if (validation === null) {
@@ -301,44 +308,48 @@ async function verifyRecoveryFinalization(input: {
     ) {
       throw new Error("judge_demo_presentation_truth_status_tree_invalid");
     }
-    const expectedReadme = treeEntry(input.cwd, input.terminalActiveCommit, "README.md");
-    const checkedOutReadme = await checkoutEntry(input.cwd, "README.md");
-    if (
-      expectedReadme === null ||
-      checkedOutReadme === null ||
-      expectedReadme.mode !== checkedOutReadme.mode ||
-      expectedReadme.blobOid !== blobOid(checkedOutReadme.bytes)
-    ) {
-      throw new Error("judge_demo_presentation_truth_status_readme_checkout_invalid");
-    }
-    const readme = new TextDecoder("utf-8", { fatal: true }).decode(checkedOutReadme.bytes);
-    if (
-      !readme.includes(truthStatus.expectedReadmeSentence) ||
-      readme.includes(truthStatus.forbiddenReadmePhrase)
-    ) {
-      throw new Error("judge_demo_presentation_truth_status_readme_invalid");
+    if (!input.predecessorBindingAnchored) {
+      const expectedReadme = treeEntry(input.cwd, input.terminalActiveCommit, "README.md");
+      const checkedOutReadme = await checkoutEntry(input.cwd, "README.md");
+      if (
+        expectedReadme === null ||
+        checkedOutReadme === null ||
+        expectedReadme.mode !== checkedOutReadme.mode ||
+        expectedReadme.blobOid !== blobOid(checkedOutReadme.bytes)
+      ) {
+        throw new Error("judge_demo_presentation_truth_status_readme_checkout_invalid");
+      }
+      const readme = new TextDecoder("utf-8", { fatal: true }).decode(checkedOutReadme.bytes);
+      if (
+        !readme.includes(truthStatus.expectedReadmeSentence) ||
+        readme.includes(truthStatus.forbiddenReadmePhrase)
+      ) {
+        throw new Error("judge_demo_presentation_truth_status_readme_invalid");
+      }
     }
   }
 
-  const expectedTest = treeEntry(input.cwd, validation.activeCommit, JUDGE_DEMO_CI_TIMEOUT_PATH);
-  const checkedOutTest = await checkoutEntry(input.cwd, JUDGE_DEMO_CI_TIMEOUT_PATH);
-  if (
-    expectedTest === null ||
-    checkedOutTest === null ||
-    expectedTest.mode !== checkedOutTest.mode ||
-    expectedTest.blobOid !== blobOid(checkedOutTest.bytes)
-  ) {
-    throw new Error("judge_demo_presentation_recovery_finalization_test_missing");
-  }
-  const testSource = new TextDecoder("utf-8", { fatal: true }).decode(checkedOutTest.bytes);
-  const timeoutCount = testSource.match(/\}, 20_000\);/gu)?.length ?? 0;
-  if (
-    validation.timeoutPath !== JUDGE_DEMO_CI_TIMEOUT_PATH ||
-    validation.timeoutMs !== JUDGE_DEMO_CI_TIMEOUT_MS ||
-    validation.timeoutCount !== JUDGE_DEMO_CI_TIMEOUT_COUNT ||
-    timeoutCount !== JUDGE_DEMO_CI_TIMEOUT_COUNT
-  ) {
-    throw new Error("judge_demo_presentation_recovery_finalization_timeout_invalid");
+  if (!input.predecessorBindingAnchored) {
+    const expectedTest = treeEntry(input.cwd, validation.activeCommit, JUDGE_DEMO_CI_TIMEOUT_PATH);
+    const checkedOutTest = await checkoutEntry(input.cwd, JUDGE_DEMO_CI_TIMEOUT_PATH);
+    if (
+      expectedTest === null ||
+      checkedOutTest === null ||
+      expectedTest.mode !== checkedOutTest.mode ||
+      expectedTest.blobOid !== blobOid(checkedOutTest.bytes)
+    ) {
+      throw new Error("judge_demo_presentation_recovery_finalization_test_missing");
+    }
+    const testSource = new TextDecoder("utf-8", { fatal: true }).decode(checkedOutTest.bytes);
+    const timeoutCount = testSource.match(/\}, 20_000\);/gu)?.length ?? 0;
+    if (
+      validation.timeoutPath !== JUDGE_DEMO_CI_TIMEOUT_PATH ||
+      validation.timeoutMs !== JUDGE_DEMO_CI_TIMEOUT_MS ||
+      validation.timeoutCount !== JUDGE_DEMO_CI_TIMEOUT_COUNT ||
+      timeoutCount !== JUDGE_DEMO_CI_TIMEOUT_COUNT
+    ) {
+      throw new Error("judge_demo_presentation_recovery_finalization_timeout_invalid");
+    }
   }
 }
 
@@ -350,44 +361,159 @@ async function verifyCollateralChanges(
   if (transition.successorCommit !== activeCommit) {
     throw new Error("judge_demo_presentation_collateral_not_terminal");
   }
-  const actual: (typeof transition.collateralChanges)[number][] = [];
   const changedPaths = [...new Set(transition.collateralChanges.map(({ path }) => path))].sort();
   for (const path of changedPaths) {
-    const predecessorFields = collateralFields(gitText(cwd, transition.predecessorCommit, path));
+    const predecessorSource = gitText(cwd, transition.predecessorCommit, path);
+    if (predecessorSource === null) {
+      throw new Error("judge_demo_presentation_collateral_predecessor_missing");
+    }
     let successorSource: string;
     try {
       successorSource = await readFile(`${cwd}/${path}`, "utf8");
     } catch {
       throw new Error("judge_demo_presentation_collateral_successor_missing");
     }
-    const successorFields = collateralFields(successorSource);
-    if (predecessorFields.remainder !== successorFields.remainder) {
-      throw new Error("judge_demo_presentation_non_link_change");
-    }
-    for (const field of Object.keys(
-      JUDGE_DEMO_COLLATERAL_FIELD_PREFIXES
-    ).sort() as JudgeDemoCollateralField[]) {
-      const predecessorValue = predecessorFields.values[field] ?? null;
-      const successorValue = successorFields.values[field] ?? null;
-      if (predecessorValue === successorValue) continue;
-      if (successorValue === null) {
-        throw new Error("judge_demo_presentation_collateral_successor_missing");
-      }
-      actual.push({
-        path: path as JudgeDemoCollateralPath,
-        field,
-        predecessorValue,
-        successorValue
+    let expectedSuccessor = predecessorSource;
+    for (const change of transition.collateralChanges.filter(
+      ({ path: candidate }) => candidate === path
+    )) {
+      expectedSuccessor = replaceCollateralFieldLineExactlyOnce({
+        source: expectedSuccessor,
+        field: change.field,
+        predecessorValue: change.predecessorValue,
+        successorValue: change.successorValue
       });
     }
+    if (successorSource !== expectedSuccessor) {
+      throw new Error("judge_demo_presentation_non_link_change");
+    }
   }
-  actual.sort((left, right) =>
-    left.path === right.path
-      ? left.field.localeCompare(right.field)
-      : left.path.localeCompare(right.path)
+}
+
+function assertExpectedTreeMutation(
+  change: GitTreeChange,
+  input: { readonly added: boolean }
+): void {
+  const expected = input.added
+    ? change.status === "A" &&
+      change.predecessorMode === null &&
+      change.predecessorBlobOid === null &&
+      change.successorMode === "100644" &&
+      change.successorBlobOid !== null
+    : change.status === "M" &&
+      change.predecessorMode === "100644" &&
+      change.successorMode === "100644" &&
+      change.predecessorBlobOid !== null &&
+      change.successorBlobOid !== null;
+  if (!expected) throw new Error(`judge_demo_rebrand_tree_mode_invalid:${change.path}`);
+}
+
+async function verifyPresentationRebrand(input: {
+  readonly cwd: string;
+  readonly transition: JudgeDemoRebrandTransition;
+  readonly firstParentChain: readonly string[];
+  readonly terminalActiveCommit: string;
+}): Promise<void> {
+  const protocolCommit = input.transition.protocolExtension.commit;
+  const expectedChain = [
+    JUDGE_DEMO_REBRAND_PREDECESSOR_COMMIT,
+    protocolCommit,
+    input.transition.successorCommit
+  ];
+  if (
+    canonicalJson(input.firstParentChain) !== canonicalJson(expectedChain) ||
+    commitTree(input.cwd, JUDGE_DEMO_REBRAND_PREDECESSOR_COMMIT) !==
+      JUDGE_DEMO_REBRAND_PREDECESSOR_TREE ||
+    commitTree(input.cwd, protocolCommit) !== input.transition.protocolExtension.tree ||
+    commitTree(input.cwd, input.transition.successorCommit) !== input.transition.branding.tree
+  ) {
+    throw new Error("judge_demo_rebrand_chain_invalid");
+  }
+
+  const protocolChanges = gitTreeChanges(
+    input.cwd,
+    JUDGE_DEMO_REBRAND_PREDECESSOR_COMMIT,
+    protocolCommit
   );
-  if (canonicalJson(actual) !== canonicalJson(transition.collateralChanges)) {
-    throw new Error("judge_demo_presentation_collateral_change_mismatch");
+  const brandingChanges = gitTreeChanges(
+    input.cwd,
+    protocolCommit,
+    input.transition.successorCommit
+  );
+  if (
+    canonicalJson(protocolChanges.map(({ path }) => path)) !==
+      canonicalJson(JUDGE_DEMO_REBRAND_PROTOCOL_PATHS) ||
+    canonicalJson(protocolChanges) !==
+      canonicalJson(input.transition.protocolExtension.treeChanges) ||
+    (await canonicalSha256(protocolChanges)) !==
+      input.transition.protocolExtension.gitTreeProjectionHash ||
+    canonicalJson(brandingChanges.map(({ path }) => path)) !==
+      canonicalJson(JUDGE_DEMO_REBRAND_BRANDING_PATHS) ||
+    canonicalJson(brandingChanges) !== canonicalJson(input.transition.branding.treeChanges) ||
+    (await canonicalSha256(brandingChanges)) !== input.transition.branding.gitTreeProjectionHash
+  ) {
+    throw new Error("judge_demo_rebrand_step_projection_invalid");
+  }
+  for (const change of protocolChanges) assertExpectedTreeMutation(change, { added: false });
+  for (const change of brandingChanges) {
+    assertExpectedTreeMutation(change, {
+      added: ["lib/brand.ts", "public/thurstone-results.jpg"].includes(change.path)
+    });
+  }
+
+  const brandingFiles = await Promise.all(
+    input.transition.branding.files.map(async ({ path }) => {
+      const useReferencedBlob =
+        judgeDemoPathExcludedFromDeployment(path) ||
+        (input.terminalActiveCommit !== input.transition.successorCommit &&
+          JUDGE_DEMO_COLLATERAL_PATHS.includes(path as JudgeDemoCollateralPath));
+      const bytes = useReferencedBlob
+        ? gitBlobBytes(input.cwd, input.transition.successorCommit, path)
+        : (await checkoutEntry(input.cwd, path))?.bytes;
+      if (!bytes) throw new Error(`judge_demo_rebrand_branding_file_missing:${path}`);
+      return { path, sha256: sha256(bytes) };
+    })
+  );
+  if (
+    canonicalJson(brandingFiles) !== canonicalJson(input.transition.branding.files) ||
+    (await canonicalSha256(brandingFiles)) !== input.transition.branding.filesProjectionHash
+  ) {
+    throw new Error("judge_demo_rebrand_branding_projection_invalid");
+  }
+
+  const brandSource = await readFile(`${input.cwd}/lib/brand.ts`, "utf8");
+  if (
+    !brandSource.includes('PRODUCT_NAME = "Thurstone"') ||
+    !brandSource.includes(
+      'PRODUCT_BYLINE = "Thurstone by Invarra — created by Sergio Valencia."'
+    ) ||
+    !brandSource.includes('LEGACY_PROTOCOL_NAMESPACE = "toolproof"')
+  ) {
+    throw new Error("judge_demo_rebrand_brand_contract_invalid");
+  }
+  const packageJson = JSON.parse(await readFile(`${input.cwd}/package.json`, "utf8")) as {
+    readonly name?: unknown;
+  };
+  const testingDocumentation = await readFile(`${input.cwd}/docs/testing.md`, "utf8");
+  if (
+    packageJson.name !== input.transition.branding.packageName ||
+    PROBE_PRODUCTION_ORIGIN !== input.transition.branding.productionOrigin ||
+    !testingDocumentation.includes(input.transition.branding.repositorySlug)
+  ) {
+    throw new Error("judge_demo_rebrand_compatibility_identity_invalid");
+  }
+
+  const preservedArtifacts = await Promise.all(
+    JUDGE_DEMO_REBRAND_PRESERVED_ARTIFACTS.map(async ({ path }) => ({
+      path,
+      sha256: sha256(await readFile(`${input.cwd}/${path}`))
+    }))
+  );
+  if (
+    canonicalJson(preservedArtifacts) !== canonicalJson(input.transition.preservedArtifacts) ||
+    (await canonicalSha256(preservedArtifacts)) !== input.transition.preservedArtifactsHash
+  ) {
+    throw new Error("judge_demo_rebrand_preserved_artifact_mismatch");
   }
 }
 
@@ -395,6 +521,7 @@ async function verifyTransitionGit(input: {
   readonly transition: JudgeDemoPresentationTransition;
   readonly activeCommit: string;
   readonly cwd: string;
+  readonly predecessorBindingAnchored?: boolean;
 }): Promise<{
   readonly treeChanges: readonly GitTreeChange[];
   readonly criticalEntries: readonly CriticalTreeEntry[];
@@ -421,6 +548,14 @@ async function verifyTransitionGit(input: {
       cwd: input.cwd,
       transition: input.transition,
       firstParentChain: actualFirstParentChain,
+      terminalActiveCommit: input.activeCommit,
+      predecessorBindingAnchored: input.predecessorBindingAnchored ?? false
+    });
+  } else if (input.transition.kind === "presentation-rebrand") {
+    await verifyPresentationRebrand({
+      cwd: input.cwd,
+      transition: input.transition,
+      firstParentChain: actualFirstParentChain,
       terminalActiveCommit: input.activeCommit
     });
   } else if (actualFirstParentChain.length !== 2) {
@@ -430,6 +565,19 @@ async function verifyTransitionGit(input: {
     throw new Error("judge_demo_presentation_first_parent_chain_mismatch");
   }
   const actualTreeChanges = gitTreeChanges(input.cwd, predecessor, successor);
+  if (
+    input.transition.kind === "collateral-links" &&
+    actualTreeChanges.some(
+      (change) =>
+        change.status !== "M" ||
+        change.predecessorMode !== "100644" ||
+        change.successorMode !== "100644" ||
+        change.predecessorBlobOid === null ||
+        change.successorBlobOid === null
+    )
+  ) {
+    throw new Error("judge_demo_presentation_collateral_tree_mode_invalid");
+  }
   if ((await canonicalSha256(actualTreeChanges)) !== input.transition.gitTreeProjectionHash) {
     throw new Error("judge_demo_presentation_git_tree_projection_mismatch");
   }
@@ -437,7 +585,9 @@ async function verifyTransitionGit(input: {
   const expectedChangedPaths =
     input.transition.kind === "sealed-reader-compatibility-recovery"
       ? JUDGE_DEMO_RECOVERY_PATHS
-      : [...new Set(input.transition.collateralChanges.map(({ path }) => path))].sort();
+      : input.transition.kind === "presentation-rebrand"
+        ? [...JUDGE_DEMO_REBRAND_PROTOCOL_PATHS, ...JUDGE_DEMO_REBRAND_BRANDING_PATHS].sort()
+        : [...new Set(input.transition.collateralChanges.map(({ path }) => path))].sort();
   if (canonicalJson(actualChangedPaths) !== canonicalJson(expectedChangedPaths)) {
     throw new Error("judge_demo_presentation_actual_diff_mismatch");
   }
@@ -460,6 +610,16 @@ async function verifyTransitionGit(input: {
   if (
     (input.transition.kind === "sealed-reader-compatibility-recovery" &&
       changedCriticalPaths.some((path) => !JUDGE_DEMO_RECOVERY_PATHS.includes(path))) ||
+    (input.transition.kind === "presentation-rebrand" &&
+      changedCriticalPaths.some(
+        (path) =>
+          !JUDGE_DEMO_REBRAND_PROTOCOL_PATHS.includes(
+            path as (typeof JUDGE_DEMO_REBRAND_PROTOCOL_PATHS)[number]
+          ) &&
+          !JUDGE_DEMO_REBRAND_BRANDING_PATHS.includes(
+            path as (typeof JUDGE_DEMO_REBRAND_BRANDING_PATHS)[number]
+          )
+      )) ||
     (input.transition.kind === "collateral-links" && changedCriticalPaths.length !== 0)
   ) {
     throw new Error("judge_demo_presentation_critical_invariant_mismatch");
@@ -532,7 +692,13 @@ async function assertCheckoutMatchesActive(input: {
     }
   }
 
-  for (const verified of input.verifiedTransitions) {
+  const activeMaterialTransition = [...input.verifiedTransitions]
+    .reverse()
+    .find(({ transition }) => transition.kind !== "collateral-links");
+  if (!activeMaterialTransition) {
+    throw new Error("judge_demo_presentation_active_material_transition_missing");
+  }
+  for (const verified of [activeMaterialTransition]) {
     const criticalProjection = verified.criticalEntries.map((file) => {
       const activeEntry = treeEntry(input.cwd, input.binding.activeCommit, file.path);
       const activeSha256 = activeCriticalSha256.get(file.path);
@@ -579,11 +745,27 @@ export async function verifyJudgeDemoPresentationCheckout(input: {
   readonly dependencyProjectionHash: string;
 }> {
   const verifiedTransitions: VerifiedTransitionGit[] = [];
+  const rebrandTransition = input.binding.transitions.find(
+    ({ kind }) => kind === "presentation-rebrand"
+  );
+  const rebrandPredecessorBindingValid =
+    rebrandTransition?.kind === "presentation-rebrand" &&
+    rebrandTransition.predecessorBinding.bindingHash ===
+      JUDGE_DEMO_REBRAND_PREDECESSOR_BINDING_HASH &&
+    input.binding.transitions[0]?.proofHash ===
+      JUDGE_DEMO_REBRAND_PREDECESSOR_TRANSITION_PROOF_HASH;
+  if (rebrandTransition && !rebrandPredecessorBindingValid) {
+    throw new Error("judge_demo_rebrand_predecessor_binding_invalid");
+  }
+  const recoveryTerminalCheckoutDeferred = input.binding.transitions.length > 1;
   for (const transition of input.binding.transitions) {
     const result = await verifyTransitionGit({
       transition,
       activeCommit: input.binding.activeCommit,
-      cwd: input.cwd
+      cwd: input.cwd,
+      predecessorBindingAnchored:
+        recoveryTerminalCheckoutDeferred &&
+        transition.kind === "sealed-reader-compatibility-recovery"
     });
     verifiedTransitions.push({ transition, ...result });
   }

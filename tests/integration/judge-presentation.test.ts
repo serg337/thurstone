@@ -13,7 +13,17 @@ import {
   JUDGE_DEMO_CI_TIMEOUT_PATH,
   JUDGE_DEMO_CI_TIMEOUT_VALIDATION_VERSION,
   JUDGE_DEMO_CRITICAL_PATHS,
+  JUDGE_DEMO_PRESENTATION_REBRAND_TRANSITION_VERSION,
   JUDGE_DEMO_PRESENTATION_TRANSITION_VERSION,
+  JUDGE_DEMO_REBRAND_BRANDING_PATHS,
+  JUDGE_DEMO_REBRAND_PREDECESSOR_BINDING_ARTIFACT_SHA256,
+  JUDGE_DEMO_REBRAND_PREDECESSOR_BINDING_HASH,
+  JUDGE_DEMO_REBRAND_PREDECESSOR_COMMIT,
+  JUDGE_DEMO_REBRAND_PREDECESSOR_ENVELOPE_HASH,
+  JUDGE_DEMO_REBRAND_PREDECESSOR_TRANSITION_PROOF_HASH,
+  JUDGE_DEMO_REBRAND_PREDECESSOR_TREE,
+  JUDGE_DEMO_REBRAND_PRESERVED_ARTIFACTS,
+  JUDGE_DEMO_REBRAND_PROTOCOL_PATHS,
   JUDGE_DEMO_RECOVERY_CI_FINALIZATION_COMMIT,
   JUDGE_DEMO_RECOVERY_CI_FINALIZATION_TREE,
   JUDGE_DEMO_RECOVERY_FINALIZATION_PATHS,
@@ -28,6 +38,7 @@ import {
   verifyJudgeDemoPresentationTransition,
   type JudgeDemoCollateralTransition,
   type JudgeDemoPresentationTransition,
+  type JudgeDemoRebrandTransition,
   type JudgeDemoRecoveryTransition
 } from "@/lib/judge/collateral-proof";
 import { createJudgeDemoEnvelope } from "@/lib/judge/envelope";
@@ -35,19 +46,26 @@ import {
   JUDGE_DEMO_GIT_PACK_ENV,
   JUDGE_DEMO_PRESENTATION_BINDING_ENV,
   JUDGE_DEMO_PRESENTATION_BINDING_HASH_ENV,
+  JUDGE_DEMO_PRESENTATION_REBRAND_BINDING_VERSION,
   JUDGE_DEMO_PRESENTATION_BINDING_VERSION,
   JUDGE_DEMO_SHARED_GIT_PACK_ENV,
+  configuredJudgeDemoPresentationBinding,
   publicJudgeDemoPresentationBinding,
   verifyJudgeDemoPresentationBinding,
   type JudgeDemoPresentationBinding
 } from "@/lib/judge/presentation-binding.server";
-import { dependencyProjectionHash } from "@/lib/results/presentation-proof";
+import {
+  GATE6_PRESENTATION_PROOF_ENV,
+  GATE6_PRESENTATION_PROOF_VERSION,
+  dependencyProjectionHash
+} from "@/lib/results/presentation-proof";
 import { afterEach, describe, expect, it } from "vitest";
 
 const temporaryRoots: string[] = [];
-const rootReceiptDigest = "b".repeat(64);
-const rootArtifactDigest = "c".repeat(64);
-const rootStoredProjectionDigest = "d".repeat(64);
+const rootReceiptDigest = "3c90e3ed158b4d1b7cdab115c5afa66b83a1c4e0453096a4129c6b790a1840f2";
+const rootArtifactDigest = "6fedd98f28eaa9137da458b5a59b396fa1685c8d6f8bccafc2cfde457f993bdb";
+const rootStoredProjectionDigest =
+  "22c667eec119ddd46d31f764eef5e0e2fa4b4fc61bdddfdd9696be4ba1ac9655";
 const rootCapturedAt = "2026-08-29T14:24:37.377Z";
 const rootEvidenceCommit = "e2cf8d47375abfeeb4f32bd6f5973918acf4c091";
 
@@ -129,7 +147,10 @@ async function transitionCommon(input: {
   rootCommit: string;
   predecessorCommit: string;
   successorCommit: string;
-  ordinal: 0 | 1;
+  ordinal: 0 | 1 | 2;
+  version?:
+    | typeof JUDGE_DEMO_PRESENTATION_TRANSITION_VERSION
+    | typeof JUDGE_DEMO_PRESENTATION_REBRAND_TRANSITION_VERSION;
 }) {
   const [rootEnvelope, predecessorEnvelope, successorEnvelope] = await Promise.all([
     createJudgeDemoEnvelope(input.rootCommit),
@@ -160,7 +181,7 @@ async function transitionCommon(input: {
       .filter(Boolean)
   ];
   return {
-    version: JUDGE_DEMO_PRESENTATION_TRANSITION_VERSION,
+    version: input.version ?? JUDGE_DEMO_PRESENTATION_TRANSITION_VERSION,
     ordinal: input.ordinal,
     predecessorCommit: input.predecessorCommit,
     successorCommit: input.successorCommit,
@@ -301,13 +322,18 @@ async function collateralTransition(input: {
   recoveryCommit: string;
   releaseCommit: string;
   collateralChanges?: JudgeDemoCollateralTransition["collateralChanges"];
+  ordinal?: 1 | 2;
+  version?:
+    | typeof JUDGE_DEMO_PRESENTATION_TRANSITION_VERSION
+    | typeof JUDGE_DEMO_PRESENTATION_REBRAND_TRANSITION_VERSION;
 }): Promise<JudgeDemoCollateralTransition> {
   const common = await transitionCommon({
     cwd: input.cwd,
     rootCommit: input.rootCommit,
     predecessorCommit: input.recoveryCommit,
     successorCommit: input.releaseCommit,
-    ordinal: 1
+    ordinal: input.ordinal ?? 1,
+    ...(input.version ? { version: input.version } : {})
   });
   const collateralChanges =
     input.collateralChanges ??
@@ -337,17 +363,120 @@ async function collateralTransition(input: {
   })) as JudgeDemoCollateralTransition;
 }
 
+async function rebrandTransition(input: {
+  cwd: string;
+  rootCommit: string;
+  protocolCommit: string;
+  rebrandCommit: string;
+}) {
+  const common = await transitionCommon({
+    cwd: input.cwd,
+    rootCommit: input.rootCommit,
+    predecessorCommit: JUDGE_DEMO_REBRAND_PREDECESSOR_COMMIT,
+    successorCommit: input.rebrandCommit,
+    ordinal: 1,
+    version: JUDGE_DEMO_PRESENTATION_REBRAND_TRANSITION_VERSION
+  });
+  const protocolChanges = rawTreeChanges(
+    input.cwd,
+    JUDGE_DEMO_REBRAND_PREDECESSOR_COMMIT,
+    input.protocolCommit
+  );
+  const brandingChanges = rawTreeChanges(input.cwd, input.protocolCommit, input.rebrandCommit);
+  const brandingFiles = JUDGE_DEMO_REBRAND_BRANDING_PATHS.map((path) => {
+    const bytes = gitFile(input.cwd, input.rebrandCommit, path);
+    if (!bytes) throw new Error(`missing_branding_file:${path}`);
+    return { path, sha256: sha256(bytes) };
+  });
+  const preservedArtifacts = JUDGE_DEMO_REBRAND_PRESERVED_ARTIFACTS.map((artifact) => {
+    const bytes = gitFile(input.cwd, input.rebrandCommit, artifact.path);
+    if (!bytes || sha256(bytes) !== artifact.sha256) {
+      throw new Error(`preserved_artifact_drift:${artifact.path}`);
+    }
+    return artifact;
+  });
+  const gate6CriticalFiles = Array.from({ length: 20 }, (_, index) => ({
+    path: `lib/domain/rebrand-critical-${String(index).padStart(2, "0")}.ts`,
+    sha256: index.toString(16).padStart(64, "0")
+  }));
+  const gate6Payload = {
+    version: GATE6_PRESENTATION_PROOF_VERSION,
+    measuredV2Commit: "a".repeat(40),
+    presentationCommit: input.rebrandCommit,
+    changedPaths: ["app/page.tsx"],
+    criticalFiles: gate6CriticalFiles,
+    criticalProjectionHash: await canonicalSha256(gate6CriticalFiles),
+    dependencyProjectionHash: common.dependencyProjectionHash,
+    gitProofPackSha256: "a".repeat(64),
+    baselineRawSha256: "edf0f0e3a2a3438be58a17e27594e57e6230f713c68501a3d26900cb731d7dfb",
+    revisedRawSha256: "26c436e38fecd8a128a0204af510556b3edf555ceeb421254d0248c0b23302fa"
+  };
+  const gate6Proof = {
+    ...gate6Payload,
+    proofHash: await canonicalSha256(gate6Payload)
+  };
+  const payload = {
+    ...common,
+    kind: "presentation-rebrand" as const,
+    predecessorBinding: {
+      activeCommit: JUDGE_DEMO_REBRAND_PREDECESSOR_COMMIT,
+      activeTree: JUDGE_DEMO_REBRAND_PREDECESSOR_TREE,
+      activeEnvelopeHash: JUDGE_DEMO_REBRAND_PREDECESSOR_ENVELOPE_HASH,
+      bindingHash: JUDGE_DEMO_REBRAND_PREDECESSOR_BINDING_HASH,
+      reviewedArtifactSha256: JUDGE_DEMO_REBRAND_PREDECESSOR_BINDING_ARTIFACT_SHA256,
+      recoveryTransitionProofHash: JUDGE_DEMO_REBRAND_PREDECESSOR_TRANSITION_PROOF_HASH
+    },
+    protocolExtension: {
+      commit: input.protocolCommit,
+      tree: git(input.cwd, ["rev-parse", `${input.protocolCommit}^{tree}`]),
+      changedPaths: [...JUDGE_DEMO_REBRAND_PROTOCOL_PATHS],
+      treeChanges: protocolChanges,
+      gitTreeProjectionHash: await canonicalSha256(protocolChanges)
+    },
+    branding: {
+      productNameBefore: "ToolProof" as const,
+      productNameAfter: "Thurstone" as const,
+      adoptedAt: "2026-08-29" as const,
+      legacyProtocolNamespace: "toolproof" as const,
+      packageName: "toolproof" as const,
+      productionOrigin: "https://toolproof-rust.vercel.app" as const,
+      repositorySlug: "serg337/toolproof" as const,
+      tree: git(input.cwd, ["rev-parse", `${input.rebrandCommit}^{tree}`]),
+      changedPaths: [...JUDGE_DEMO_REBRAND_BRANDING_PATHS],
+      treeChanges: brandingChanges,
+      gitTreeProjectionHash: await canonicalSha256(brandingChanges),
+      files: brandingFiles,
+      filesProjectionHash: await canonicalSha256(brandingFiles)
+    },
+    preservedArtifacts,
+    preservedArtifactsHash: await canonicalSha256(preservedArtifacts),
+    gate6PresentationProofHash: gate6Proof.proofHash,
+    gate6CriticalProjectionHash: gate6Proof.criticalProjectionHash,
+    baselineRawSha256: "edf0f0e3a2a3438be58a17e27594e57e6230f713c68501a3d26900cb731d7dfb",
+    revisedRawSha256: "26c436e38fecd8a128a0204af510556b3edf555ceeb421254d0248c0b23302fa",
+    scoredCallsPerformed: 0 as const
+  };
+  const transition = (await verifyJudgeDemoPresentationTransition({
+    ...payload,
+    proofHash: await canonicalSha256(payload)
+  })) as JudgeDemoRebrandTransition;
+  return { transition, gate6Proof };
+}
+
 async function bindingFor(input: {
   rootCommit: string;
   activeCommit: string;
   transitions: readonly JudgeDemoPresentationTransition[];
+  version?:
+    | typeof JUDGE_DEMO_PRESENTATION_BINDING_VERSION
+    | typeof JUDGE_DEMO_PRESENTATION_REBRAND_BINDING_VERSION;
 }): Promise<JudgeDemoPresentationBinding> {
   const [rootEnvelope, activeEnvelope] = await Promise.all([
     createJudgeDemoEnvelope(input.rootCommit),
     createJudgeDemoEnvelope(input.activeCommit)
   ]);
   const payload = {
-    version: JUDGE_DEMO_PRESENTATION_BINDING_VERSION,
+    version: input.version ?? JUDGE_DEMO_PRESENTATION_BINDING_VERSION,
     rootEvidenceCommit: input.rootCommit,
     activeCommit: input.activeCommit,
     rootEnvelopeHash: rootEnvelope.envelopeHash,
@@ -516,6 +645,80 @@ async function truthStatusFinalizationFixture(options: { staleReadme?: boolean }
   };
 }
 
+async function presentationRebrandFixture() {
+  const cwd = await mkdtemp(join(tmpdir(), "toolproof-judge-rebrand-"));
+  temporaryRoots.push(cwd);
+  git(cwd, ["clone", "-q", "--no-hardlinks", resolve("."), "."]);
+  git(cwd, ["checkout", "-q", JUDGE_DEMO_REBRAND_PREDECESSOR_COMMIT]);
+
+  const truthStatus = await truthStatusFinalization({
+    cwd,
+    activeCommit: JUDGE_DEMO_REBRAND_PREDECESSOR_COMMIT
+  });
+  const validation = await ciTimeoutValidation({
+    cwd,
+    activeCommit: JUDGE_DEMO_REBRAND_PREDECESSOR_COMMIT,
+    truthStatusFinalization: truthStatus
+  });
+  const recovery = await recoveryTransition({
+    cwd,
+    rootCommit: rootEvidenceCommit,
+    recoveryCommit: JUDGE_DEMO_REBRAND_PREDECESSOR_COMMIT,
+    ciTimeoutValidation: validation
+  });
+  if (recovery.proofHash !== JUDGE_DEMO_REBRAND_PREDECESSOR_TRANSITION_PROOF_HASH) {
+    throw new Error("test_rebrand_recovery_anchor_mismatch");
+  }
+
+  for (const path of JUDGE_DEMO_REBRAND_PROTOCOL_PATHS) {
+    const source = await readFile(resolve(path), "utf8");
+    await write(cwd, path, `${source}\n// presentation-rebrand protocol fixture: ${path}\n`);
+  }
+  git(cwd, ["add", "--", ...JUDGE_DEMO_REBRAND_PROTOCOL_PATHS]);
+  git(cwd, ["commit", "-q", "-m", "add presentation rebrand protocol"]);
+  const protocolCommit = git(cwd, ["rev-parse", "HEAD"]);
+
+  for (const path of JUDGE_DEMO_REBRAND_BRANDING_PATHS) {
+    if (path === "lib/brand.ts") {
+      await write(
+        cwd,
+        path,
+        [
+          'export const PRODUCT_NAME = "Thurstone" as const;',
+          'export const PRODUCT_BYLINE = "Thurstone by Invarra — created by Sergio Valencia." as const;',
+          'export const LEGACY_PROTOCOL_NAMESPACE = "toolproof" as const;',
+          ""
+        ].join("\n")
+      );
+      continue;
+    }
+    if (path === "public/thurstone-results.jpg") {
+      await write(cwd, path, "synthetic Thurstone presentation JPEG fixture\n");
+      continue;
+    }
+    const source = await readFile(join(cwd, path), "utf8");
+    await write(cwd, path, `${source}\nThurstone presentation fixture: ${path}\n`);
+  }
+  git(cwd, ["add", "--", ...JUDGE_DEMO_REBRAND_BRANDING_PATHS]);
+  git(cwd, ["commit", "-q", "-m", "rename presentation to Thurstone"]);
+  const rebrandCommit = git(cwd, ["rev-parse", "HEAD"]);
+  const { transition: rebrand, gate6Proof } = await rebrandTransition({
+    cwd,
+    rootCommit: rootEvidenceCommit,
+    protocolCommit,
+    rebrandCommit
+  });
+  return {
+    cwd,
+    rootCommit: rootEvidenceCommit,
+    recovery,
+    protocolCommit,
+    rebrandCommit,
+    rebrand,
+    gate6Proof
+  };
+}
+
 afterEach(async () => {
   await Promise.all(temporaryRoots.splice(0).map((path) => rm(path, { recursive: true })));
 });
@@ -611,9 +814,29 @@ describe("judge provider-free presentation lineage", () => {
       transitionCount: 1,
       changedPathCount: JUDGE_DEMO_RECOVERY_PATHS.length
     });
-    expect(
-      publicJudgeDemoPresentationBinding(finalizedBinding).transitions[0]?.ciTimeoutValidation
-    ).toMatchObject({
+    const finalizedPublicBinding = publicJudgeDemoPresentationBinding(finalizedBinding);
+    const legacyTransition = finalizedPublicBinding.transitions[0]!;
+    expect(Object.hasOwn(legacyTransition, "rebrandVerification")).toBe(false);
+    expect(Object.keys(legacyTransition).sort()).toEqual(
+      [
+        "ciTimeoutValidation",
+        "criticalProjectionHash",
+        "dependencyProjectionHash",
+        "firstParentChainHash",
+        "gitTreeProjectionHash",
+        "kind",
+        "ordinal",
+        "predecessorCommit",
+        "predecessorEnvelopeHash",
+        "proofHash",
+        "providerCallsPerformed",
+        "replayOnly",
+        "storeWritesPerformed",
+        "successorCommit",
+        "successorEnvelopeHash"
+      ].sort()
+    );
+    expect(legacyTransition.ciTimeoutValidation).toMatchObject({
       kind: "recovery-finalization",
       implementationCommit: JUDGE_DEMO_RECOVERY_IMPLEMENTATION_COMMIT,
       implementationTree: JUDGE_DEMO_RECOVERY_IMPLEMENTATION_TREE,
@@ -691,6 +914,257 @@ describe("judge provider-free presentation lineage", () => {
       /judge_demo_presentation_active_checkout_mismatch/u
     );
   }, 20_000);
+
+  it("rejects collateral mode, newline, relocation, and whitespace drift", async () => {
+    const predecessorValue = "reserved for the verified Gate 9 link-only release commit";
+    const successorValue = "https://github.com/serg337/toolproof";
+    const predecessorLine = `Public repository: ${predecessorValue}`;
+    const successorLine = `Public repository: ${successorValue}`;
+    for (const scenario of ["mode", "crlf", "relocation", "whitespace"] as const) {
+      const value = await truthStatusFinalizationFixture();
+      const source = await readFile(join(value.cwd, "README.md"), "utf8");
+      let successor = source.replace(predecessorLine, successorLine);
+      if (scenario === "crlf") successor = successor.replace(/\n/gu, "\r\n");
+      if (scenario === "relocation") {
+        const lines = successor.split("\n");
+        const index = lines.indexOf(successorLine);
+        if (index < 0) throw new Error("test_collateral_line_missing");
+        lines.splice(index, 1);
+        lines.push(successorLine);
+        successor = lines.join("\n");
+      }
+      if (scenario === "whitespace") {
+        successor = successor.replace(successorLine, `${successorLine} `);
+      }
+      await write(value.cwd, "README.md", successor);
+      git(value.cwd, ["add", "--", "README.md"]);
+      if (scenario === "mode") {
+        git(value.cwd, ["update-index", "--chmod=+x", "README.md"]);
+      }
+      git(value.cwd, ["commit", "-q", "-m", `invalid collateral ${scenario}`]);
+      const releaseCommit = git(value.cwd, ["rev-parse", "HEAD"]);
+      const collateral = await collateralTransition({
+        cwd: value.cwd,
+        rootCommit: value.rootCommit,
+        recoveryCommit: value.activeCommit,
+        releaseCommit,
+        collateralChanges: [
+          {
+            path: "README.md",
+            field: "public_repository",
+            predecessorValue,
+            successorValue
+          }
+        ]
+      });
+      const binding = await bindingFor({
+        rootCommit: value.rootCommit,
+        activeCommit: releaseCommit,
+        transitions: [value.recovery, collateral]
+      });
+      await expect(
+        verifyJudgeDemoPresentationCheckout({ cwd: value.cwd, binding }),
+        scenario
+      ).rejects.toThrow(
+        scenario === "mode"
+          ? /judge_demo_presentation_collateral_tree_mode_invalid/u
+          : /judge_demo_presentation_non_link_change/u
+      );
+    }
+  }, 19_000);
+
+  it("verifies recovery then a provider-free presentation rebrand anchored to build768", async () => {
+    const value = await presentationRebrandFixture();
+    const binding = await bindingFor({
+      rootCommit: value.rootCommit,
+      activeCommit: value.rebrandCommit,
+      transitions: [value.recovery, value.rebrand],
+      version: JUDGE_DEMO_PRESENTATION_REBRAND_BINDING_VERSION
+    });
+    await expect(
+      verifyJudgeDemoPresentationCheckout({ cwd: value.cwd, binding })
+    ).resolves.toMatchObject({
+      transitionCount: 2,
+      criticalFileCount: JUDGE_DEMO_CRITICAL_PATHS.length
+    });
+    const [rootEnvelope, activeEnvelope] = await Promise.all([
+      createJudgeDemoEnvelope(value.rootCommit),
+      createJudgeDemoEnvelope(value.rebrandCommit)
+    ]);
+    const configuredEnvironment = {
+      [JUDGE_DEMO_PRESENTATION_BINDING_ENV]: gzipSync(Buffer.from(canonicalJson(binding))).toString(
+        "base64url"
+      ),
+      [JUDGE_DEMO_PRESENTATION_BINDING_HASH_ENV]: binding.bindingHash,
+      [GATE6_PRESENTATION_PROOF_ENV]: gzipSync(
+        Buffer.from(canonicalJson(value.gate6Proof))
+      ).toString("base64url"),
+      TOOLPROOF_GATE6_PRESENTATION_PROOF_HASH: value.gate6Proof.proofHash
+    };
+    await expect(
+      configuredJudgeDemoPresentationBinding({
+        environment: configuredEnvironment,
+        rootEnvelope,
+        activeEnvelope,
+        rootReceiptDigest,
+        rootArtifactDigest,
+        rootStoredProjectionDigest,
+        rootCapturedAt
+      })
+    ).resolves.toEqual(binding);
+    await expect(
+      configuredJudgeDemoPresentationBinding({
+        environment: {
+          ...configuredEnvironment,
+          TOOLPROOF_GATE6_PRESENTATION_PROOF_HASH: "f".repeat(64)
+        },
+        rootEnvelope,
+        activeEnvelope,
+        rootReceiptDigest,
+        rootArtifactDigest,
+        rootStoredProjectionDigest,
+        rootCapturedAt
+      })
+    ).rejects.toThrow(/judge_demo_presentation_rebrand_gate6_mismatch/u);
+    const publicBinding = publicJudgeDemoPresentationBinding(binding);
+    expect(publicBinding).toMatchObject({
+      version: "toolproof-judge-demo-public-presentation-lineage@3.0.0",
+      transitions: [
+        { kind: "sealed-reader-compatibility-recovery" },
+        {
+          kind: "presentation-rebrand",
+          rebrandVerification: {
+            productNameBefore: "ToolProof",
+            productNameAfter: "Thurstone",
+            predecessorBindingHash: JUDGE_DEMO_REBRAND_PREDECESSOR_BINDING_HASH,
+            predecessorBindingArtifactSha256:
+              JUDGE_DEMO_REBRAND_PREDECESSOR_BINDING_ARTIFACT_SHA256,
+            scoredCallsPerformed: 0
+          }
+        }
+      ],
+      providerCallsPerformed: 0,
+      storeWritesPerformed: 0
+    });
+    expect(Object.hasOwn(publicBinding.transitions[0]!, "rebrandVerification")).toBe(false);
+    expect(Object.hasOwn(publicBinding.transitions[1]!, "rebrandVerification")).toBe(true);
+  }, 19_000);
+
+  it("allows only a direct-child ordinal-two collateral hop after the rebrand", async () => {
+    const value = await presentationRebrandFixture();
+    const predecessorValue = "reserved for the verified Gate 9 link-only release commit";
+    const successorValue = "https://github.com/serg337/toolproof";
+    for (const path of ["README.md", "submission/devpost.md"] as const) {
+      const source = await readFile(join(value.cwd, path), "utf8");
+      await write(
+        value.cwd,
+        path,
+        source.replace(
+          `Public repository: ${predecessorValue}`,
+          `Public repository: ${successorValue}`
+        )
+      );
+    }
+    git(value.cwd, ["add", "--", "README.md", "submission/devpost.md"]);
+    git(value.cwd, ["commit", "-q", "-m", "add final public links"]);
+    const releaseCommit = git(value.cwd, ["rev-parse", "HEAD"]);
+    const collateralChanges = ["README.md", "submission/devpost.md"].map((path) => ({
+      path: path as "README.md" | "submission/devpost.md",
+      field: "public_repository" as const,
+      predecessorValue,
+      successorValue
+    }));
+    const collateral = await collateralTransition({
+      cwd: value.cwd,
+      rootCommit: value.rootCommit,
+      recoveryCommit: value.rebrandCommit,
+      releaseCommit,
+      collateralChanges,
+      ordinal: 2,
+      version: JUDGE_DEMO_PRESENTATION_REBRAND_TRANSITION_VERSION
+    });
+    const binding = await bindingFor({
+      rootCommit: value.rootCommit,
+      activeCommit: releaseCommit,
+      transitions: [value.recovery, value.rebrand, collateral],
+      version: JUDGE_DEMO_PRESENTATION_REBRAND_BINDING_VERSION
+    });
+    await expect(
+      verifyJudgeDemoPresentationCheckout({ cwd: value.cwd, binding })
+    ).resolves.toMatchObject({ transitionCount: 3 });
+
+    await expect(
+      collateralTransition({
+        cwd: value.cwd,
+        rootCommit: value.rootCommit,
+        recoveryCommit: value.rebrandCommit,
+        releaseCommit,
+        collateralChanges,
+        ordinal: 1,
+        version: JUDGE_DEMO_PRESENTATION_REBRAND_TRANSITION_VERSION
+      })
+    ).rejects.toThrow();
+  }, 19_000);
+
+  it("rejects rebrand projection substitution, nonzero scored work, and active drift", async () => {
+    const value = await presentationRebrandFixture();
+    const unsigned = { ...value.rebrand };
+    delete (unsigned as Partial<typeof value.rebrand>).proofHash;
+    await expect(
+      verifyJudgeDemoPresentationTransition({
+        ...unsigned,
+        scoredCallsPerformed: 1,
+        proofHash: await canonicalSha256({ ...unsigned, scoredCallsPerformed: 1 })
+      })
+    ).rejects.toThrow();
+    const wrongArtifactUnsigned = {
+      ...unsigned,
+      predecessorBinding: {
+        ...value.rebrand.predecessorBinding,
+        reviewedArtifactSha256: "f".repeat(64)
+      }
+    };
+    await expect(
+      verifyJudgeDemoPresentationTransition({
+        ...wrongArtifactUnsigned,
+        proofHash: await canonicalSha256(wrongArtifactUnsigned)
+      })
+    ).rejects.toThrow();
+
+    const alteredTreeChanges = value.rebrand.branding.treeChanges.map((change, index) =>
+      index === 0 ? { ...change, successorBlobOid: "f".repeat(40) } : change
+    );
+    const alteredBranding = {
+      ...value.rebrand.branding,
+      treeChanges: alteredTreeChanges,
+      gitTreeProjectionHash: await canonicalSha256(alteredTreeChanges)
+    };
+    const alteredUnsigned = { ...unsigned, branding: alteredBranding };
+    const altered = (await verifyJudgeDemoPresentationTransition({
+      ...alteredUnsigned,
+      proofHash: await canonicalSha256(alteredUnsigned)
+    })) as JudgeDemoRebrandTransition;
+    const alteredBinding = await bindingFor({
+      rootCommit: value.rootCommit,
+      activeCommit: value.rebrandCommit,
+      transitions: [value.recovery, altered],
+      version: JUDGE_DEMO_PRESENTATION_REBRAND_BINDING_VERSION
+    });
+    await expect(
+      verifyJudgeDemoPresentationCheckout({ cwd: value.cwd, binding: alteredBinding })
+    ).rejects.toThrow(/judge_demo_rebrand_step_projection_invalid/u);
+
+    const binding = await bindingFor({
+      rootCommit: value.rootCommit,
+      activeCommit: value.rebrandCommit,
+      transitions: [value.recovery, value.rebrand],
+      version: JUDGE_DEMO_PRESENTATION_REBRAND_BINDING_VERSION
+    });
+    await write(value.cwd, "package.json", '{"name":"thurstone"}\n');
+    await expect(verifyJudgeDemoPresentationCheckout({ cwd: value.cwd, binding })).rejects.toThrow(
+      /judge_demo_rebrand_compatibility_identity_invalid/u
+    );
+  }, 19_000);
 
   it("rejects tree substitution, chain discontinuity, writes, and non-link release edits", async () => {
     const value = await fixture();

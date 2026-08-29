@@ -9,6 +9,7 @@ import { judgeDemoDecisionResponseSchema, judgeDemoStatusSchema } from "@/lib/ju
 import {
   JUDGE_DEMO_COLLATERAL_PROOF_VERSION,
   JUDGE_DEMO_CRITICAL_PATHS,
+  JUDGE_DEMO_REBRAND_PREDECESSOR_BINDING_ARTIFACT_SHA256,
   JUDGE_DEMO_RECOVERY_PATHS,
   judgeDemoImmutableProjectionHash
 } from "@/lib/judge/collateral-proof";
@@ -759,6 +760,56 @@ describe("single-use signed-out judge demo service", () => {
     });
     if (status.status !== "sealed") throw new Error("expected_sealed_successor");
     const publicBinding = status.projection.presentationBinding!;
+    const rebrandCommit = "7".repeat(40);
+    const rebrandEnvelopeHash = "6".repeat(64);
+    const publicRebrandTransition = {
+      kind: "presentation-rebrand" as const,
+      ordinal: 1,
+      predecessorCommit: publicBinding.activeCommit,
+      successorCommit: rebrandCommit,
+      predecessorEnvelopeHash: publicBinding.activeEnvelopeHash,
+      successorEnvelopeHash: rebrandEnvelopeHash,
+      firstParentChainHash: "1".repeat(64),
+      gitTreeProjectionHash: "2".repeat(64),
+      criticalProjectionHash: "3".repeat(64),
+      dependencyProjectionHash: "4".repeat(64),
+      proofHash: "5".repeat(64),
+      ciTimeoutValidation: null,
+      rebrandVerification: {
+        productNameBefore: "ToolProof" as const,
+        productNameAfter: "Thurstone" as const,
+        adoptedAt: "2026-08-29" as const,
+        legacyProtocolNamespace: "toolproof" as const,
+        predecessorBindingHash: publicBinding.bindingHash,
+        predecessorBindingArtifactSha256: JUDGE_DEMO_REBRAND_PREDECESSOR_BINDING_ARTIFACT_SHA256,
+        protocolExtensionCommit: "8".repeat(40),
+        protocolProjectionHash: "6".repeat(64),
+        brandingProjectionHash: "7".repeat(64),
+        preservedArtifactsHash: "8".repeat(64),
+        gate6PresentationProofHash: "9".repeat(64),
+        gate6CriticalProjectionHash: "a".repeat(64),
+        scoredCallsPerformed: 0 as const
+      },
+      providerCallsPerformed: 0 as const,
+      storeWritesPerformed: 0 as const,
+      replayOnly: true as const
+    };
+    expect(() =>
+      judgeDemoStatusSchema.parse({
+        ...status,
+        projection: {
+          ...status.projection,
+          appCommit: rebrandCommit,
+          presentationBinding: {
+            ...publicBinding,
+            version: "toolproof-judge-demo-public-presentation-lineage@3.0.0",
+            activeCommit: rebrandCommit,
+            activeEnvelopeHash: rebrandEnvelopeHash,
+            transitions: [publicBinding.transitions[0]!, publicRebrandTransition]
+          }
+        }
+      })
+    ).not.toThrow();
     expect(() =>
       judgeDemoStatusSchema.parse({
         ...status,

@@ -1,4 +1,6 @@
-import { canonicalSha256 } from "@/lib/evidence/digest";
+import { canonicalJson, canonicalSha256 } from "@/lib/evidence/digest";
+import { gzipSync } from "node:zlib";
+import type { Gate6PresentationProof } from "@/lib/results/presentation-proof";
 import { buildGate3HumanReviewPackage } from "@/lib/semantic/checkout-candidate.server";
 import {
   GATE3_AUTHORING_TERMINATION_VERSION,
@@ -13,10 +15,12 @@ import {
 } from "@/lib/semantic/revision-freeze.server";
 import {
   assertGate5TerminalPresentationBinding,
-  assertStoredGate5RevisionLineage
+  assertStoredGate5RevisionLineage,
+  configuredGate5Revision,
+  type Gate5RevisionDependencies
 } from "@/lib/semantic/revision-config.server";
 import { buildGate5SourceDiffProof } from "@/lib/semantic/gate5-source-diff-proof";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 function source(description: string): string {
   return `export const CHECKOUT_REQUEST_METADATA = {\n  description:\n    ${JSON.stringify(description)},\n  inputSchema: CHECKOUT_OPERATION_JSON_SCHEMA\n} as const;\n`;
@@ -85,6 +89,92 @@ async function gate3() {
   };
 }
 
+async function revisionFixture() {
+  const { review, frozen } = await gate3();
+  const proposedDescription =
+    "Open a simulated pending checkout only when the user explicitly directs checkout; never use this tool for review-only or tentative requests.";
+  const repairPayload = {
+    version: GATE5_REPAIR_BUILDER_RECEIPT_VERSION,
+    contextId: `repair_${"x".repeat(22)}`,
+    contextClass: "fresh-stateless-application-api",
+    provider: "OpenAI",
+    model: "gpt-5.6-terra",
+    store: false,
+    baselineRunId: `run_${"b".repeat(22)}`,
+    baselineEvidenceDigest: "8".repeat(64),
+    developmentPackageHash: "9".repeat(64),
+    developmentCaseCount: 12,
+    holdoutPromptCountReceived: 0,
+    holdoutResultCountReceived: 0,
+    filesystemAccess: false,
+    browserAccess: false,
+    sourceBriefAccess: false,
+    fullContractAccess: false,
+    proposedField: "checkout_request.description",
+    proposedDescription,
+    rationale:
+      "Development-only failures indicate a sharper explicit-commitment boundary is warranted.",
+    createdAt: "2026-08-29T10:00:00.000Z"
+  } as const;
+  const repairBuilderReceipt = {
+    ...repairPayload,
+    receiptHash: await canonicalSha256(repairPayload)
+  };
+  const v2TargetContract = {
+    ...review.targetContract,
+    appCommit: "b".repeat(40),
+    initialManifest: {
+      ...review.targetContract.initialManifest,
+      manifestHash: "c".repeat(64),
+      tools: review.targetContract.initialManifest.tools.map((tool) =>
+        tool.name === "checkout_request" ? { ...tool, description: proposedDescription } : tool
+      )
+    },
+    pendingManifest: {
+      ...review.targetContract.pendingManifest,
+      manifestHash: "d".repeat(64),
+      tools: review.targetContract.pendingManifest.tools.map((tool) =>
+        tool.name === "checkout_request" ? { ...tool, description: proposedDescription } : tool
+      )
+    }
+  };
+  const revisionApproval = {
+    version: GATE5_REVISION_APPROVAL_VERSION,
+    receiptId: `revision_${"v".repeat(22)}`,
+    reviewer: "Sergio Valencia",
+    authority: "human-semantic-authority",
+    decision: "approved",
+    repairBuilderReceiptHash: repairBuilderReceipt.receiptHash,
+    proposedField: "checkout_request.description",
+    approvedDescription: proposedDescription,
+    reviewedAt: "2026-08-29T11:00:00.000Z",
+    approvalText: "Synthetic unit-test approval only."
+  } as const;
+  const oldDescription = review.targetContract.initialManifest.tools.find(
+    ({ name }) => name === "checkout_request"
+  )!.description;
+  const exactSourceDiffProof = await sourceDiffProof(oldDescription, proposedDescription);
+  const revision = await buildGate5RevisionFreeze({
+    gate3ReviewPackage: review,
+    gate3FrozenProtocol: frozen,
+    baselineRunId: repairBuilderReceipt.baselineRunId,
+    baselineEvidenceDigest: repairBuilderReceipt.baselineEvidenceDigest,
+    repairBuilderReceipt,
+    revisionApproval,
+    v2TargetContract,
+    sourceDiffProof: exactSourceDiffProof
+  });
+  return {
+    review,
+    frozen,
+    repairBuilderReceipt,
+    revision,
+    v2TargetContract,
+    exactSourceDiffProof,
+    proposedDescription
+  };
+}
+
 describe("Gate 5 one-variable revision freeze", () => {
   it("allows only one exact terminal presentation commit with scored execution absent", () => {
     const input = {
@@ -105,6 +195,196 @@ describe("Gate 5 one-variable revision freeze", () => {
         /gate5_terminal_presentation_binding_invalid/u
       );
     }
+  });
+
+  it("uses the stored terminal freeze without redundant approval/source env copies", async () => {
+    const fixture = await revisionFixture();
+    const presentationCommit = "c".repeat(40);
+    const revisedRunId = `run_${"r".repeat(22)}`;
+    const revisedEvidenceDigest = "f".repeat(64);
+    const criticalFiles = Array.from({ length: 20 }, (_, index) => ({
+      path: `lib/domain/terminal-critical-${String(index).padStart(2, "0")}.ts`,
+      sha256: index.toString(16).padStart(64, "0")
+    }));
+    const gate6Payload = {
+      version: "toolproof-gate6-presentation-proof@1.0.0" as const,
+      measuredV2Commit: fixture.revision.v2AppCommit,
+      presentationCommit,
+      changedPaths: ["app/page.tsx"],
+      criticalFiles,
+      criticalProjectionHash: await canonicalSha256(criticalFiles),
+      dependencyProjectionHash: "1".repeat(64),
+      gitProofPackSha256: "2".repeat(64),
+      baselineRawSha256: "edf0f0e3a2a3438be58a17e27594e57e6230f713c68501a3d26900cb731d7dfb",
+      revisedRawSha256: "26c436e38fecd8a128a0204af510556b3edf555ceeb421254d0248c0b23302fa"
+    };
+    const gate6Proof: Gate6PresentationProof = {
+      ...gate6Payload,
+      proofHash: await canonicalSha256(gate6Payload)
+    };
+    const environment = {
+      TOOLPROOF_SIGNING_SECRET: Buffer.alloc(32, 7).toString("base64url"),
+      TOOLPROOF_GATE3_FROZEN_PROTOCOL_HASH: fixture.frozen.frozenProtocolHash,
+      TOOLPROOF_BASELINE_RUN_ID: fixture.revision.baselineRunId,
+      TOOLPROOF_BASELINE_EVIDENCE_DIGEST: fixture.revision.baselineEvidenceDigest,
+      TOOLPROOF_GATE5_REVISION_FREEZE_HASH: fixture.revision.revisionFreezeHash,
+      TOOLPROOF_GATE5_PRESENTATION_COMMIT: presentationCommit,
+      TOOLPROOF_REVISED_RUN_ID: revisedRunId,
+      TOOLPROOF_REVISED_EVIDENCE_DIGEST: revisedEvidenceDigest,
+      TOOLPROOF_COMMIT_SHA: presentationCommit,
+      TOOLPROOF_GATE6_PRESENTATION_PROOF_B64: gzipSync(
+        Buffer.from(canonicalJson(gate6Proof))
+      ).toString("base64url"),
+      TOOLPROOF_GATE6_PRESENTATION_PROOF_HASH: gate6Proof.proofHash
+    };
+    const baseline = {
+      status: "acknowledged",
+      terminalStatus: "terminal-complete",
+      completedCount: 24,
+      evidenceDigest: fixture.revision.baselineEvidenceDigest,
+      identity: {
+        runId: fixture.revision.baselineRunId,
+        appCommit: fixture.review.targetContract.appCommit,
+        frozenProtocolHash: fixture.frozen.frozenProtocolHash,
+        reviewPackageHash: fixture.review.packageHash,
+        freezeCandidateHash: fixture.review.freezeHash
+      }
+    };
+    const revised = {
+      status: "acknowledged",
+      terminalStatus: "terminal-complete",
+      completedCount: 24,
+      evidenceDigest: revisedEvidenceDigest,
+      identity: {
+        appCommit: fixture.revision.v2AppCommit,
+        frozenProtocolHash: fixture.revision.revisionFreezeHash,
+        reviewPackageHash: fixture.revision.gate3ReviewPackageHash,
+        freezeCandidateHash: fixture.review.freezeHash
+      }
+    };
+    const createTarget = vi.fn(async () => fixture.v2TargetContract);
+    const dependencies = {
+      createProbeRedis: vi.fn(() => ({})),
+      readRepairProviderReceipt: vi.fn(async () => ({
+        repairBuilderReceipt: fixture.repairBuilderReceipt
+      })),
+      readPermanentScoredRunById: vi.fn(async (_redis, input) =>
+        input.phase === "baseline" ? baseline : revised
+      ),
+      createGate3TargetContractBinding: createTarget,
+      configuredGate3FrozenProtocol: vi.fn(async () => ({
+        status: "frozen",
+        protocol: fixture.frozen,
+        reviewPackage: fixture.review,
+        issue: null
+      })),
+      readGate3Freeze: vi.fn(async () => ({
+        reviewPackage: fixture.review,
+        frozenProtocol: fixture.frozen
+      })),
+      readGate5RevisionFreeze: vi.fn(async () => fixture.revision)
+    } as unknown as Gate5RevisionDependencies;
+
+    await expect(configuredGate5Revision(environment, dependencies)).resolves.toEqual({
+      status: "ready",
+      revision: fixture.revision,
+      issue: null
+    });
+    expect(createTarget).not.toHaveBeenCalled();
+    expect(environment).not.toHaveProperty("TOOLPROOF_GATE5_REVISION_APPROVAL_B64");
+    expect(environment).not.toHaveProperty("TOOLPROOF_GATE5_SOURCE_DIFF_PROOF_B64");
+
+    for (const [label, changedBaseline] of [
+      ["terminal status", { ...baseline, terminalStatus: "terminal-incomplete" }],
+      [
+        "app commit",
+        { ...baseline, identity: { ...baseline.identity, appCommit: "0".repeat(40) } }
+      ],
+      [
+        "freeze candidate",
+        { ...baseline, identity: { ...baseline.identity, freezeCandidateHash: "0".repeat(64) } }
+      ]
+    ] as const) {
+      await expect(
+        configuredGate5Revision(environment, {
+          ...dependencies,
+          readPermanentScoredRunById: vi.fn(async (_redis, input) =>
+            input.phase === "baseline" ? changedBaseline : revised
+          )
+        } as unknown as Gate5RevisionDependencies),
+        label
+      ).resolves.toMatchObject({ status: "invalid", issue: "gate5_gate3_predecessor_missing" });
+    }
+
+    await expect(
+      configuredGate5Revision(environment, {
+        ...dependencies,
+        readGate5RevisionFreeze: vi.fn(async () => null)
+      })
+    ).resolves.toMatchObject({ status: "invalid", issue: "gate5_stored_revision_mismatch" });
+    await expect(
+      configuredGate5Revision(environment, {
+        ...dependencies,
+        readGate5RevisionFreeze: vi.fn(async () => ({
+          ...fixture.revision,
+          baselineEvidenceDigest: "0".repeat(64)
+        }))
+      } as unknown as Gate5RevisionDependencies)
+    ).resolves.toMatchObject({ status: "invalid", issue: "gate5_revision_digest_invalid" });
+    const { receiptHash: _receiptHash, ...repairWithoutHash } = fixture.repairBuilderReceipt;
+    void _receiptHash;
+    const differentRepairPayload = {
+      ...repairWithoutHash,
+      rationale: `${repairWithoutHash.rationale} Different retained receipt.`
+    };
+    await expect(
+      configuredGate5Revision(environment, {
+        ...dependencies,
+        readRepairProviderReceipt: vi.fn(async () => ({
+          repairBuilderReceipt: {
+            ...differentRepairPayload,
+            receiptHash: await canonicalSha256(differentRepairPayload)
+          }
+        }))
+      } as unknown as Gate5RevisionDependencies)
+    ).resolves.toMatchObject({ status: "invalid", issue: "gate5_one_variable_diff_mismatch" });
+    await expect(
+      configuredGate5Revision(
+        { ...environment, TOOLPROOF_GATE6_PRESENTATION_PROOF_HASH: "0".repeat(64) },
+        dependencies
+      )
+    ).resolves.toMatchObject({
+      status: "invalid",
+      issue: "gate6_presentation_proof_binding_invalid"
+    });
+
+    const nonTerminalEnvironment = {
+      ...environment,
+      TOOLPROOF_COMMIT_SHA: fixture.revision.v2AppCommit
+    };
+    await expect(
+      configuredGate5Revision(nonTerminalEnvironment, dependencies)
+    ).resolves.toMatchObject({ status: "awaiting-human", revision: null });
+    const approvalOnly = {
+      ...nonTerminalEnvironment,
+      TOOLPROOF_GATE5_REVISION_APPROVAL_B64: Buffer.from(
+        canonicalJson(fixture.revision.revisionApproval)
+      ).toString("base64url")
+    };
+    await expect(configuredGate5Revision(approvalOnly, dependencies)).resolves.toMatchObject({
+      status: "invalid",
+      issue: "gate5_source_diff_proof_missing"
+    });
+    const completeNonTerminal = {
+      ...approvalOnly,
+      TOOLPROOF_GATE5_SOURCE_DIFF_PROOF_B64: Buffer.from(
+        canonicalJson(fixture.revision.sourceDiffProof)
+      ).toString("base64url")
+    };
+    await expect(configuredGate5Revision(completeNonTerminal, dependencies)).resolves.toMatchObject(
+      { status: "ready", revision: fixture.revision }
+    );
+    expect(createTarget).toHaveBeenCalledWith(fixture.revision.v2AppCommit);
   });
 
   it("accepts only an approved checkout_request description diff with unchanged protocol", async () => {

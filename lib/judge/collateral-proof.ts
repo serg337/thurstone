@@ -5,6 +5,8 @@ import { z } from "zod";
 
 export const JUDGE_DEMO_PRESENTATION_TRANSITION_VERSION =
   "toolproof-judge-demo-presentation-transition@2.0.0";
+export const JUDGE_DEMO_PRESENTATION_REBRAND_TRANSITION_VERSION =
+  "toolproof-judge-demo-presentation-transition@3.0.0";
 // Retained as an import-compatible name for release tooling. The proof is now a
 // discriminated transition rather than an unrestricted one-hop collateral proof.
 export const JUDGE_DEMO_COLLATERAL_PROOF_VERSION = JUDGE_DEMO_PRESENTATION_TRANSITION_VERSION;
@@ -25,6 +27,84 @@ export const JUDGE_DEMO_TRUTH_STATUS_EXPECTED_README_SENTENCE =
   "Its sole provider decision remains sealed on evidence root `e2cf8d47375abfeeb4f32bd6f5973918acf4c091`; recovery and native completion are deployment-bound and recorded by the live receipt and release manifest, not preclaimed by source." as const;
 export const JUDGE_DEMO_TRUTH_STATUS_FORBIDDEN_README_PHRASE =
   "while the archive-presentation recovery and a fresh current-build native replay remain required before Gate 7 can be called complete" as const;
+
+export const JUDGE_DEMO_REBRAND_PREDECESSOR_COMMIT = "768af2539ca20c29928a897644ad22ba897c580d";
+export const JUDGE_DEMO_REBRAND_PREDECESSOR_TREE = "9a3d7f59cae2f4632ad891d65ab38179e486b129";
+export const JUDGE_DEMO_REBRAND_PREDECESSOR_ENVELOPE_HASH =
+  "85cebeb51f69c754c10d4f0f0e71772a0d1885f2a1d9f5809947cc228f7a8fd6";
+export const JUDGE_DEMO_REBRAND_PREDECESSOR_BINDING_HASH =
+  "973aad5bab10fc9bb4edef64af4faea64a664151dbfe8ae3e0d29d469dd875c0";
+/**
+ * Raw SHA-256 of the canonical, non-secret build768 binding JSON. The ignored lineage generator
+ * must hash and verify the locally retained reviewed artifact before constructing v3; the digest
+ * is an identity anchor, not independent attestation and not a substitute for that byte check.
+ */
+export const JUDGE_DEMO_REBRAND_PREDECESSOR_BINDING_ARTIFACT_SHA256 =
+  "d757c83b49eb67e1150db39496e1b52fa13f6764b1dcf88609d7d1204293e682";
+export const JUDGE_DEMO_REBRAND_PREDECESSOR_TRANSITION_PROOF_HASH =
+  "b76c5769d511dd57ff713385143fa81421f5f7280f8f4df55452702aefe1bc6e";
+
+export const JUDGE_DEMO_REBRAND_PROTOCOL_PATHS = Object.freeze([
+  "lib/judge/collateral-checkout-verifier.server.ts",
+  "lib/judge/collateral-proof.ts",
+  "lib/judge/contract.ts",
+  "lib/judge/presentation-binding.server.ts",
+  "lib/results/presentation-proof.ts",
+  "lib/semantic/revision-config.server.ts",
+  "tests/integration/judge-presentation.test.ts",
+  "tests/integration/judge-service.test.ts",
+  "tests/unit/gate5-revision-freeze.test.ts",
+  "tests/unit/results-presentation-proof.test.ts"
+] as const);
+
+export const JUDGE_DEMO_REBRAND_BRANDING_PATHS = Object.freeze([
+  ".env.example",
+  ".vercelignore",
+  "AGENTS.md",
+  "app/error.tsx",
+  "app/global-error.tsx",
+  "app/layout.tsx",
+  "app/not-found.tsx",
+  "app/page.tsx",
+  "app/studio/page.tsx",
+  "CHALLENGE.md",
+  "components/lab/judge-demo-panel.tsx",
+  "components/site-header.tsx",
+  "CONTRIBUTING.md",
+  "docs/architecture.md",
+  "docs/demo-script.md",
+  "docs/methodology.md",
+  "docs/OFFICIAL_SOURCE_CHECK.md",
+  "docs/rights-review.md",
+  "docs/testing.md",
+  "HACKATHON_BUILD.md",
+  "lib/brand.ts",
+  "PLAN.md",
+  "public/thurstone-results.jpg",
+  "README.md",
+  "SECURITY.md",
+  "submission/devpost.md",
+  "THIRD_PARTY_NOTICES.md"
+] as const);
+
+export const JUDGE_DEMO_REBRAND_PRESERVED_ARTIFACTS = Object.freeze([
+  Object.freeze({
+    path: "evidence/toolproof-reference-evidence.json" as const,
+    sha256: "fb272a4a68d9c1d3d4542a668b86b23f293cd55e714c1b826af32c7fcac0be26" as const
+  }),
+  Object.freeze({
+    path: "evidence/toolproof-reference-evidence.md" as const,
+    sha256: "8301efa790f193060296d68a78b0553cf30d0c207b15864cf13609c65f2931fa" as const
+  }),
+  Object.freeze({
+    path: "public/toolproof-results.jpg" as const,
+    sha256: "16d414589500895629ab72bbbe8603439b7372a1dfd43db36ead5736de0bf93c" as const
+  }),
+  Object.freeze({
+    path: "evidence/direct-site-tools-observations.json" as const,
+    sha256: "63ad854753f59440b11d00d327e6ce135cf5cb84c38d7b6906f2e6719e48bf41" as const
+  })
+] as const);
 
 export const JUDGE_DEMO_CRITICAL_PATHS = Object.freeze(
   [
@@ -175,6 +255,8 @@ const gitMode = z
   .nullable();
 const recoveryFinalizationPath = z.enum(JUDGE_DEMO_RECOVERY_FINALIZATION_PATHS);
 const truthStatusFinalizationPath = z.enum(JUDGE_DEMO_TRUTH_STATUS_FINALIZATION_PATHS);
+const rebrandProtocolPath = z.enum(JUDGE_DEMO_REBRAND_PROTOCOL_PATHS);
+const rebrandBrandingPath = z.enum(JUDGE_DEMO_REBRAND_BRANDING_PATHS);
 const collateralPath = z.enum(JUDGE_DEMO_COLLATERAL_PATHS);
 const collateralField = z.enum(
   Object.keys(JUDGE_DEMO_COLLATERAL_FIELD_PREFIXES) as [
@@ -197,6 +279,21 @@ const recoveryFinalizationTreeChangeSchema = z
     predecessorBlobOid: gitOid.nullable(),
     successorBlobOid: gitOid.nullable()
   })
+  .strict();
+
+const transitionTreeChangeShape = {
+  status: z.enum(["A", "D", "M", "T"]),
+  predecessorMode: gitMode,
+  successorMode: gitMode,
+  predecessorBlobOid: gitOid.nullable(),
+  successorBlobOid: gitOid.nullable()
+} as const;
+
+const rebrandProtocolTreeChangeSchema = z
+  .object({ path: rebrandProtocolPath, ...transitionTreeChangeShape })
+  .strict();
+const rebrandBrandingTreeChangeSchema = z
+  .object({ path: rebrandBrandingPath, ...transitionTreeChangeShape })
   .strict();
 
 const truthStatusFinalizationSchema = z
@@ -248,8 +345,7 @@ const ciTimeoutValidationSchema = z
   .strict();
 
 const transitionCommon = {
-  version: z.literal(JUDGE_DEMO_PRESENTATION_TRANSITION_VERSION),
-  ordinal: z.number().int().min(0).max(1),
+  ordinal: z.number().int().min(0).max(2),
   predecessorCommit: commit,
   successorCommit: commit,
   predecessorEnvelopeHash: sha256,
@@ -274,6 +370,7 @@ const transitionCommon = {
 const recoveryTransitionSchema = z
   .object({
     ...transitionCommon,
+    version: z.literal(JUDGE_DEMO_PRESENTATION_TRANSITION_VERSION),
     kind: z.literal("sealed-reader-compatibility-recovery"),
     recoveryContract: z
       .object({
@@ -294,6 +391,10 @@ const recoveryTransitionSchema = z
 const collateralTransitionSchema = z
   .object({
     ...transitionCommon,
+    version: z.enum([
+      JUDGE_DEMO_PRESENTATION_TRANSITION_VERSION,
+      JUDGE_DEMO_PRESENTATION_REBRAND_TRANSITION_VERSION
+    ]),
     kind: z.literal("collateral-links"),
     collateralChanges: z
       .array(
@@ -312,14 +413,100 @@ const collateralTransitionSchema = z
   })
   .strict();
 
+const rebrandTransitionSchema = z
+  .object({
+    ...transitionCommon,
+    version: z.literal(JUDGE_DEMO_PRESENTATION_REBRAND_TRANSITION_VERSION),
+    kind: z.literal("presentation-rebrand"),
+    predecessorBinding: z
+      .object({
+        activeCommit: z.literal(JUDGE_DEMO_REBRAND_PREDECESSOR_COMMIT),
+        activeTree: z.literal(JUDGE_DEMO_REBRAND_PREDECESSOR_TREE),
+        activeEnvelopeHash: z.literal(JUDGE_DEMO_REBRAND_PREDECESSOR_ENVELOPE_HASH),
+        bindingHash: z.literal(JUDGE_DEMO_REBRAND_PREDECESSOR_BINDING_HASH),
+        reviewedArtifactSha256: z.literal(JUDGE_DEMO_REBRAND_PREDECESSOR_BINDING_ARTIFACT_SHA256),
+        recoveryTransitionProofHash: z.literal(JUDGE_DEMO_REBRAND_PREDECESSOR_TRANSITION_PROOF_HASH)
+      })
+      .strict(),
+    protocolExtension: z
+      .object({
+        commit,
+        tree: gitOid,
+        changedPaths: z.array(rebrandProtocolPath).length(JUDGE_DEMO_REBRAND_PROTOCOL_PATHS.length),
+        treeChanges: z
+          .array(rebrandProtocolTreeChangeSchema)
+          .length(JUDGE_DEMO_REBRAND_PROTOCOL_PATHS.length),
+        gitTreeProjectionHash: sha256
+      })
+      .strict(),
+    branding: z
+      .object({
+        productNameBefore: z.literal("ToolProof"),
+        productNameAfter: z.literal("Thurstone"),
+        adoptedAt: z.literal("2026-08-29"),
+        legacyProtocolNamespace: z.literal("toolproof"),
+        packageName: z.literal("toolproof"),
+        productionOrigin: z.literal("https://toolproof-rust.vercel.app"),
+        repositorySlug: z.literal("serg337/toolproof"),
+        tree: gitOid,
+        changedPaths: z.array(rebrandBrandingPath).length(JUDGE_DEMO_REBRAND_BRANDING_PATHS.length),
+        treeChanges: z
+          .array(rebrandBrandingTreeChangeSchema)
+          .length(JUDGE_DEMO_REBRAND_BRANDING_PATHS.length),
+        gitTreeProjectionHash: sha256,
+        files: z
+          .array(z.object({ path: rebrandBrandingPath, sha256 }).strict())
+          .length(JUDGE_DEMO_REBRAND_BRANDING_PATHS.length),
+        filesProjectionHash: sha256
+      })
+      .strict(),
+    preservedArtifacts: z.tuple([
+      z
+        .object({
+          path: z.literal(JUDGE_DEMO_REBRAND_PRESERVED_ARTIFACTS[0].path),
+          sha256: z.literal(JUDGE_DEMO_REBRAND_PRESERVED_ARTIFACTS[0].sha256)
+        })
+        .strict(),
+      z
+        .object({
+          path: z.literal(JUDGE_DEMO_REBRAND_PRESERVED_ARTIFACTS[1].path),
+          sha256: z.literal(JUDGE_DEMO_REBRAND_PRESERVED_ARTIFACTS[1].sha256)
+        })
+        .strict(),
+      z
+        .object({
+          path: z.literal(JUDGE_DEMO_REBRAND_PRESERVED_ARTIFACTS[2].path),
+          sha256: z.literal(JUDGE_DEMO_REBRAND_PRESERVED_ARTIFACTS[2].sha256)
+        })
+        .strict(),
+      z
+        .object({
+          path: z.literal(JUDGE_DEMO_REBRAND_PRESERVED_ARTIFACTS[3].path),
+          sha256: z.literal(JUDGE_DEMO_REBRAND_PRESERVED_ARTIFACTS[3].sha256)
+        })
+        .strict()
+    ]),
+    preservedArtifactsHash: sha256,
+    gate6PresentationProofHash: sha256,
+    gate6CriticalProjectionHash: sha256,
+    baselineRawSha256: z.literal(
+      "edf0f0e3a2a3438be58a17e27594e57e6230f713c68501a3d26900cb731d7dfb"
+    ),
+    revisedRawSha256: z.literal("26c436e38fecd8a128a0204af510556b3edf555ceeb421254d0248c0b23302fa"),
+    scoredCallsPerformed: z.literal(0)
+  })
+  .strict();
+
 export const judgeDemoPresentationTransitionSchema = z.discriminatedUnion("kind", [
   recoveryTransitionSchema,
+  rebrandTransitionSchema,
   collateralTransitionSchema
 ]);
 export const judgeDemoCollateralProofSchema = judgeDemoPresentationTransitionSchema;
 
 export type JudgeDemoPresentationTransition = z.infer<typeof judgeDemoPresentationTransitionSchema>;
 export type JudgeDemoRecoveryTransition = z.infer<typeof recoveryTransitionSchema>;
+export type JudgeDemoRebrandTransition = z.infer<typeof rebrandTransitionSchema>;
 export type JudgeDemoCollateralTransition = z.infer<typeof collateralTransitionSchema>;
 export type JudgeDemoCollateralProof = JudgeDemoPresentationTransition;
 
@@ -463,10 +650,54 @@ export async function verifyJudgeDemoPresentationTransition(
     ) {
       throw new Error("judge_demo_recovery_transition_invalid");
     }
-  } else {
-    const changeKeys = proof.collateralChanges.map(({ path, field }) => `${path}\n${field}`);
+  } else if (proof.kind === "presentation-rebrand") {
+    const protocolPaths = proof.protocolExtension.treeChanges.map(({ path }) => path);
+    const brandingPaths = proof.branding.treeChanges.map(({ path }) => path);
+    const brandingFilePaths = proof.branding.files.map(({ path }) => path);
     if (
       proof.ordinal !== 1 ||
+      proof.predecessorCommit !== JUDGE_DEMO_REBRAND_PREDECESSOR_COMMIT ||
+      proof.predecessorEnvelopeHash !== JUDGE_DEMO_REBRAND_PREDECESSOR_ENVELOPE_HASH ||
+      proof.protocolExtension.commit === proof.predecessorCommit ||
+      proof.protocolExtension.commit === proof.successorCommit ||
+      canonicalJson(proof.protocolExtension.changedPaths) !==
+        canonicalJson(JUDGE_DEMO_REBRAND_PROTOCOL_PATHS) ||
+      canonicalJson(protocolPaths) !== canonicalJson(JUDGE_DEMO_REBRAND_PROTOCOL_PATHS) ||
+      canonicalJson(proof.protocolExtension.treeChanges) !==
+        canonicalJson(
+          [...proof.protocolExtension.treeChanges].sort((left, right) =>
+            left.path.localeCompare(right.path)
+          )
+        ) ||
+      (await canonicalSha256(proof.protocolExtension.treeChanges)) !==
+        proof.protocolExtension.gitTreeProjectionHash ||
+      canonicalJson(proof.branding.changedPaths) !==
+        canonicalJson(JUDGE_DEMO_REBRAND_BRANDING_PATHS) ||
+      canonicalJson(brandingPaths) !== canonicalJson(JUDGE_DEMO_REBRAND_BRANDING_PATHS) ||
+      canonicalJson(proof.branding.treeChanges) !==
+        canonicalJson(
+          [...proof.branding.treeChanges].sort((left, right) => left.path.localeCompare(right.path))
+        ) ||
+      (await canonicalSha256(proof.branding.treeChanges)) !==
+        proof.branding.gitTreeProjectionHash ||
+      canonicalJson(brandingFilePaths) !== canonicalJson(JUDGE_DEMO_REBRAND_BRANDING_PATHS) ||
+      canonicalJson(proof.branding.files) !==
+        canonicalJson(
+          [...proof.branding.files].sort((left, right) => left.path.localeCompare(right.path))
+        ) ||
+      (await canonicalSha256(proof.branding.files)) !== proof.branding.filesProjectionHash ||
+      canonicalJson(proof.preservedArtifacts) !==
+        canonicalJson(JUDGE_DEMO_REBRAND_PRESERVED_ARTIFACTS) ||
+      (await canonicalSha256(proof.preservedArtifacts)) !== proof.preservedArtifactsHash
+    ) {
+      throw new Error("judge_demo_rebrand_transition_invalid");
+    }
+  } else {
+    const changeKeys = proof.collateralChanges.map(({ path, field }) => `${path}\n${field}`);
+    const expectedOrdinal =
+      proof.version === JUDGE_DEMO_PRESENTATION_REBRAND_TRANSITION_VERSION ? 2 : 1;
+    if (
+      proof.ordinal !== expectedOrdinal ||
       new Set(changeKeys).size !== changeKeys.length ||
       proof.collateralChanges.some(
         ({ predecessorValue, successorValue }) => predecessorValue === successorValue

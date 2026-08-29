@@ -4,6 +4,7 @@ import { z } from "zod";
 
 export const GATE6_PRESENTATION_PROOF_VERSION = "toolproof-gate6-presentation-proof@1.0.0";
 export const GATE6_PRESENTATION_PROOF_ENV = "TOOLPROOF_GATE6_PRESENTATION_PROOF_B64";
+export const GATE6_PRESENTATION_CHANGED_PATH_LIMIT = 128 as const;
 
 const sha256 = z.string().regex(/^[a-f0-9]{64}$/u);
 const commit = z.string().regex(/^[a-f0-9]{40}$/u);
@@ -18,7 +19,7 @@ const presentationProofSchema = z
     version: z.literal(GATE6_PRESENTATION_PROOF_VERSION),
     measuredV2Commit: commit,
     presentationCommit: commit,
-    changedPaths: z.array(sourcePath).min(1).max(100),
+    changedPaths: z.array(sourcePath).min(1).max(GATE6_PRESENTATION_CHANGED_PATH_LIMIT),
     criticalFiles: z
       .array(z.object({ path: sourcePath, sha256 }).strict())
       .min(20)
@@ -40,20 +41,28 @@ const allowedExact = new Set([
   ".github/workflows/ci.yml",
   ".prettierignore",
   ".vercelignore",
+  "AGENTS.md",
   "CHALLENGE.md",
+  "CONTRIBUTING.md",
   "HACKATHON_BUILD.md",
   "README.md",
   "PLAN.md",
   "SECURITY.md",
   "THIRD_PARTY_NOTICES.md",
   "app/api/readiness/route.ts",
+  "app/error.tsx",
+  "app/global-error.tsx",
   "app/globals.css",
   "app/lab/page.tsx",
+  "app/layout.tsx",
+  "app/not-found.tsx",
   "app/page.tsx",
   "app/results/page.tsx",
+  "app/studio/page.tsx",
   "components/lab/judge-demo-panel.tsx",
   "components/lab/lab-client.tsx",
   "components/results/semantic-paired-results.tsx",
+  "components/site-header.tsx",
   "docs/OFFICIAL_SOURCE_CHECK.md",
   "docs/architecture.md",
   "docs/demo-script.md",
@@ -62,7 +71,9 @@ const allowedExact = new Set([
   "docs/testing.md",
   "lib/semantic/revision-config.server.ts",
   "lib/probe/status.ts",
+  "lib/brand.ts",
   "package.json",
+  "public/thurstone-results.jpg",
   "public/toolproof-results.jpg",
   "scripts/verify-evidence.mjs",
   "scripts/verify-evidence.ts",

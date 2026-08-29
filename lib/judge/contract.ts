@@ -149,6 +149,24 @@ export const judgeDemoUsageProjectionSchema = z
   })
   .strict();
 
+const publicRebrandVerificationSchema = z
+  .object({
+    productNameBefore: z.literal("ToolProof"),
+    productNameAfter: z.literal("Thurstone"),
+    adoptedAt: z.literal("2026-08-29"),
+    legacyProtocolNamespace: z.literal("toolproof"),
+    predecessorBindingHash: sha256,
+    predecessorBindingArtifactSha256: sha256,
+    protocolExtensionCommit: gitCommit,
+    protocolProjectionHash: sha256,
+    brandingProjectionHash: sha256,
+    preservedArtifactsHash: sha256,
+    gate6PresentationProofHash: sha256,
+    gate6CriticalProjectionHash: sha256,
+    scoredCallsPerformed: z.literal(0)
+  })
+  .strict();
+
 export const judgeDemoProjectionSchema = z
   .object({
     version: z.literal("toolproof-judge-demo-public-receipt@1.0.0"),
@@ -180,7 +198,10 @@ export const judgeDemoProjectionSchema = z
     capturedAt: z.string().datetime({ offset: true }),
     presentationBinding: z
       .object({
-        version: z.literal("toolproof-judge-demo-public-presentation-lineage@2.0.0"),
+        version: z.enum([
+          "toolproof-judge-demo-public-presentation-lineage@2.0.0",
+          "toolproof-judge-demo-public-presentation-lineage@3.0.0"
+        ]),
         rootEvidenceCommit: gitCommit,
         activeCommit: gitCommit,
         rootEnvelopeHash: sha256,
@@ -194,8 +215,12 @@ export const judgeDemoProjectionSchema = z
           .array(
             z
               .object({
-                kind: z.enum(["sealed-reader-compatibility-recovery", "collateral-links"]),
-                ordinal: z.number().int().min(0).max(1),
+                kind: z.enum([
+                  "sealed-reader-compatibility-recovery",
+                  "presentation-rebrand",
+                  "collateral-links"
+                ]),
+                ordinal: z.number().int().min(0).max(2),
                 predecessorCommit: gitCommit,
                 successorCommit: gitCommit,
                 predecessorEnvelopeHash: sha256,
@@ -206,6 +231,7 @@ export const judgeDemoProjectionSchema = z
                 dependencyProjectionHash: sha256,
                 proofHash: sha256,
                 ciTimeoutValidation: publicCiTimeoutValidationSchema.nullable(),
+                rebrandVerification: publicRebrandVerificationSchema.nullable().optional(),
                 providerCallsPerformed: z.literal(0),
                 storeWritesPerformed: z.literal(0),
                 replayOnly: z.literal(true)
@@ -213,7 +239,7 @@ export const judgeDemoProjectionSchema = z
               .strict()
           )
           .min(1)
-          .max(2),
+          .max(3),
         gitProofPackSha256: sha256,
         lineageHash: sha256,
         bindingHash: sha256,
@@ -242,6 +268,17 @@ export const judgeDemoProjectionSchema = z
     }
     const binding = projection.presentationBinding;
     const transitions = binding.transitions;
+    const legacyKindsValid =
+      binding.version === "toolproof-judge-demo-public-presentation-lineage@2.0.0" &&
+      transitions[0]?.kind === "sealed-reader-compatibility-recovery" &&
+      (transitions.length === 1 ||
+        (transitions.length === 2 && transitions[1]?.kind === "collateral-links"));
+    const rebrandKindsValid =
+      binding.version === "toolproof-judge-demo-public-presentation-lineage@3.0.0" &&
+      transitions[0]?.kind === "sealed-reader-compatibility-recovery" &&
+      transitions[1]?.kind === "presentation-rebrand" &&
+      (transitions.length === 2 ||
+        (transitions.length === 3 && transitions[2]?.kind === "collateral-links"));
     const continuityValid = transitions.every((transition, index) => {
       const priorCommit =
         index === 0 ? binding.rootEvidenceCommit : transitions[index - 1]!.successorCommit;
@@ -252,9 +289,11 @@ export const judgeDemoProjectionSchema = z
         transition.predecessorCommit === priorCommit &&
         transition.predecessorEnvelopeHash === priorEnvelopeHash &&
         (index !== 0 || transition.kind === "sealed-reader-compatibility-recovery") &&
-        (index !== 1 || transition.kind === "collateral-links") &&
         (transition.kind === "sealed-reader-compatibility-recovery" ||
           transition.ciTimeoutValidation === null) &&
+        (transition.kind === "presentation-rebrand"
+          ? transition.rebrandVerification !== null && transition.rebrandVerification !== undefined
+          : (transition.rebrandVerification ?? null) === null) &&
         (binding.rootEvidenceCommit !== judgeEvidenceRootCommit ||
           transition.kind !== "sealed-reader-compatibility-recovery" ||
           (transition.successorCommit === judgeRecoveryImplementationCommit
@@ -277,6 +316,7 @@ export const judgeDemoProjectionSchema = z
       binding.lineageHash !== binding.bindingHash ||
       transitions.at(-1)?.successorCommit !== binding.activeCommit ||
       transitions.at(-1)?.successorEnvelopeHash !== binding.activeEnvelopeHash ||
+      (!legacyKindsValid && !rebrandKindsValid) ||
       !continuityValid
     ) {
       context.addIssue({

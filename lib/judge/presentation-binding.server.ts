@@ -2,18 +2,29 @@ import "server-only";
 
 import { canonicalJson, canonicalSha256 } from "@/lib/evidence/digest";
 import {
+  JUDGE_DEMO_REBRAND_PREDECESSOR_BINDING_HASH,
+  JUDGE_DEMO_REBRAND_PREDECESSOR_COMMIT,
+  JUDGE_DEMO_REBRAND_PREDECESSOR_TRANSITION_PROOF_HASH,
   judgeDemoImmutableProjectionHash,
   verifyJudgeDemoPresentationTransition,
   type JudgeDemoPresentationTransition
 } from "@/lib/judge/collateral-proof";
 import { createJudgeDemoEnvelope, type JudgeDemoEnvelope } from "@/lib/judge/envelope";
+import {
+  GATE6_PRESENTATION_PROOF_ENV,
+  decodeGate6PresentationProof
+} from "@/lib/results/presentation-proof";
 import { gunzipSync } from "node:zlib";
 import { z } from "zod";
 
 export const JUDGE_DEMO_PRESENTATION_BINDING_VERSION =
   "toolproof-judge-demo-presentation-lineage@2.0.0";
+export const JUDGE_DEMO_PRESENTATION_REBRAND_BINDING_VERSION =
+  "toolproof-judge-demo-presentation-lineage@3.0.0";
 export const JUDGE_DEMO_PUBLIC_PRESENTATION_BINDING_VERSION =
   "toolproof-judge-demo-public-presentation-lineage@2.0.0";
+export const JUDGE_DEMO_PUBLIC_PRESENTATION_REBRAND_BINDING_VERSION =
+  "toolproof-judge-demo-public-presentation-lineage@3.0.0";
 export const JUDGE_DEMO_PRESENTATION_BINDING_ENV = "TOOLPROOF_JUDGE_PRESENTATION_BINDING_B64";
 export const JUDGE_DEMO_PRESENTATION_BINDING_HASH_ENV = "TOOLPROOF_JUDGE_PRESENTATION_BINDING_HASH";
 export const JUDGE_DEMO_PRESENTATION_MODE_ENV = "TOOLPROOF_JUDGE_PRESENTATION_MODE";
@@ -25,27 +36,44 @@ export type JudgeDemoPresentationMode = (typeof JUDGE_DEMO_PRESENTATION_MODES)[n
 const sha256 = z.string().regex(/^[a-f0-9]{64}$/u);
 const commit = z.string().regex(/^[a-f0-9]{40}$/u);
 
-export const judgeDemoPresentationBindingSchema = z
+const bindingShape = {
+  rootEvidenceCommit: commit,
+  activeCommit: commit,
+  rootEnvelopeHash: sha256,
+  activeEnvelopeHash: sha256,
+  rootReceiptDigest: sha256,
+  rootArtifactDigest: sha256,
+  rootStoredProjectionDigest: sha256,
+  rootCapturedAt: z.string().datetime({ offset: true }),
+  immutableProjectionHash: sha256,
+  gitProofPackSha256: sha256,
+  providerCallsPerformed: z.literal(0),
+  storeWritesPerformed: z.literal(0),
+  replayOnly: z.literal(true),
+  lineageHash: sha256,
+  bindingHash: sha256
+} as const;
+
+const legacyBindingSchema = z
   .object({
+    ...bindingShape,
     version: z.literal(JUDGE_DEMO_PRESENTATION_BINDING_VERSION),
-    rootEvidenceCommit: commit,
-    activeCommit: commit,
-    rootEnvelopeHash: sha256,
-    activeEnvelopeHash: sha256,
-    rootReceiptDigest: sha256,
-    rootArtifactDigest: sha256,
-    rootStoredProjectionDigest: sha256,
-    rootCapturedAt: z.string().datetime({ offset: true }),
-    immutableProjectionHash: sha256,
-    transitions: z.array(z.unknown()).min(1).max(2),
-    gitProofPackSha256: sha256,
-    providerCallsPerformed: z.literal(0),
-    storeWritesPerformed: z.literal(0),
-    replayOnly: z.literal(true),
-    lineageHash: sha256,
-    bindingHash: sha256
+    transitions: z.array(z.unknown()).min(1).max(2)
   })
   .strict();
+
+const rebrandBindingSchema = z
+  .object({
+    ...bindingShape,
+    version: z.literal(JUDGE_DEMO_PRESENTATION_REBRAND_BINDING_VERSION),
+    transitions: z.array(z.unknown()).min(2).max(3)
+  })
+  .strict();
+
+export const judgeDemoPresentationBindingSchema = z.discriminatedUnion("version", [
+  legacyBindingSchema,
+  rebrandBindingSchema
+]);
 
 export type JudgeDemoPresentationBinding = Omit<
   z.infer<typeof judgeDemoPresentationBindingSchema>,
@@ -82,6 +110,18 @@ export async function verifyJudgeDemoPresentationBinding(input: {
   const activeProjectionHash = await judgeDemoImmutableProjectionHash(input.activeEnvelope);
   const { bindingHash, lineageHash, ...payload } = parsed;
   const expectedLineageHash = await canonicalSha256(payload);
+  const legacyKindsValid =
+    parsed.version === JUDGE_DEMO_PRESENTATION_BINDING_VERSION &&
+    transitions[0]?.kind === "sealed-reader-compatibility-recovery" &&
+    (transitions.length === 1 || transitions[1]?.kind === "collateral-links");
+  const rebrandKindsValid =
+    parsed.version === JUDGE_DEMO_PRESENTATION_REBRAND_BINDING_VERSION &&
+    transitions[0]?.kind === "sealed-reader-compatibility-recovery" &&
+    transitions[0].successorCommit === JUDGE_DEMO_REBRAND_PREDECESSOR_COMMIT &&
+    transitions[0].proofHash === JUDGE_DEMO_REBRAND_PREDECESSOR_TRANSITION_PROOF_HASH &&
+    transitions[1]?.kind === "presentation-rebrand" &&
+    transitions[1].predecessorBinding.bindingHash === JUDGE_DEMO_REBRAND_PREDECESSOR_BINDING_HASH &&
+    (transitions.length === 2 || transitions[2]?.kind === "collateral-links");
   if (
     parsed.rootEvidenceCommit === parsed.activeCommit ||
     parsed.rootEvidenceCommit !== input.rootEnvelope.buildCommit ||
@@ -94,8 +134,7 @@ export async function verifyJudgeDemoPresentationBinding(input: {
     parsed.rootCapturedAt !== input.rootCapturedAt ||
     rootProjectionHash !== activeProjectionHash ||
     parsed.immutableProjectionHash !== rootProjectionHash ||
-    transitions[0]?.kind !== "sealed-reader-compatibility-recovery" ||
-    (transitions.length === 2 && transitions[1]?.kind !== "collateral-links") ||
+    (!legacyKindsValid && !rebrandKindsValid) ||
     expectedLineageHash !== lineageHash ||
     bindingHash !== lineageHash
   ) {
@@ -185,12 +224,36 @@ export async function configuredJudgeDemoPresentationBinding(input: {
   if (binding.bindingHash !== expectedHash) {
     throw new Error("judge_demo_presentation_binding_root_mismatch");
   }
+  if (binding.version === JUDGE_DEMO_PRESENTATION_REBRAND_BINDING_VERSION) {
+    const rebrand = binding.transitions[1];
+    if (rebrand?.kind !== "presentation-rebrand") {
+      throw new Error("judge_demo_presentation_rebrand_binding_missing");
+    }
+    const gate6Proof = await decodeGate6PresentationProof(
+      input.environment[GATE6_PRESENTATION_PROOF_ENV]?.trim() ?? ""
+    );
+    const terminalAtRebrand = binding.transitions.length === 2;
+    if (
+      input.environment.TOOLPROOF_GATE6_PRESENTATION_PROOF_HASH?.trim() !== gate6Proof.proofHash ||
+      gate6Proof.presentationCommit !== binding.activeCommit ||
+      gate6Proof.criticalProjectionHash !== rebrand.gate6CriticalProjectionHash ||
+      gate6Proof.dependencyProjectionHash !== rebrand.dependencyProjectionHash ||
+      gate6Proof.baselineRawSha256 !== rebrand.baselineRawSha256 ||
+      gate6Proof.revisedRawSha256 !== rebrand.revisedRawSha256 ||
+      (terminalAtRebrand && gate6Proof.proofHash !== rebrand.gate6PresentationProofHash)
+    ) {
+      throw new Error("judge_demo_presentation_rebrand_gate6_mismatch");
+    }
+  }
   return binding;
 }
 
 export function publicJudgeDemoPresentationBinding(binding: JudgeDemoPresentationBinding) {
   return Object.freeze({
-    version: JUDGE_DEMO_PUBLIC_PRESENTATION_BINDING_VERSION,
+    version:
+      binding.version === JUDGE_DEMO_PRESENTATION_REBRAND_BINDING_VERSION
+        ? JUDGE_DEMO_PUBLIC_PRESENTATION_REBRAND_BINDING_VERSION
+        : JUDGE_DEMO_PUBLIC_PRESENTATION_BINDING_VERSION,
     rootEvidenceCommit: binding.rootEvidenceCommit,
     activeCommit: binding.activeCommit,
     rootEnvelopeHash: binding.rootEnvelopeHash,
@@ -200,8 +263,8 @@ export function publicJudgeDemoPresentationBinding(binding: JudgeDemoPresentatio
     rootStoredProjectionDigest: binding.rootStoredProjectionDigest,
     rootCapturedAt: binding.rootCapturedAt,
     immutableProjectionHash: binding.immutableProjectionHash,
-    transitions: binding.transitions.map((transition) =>
-      Object.freeze({
+    transitions: binding.transitions.map((transition) => {
+      const common = {
         kind: transition.kind,
         ordinal: transition.ordinal,
         predecessorCommit: transition.predecessorCommit,
@@ -213,15 +276,39 @@ export function publicJudgeDemoPresentationBinding(binding: JudgeDemoPresentatio
         criticalProjectionHash: transition.criticalProjectionHash,
         dependencyProjectionHash: transition.dependencyProjectionHash,
         proofHash: transition.proofHash,
-        ciTimeoutValidation:
-          transition.kind === "sealed-reader-compatibility-recovery"
-            ? (transition.recoveryContract.ciTimeoutValidation ?? null)
-            : null,
         providerCallsPerformed: 0 as const,
         storeWritesPerformed: 0 as const,
         replayOnly: true as const
-      })
-    ),
+      };
+      if (transition.kind === "sealed-reader-compatibility-recovery") {
+        return Object.freeze({
+          ...common,
+          ciTimeoutValidation: transition.recoveryContract.ciTimeoutValidation ?? null
+        });
+      }
+      if (transition.kind === "presentation-rebrand") {
+        return Object.freeze({
+          ...common,
+          ciTimeoutValidation: null,
+          rebrandVerification: Object.freeze({
+            productNameBefore: transition.branding.productNameBefore,
+            productNameAfter: transition.branding.productNameAfter,
+            adoptedAt: transition.branding.adoptedAt,
+            legacyProtocolNamespace: transition.branding.legacyProtocolNamespace,
+            predecessorBindingHash: transition.predecessorBinding.bindingHash,
+            predecessorBindingArtifactSha256: transition.predecessorBinding.reviewedArtifactSha256,
+            protocolExtensionCommit: transition.protocolExtension.commit,
+            protocolProjectionHash: transition.protocolExtension.gitTreeProjectionHash,
+            brandingProjectionHash: transition.branding.filesProjectionHash,
+            preservedArtifactsHash: transition.preservedArtifactsHash,
+            gate6PresentationProofHash: transition.gate6PresentationProofHash,
+            gate6CriticalProjectionHash: transition.gate6CriticalProjectionHash,
+            scoredCallsPerformed: 0 as const
+          })
+        });
+      }
+      return Object.freeze({ ...common, ciTimeoutValidation: null });
+    }),
     gitProofPackSha256: binding.gitProofPackSha256,
     lineageHash: binding.lineageHash,
     bindingHash: binding.bindingHash,
