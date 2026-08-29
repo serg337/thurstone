@@ -5,6 +5,7 @@ import {
   JUDGE_DEMO_REBRAND_PREDECESSOR_BINDING_HASH,
   JUDGE_DEMO_REBRAND_PREDECESSOR_COMMIT,
   JUDGE_DEMO_REBRAND_PREDECESSOR_TRANSITION_PROOF_HASH,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_REBRAND_PROOF_HASH,
   judgeDemoImmutableProjectionHash,
   verifyJudgeDemoPresentationTransition,
   type JudgeDemoPresentationTransition
@@ -21,10 +22,14 @@ export const JUDGE_DEMO_PRESENTATION_BINDING_VERSION =
   "toolproof-judge-demo-presentation-lineage@2.0.0";
 export const JUDGE_DEMO_PRESENTATION_REBRAND_BINDING_VERSION =
   "toolproof-judge-demo-presentation-lineage@3.0.0";
+export const JUDGE_DEMO_INVOCATION_INTEGRITY_BINDING_VERSION =
+  "toolproof-judge-demo-presentation-lineage@4.0.0";
 export const JUDGE_DEMO_PUBLIC_PRESENTATION_BINDING_VERSION =
   "toolproof-judge-demo-public-presentation-lineage@2.0.0";
 export const JUDGE_DEMO_PUBLIC_PRESENTATION_REBRAND_BINDING_VERSION =
   "toolproof-judge-demo-public-presentation-lineage@3.0.0";
+export const JUDGE_DEMO_PUBLIC_INVOCATION_INTEGRITY_BINDING_VERSION =
+  "toolproof-judge-demo-public-presentation-lineage@4.0.0";
 export const JUDGE_DEMO_PRESENTATION_BINDING_ENV = "TOOLPROOF_JUDGE_PRESENTATION_BINDING_B64";
 export const JUDGE_DEMO_PRESENTATION_BINDING_HASH_ENV = "TOOLPROOF_JUDGE_PRESENTATION_BINDING_HASH";
 export const JUDGE_DEMO_PRESENTATION_MODE_ENV = "TOOLPROOF_JUDGE_PRESENTATION_MODE";
@@ -70,15 +75,62 @@ const rebrandBindingSchema = z
   })
   .strict();
 
+const invocationIntegrityBindingSchema = z
+  .object({
+    ...bindingShape,
+    version: z.literal(JUDGE_DEMO_INVOCATION_INTEGRITY_BINDING_VERSION),
+    activeImmutableProjectionHash: sha256,
+    transitions: z.array(z.unknown()).min(3).max(5)
+  })
+  .strict();
+
 export const judgeDemoPresentationBindingSchema = z.discriminatedUnion("version", [
   legacyBindingSchema,
-  rebrandBindingSchema
+  rebrandBindingSchema,
+  invocationIntegrityBindingSchema
 ]);
 
 export type JudgeDemoPresentationBinding = Omit<
   z.infer<typeof judgeDemoPresentationBindingSchema>,
   "transitions"
-> & { readonly transitions: readonly JudgeDemoPresentationTransition[] };
+> & {
+  readonly activeImmutableProjectionHash?: string;
+  readonly transitions: readonly JudgeDemoPresentationTransition[];
+};
+
+export function judgeDemoPresentationOrderValid(
+  version: string,
+  transitions: readonly { readonly kind: JudgeDemoPresentationTransition["kind"] }[]
+): boolean {
+  if (version === JUDGE_DEMO_PRESENTATION_BINDING_VERSION) {
+    return (
+      transitions[0]?.kind === "sealed-reader-compatibility-recovery" &&
+      (transitions.length === 1 ||
+        (transitions.length === 2 && transitions[1]?.kind === "collateral-links"))
+    );
+  }
+  if (version === JUDGE_DEMO_PRESENTATION_REBRAND_BINDING_VERSION) {
+    return (
+      transitions[0]?.kind === "sealed-reader-compatibility-recovery" &&
+      transitions[1]?.kind === "presentation-rebrand" &&
+      (transitions.length === 2 ||
+        (transitions.length === 3 && transitions[2]?.kind === "collateral-links"))
+    );
+  }
+  if (version !== JUDGE_DEMO_INVOCATION_INTEGRITY_BINDING_VERSION) return false;
+  return (
+    transitions[0]?.kind === "sealed-reader-compatibility-recovery" &&
+    transitions[1]?.kind === "presentation-rebrand" &&
+    transitions[2]?.kind === "invocation-integrity" &&
+    (transitions.length === 3 ||
+      (transitions.length === 4 &&
+        (transitions[3]?.kind === "invocation-integrity-evidence" ||
+          transitions[3]?.kind === "collateral-links")) ||
+      (transitions.length === 5 &&
+        transitions[3]?.kind === "invocation-integrity-evidence" &&
+        transitions[4]?.kind === "collateral-links"))
+  );
+}
 
 async function envelopeFor(
   commitValue: string,
@@ -112,16 +164,43 @@ export async function verifyJudgeDemoPresentationBinding(input: {
   const expectedLineageHash = await canonicalSha256(payload);
   const legacyKindsValid =
     parsed.version === JUDGE_DEMO_PRESENTATION_BINDING_VERSION &&
-    transitions[0]?.kind === "sealed-reader-compatibility-recovery" &&
-    (transitions.length === 1 || transitions[1]?.kind === "collateral-links");
+    judgeDemoPresentationOrderValid(parsed.version, transitions);
   const rebrandKindsValid =
     parsed.version === JUDGE_DEMO_PRESENTATION_REBRAND_BINDING_VERSION &&
+    judgeDemoPresentationOrderValid(parsed.version, transitions) &&
     transitions[0]?.kind === "sealed-reader-compatibility-recovery" &&
     transitions[0].successorCommit === JUDGE_DEMO_REBRAND_PREDECESSOR_COMMIT &&
     transitions[0].proofHash === JUDGE_DEMO_REBRAND_PREDECESSOR_TRANSITION_PROOF_HASH &&
     transitions[1]?.kind === "presentation-rebrand" &&
+    transitions[1].predecessorBinding.bindingHash === JUDGE_DEMO_REBRAND_PREDECESSOR_BINDING_HASH;
+  const invocationIntegrityKindsValid =
+    parsed.version === JUDGE_DEMO_INVOCATION_INTEGRITY_BINDING_VERSION &&
+    judgeDemoPresentationOrderValid(parsed.version, transitions) &&
+    transitions[0]?.kind === "sealed-reader-compatibility-recovery" &&
+    transitions[0].successorCommit === JUDGE_DEMO_REBRAND_PREDECESSOR_COMMIT &&
+    transitions[0].proofHash === JUDGE_DEMO_REBRAND_PREDECESSOR_TRANSITION_PROOF_HASH &&
+    transitions[1]?.kind === "presentation-rebrand" &&
+    transitions[1].proofHash === JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_REBRAND_PROOF_HASH &&
     transitions[1].predecessorBinding.bindingHash === JUDGE_DEMO_REBRAND_PREDECESSOR_BINDING_HASH &&
-    (transitions.length === 2 || transitions[2]?.kind === "collateral-links");
+    transitions[2]?.kind === "invocation-integrity";
+  const legacyProjectionValid =
+    parsed.version !== JUDGE_DEMO_INVOCATION_INTEGRITY_BINDING_VERSION &&
+    rootProjectionHash === activeProjectionHash &&
+    parsed.immutableProjectionHash === rootProjectionHash;
+  const invocationProjectionValid =
+    parsed.version === JUDGE_DEMO_INVOCATION_INTEGRITY_BINDING_VERSION &&
+    parsed.immutableProjectionHash === rootProjectionHash &&
+    parsed.activeImmutableProjectionHash === activeProjectionHash &&
+    transitions[2]?.kind === "invocation-integrity" &&
+    transitions[2].immutableProjectionDelta.predecessorProjectionHash === rootProjectionHash &&
+    transitions[2].immutableProjectionDelta.successorProjectionHash === activeProjectionHash &&
+    transitions
+      .slice(3)
+      .every(
+        (transition) =>
+          transition.kind !== "invocation-integrity-evidence" ||
+          transition.evidence.immutableProjectionHash === activeProjectionHash
+      );
   if (
     parsed.rootEvidenceCommit === parsed.activeCommit ||
     parsed.rootEvidenceCommit !== input.rootEnvelope.buildCommit ||
@@ -132,9 +211,8 @@ export async function verifyJudgeDemoPresentationBinding(input: {
     parsed.rootArtifactDigest !== input.rootArtifactDigest ||
     parsed.rootStoredProjectionDigest !== input.rootStoredProjectionDigest ||
     parsed.rootCapturedAt !== input.rootCapturedAt ||
-    rootProjectionHash !== activeProjectionHash ||
-    parsed.immutableProjectionHash !== rootProjectionHash ||
-    (!legacyKindsValid && !rebrandKindsValid) ||
+    (!legacyProjectionValid && !invocationProjectionValid) ||
+    (!legacyKindsValid && !rebrandKindsValid && !invocationIntegrityKindsValid) ||
     expectedLineageHash !== lineageHash ||
     bindingHash !== lineageHash
   ) {
@@ -142,20 +220,28 @@ export async function verifyJudgeDemoPresentationBinding(input: {
   }
 
   let priorCommit = parsed.rootEvidenceCommit;
+  let priorEnvelopeHash = parsed.rootEnvelopeHash;
   for (const [ordinal, transition] of transitions.entries()) {
-    const [predecessorEnvelope, successorEnvelope] = await Promise.all([
-      envelopeFor(transition.predecessorCommit, input),
-      envelopeFor(transition.successorCommit, input)
-    ]);
-    const [predecessorProjectionHash, successorProjectionHash] = await Promise.all([
-      judgeDemoImmutableProjectionHash(predecessorEnvelope),
-      judgeDemoImmutableProjectionHash(successorEnvelope)
-    ]);
+    let legacyEnvelopeProjectionValid = true;
+    if (parsed.version !== JUDGE_DEMO_INVOCATION_INTEGRITY_BINDING_VERSION) {
+      const [predecessorEnvelope, successorEnvelope] = await Promise.all([
+        envelopeFor(transition.predecessorCommit, input),
+        envelopeFor(transition.successorCommit, input)
+      ]);
+      const [predecessorProjectionHash, successorProjectionHash] = await Promise.all([
+        judgeDemoImmutableProjectionHash(predecessorEnvelope),
+        judgeDemoImmutableProjectionHash(successorEnvelope)
+      ]);
+      legacyEnvelopeProjectionValid =
+        transition.predecessorEnvelopeHash === predecessorEnvelope.envelopeHash &&
+        transition.successorEnvelopeHash === successorEnvelope.envelopeHash &&
+        predecessorProjectionHash === parsed.immutableProjectionHash &&
+        successorProjectionHash === parsed.immutableProjectionHash;
+    }
     if (
       transition.ordinal !== ordinal ||
       transition.predecessorCommit !== priorCommit ||
-      transition.predecessorEnvelopeHash !== predecessorEnvelope.envelopeHash ||
-      transition.successorEnvelopeHash !== successorEnvelope.envelopeHash ||
+      transition.predecessorEnvelopeHash !== priorEnvelopeHash ||
       transition.rootEvidenceCommit !== parsed.rootEvidenceCommit ||
       transition.rootEnvelopeHash !== parsed.rootEnvelopeHash ||
       transition.rootReceiptDigest !== parsed.rootReceiptDigest ||
@@ -163,14 +249,14 @@ export async function verifyJudgeDemoPresentationBinding(input: {
       transition.rootStoredProjectionDigest !== parsed.rootStoredProjectionDigest ||
       transition.rootCapturedAt !== parsed.rootCapturedAt ||
       transition.immutableProjectionHash !== parsed.immutableProjectionHash ||
-      predecessorProjectionHash !== parsed.immutableProjectionHash ||
-      successorProjectionHash !== parsed.immutableProjectionHash
+      !legacyEnvelopeProjectionValid
     ) {
       throw new Error("judge_demo_presentation_transition_continuity_invalid");
     }
     priorCommit = transition.successorCommit;
+    priorEnvelopeHash = transition.successorEnvelopeHash;
   }
-  if (priorCommit !== parsed.activeCommit) {
+  if (priorCommit !== parsed.activeCommit || priorEnvelopeHash !== parsed.activeEnvelopeHash) {
     throw new Error("judge_demo_presentation_transition_terminal_invalid");
   }
 
@@ -245,15 +331,46 @@ export async function configuredJudgeDemoPresentationBinding(input: {
       throw new Error("judge_demo_presentation_rebrand_gate6_mismatch");
     }
   }
+  if (binding.version === JUDGE_DEMO_INVOCATION_INTEGRITY_BINDING_VERSION) {
+    const material = [...binding.transitions]
+      .reverse()
+      .find(({ kind }) => kind !== "collateral-links");
+    if (
+      !material ||
+      (material.kind !== "invocation-integrity" &&
+        material.kind !== "invocation-integrity-evidence")
+    ) {
+      throw new Error("judge_demo_invocation_integrity_material_transition_missing");
+    }
+    const gate6Proof = await decodeGate6PresentationProof(
+      input.environment[GATE6_PRESENTATION_PROOF_ENV]?.trim() ?? ""
+    );
+    const terminalAtMaterial = binding.transitions.at(-1)?.kind !== "collateral-links";
+    if (
+      input.environment.TOOLPROOF_GATE6_PRESENTATION_PROOF_HASH?.trim() !== gate6Proof.proofHash ||
+      gate6Proof.presentationCommit !== binding.activeCommit ||
+      gate6Proof.criticalProjectionHash !== material.gate6CriticalProjectionHash ||
+      gate6Proof.dependencyProjectionHash !== material.dependencyProjectionHash ||
+      gate6Proof.baselineRawSha256 !==
+        "edf0f0e3a2a3438be58a17e27594e57e6230f713c68501a3d26900cb731d7dfb" ||
+      gate6Proof.revisedRawSha256 !==
+        "26c436e38fecd8a128a0204af510556b3edf555ceeb421254d0248c0b23302fa" ||
+      (terminalAtMaterial && gate6Proof.proofHash !== material.gate6PresentationProofHash)
+    ) {
+      throw new Error("judge_demo_invocation_integrity_gate6_mismatch");
+    }
+  }
   return binding;
 }
 
 export function publicJudgeDemoPresentationBinding(binding: JudgeDemoPresentationBinding) {
   return Object.freeze({
     version:
-      binding.version === JUDGE_DEMO_PRESENTATION_REBRAND_BINDING_VERSION
-        ? JUDGE_DEMO_PUBLIC_PRESENTATION_REBRAND_BINDING_VERSION
-        : JUDGE_DEMO_PUBLIC_PRESENTATION_BINDING_VERSION,
+      binding.version === JUDGE_DEMO_INVOCATION_INTEGRITY_BINDING_VERSION
+        ? JUDGE_DEMO_PUBLIC_INVOCATION_INTEGRITY_BINDING_VERSION
+        : binding.version === JUDGE_DEMO_PRESENTATION_REBRAND_BINDING_VERSION
+          ? JUDGE_DEMO_PUBLIC_PRESENTATION_REBRAND_BINDING_VERSION
+          : JUDGE_DEMO_PUBLIC_PRESENTATION_BINDING_VERSION,
     rootEvidenceCommit: binding.rootEvidenceCommit,
     activeCommit: binding.activeCommit,
     rootEnvelopeHash: binding.rootEnvelopeHash,
@@ -263,6 +380,9 @@ export function publicJudgeDemoPresentationBinding(binding: JudgeDemoPresentatio
     rootStoredProjectionDigest: binding.rootStoredProjectionDigest,
     rootCapturedAt: binding.rootCapturedAt,
     immutableProjectionHash: binding.immutableProjectionHash,
+    ...(binding.version === JUDGE_DEMO_INVOCATION_INTEGRITY_BINDING_VERSION
+      ? { activeImmutableProjectionHash: binding.activeImmutableProjectionHash }
+      : {}),
     transitions: binding.transitions.map((transition) => {
       const common = {
         kind: transition.kind,
@@ -304,6 +424,49 @@ export function publicJudgeDemoPresentationBinding(binding: JudgeDemoPresentatio
             gate6PresentationProofHash: transition.gate6PresentationProofHash,
             gate6CriticalProjectionHash: transition.gate6CriticalProjectionHash,
             scoredCallsPerformed: 0 as const
+          })
+        });
+      }
+      if (transition.kind === "invocation-integrity") {
+        return Object.freeze({
+          ...common,
+          ciTimeoutValidation: null,
+          invocationIntegrityVerification: Object.freeze({
+            predecessorBindingHash: transition.predecessorBinding.bindingHash,
+            predecessorBindingArtifactSha256: transition.predecessorBinding.reviewedArtifactSha256,
+            predecessorEnvelopeHash: transition.predecessorBinding.activeEnvelopeHash,
+            amendmentCommit: transition.amendment.commit,
+            amendmentSha256: transition.amendment.fileSha256,
+            protocolExtensionCommit: transition.protocolExtension.commit,
+            protocolProjectionHash: transition.protocolExtension.gitTreeProjectionHash,
+            implementationProjectionHash: transition.implementation.gitTreeProjectionHash,
+            contractSourceSha256: transition.invocationContract.contractSourceSha256,
+            semanticEvidenceBuildCommit: transition.semanticEvidence.sealedEvidenceBuildCommit,
+            semanticPackageDigest: transition.semanticEvidence.packageDigest,
+            semanticBaselinePassed: transition.semanticEvidence.baselinePassed,
+            semanticRevisedPassed: transition.semanticEvidence.revisedPassed,
+            semanticPossible: transition.semanticEvidence.possible,
+            semanticNoMeasuredImprovement: transition.semanticEvidence.noMeasuredImprovement,
+            modelCallsPerformed: 0 as const,
+            scoredCallsPerformed: 0 as const
+          })
+        });
+      }
+      if (transition.kind === "invocation-integrity-evidence") {
+        return Object.freeze({
+          ...common,
+          ciTimeoutValidation: null,
+          invocationIntegrityEvidenceVerification: Object.freeze({
+            executionBuildCommit: transition.evidence.executionBuildCommit,
+            supplementalPackageDigest: transition.evidence.supplementalPackageDigest,
+            jsonExportSha256: transition.evidence.jsonExportSha256,
+            markdownExportSha256: transition.evidence.markdownExportSha256,
+            measuredSourceSha256: transition.evidence.measuredSourceSha256,
+            scoreEarned: 3 as const,
+            scorePossible: 3 as const,
+            modelCallCount: 0 as const,
+            includedInSemanticDenominator: false as const,
+            semanticPackageDigest: transition.evidence.semanticPackageDigest
           })
         });
       }

@@ -1,4 +1,9 @@
 import { canonicalJson, canonicalSha256 } from "@/lib/evidence/digest";
+import {
+  JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_PATH,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_IMPLEMENTATION_ALLOWED_PATHS,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_PROTOCOL_PATHS
+} from "@/lib/judge/collateral-proof";
 import { gzipSync } from "node:zlib";
 import {
   GATE6_PRESENTATION_PROOF_VERSION,
@@ -36,7 +41,7 @@ describe("Gate 6 terminal presentation proof", () => {
       presentationCommit: "b".repeat(40)
     });
     await expect(
-      verifyGate6PresentationProof(await proof(["lib/domain/checkout.ts"]))
+      verifyGate6PresentationProof(await proof(["lib/domain/unrelated.ts"]))
     ).rejects.toThrow(/gate6_presentation_proof_projection_invalid/u);
     expect(gate6PresentationPathAllowed("lib/results/evidence-package.ts")).toBe(true);
     expect(gate6PresentationPathAllowed("lib/judge/service.server.ts")).toBe(true);
@@ -55,10 +60,20 @@ describe("Gate 6 terminal presentation proof", () => {
     ]) {
       expect(gate6PresentationPathAllowed(rebrandPath), rebrandPath).toBe(true);
     }
+    for (const invocationIntegrityPath of [
+      JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_PATH,
+      ...JUDGE_DEMO_INVOCATION_INTEGRITY_PROTOCOL_PATHS,
+      ...JUDGE_DEMO_INVOCATION_INTEGRITY_IMPLEMENTATION_ALLOWED_PATHS
+    ]) {
+      expect(gate6PresentationPathAllowed(invocationIntegrityPath), invocationIntegrityPath).toBe(
+        true
+      );
+    }
     expect(gate6PresentationPathAllowed("lib/scored/service.server.ts")).toBe(false);
     expect(gate6PresentationPathAllowed("lib/webmcp/checkout-request-tool.ts")).toBe(false);
     expect(gate6PresentationPathAllowed("lib/semantic/evaluator.server.ts")).toBe(false);
     expect(gate6PresentationPathAllowed("package-lock.json")).toBe(false);
+    expect(GATE6_PRESENTATION_CHANGED_PATH_LIMIT).toBe(192);
     const atPathLimit = Array.from(
       { length: GATE6_PRESENTATION_CHANGED_PATH_LIMIT },
       (_, index) => `lib/results/rebrand-${String(index).padStart(3, "0")}.ts`
@@ -70,7 +85,9 @@ describe("Gate 6 terminal presentation proof", () => {
       verifyGate6PresentationProof(
         await proof([...atPathLimit, "lib/results/rebrand-overflow.ts"].sort())
       )
-    ).rejects.toThrow(/128|too_big/u);
+    ).rejects.toThrow(/192|too_big/u);
+    expect(atPathLimit).toHaveLength(192);
+    expect([...atPathLimit, "lib/results/rebrand-overflow.ts"]).toHaveLength(193);
     expect(canonicalJson((await proof()).changedPaths)).toBe('["app/results/page.tsx"]');
     const encoded = gzipSync(Buffer.from(canonicalJson(await proof()))).toString("base64url");
     await expect(decodeGate6PresentationProof(encoded)).resolves.toMatchObject({

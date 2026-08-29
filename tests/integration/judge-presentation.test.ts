@@ -13,6 +13,22 @@ import {
   JUDGE_DEMO_CI_TIMEOUT_PATH,
   JUDGE_DEMO_CI_TIMEOUT_VALIDATION_VERSION,
   JUDGE_DEMO_CRITICAL_PATHS,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_COMMIT,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_PATH,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_SHA256,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_TREE,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_REQUIRED_PATHS,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_IMPLEMENTATION_REQUIRED_PATHS,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_BINDING_ARTIFACT_SHA256,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_BINDING_HASH,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_COMMIT,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_ENVELOPE_HASH,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_TREE,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_PRESERVED_SEMANTIC_ARTIFACTS,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_PROTOCOL_PATHS,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_SEALED_EVIDENCE_BUILD,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_SEMANTIC_PACKAGE_DIGEST,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_TRANSITION_VERSION,
   JUDGE_DEMO_PRESENTATION_REBRAND_TRANSITION_VERSION,
   JUDGE_DEMO_PRESENTATION_TRANSITION_VERSION,
   JUDGE_DEMO_REBRAND_BRANDING_PATHS,
@@ -48,8 +64,10 @@ import {
   JUDGE_DEMO_PRESENTATION_BINDING_HASH_ENV,
   JUDGE_DEMO_PRESENTATION_REBRAND_BINDING_VERSION,
   JUDGE_DEMO_PRESENTATION_BINDING_VERSION,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_BINDING_VERSION,
   JUDGE_DEMO_SHARED_GIT_PACK_ENV,
   configuredJudgeDemoPresentationBinding,
+  judgeDemoPresentationOrderValid,
   publicJudgeDemoPresentationBinding,
   verifyJudgeDemoPresentationBinding,
   type JudgeDemoPresentationBinding
@@ -719,11 +737,285 @@ async function presentationRebrandFixture() {
   };
 }
 
+function boundedTreeChange(path: string, added = false) {
+  return {
+    path,
+    status: added ? ("A" as const) : ("M" as const),
+    predecessorMode: added ? null : "100644",
+    successorMode: "100644",
+    predecessorBlobOid: added ? null : "1".repeat(40),
+    successorBlobOid: "2".repeat(40)
+  };
+}
+
+async function invocationIntegrityTransitionFixture() {
+  const protocolCommit = "d".repeat(40);
+  const implementationCommit = "e".repeat(40);
+  const rootProjectionHash = "2".repeat(64);
+  const activeProjectionHash = "3".repeat(64);
+  const protocolChanges = JUDGE_DEMO_INVOCATION_INTEGRITY_PROTOCOL_PATHS.map((path) =>
+    boundedTreeChange(path)
+  );
+  const implementationChanges = JUDGE_DEMO_INVOCATION_INTEGRITY_IMPLEMENTATION_REQUIRED_PATHS.map(
+    (path) => boundedTreeChange(path, true)
+  );
+  const amendmentChange = boundedTreeChange(JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_PATH, true);
+  const payload = {
+    version: JUDGE_DEMO_INVOCATION_INTEGRITY_TRANSITION_VERSION,
+    kind: "invocation-integrity" as const,
+    ordinal: 2,
+    predecessorCommit: JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_COMMIT,
+    successorCommit: implementationCommit,
+    predecessorEnvelopeHash: JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_ENVELOPE_HASH,
+    successorEnvelopeHash: "1".repeat(64),
+    rootEvidenceCommit,
+    rootEnvelopeHash: "4".repeat(64),
+    rootReceiptDigest,
+    rootArtifactDigest,
+    rootStoredProjectionDigest,
+    rootCapturedAt,
+    immutableProjectionHash: rootProjectionHash,
+    firstParentChainHash: await canonicalSha256([
+      JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_COMMIT,
+      JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_COMMIT,
+      protocolCommit,
+      implementationCommit
+    ]),
+    gitTreeProjectionHash: "5".repeat(64),
+    criticalProjectionHash: "6".repeat(64),
+    dependencyProjectionHash: "7".repeat(64),
+    providerCallsPerformed: 0 as const,
+    storeWritesPerformed: 0 as const,
+    replayOnly: true as const,
+    predecessorBinding: {
+      activeCommit: JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_COMMIT,
+      activeTree: JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_TREE,
+      activeEnvelopeHash: JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_ENVELOPE_HASH,
+      bindingHash: JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_BINDING_HASH,
+      reviewedArtifactSha256: JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_BINDING_ARTIFACT_SHA256
+    },
+    amendment: {
+      commit: JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_COMMIT,
+      tree: JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_TREE,
+      path: JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_PATH,
+      fileSha256: JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_SHA256,
+      treeChange: amendmentChange,
+      gitTreeProjectionHash: await canonicalSha256([amendmentChange])
+    },
+    protocolExtension: {
+      commit: protocolCommit,
+      tree: "8".repeat(40),
+      changedPaths: [...JUDGE_DEMO_INVOCATION_INTEGRITY_PROTOCOL_PATHS],
+      treeChanges: protocolChanges,
+      gitTreeProjectionHash: await canonicalSha256(protocolChanges)
+    },
+    implementation: {
+      tree: "9".repeat(40),
+      changedPaths: implementationChanges.map(({ path }) => path),
+      treeChanges: implementationChanges,
+      requiredPathsHash: await canonicalSha256(
+        JUDGE_DEMO_INVOCATION_INTEGRITY_IMPLEMENTATION_REQUIRED_PATHS
+      ),
+      gitTreeProjectionHash: await canonicalSha256(implementationChanges)
+    },
+    invocationContract: {
+      amendmentStatus: "prospective-frozen-supplement" as const,
+      caseIds: ["II-01" as const, "II-02" as const, "II-03" as const],
+      invocationCount: 4 as const,
+      scoreDenominator: 3 as const,
+      itemIdPattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$" as const,
+      itemIdMinLength: 1 as const,
+      itemIdMaxLength: 64 as const,
+      fixtureMembership: "server-authoritative" as const,
+      successfulItemIdentity: "trusted-fixture-CartItemId" as const,
+      contractSourceSha256: "a".repeat(64)
+    },
+    immutableProjectionDelta: {
+      predecessorProjectionHash: rootProjectionHash,
+      successorProjectionHash: activeProjectionHash,
+      changedTool: "cart_update" as const,
+      changedField: "inputSchema.properties.itemId" as const,
+      judgeTargetTool: "cart_get" as const,
+      judgeTargetContractChanged: false as const,
+      semanticMeaningMatrixChanged: false as const
+    },
+    semanticEvidence: {
+      sealedEvidenceBuildCommit: JUDGE_DEMO_INVOCATION_INTEGRITY_SEALED_EVIDENCE_BUILD,
+      packageDigest: JUDGE_DEMO_INVOCATION_INTEGRITY_SEMANTIC_PACKAGE_DIGEST,
+      baselinePassed: 23 as const,
+      revisedPassed: 23 as const,
+      possible: 24 as const,
+      noMeasuredImprovement: true as const,
+      meaningMatrixCaseCount: 24 as const,
+      meaningMatrixModified: false as const,
+      artifacts: JUDGE_DEMO_INVOCATION_INTEGRITY_PRESERVED_SEMANTIC_ARTIFACTS,
+      artifactsProjectionHash: await canonicalSha256(
+        JUDGE_DEMO_INVOCATION_INTEGRITY_PRESERVED_SEMANTIC_ARTIFACTS
+      )
+    },
+    gate6PresentationProofHash: "b".repeat(64),
+    gate6CriticalProjectionHash: "c".repeat(64),
+    modelCallsPerformed: 0 as const,
+    scoredCallsPerformed: 0 as const
+  };
+  return verifyJudgeDemoPresentationTransition({
+    ...payload,
+    proofHash: await canonicalSha256(payload)
+  });
+}
+
+async function invocationIntegrityEvidenceTransitionFixture() {
+  const predecessorCommit = "e".repeat(40);
+  const successorCommit = "f".repeat(40);
+  const changes = JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_REQUIRED_PATHS.map((path) =>
+    boundedTreeChange(path, true)
+  );
+  const payload = {
+    version: JUDGE_DEMO_INVOCATION_INTEGRITY_TRANSITION_VERSION,
+    kind: "invocation-integrity-evidence" as const,
+    ordinal: 3,
+    predecessorCommit,
+    successorCommit,
+    predecessorEnvelopeHash: "1".repeat(64),
+    successorEnvelopeHash: "2".repeat(64),
+    rootEvidenceCommit,
+    rootEnvelopeHash: "4".repeat(64),
+    rootReceiptDigest,
+    rootArtifactDigest,
+    rootStoredProjectionDigest,
+    rootCapturedAt,
+    immutableProjectionHash: "3".repeat(64),
+    firstParentChainHash: await canonicalSha256([predecessorCommit, successorCommit]),
+    gitTreeProjectionHash: await canonicalSha256(changes),
+    criticalProjectionHash: "6".repeat(64),
+    dependencyProjectionHash: "7".repeat(64),
+    providerCallsPerformed: 0 as const,
+    storeWritesPerformed: 0 as const,
+    replayOnly: true as const,
+    evidence: {
+      executionBuildCommit: predecessorCommit,
+      tree: "8".repeat(40),
+      changedPaths: changes.map(({ path }) => path),
+      treeChanges: changes,
+      requiredPathsHash: await canonicalSha256(
+        JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_REQUIRED_PATHS
+      ),
+      gitTreeProjectionHash: await canonicalSha256(changes),
+      supplementalPackageDigest: "9".repeat(64),
+      jsonExportSha256: "a".repeat(64),
+      markdownExportSha256: "b".repeat(64),
+      measuredSourceSha256: "c".repeat(64),
+      scoreEarned: 3 as const,
+      scorePossible: 3 as const,
+      modelCallCount: 0 as const,
+      includedInSemanticDenominator: false as const,
+      semanticEvidenceBuildCommit: JUDGE_DEMO_INVOCATION_INTEGRITY_SEALED_EVIDENCE_BUILD,
+      semanticPackageDigest: JUDGE_DEMO_INVOCATION_INTEGRITY_SEMANTIC_PACKAGE_DIGEST,
+      semanticBaselinePassed: 23 as const,
+      semanticRevisedPassed: 23 as const,
+      semanticPossible: 24 as const,
+      semanticNoMeasuredImprovement: true as const,
+      immutableProjectionHash: "d".repeat(64)
+    },
+    gate6PresentationProofHash: "e".repeat(64),
+    gate6CriticalProjectionHash: "f".repeat(64),
+    modelCallsPerformed: 0 as const,
+    scoredCallsPerformed: 0 as const
+  };
+  return verifyJudgeDemoPresentationTransition({
+    ...payload,
+    proofHash: await canonicalSha256(payload)
+  });
+}
+
 afterEach(async () => {
   await Promise.all(temporaryRoots.splice(0).map((path) => rm(path, { recursive: true })));
 });
 
 describe("judge provider-free presentation lineage", () => {
+  it("preserves v2/v3 order and accepts only the exact v4 material/evidence/collateral order", () => {
+    const recovery = { kind: "sealed-reader-compatibility-recovery" as const };
+    const rebrand = { kind: "presentation-rebrand" as const };
+    const integrity = { kind: "invocation-integrity" as const };
+    const evidence = { kind: "invocation-integrity-evidence" as const };
+    const collateral = { kind: "collateral-links" as const };
+
+    expect(
+      judgeDemoPresentationOrderValid(JUDGE_DEMO_PRESENTATION_BINDING_VERSION, [recovery])
+    ).toBe(true);
+    expect(
+      judgeDemoPresentationOrderValid(JUDGE_DEMO_PRESENTATION_REBRAND_BINDING_VERSION, [
+        recovery,
+        rebrand,
+        collateral
+      ])
+    ).toBe(true);
+    for (const transitions of [
+      [recovery, rebrand, integrity],
+      [recovery, rebrand, integrity, evidence],
+      [recovery, rebrand, integrity, collateral],
+      [recovery, rebrand, integrity, evidence, collateral]
+    ]) {
+      expect(
+        judgeDemoPresentationOrderValid(
+          JUDGE_DEMO_INVOCATION_INTEGRITY_BINDING_VERSION,
+          transitions
+        )
+      ).toBe(true);
+    }
+    for (const transitions of [
+      [recovery, rebrand],
+      [recovery, rebrand, evidence, integrity],
+      [recovery, rebrand, integrity, collateral, evidence],
+      [recovery, rebrand, integrity, evidence, evidence]
+    ]) {
+      expect(
+        judgeDemoPresentationOrderValid(
+          JUDGE_DEMO_INVOCATION_INTEGRITY_BINDING_VERSION,
+          transitions
+        )
+      ).toBe(false);
+    }
+  });
+
+  it("verifies digest-bound v4 integrity and supplemental-evidence transition contracts", async () => {
+    await expect(invocationIntegrityTransitionFixture()).resolves.toMatchObject({
+      kind: "invocation-integrity",
+      ordinal: 2,
+      modelCallsPerformed: 0,
+      scoredCallsPerformed: 0,
+      providerCallsPerformed: 0,
+      storeWritesPerformed: 0,
+      replayOnly: true
+    });
+    await expect(invocationIntegrityEvidenceTransitionFixture()).resolves.toMatchObject({
+      kind: "invocation-integrity-evidence",
+      ordinal: 3,
+      evidence: {
+        scoreEarned: 3,
+        scorePossible: 3,
+        modelCallCount: 0,
+        includedInSemanticDenominator: false
+      }
+    });
+
+    const tampered = structuredClone(await invocationIntegrityTransitionFixture());
+    if (tampered.kind !== "invocation-integrity") throw new Error("test_transition_kind_mismatch");
+    tampered.implementation.changedPaths = tampered.implementation.changedPaths.slice(1);
+    tampered.implementation.treeChanges = tampered.implementation.treeChanges.slice(1);
+    tampered.implementation.gitTreeProjectionHash = await canonicalSha256(
+      tampered.implementation.treeChanges
+    );
+    const payload: Record<string, unknown> = { ...tampered };
+    delete payload.proofHash;
+    await expect(
+      verifyJudgeDemoPresentationTransition({
+        ...payload,
+        proofHash: await canonicalSha256(payload)
+      })
+    ).rejects.toThrow(/invocation_integrity|too_small/u);
+  });
+
   it("verifies the exact e2-style sealed-reader recovery and active checkout", async () => {
     const value = await fixture();
     git(value.cwd, ["reset", "--hard", "-q", value.recoveryCommit]);

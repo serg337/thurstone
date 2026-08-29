@@ -810,6 +810,65 @@ describe("single-use signed-out judge demo service", () => {
         }
       })
     ).not.toThrow();
+    const integrityCommit = "5".repeat(40);
+    const integrityEnvelopeHash = "4".repeat(64);
+    const publicIntegrityTransition = {
+      kind: "invocation-integrity" as const,
+      ordinal: 2,
+      predecessorCommit: rebrandCommit,
+      successorCommit: integrityCommit,
+      predecessorEnvelopeHash: rebrandEnvelopeHash,
+      successorEnvelopeHash: integrityEnvelopeHash,
+      firstParentChainHash: "1".repeat(64),
+      gitTreeProjectionHash: "2".repeat(64),
+      criticalProjectionHash: "3".repeat(64),
+      dependencyProjectionHash: "4".repeat(64),
+      proofHash: "5".repeat(64),
+      ciTimeoutValidation: null,
+      invocationIntegrityVerification: {
+        predecessorBindingHash: "6".repeat(64),
+        predecessorBindingArtifactSha256: "7".repeat(64),
+        predecessorEnvelopeHash: rebrandEnvelopeHash,
+        amendmentCommit: "8".repeat(40),
+        amendmentSha256: "9".repeat(64),
+        protocolExtensionCommit: "a".repeat(40),
+        protocolProjectionHash: "b".repeat(64),
+        implementationProjectionHash: "c".repeat(64),
+        contractSourceSha256: "d".repeat(64),
+        semanticEvidenceBuildCommit: "e".repeat(40),
+        semanticPackageDigest: "f".repeat(64),
+        semanticBaselinePassed: 23 as const,
+        semanticRevisedPassed: 23 as const,
+        semanticPossible: 24 as const,
+        semanticNoMeasuredImprovement: true as const,
+        modelCallsPerformed: 0 as const,
+        scoredCallsPerformed: 0 as const
+      },
+      providerCallsPerformed: 0 as const,
+      storeWritesPerformed: 0 as const,
+      replayOnly: true as const
+    };
+    expect(() =>
+      judgeDemoStatusSchema.parse({
+        ...status,
+        projection: {
+          ...status.projection,
+          appCommit: integrityCommit,
+          presentationBinding: {
+            ...publicBinding,
+            version: "toolproof-judge-demo-public-presentation-lineage@4.0.0",
+            activeCommit: integrityCommit,
+            activeEnvelopeHash: integrityEnvelopeHash,
+            activeImmutableProjectionHash: "f".repeat(64),
+            transitions: [
+              publicBinding.transitions[0]!,
+              publicRebrandTransition,
+              publicIntegrityTransition
+            ]
+          }
+        }
+      })
+    ).not.toThrow();
     expect(() =>
       judgeDemoStatusSchema.parse({
         ...status,

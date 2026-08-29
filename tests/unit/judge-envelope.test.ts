@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import { canonicalJson } from "@/lib/evidence/digest";
 import { JUDGE_DEMO_RUN_INTENT, judgeDemoRunBodySchema } from "@/lib/judge/contract";
 import {
+  JUDGE_DEMO_EVIDENCE_ROOT_COMMIT,
+  JUDGE_DEMO_EVIDENCE_ROOT_ENVELOPE_HASH,
   JUDGE_DEMO_REQUEST,
   createJudgeDemoEnvelope,
   verifyJudgeDemoEnvelope
@@ -59,6 +61,20 @@ describe("source-fixed judge demo envelope", () => {
     await expect(
       verifyJudgeDemoEnvelope({ ...envelope, naturalLanguageRequest: "different" })
     ).rejects.toThrow();
+  });
+
+  it("uses the digest-bound historical evidence-root envelope snapshot", async () => {
+    const rootEnvelope = await createJudgeDemoEnvelope(JUDGE_DEMO_EVIDENCE_ROOT_COMMIT);
+    expect(rootEnvelope.envelopeHash).toBe(JUDGE_DEMO_EVIDENCE_ROOT_ENVELOPE_HASH);
+    expect(
+      rootEnvelope.liveManifest.tools.find(({ name }) => name === "cart_update")
+    ).toMatchObject({
+      inputSchema: { properties: { itemId: { enum: ["field-notebook", "stoneware-mug"] } } }
+    });
+    await expect(verifyJudgeDemoEnvelope(rootEnvelope)).resolves.toEqual(rootEnvelope);
+    await expect(
+      verifyJudgeDemoEnvelope({ ...rootEnvelope, runId: "run_0000000000000000000000" })
+    ).rejects.toThrow(/judge_demo_envelope_binding_mismatch/u);
   });
 
   it("makes one bounded stateless request only after the durable dispatch grant", async () => {

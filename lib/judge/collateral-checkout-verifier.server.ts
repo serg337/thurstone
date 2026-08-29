@@ -10,8 +10,22 @@ import {
   JUDGE_DEMO_CI_TIMEOUT_MS,
   JUDGE_DEMO_CI_TIMEOUT_PATH,
   JUDGE_DEMO_COLLATERAL_FIELD_PREFIXES,
-  JUDGE_DEMO_COLLATERAL_PATHS,
   JUDGE_DEMO_CRITICAL_PATHS,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_COMMIT,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_PATH,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_SHA256,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_TREE,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_ALLOWED_PATHS,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_REQUIRED_PATHS,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_IMPLEMENTATION_ALLOWED_PATHS,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_IMPLEMENTATION_REQUIRED_PATHS,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_COMMIT,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_BINDING_ARTIFACT_SHA256,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_BINDING_HASH,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_ENVELOPE_HASH,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_TREE,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_PRESERVED_SEMANTIC_ARTIFACTS,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_PROTOCOL_PATHS,
   JUDGE_DEMO_REBRAND_BRANDING_PATHS,
   JUDGE_DEMO_REBRAND_PREDECESSOR_BINDING_HASH,
   JUDGE_DEMO_REBRAND_PREDECESSOR_COMMIT,
@@ -28,7 +42,8 @@ import {
   JUDGE_DEMO_RECOVERY_PATHS,
   JUDGE_DEMO_TRUTH_STATUS_FINALIZATION_PATHS,
   type JudgeDemoCollateralField,
-  type JudgeDemoCollateralPath,
+  type JudgeDemoInvocationIntegrityEvidenceTransition,
+  type JudgeDemoInvocationIntegrityTransition,
   type JudgeDemoPresentationTransition,
   type JudgeDemoRebrandTransition
 } from "@/lib/judge/collateral-proof";
@@ -465,8 +480,7 @@ async function verifyPresentationRebrand(input: {
     input.transition.branding.files.map(async ({ path }) => {
       const useReferencedBlob =
         judgeDemoPathExcludedFromDeployment(path) ||
-        (input.terminalActiveCommit !== input.transition.successorCommit &&
-          JUDGE_DEMO_COLLATERAL_PATHS.includes(path as JudgeDemoCollateralPath));
+        input.terminalActiveCommit !== input.transition.successorCommit;
       const bytes = useReferencedBlob
         ? gitBlobBytes(input.cwd, input.transition.successorCommit, path)
         : (await checkoutEntry(input.cwd, path))?.bytes;
@@ -517,6 +531,230 @@ async function verifyPresentationRebrand(input: {
   }
 }
 
+function assertSafeMaterialTreeMutation(change: GitTreeChange, code: string): void {
+  const modified =
+    change.status === "M" &&
+    change.predecessorMode === "100644" &&
+    change.successorMode === "100644" &&
+    change.predecessorBlobOid !== null &&
+    change.successorBlobOid !== null;
+  const added =
+    change.status === "A" &&
+    change.predecessorMode === null &&
+    change.successorMode === "100644" &&
+    change.predecessorBlobOid === null &&
+    change.successorBlobOid !== null;
+  if (!modified && !added) throw new Error(`${code}:${change.path}`);
+}
+
+async function verifyInvocationIntegrity(input: {
+  readonly cwd: string;
+  readonly transition: JudgeDemoInvocationIntegrityTransition;
+  readonly firstParentChain: readonly string[];
+}): Promise<void> {
+  const protocolCommit = input.transition.protocolExtension.commit;
+  const expectedChain = [
+    JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_COMMIT,
+    JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_COMMIT,
+    protocolCommit,
+    input.transition.successorCommit
+  ];
+  if (
+    canonicalJson(input.firstParentChain) !== canonicalJson(expectedChain) ||
+    commitTree(input.cwd, JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_COMMIT) !==
+      JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_TREE ||
+    commitTree(input.cwd, JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_COMMIT) !==
+      JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_TREE ||
+    commitTree(input.cwd, protocolCommit) !== input.transition.protocolExtension.tree ||
+    commitTree(input.cwd, input.transition.successorCommit) !==
+      input.transition.implementation.tree ||
+    input.transition.predecessorEnvelopeHash !==
+      JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_ENVELOPE_HASH
+  ) {
+    throw new Error("judge_demo_invocation_integrity_chain_invalid");
+  }
+
+  const amendmentChanges = gitTreeChanges(
+    input.cwd,
+    JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_COMMIT,
+    JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_COMMIT
+  );
+  const protocolChanges = gitTreeChanges(
+    input.cwd,
+    JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_COMMIT,
+    protocolCommit
+  );
+  const implementationChanges = gitTreeChanges(
+    input.cwd,
+    protocolCommit,
+    input.transition.successorCommit
+  );
+  if (
+    amendmentChanges.length !== 1 ||
+    amendmentChanges[0]?.path !== JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_PATH ||
+    canonicalJson(amendmentChanges[0]) !== canonicalJson(input.transition.amendment.treeChange) ||
+    (await canonicalSha256(amendmentChanges)) !==
+      input.transition.amendment.gitTreeProjectionHash ||
+    canonicalJson(protocolChanges.map(({ path }) => path)) !==
+      canonicalJson(JUDGE_DEMO_INVOCATION_INTEGRITY_PROTOCOL_PATHS) ||
+    canonicalJson(protocolChanges) !==
+      canonicalJson(input.transition.protocolExtension.treeChanges) ||
+    (await canonicalSha256(protocolChanges)) !==
+      input.transition.protocolExtension.gitTreeProjectionHash ||
+    canonicalJson(implementationChanges.map(({ path }) => path)) !==
+      canonicalJson(input.transition.implementation.changedPaths) ||
+    canonicalJson(implementationChanges) !==
+      canonicalJson(input.transition.implementation.treeChanges) ||
+    implementationChanges.some(
+      ({ path }) => !JUDGE_DEMO_INVOCATION_INTEGRITY_IMPLEMENTATION_ALLOWED_PATHS.includes(path)
+    ) ||
+    JUDGE_DEMO_INVOCATION_INTEGRITY_IMPLEMENTATION_REQUIRED_PATHS.some(
+      (path) => !implementationChanges.some((change) => change.path === path)
+    ) ||
+    (await canonicalSha256(implementationChanges)) !==
+      input.transition.implementation.gitTreeProjectionHash
+  ) {
+    throw new Error("judge_demo_invocation_integrity_step_projection_invalid");
+  }
+  assertSafeMaterialTreeMutation(
+    amendmentChanges[0]!,
+    "judge_demo_invocation_amendment_mode_invalid"
+  );
+  for (const change of protocolChanges) {
+    assertSafeMaterialTreeMutation(change, "judge_demo_invocation_protocol_mode_invalid");
+  }
+  for (const change of implementationChanges) {
+    assertSafeMaterialTreeMutation(change, "judge_demo_invocation_implementation_mode_invalid");
+  }
+
+  const amendmentBytes = gitBlobBytes(
+    input.cwd,
+    JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_COMMIT,
+    JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_PATH
+  );
+  const contractBytes = gitBlobBytes(
+    input.cwd,
+    input.transition.successorCommit,
+    "lib/invocation-integrity/contract.ts"
+  );
+  const schemaSource = gitText(
+    input.cwd,
+    input.transition.successorCommit,
+    "lib/domain/checkout-schemas.ts"
+  );
+  const domainSource = gitText(
+    input.cwd,
+    input.transition.successorCommit,
+    "lib/domain/checkout.ts"
+  );
+  if (
+    !amendmentBytes ||
+    sha256(amendmentBytes) !== JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_SHA256 ||
+    !contractBytes ||
+    sha256(contractBytes) !== input.transition.invocationContract.contractSourceSha256 ||
+    !schemaSource?.includes('CART_ITEM_ID_PATTERN = "^[a-z0-9]+(?:-[a-z0-9]+)*$"') ||
+    !schemaSource.includes(".min(1).max(64)") ||
+    !schemaSource.includes("pattern: CART_ITEM_ID_PATTERN") ||
+    !domainSource?.includes("itemId: line.itemId")
+  ) {
+    throw new Error("judge_demo_invocation_integrity_contract_delta_invalid");
+  }
+
+  const preserved = JUDGE_DEMO_INVOCATION_INTEGRITY_PRESERVED_SEMANTIC_ARTIFACTS.map(({ path }) => {
+    const bytes = gitBlobBytes(input.cwd, input.transition.successorCommit, path);
+    if (!bytes) throw new Error(`judge_demo_invocation_semantic_artifact_missing:${path}`);
+    return { path, sha256: sha256(bytes) };
+  });
+  if (
+    canonicalJson(preserved) !== canonicalJson(input.transition.semanticEvidence.artifacts) ||
+    (await canonicalSha256(preserved)) !== input.transition.semanticEvidence.artifactsProjectionHash
+  ) {
+    throw new Error("judge_demo_invocation_semantic_preservation_invalid");
+  }
+}
+
+async function verifyInvocationIntegrityEvidence(input: {
+  readonly cwd: string;
+  readonly transition: JudgeDemoInvocationIntegrityEvidenceTransition;
+  readonly firstParentChain: readonly string[];
+}): Promise<void> {
+  if (
+    input.firstParentChain.length !== 2 ||
+    input.firstParentChain[0] !== input.transition.predecessorCommit ||
+    input.firstParentChain[1] !== input.transition.successorCommit ||
+    commitTree(input.cwd, input.transition.successorCommit) !== input.transition.evidence.tree
+  ) {
+    throw new Error("judge_demo_invocation_evidence_chain_invalid");
+  }
+  const changes = gitTreeChanges(
+    input.cwd,
+    input.transition.predecessorCommit,
+    input.transition.successorCommit
+  );
+  if (
+    canonicalJson(changes.map(({ path }) => path)) !==
+      canonicalJson(input.transition.evidence.changedPaths) ||
+    canonicalJson(changes) !== canonicalJson(input.transition.evidence.treeChanges) ||
+    changes.some(
+      ({ path }) => !JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_ALLOWED_PATHS.includes(path)
+    ) ||
+    JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_REQUIRED_PATHS.some(
+      (path) => !changes.some((change) => change.path === path)
+    ) ||
+    (await canonicalSha256(changes)) !== input.transition.evidence.gitTreeProjectionHash
+  ) {
+    throw new Error("judge_demo_invocation_evidence_projection_invalid");
+  }
+  for (const change of changes) {
+    assertSafeMaterialTreeMutation(change, "judge_demo_invocation_evidence_mode_invalid");
+  }
+  const jsonBytes = gitBlobBytes(
+    input.cwd,
+    input.transition.successorCommit,
+    "evidence/thurstone-invocation-integrity.json"
+  );
+  const markdownBytes = gitBlobBytes(
+    input.cwd,
+    input.transition.successorCommit,
+    "evidence/thurstone-invocation-integrity.md"
+  );
+  const measuredBytes = gitBlobBytes(
+    input.cwd,
+    input.transition.successorCommit,
+    "lib/results/invocation-integrity-measured.ts"
+  );
+  if (
+    !jsonBytes ||
+    !markdownBytes ||
+    !measuredBytes ||
+    sha256(jsonBytes) !== input.transition.evidence.jsonExportSha256 ||
+    sha256(markdownBytes) !== input.transition.evidence.markdownExportSha256 ||
+    sha256(measuredBytes) !== input.transition.evidence.measuredSourceSha256
+  ) {
+    throw new Error("judge_demo_invocation_evidence_file_digest_invalid");
+  }
+  let document: Record<string, unknown>;
+  try {
+    document = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(jsonBytes)) as Record<
+      string,
+      unknown
+    >;
+  } catch {
+    throw new Error("judge_demo_invocation_evidence_json_invalid");
+  }
+  const score = document.score as Record<string, unknown> | undefined;
+  if (
+    document.evidenceClass !== "supplemental-invocation-integrity" ||
+    document.modelCallCount !== 0 ||
+    document.includedInSemanticDenominator !== false ||
+    document.packageDigest !== input.transition.evidence.supplementalPackageDigest ||
+    score?.earned !== 3 ||
+    score.possible !== 3
+  ) {
+    throw new Error("judge_demo_invocation_evidence_claim_invalid");
+  }
+}
+
 async function verifyTransitionGit(input: {
   readonly transition: JudgeDemoPresentationTransition;
   readonly activeCommit: string;
@@ -558,6 +796,18 @@ async function verifyTransitionGit(input: {
       firstParentChain: actualFirstParentChain,
       terminalActiveCommit: input.activeCommit
     });
+  } else if (input.transition.kind === "invocation-integrity") {
+    await verifyInvocationIntegrity({
+      cwd: input.cwd,
+      transition: input.transition,
+      firstParentChain: actualFirstParentChain
+    });
+  } else if (input.transition.kind === "invocation-integrity-evidence") {
+    await verifyInvocationIntegrityEvidence({
+      cwd: input.cwd,
+      transition: input.transition,
+      firstParentChain: actualFirstParentChain
+    });
   } else if (actualFirstParentChain.length !== 2) {
     throw new Error("judge_demo_presentation_transition_not_direct_child");
   }
@@ -587,7 +837,15 @@ async function verifyTransitionGit(input: {
       ? JUDGE_DEMO_RECOVERY_PATHS
       : input.transition.kind === "presentation-rebrand"
         ? [...JUDGE_DEMO_REBRAND_PROTOCOL_PATHS, ...JUDGE_DEMO_REBRAND_BRANDING_PATHS].sort()
-        : [...new Set(input.transition.collateralChanges.map(({ path }) => path))].sort();
+        : input.transition.kind === "invocation-integrity"
+          ? [
+              JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_PATH,
+              ...JUDGE_DEMO_INVOCATION_INTEGRITY_PROTOCOL_PATHS,
+              ...input.transition.implementation.changedPaths
+            ].sort()
+          : input.transition.kind === "invocation-integrity-evidence"
+            ? input.transition.evidence.changedPaths
+            : [...new Set(input.transition.collateralChanges.map(({ path }) => path))].sort();
   if (canonicalJson(actualChangedPaths) !== canonicalJson(expectedChangedPaths)) {
     throw new Error("judge_demo_presentation_actual_diff_mismatch");
   }
@@ -607,10 +865,11 @@ async function verifyTransitionGit(input: {
   const changedCriticalPaths = criticalEntries
     .filter(({ predecessorBlobOid, successorBlobOid }) => predecessorBlobOid !== successorBlobOid)
     .map(({ path }) => path);
+  const transition = input.transition;
   if (
-    (input.transition.kind === "sealed-reader-compatibility-recovery" &&
+    (transition.kind === "sealed-reader-compatibility-recovery" &&
       changedCriticalPaths.some((path) => !JUDGE_DEMO_RECOVERY_PATHS.includes(path))) ||
-    (input.transition.kind === "presentation-rebrand" &&
+    (transition.kind === "presentation-rebrand" &&
       changedCriticalPaths.some(
         (path) =>
           !JUDGE_DEMO_REBRAND_PROTOCOL_PATHS.includes(
@@ -620,7 +879,16 @@ async function verifyTransitionGit(input: {
             path as (typeof JUDGE_DEMO_REBRAND_BRANDING_PATHS)[number]
           )
       )) ||
-    (input.transition.kind === "collateral-links" && changedCriticalPaths.length !== 0)
+    (transition.kind === "invocation-integrity" &&
+      changedCriticalPaths.some(
+        (path) =>
+          path !== JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_PATH &&
+          !JUDGE_DEMO_INVOCATION_INTEGRITY_PROTOCOL_PATHS.includes(path) &&
+          !transition.implementation.changedPaths.includes(path)
+      )) ||
+    (transition.kind === "invocation-integrity-evidence" &&
+      changedCriticalPaths.some((path) => !transition.evidence.changedPaths.includes(path))) ||
+    (transition.kind === "collateral-links" && changedCriticalPaths.length !== 0)
   ) {
     throw new Error("judge_demo_presentation_critical_invariant_mismatch");
   }
@@ -756,6 +1024,21 @@ export async function verifyJudgeDemoPresentationCheckout(input: {
       JUDGE_DEMO_REBRAND_PREDECESSOR_TRANSITION_PROOF_HASH;
   if (rebrandTransition && !rebrandPredecessorBindingValid) {
     throw new Error("judge_demo_rebrand_predecessor_binding_invalid");
+  }
+  const invocationTransition = input.binding.transitions.find(
+    ({ kind }) => kind === "invocation-integrity"
+  );
+  const invocationPredecessorBindingValid =
+    invocationTransition?.kind === "invocation-integrity" &&
+    invocationTransition.predecessorCommit === JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_COMMIT &&
+    invocationTransition.predecessorBinding.bindingHash ===
+      JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_BINDING_HASH &&
+    invocationTransition.predecessorBinding.reviewedArtifactSha256 ===
+      JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_BINDING_ARTIFACT_SHA256 &&
+    rebrandTransition?.kind === "presentation-rebrand" &&
+    rebrandTransition.successorCommit === JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_COMMIT;
+  if (invocationTransition && !invocationPredecessorBindingValid) {
+    throw new Error("judge_demo_invocation_predecessor_binding_invalid");
   }
   const recoveryTerminalCheckoutDeferred = input.binding.transitions.length > 1;
   for (const transition of input.binding.transitions) {

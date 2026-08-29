@@ -30,11 +30,16 @@ import {
 import { createCheckoutLiveManifest } from "@/lib/webmcp/live-manifest.server";
 import { z } from "zod";
 
+import frozenEvidenceRootEnvelopeJson from "../../evidence/judge-root-envelope.json";
+
 export const JUDGE_DEMO_ENVELOPE_VERSION = "toolproof-judge-demo-envelope@1.0.0";
 export const JUDGE_DEMO_CASE_ID = "judge_multi_quantity_lines_v1" as const;
 export const JUDGE_DEMO_REQUEST =
   "Which current cart lines have a quantity greater than one?" as const;
 export const JUDGE_DEMO_RUNNER_SETTINGS_VERSION = "toolproof-judge-demo-runner-settings@1.0.0";
+export const JUDGE_DEMO_EVIDENCE_ROOT_COMMIT = "e2cf8d47375abfeeb4f32bd6f5973918acf4c091";
+export const JUDGE_DEMO_EVIDENCE_ROOT_ENVELOPE_HASH =
+  "bc8ef35d5df7136dc88d19ec6850d76bd804cbf6f52f343e7754bd25d9b26687";
 
 export const JUDGE_DEMO_RUNNER_SETTINGS = Object.freeze({
   version: JUDGE_DEMO_RUNNER_SETTINGS_VERSION,
@@ -120,8 +125,25 @@ export async function judgeDemoRunnerHash(): Promise<string> {
   });
 }
 
+async function frozenEvidenceRootEnvelope(): Promise<JudgeDemoEnvelope> {
+  assertNoProbeExpectationLeakage(frozenEvidenceRootEnvelopeJson);
+  const parsed = judgeDemoEnvelopeSchema.parse(frozenEvidenceRootEnvelopeJson);
+  const { envelopeHash, ...unsigned } = parsed;
+  if (
+    parsed.buildCommit !== JUDGE_DEMO_EVIDENCE_ROOT_COMMIT ||
+    envelopeHash !== JUDGE_DEMO_EVIDENCE_ROOT_ENVELOPE_HASH ||
+    (await canonicalSha256(unsigned)) !== envelopeHash
+  ) {
+    throw new Error("judge_demo_root_envelope_binding_invalid");
+  }
+  return deepFreeze(JSON.parse(canonicalJson(parsed)) as JudgeDemoEnvelope);
+}
+
 export async function createJudgeDemoEnvelope(appCommit: string): Promise<JudgeDemoEnvelope> {
   if (!/^[a-f0-9]{40}$/u.test(appCommit)) throw new TypeError("judge_demo_commit_invalid");
+  if (appCommit === JUDGE_DEMO_EVIDENCE_ROOT_COMMIT) {
+    return frozenEvidenceRootEnvelope();
+  }
   const identitySeed = await canonicalSha256({
     version: JUDGE_DEMO_ENVELOPE_VERSION,
     lane: JUDGE_DEMO_LANE,

@@ -7,6 +7,8 @@ export const JUDGE_DEMO_PRESENTATION_TRANSITION_VERSION =
   "toolproof-judge-demo-presentation-transition@2.0.0";
 export const JUDGE_DEMO_PRESENTATION_REBRAND_TRANSITION_VERSION =
   "toolproof-judge-demo-presentation-transition@3.0.0";
+export const JUDGE_DEMO_INVOCATION_INTEGRITY_TRANSITION_VERSION =
+  "toolproof-judge-demo-presentation-transition@4.0.0";
 // Retained as an import-compatible name for release tooling. The proof is now a
 // discriminated transition rather than an unrestricted one-hop collateral proof.
 export const JUDGE_DEMO_COLLATERAL_PROOF_VERSION = JUDGE_DEMO_PRESENTATION_TRANSITION_VERSION;
@@ -43,6 +45,154 @@ export const JUDGE_DEMO_REBRAND_PREDECESSOR_BINDING_ARTIFACT_SHA256 =
   "d757c83b49eb67e1150db39496e1b52fa13f6764b1dcf88609d7d1204293e682";
 export const JUDGE_DEMO_REBRAND_PREDECESSOR_TRANSITION_PROOF_HASH =
   "b76c5769d511dd57ff713385143fa81421f5f7280f8f4df55452702aefe1bc6e";
+
+export const JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_COMMIT =
+  "ca18dd438c5499107bbf9937460cc2faaab14ade";
+export const JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_TREE =
+  "581c4a88e75fddb3cd4175496611e2a5b572b9ce";
+export const JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_ENVELOPE_HASH =
+  "1744a3835aa7f401ac27fb8598b5c247b5dd6bb725e37b910b5d040dc8f75b4f";
+export const JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_BINDING_HASH =
+  "bdaef9a5cf45c8fb944750d3bcac0dd9b30bfca0a6fa520fbd5229f7b7987799";
+export const JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_BINDING_ARTIFACT_SHA256 =
+  "f6c534a75f66d44ddfa6c810f5ceb5c55f1cc2ebe04348594818ccdfcdbe885a";
+export const JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_REBRAND_PROOF_HASH =
+  "c29e0c9b4e99fe1f49c4c6652734cb80bd764462bfd04d1442f1eda472db8660";
+export const JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_COMMIT =
+  "feef201241db3d1f4da437bfa3d66a55ca34d178";
+export const JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_TREE =
+  "8d46e0a10d969a328632ca9e9ac6f93f4dda94d9";
+export const JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_PATH =
+  "Thurstone_Brief_v2.1_Invocation_Integrity_Amendment.md" as const;
+export const JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_SHA256 =
+  "118ab0c19d6be6d82ef631308cff25c0855e41e08ec58aa49bd860d217d0c8c9";
+export const JUDGE_DEMO_INVOCATION_INTEGRITY_SEALED_EVIDENCE_BUILD =
+  "768af2539ca20c29928a897644ad22ba897c580d";
+export const JUDGE_DEMO_INVOCATION_INTEGRITY_SEMANTIC_PACKAGE_DIGEST =
+  "a449db4b1faacdbaab58777923d2ddbde75396b70fa4744b29d0eb8e97089a46";
+
+/** Exact prospective A -> P proof-protocol boundary. */
+export const JUDGE_DEMO_INVOCATION_INTEGRITY_PROTOCOL_PATHS = Object.freeze(
+  [
+    "evidence/judge-root-envelope.json",
+    "lib/judge/collateral-checkout-verifier.server.ts",
+    "lib/judge/collateral-proof.ts",
+    "lib/judge/contract.ts",
+    "lib/judge/envelope.ts",
+    "lib/judge/presentation-binding.server.ts",
+    "lib/results/presentation-proof.ts",
+    "scripts/verify-direct-observation-presentation.ts",
+    "tests/integration/judge-presentation.test.ts",
+    "tests/integration/judge-service.test.ts",
+    "tests/unit/judge-envelope.test.ts",
+    "tests/unit/direct-observation-presentation.test.ts",
+    "tests/unit/results-presentation-proof.test.ts"
+  ].sort()
+);
+
+/** Bounded P -> I application/result delta. Required paths are enforced separately below. */
+export const JUDGE_DEMO_INVOCATION_INTEGRITY_IMPLEMENTATION_ALLOWED_PATHS = Object.freeze(
+  [
+    ".github/workflows/ci.yml",
+    "PLAN.md",
+    "app/api/evidence/invocation-integrity/markdown/route.ts",
+    "app/api/evidence/invocation-integrity/route.ts",
+    "app/api/invocation-integrity/verify/route.ts",
+    "app/globals.css",
+    "app/invocation-integrity/page.tsx",
+    "app/results/page.tsx",
+    "components/invocation-integrity/invocation-integrity-client.tsx",
+    "components/results/invocation-integrity-results.tsx",
+    "components/site-header.tsx",
+    "lib/domain/checkout-schemas.ts",
+    "lib/domain/checkout-session.ts",
+    "lib/domain/checkout.ts",
+    "lib/invocation-integrity/contract.ts",
+    "lib/invocation-integrity/trusted-ledger.server.ts",
+    "lib/invocation-integrity/verifier.server.ts",
+    "lib/results/invocation-integrity-evidence.ts",
+    "lib/results/invocation-integrity-measured.ts",
+    "lib/results/invocation-integrity-results.server.ts",
+    "package.json",
+    "scripts/verify-semantic-record-preservation.ts",
+    "tests/browser/invocation-integrity-results.spec.ts",
+    "tests/browser/lab-sandbox.spec.ts",
+    "tests/browser/shell.spec.ts",
+    "tests/unit/checkout-schemas.test.ts",
+    "tests/unit/checkout-session.test.ts",
+    "tests/unit/checkout.test.ts",
+    "tests/unit/invocation-integrity-evidence.test.ts",
+    "tests/unit/invocation-integrity.test.ts"
+  ].sort()
+);
+export const JUDGE_DEMO_INVOCATION_INTEGRITY_IMPLEMENTATION_REQUIRED_PATHS = Object.freeze(
+  [
+    "app/api/invocation-integrity/verify/route.ts",
+    "app/invocation-integrity/page.tsx",
+    "components/invocation-integrity/invocation-integrity-client.tsx",
+    "components/results/invocation-integrity-results.tsx",
+    "lib/domain/checkout-schemas.ts",
+    "lib/domain/checkout.ts",
+    "lib/invocation-integrity/contract.ts",
+    "lib/invocation-integrity/trusted-ledger.server.ts",
+    "lib/invocation-integrity/verifier.server.ts",
+    "lib/results/invocation-integrity-evidence.ts",
+    "lib/results/invocation-integrity-measured.ts",
+    "lib/results/invocation-integrity-results.server.ts",
+    "scripts/verify-semantic-record-preservation.ts",
+    "tests/unit/invocation-integrity.test.ts"
+  ].sort()
+);
+
+/** Strict I -> E supplemental-evidence/Gate-9-preparation boundary. */
+export const JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_ALLOWED_PATHS = Object.freeze(
+  [
+    "CHALLENGE.md",
+    "HACKATHON_BUILD.md",
+    "PLAN.md",
+    "README.md",
+    "SECURITY.md",
+    "docs/OFFICIAL_SOURCE_CHECK.md",
+    "docs/architecture.md",
+    "docs/demo-script.md",
+    "docs/methodology.md",
+    "docs/rights-review.md",
+    "docs/testing.md",
+    "evidence/thurstone-invocation-integrity.json",
+    "evidence/thurstone-invocation-integrity.md",
+    "lib/results/invocation-integrity-measured.ts",
+    "scripts/verify-invocation-integrity-evidence.ts",
+    "submission/devpost.md",
+    "tests/browser/results.spec.ts",
+    "tests/unit/invocation-integrity-evidence.test.ts"
+  ].sort()
+);
+export const JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_REQUIRED_PATHS = Object.freeze(
+  [
+    "evidence/thurstone-invocation-integrity.json",
+    "evidence/thurstone-invocation-integrity.md",
+    "lib/results/invocation-integrity-measured.ts"
+  ].sort()
+);
+
+export const JUDGE_DEMO_INVOCATION_INTEGRITY_PRESERVED_SEMANTIC_ARTIFACTS = Object.freeze([
+  Object.freeze({
+    path: "evidence/sample-report.md" as const,
+    sha256: "d627627b464e64a46c8809fbb6d76be883b269aca181417b2337ddd8cfd74abe" as const
+  }),
+  Object.freeze({
+    path: "evidence/sample-run.json" as const,
+    sha256: "6d2835c5bfa580a4a8fdb79d4dfe6ee74b3eaf48dc11a8f4f5cfe86573e954ee" as const
+  }),
+  Object.freeze({
+    path: "evidence/toolproof-reference-evidence.json" as const,
+    sha256: "fb272a4a68d9c1d3d4542a668b86b23f293cd55e714c1b826af32c7fcac0be26" as const
+  }),
+  Object.freeze({
+    path: "evidence/toolproof-reference-evidence.md" as const,
+    sha256: "8301efa790f193060296d68a78b0553cf30d0c207b15864cf13609c65f2931fa" as const
+  })
+]);
 
 export const JUDGE_DEMO_REBRAND_PROTOCOL_PATHS = Object.freeze([
   "lib/judge/collateral-checkout-verifier.server.ts",
@@ -257,6 +407,15 @@ const recoveryFinalizationPath = z.enum(JUDGE_DEMO_RECOVERY_FINALIZATION_PATHS);
 const truthStatusFinalizationPath = z.enum(JUDGE_DEMO_TRUTH_STATUS_FINALIZATION_PATHS);
 const rebrandProtocolPath = z.enum(JUDGE_DEMO_REBRAND_PROTOCOL_PATHS);
 const rebrandBrandingPath = z.enum(JUDGE_DEMO_REBRAND_BRANDING_PATHS);
+const invocationIntegrityProtocolPath = z.enum(
+  JUDGE_DEMO_INVOCATION_INTEGRITY_PROTOCOL_PATHS as unknown as [string, ...string[]]
+);
+const invocationIntegrityImplementationPath = z.enum(
+  JUDGE_DEMO_INVOCATION_INTEGRITY_IMPLEMENTATION_ALLOWED_PATHS as unknown as [string, ...string[]]
+);
+const invocationIntegrityEvidencePath = z.enum(
+  JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_ALLOWED_PATHS as unknown as [string, ...string[]]
+);
 const collateralPath = z.enum(JUDGE_DEMO_COLLATERAL_PATHS);
 const collateralField = z.enum(
   Object.keys(JUDGE_DEMO_COLLATERAL_FIELD_PREFIXES) as [
@@ -294,6 +453,21 @@ const rebrandProtocolTreeChangeSchema = z
   .strict();
 const rebrandBrandingTreeChangeSchema = z
   .object({ path: rebrandBrandingPath, ...transitionTreeChangeShape })
+  .strict();
+const invocationIntegrityProtocolTreeChangeSchema = z
+  .object({ path: invocationIntegrityProtocolPath, ...transitionTreeChangeShape })
+  .strict();
+const invocationIntegrityImplementationTreeChangeSchema = z
+  .object({ path: invocationIntegrityImplementationPath, ...transitionTreeChangeShape })
+  .strict();
+const invocationIntegrityEvidenceTreeChangeSchema = z
+  .object({ path: invocationIntegrityEvidencePath, ...transitionTreeChangeShape })
+  .strict();
+const invocationIntegrityAmendmentTreeChangeSchema = z
+  .object({
+    path: z.literal(JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_PATH),
+    ...transitionTreeChangeShape
+  })
   .strict();
 
 const truthStatusFinalizationSchema = z
@@ -345,7 +519,7 @@ const ciTimeoutValidationSchema = z
   .strict();
 
 const transitionCommon = {
-  ordinal: z.number().int().min(0).max(2),
+  ordinal: z.number().int().min(0).max(4),
   predecessorCommit: commit,
   successorCommit: commit,
   predecessorEnvelopeHash: sha256,
@@ -393,7 +567,8 @@ const collateralTransitionSchema = z
     ...transitionCommon,
     version: z.enum([
       JUDGE_DEMO_PRESENTATION_TRANSITION_VERSION,
-      JUDGE_DEMO_PRESENTATION_REBRAND_TRANSITION_VERSION
+      JUDGE_DEMO_PRESENTATION_REBRAND_TRANSITION_VERSION,
+      JUDGE_DEMO_INVOCATION_INTEGRITY_TRANSITION_VERSION
     ]),
     kind: z.literal("collateral-links"),
     collateralChanges: z
@@ -497,9 +672,183 @@ const rebrandTransitionSchema = z
   })
   .strict();
 
+const invocationIntegritySemanticArtifactsSchema = z.tuple([
+  z
+    .object({
+      path: z.literal(JUDGE_DEMO_INVOCATION_INTEGRITY_PRESERVED_SEMANTIC_ARTIFACTS[0]!.path),
+      sha256: z.literal(JUDGE_DEMO_INVOCATION_INTEGRITY_PRESERVED_SEMANTIC_ARTIFACTS[0]!.sha256)
+    })
+    .strict(),
+  z
+    .object({
+      path: z.literal(JUDGE_DEMO_INVOCATION_INTEGRITY_PRESERVED_SEMANTIC_ARTIFACTS[1]!.path),
+      sha256: z.literal(JUDGE_DEMO_INVOCATION_INTEGRITY_PRESERVED_SEMANTIC_ARTIFACTS[1]!.sha256)
+    })
+    .strict(),
+  z
+    .object({
+      path: z.literal(JUDGE_DEMO_INVOCATION_INTEGRITY_PRESERVED_SEMANTIC_ARTIFACTS[2]!.path),
+      sha256: z.literal(JUDGE_DEMO_INVOCATION_INTEGRITY_PRESERVED_SEMANTIC_ARTIFACTS[2]!.sha256)
+    })
+    .strict(),
+  z
+    .object({
+      path: z.literal(JUDGE_DEMO_INVOCATION_INTEGRITY_PRESERVED_SEMANTIC_ARTIFACTS[3]!.path),
+      sha256: z.literal(JUDGE_DEMO_INVOCATION_INTEGRITY_PRESERVED_SEMANTIC_ARTIFACTS[3]!.sha256)
+    })
+    .strict()
+]);
+
+const invocationIntegrityTransitionSchema = z
+  .object({
+    ...transitionCommon,
+    version: z.literal(JUDGE_DEMO_INVOCATION_INTEGRITY_TRANSITION_VERSION),
+    kind: z.literal("invocation-integrity"),
+    predecessorBinding: z
+      .object({
+        activeCommit: z.literal(JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_COMMIT),
+        activeTree: z.literal(JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_TREE),
+        activeEnvelopeHash: z.literal(JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_ENVELOPE_HASH),
+        bindingHash: z.literal(JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_BINDING_HASH),
+        reviewedArtifactSha256: z.literal(
+          JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_BINDING_ARTIFACT_SHA256
+        )
+      })
+      .strict(),
+    amendment: z
+      .object({
+        commit: z.literal(JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_COMMIT),
+        tree: z.literal(JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_TREE),
+        path: z.literal(JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_PATH),
+        fileSha256: z.literal(JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_SHA256),
+        treeChange: invocationIntegrityAmendmentTreeChangeSchema,
+        gitTreeProjectionHash: sha256
+      })
+      .strict(),
+    protocolExtension: z
+      .object({
+        commit,
+        tree: gitOid,
+        changedPaths: z
+          .array(invocationIntegrityProtocolPath)
+          .length(JUDGE_DEMO_INVOCATION_INTEGRITY_PROTOCOL_PATHS.length),
+        treeChanges: z
+          .array(invocationIntegrityProtocolTreeChangeSchema)
+          .length(JUDGE_DEMO_INVOCATION_INTEGRITY_PROTOCOL_PATHS.length),
+        gitTreeProjectionHash: sha256
+      })
+      .strict(),
+    implementation: z
+      .object({
+        tree: gitOid,
+        changedPaths: z
+          .array(invocationIntegrityImplementationPath)
+          .min(JUDGE_DEMO_INVOCATION_INTEGRITY_IMPLEMENTATION_REQUIRED_PATHS.length)
+          .max(JUDGE_DEMO_INVOCATION_INTEGRITY_IMPLEMENTATION_ALLOWED_PATHS.length),
+        treeChanges: z
+          .array(invocationIntegrityImplementationTreeChangeSchema)
+          .min(JUDGE_DEMO_INVOCATION_INTEGRITY_IMPLEMENTATION_REQUIRED_PATHS.length)
+          .max(JUDGE_DEMO_INVOCATION_INTEGRITY_IMPLEMENTATION_ALLOWED_PATHS.length),
+        requiredPathsHash: sha256,
+        gitTreeProjectionHash: sha256
+      })
+      .strict(),
+    invocationContract: z
+      .object({
+        amendmentStatus: z.literal("prospective-frozen-supplement"),
+        caseIds: z.tuple([z.literal("II-01"), z.literal("II-02"), z.literal("II-03")]),
+        invocationCount: z.literal(4),
+        scoreDenominator: z.literal(3),
+        itemIdPattern: z.literal("^[a-z0-9]+(?:-[a-z0-9]+)*$"),
+        itemIdMinLength: z.literal(1),
+        itemIdMaxLength: z.literal(64),
+        fixtureMembership: z.literal("server-authoritative"),
+        successfulItemIdentity: z.literal("trusted-fixture-CartItemId"),
+        contractSourceSha256: sha256
+      })
+      .strict(),
+    immutableProjectionDelta: z
+      .object({
+        predecessorProjectionHash: sha256,
+        successorProjectionHash: sha256,
+        changedTool: z.literal("cart_update"),
+        changedField: z.literal("inputSchema.properties.itemId"),
+        judgeTargetTool: z.literal("cart_get"),
+        judgeTargetContractChanged: z.literal(false),
+        semanticMeaningMatrixChanged: z.literal(false)
+      })
+      .strict(),
+    semanticEvidence: z
+      .object({
+        sealedEvidenceBuildCommit: z.literal(JUDGE_DEMO_INVOCATION_INTEGRITY_SEALED_EVIDENCE_BUILD),
+        packageDigest: z.literal(JUDGE_DEMO_INVOCATION_INTEGRITY_SEMANTIC_PACKAGE_DIGEST),
+        baselinePassed: z.literal(23),
+        revisedPassed: z.literal(23),
+        possible: z.literal(24),
+        noMeasuredImprovement: z.literal(true),
+        meaningMatrixCaseCount: z.literal(24),
+        meaningMatrixModified: z.literal(false),
+        artifacts: invocationIntegritySemanticArtifactsSchema,
+        artifactsProjectionHash: sha256
+      })
+      .strict(),
+    gate6PresentationProofHash: sha256,
+    gate6CriticalProjectionHash: sha256,
+    modelCallsPerformed: z.literal(0),
+    scoredCallsPerformed: z.literal(0)
+  })
+  .strict();
+
+const invocationIntegrityEvidenceTransitionSchema = z
+  .object({
+    ...transitionCommon,
+    version: z.literal(JUDGE_DEMO_INVOCATION_INTEGRITY_TRANSITION_VERSION),
+    kind: z.literal("invocation-integrity-evidence"),
+    evidence: z
+      .object({
+        executionBuildCommit: commit,
+        tree: gitOid,
+        changedPaths: z
+          .array(invocationIntegrityEvidencePath)
+          .min(JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_REQUIRED_PATHS.length)
+          .max(JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_ALLOWED_PATHS.length),
+        treeChanges: z
+          .array(invocationIntegrityEvidenceTreeChangeSchema)
+          .min(JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_REQUIRED_PATHS.length)
+          .max(JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_ALLOWED_PATHS.length),
+        requiredPathsHash: sha256,
+        gitTreeProjectionHash: sha256,
+        supplementalPackageDigest: sha256,
+        jsonExportSha256: sha256,
+        markdownExportSha256: sha256,
+        measuredSourceSha256: sha256,
+        scoreEarned: z.literal(3),
+        scorePossible: z.literal(3),
+        modelCallCount: z.literal(0),
+        includedInSemanticDenominator: z.literal(false),
+        semanticEvidenceBuildCommit: z.literal(
+          JUDGE_DEMO_INVOCATION_INTEGRITY_SEALED_EVIDENCE_BUILD
+        ),
+        semanticPackageDigest: z.literal(JUDGE_DEMO_INVOCATION_INTEGRITY_SEMANTIC_PACKAGE_DIGEST),
+        semanticBaselinePassed: z.literal(23),
+        semanticRevisedPassed: z.literal(23),
+        semanticPossible: z.literal(24),
+        semanticNoMeasuredImprovement: z.literal(true),
+        immutableProjectionHash: sha256
+      })
+      .strict(),
+    gate6PresentationProofHash: sha256,
+    gate6CriticalProjectionHash: sha256,
+    modelCallsPerformed: z.literal(0),
+    scoredCallsPerformed: z.literal(0)
+  })
+  .strict();
+
 export const judgeDemoPresentationTransitionSchema = z.discriminatedUnion("kind", [
   recoveryTransitionSchema,
   rebrandTransitionSchema,
+  invocationIntegrityTransitionSchema,
+  invocationIntegrityEvidenceTransitionSchema,
   collateralTransitionSchema
 ]);
 export const judgeDemoCollateralProofSchema = judgeDemoPresentationTransitionSchema;
@@ -507,6 +856,12 @@ export const judgeDemoCollateralProofSchema = judgeDemoPresentationTransitionSch
 export type JudgeDemoPresentationTransition = z.infer<typeof judgeDemoPresentationTransitionSchema>;
 export type JudgeDemoRecoveryTransition = z.infer<typeof recoveryTransitionSchema>;
 export type JudgeDemoRebrandTransition = z.infer<typeof rebrandTransitionSchema>;
+export type JudgeDemoInvocationIntegrityTransition = z.infer<
+  typeof invocationIntegrityTransitionSchema
+>;
+export type JudgeDemoInvocationIntegrityEvidenceTransition = z.infer<
+  typeof invocationIntegrityEvidenceTransitionSchema
+>;
 export type JudgeDemoCollateralTransition = z.infer<typeof collateralTransitionSchema>;
 export type JudgeDemoCollateralProof = JudgeDemoPresentationTransition;
 
@@ -692,12 +1047,101 @@ export async function verifyJudgeDemoPresentationTransition(
     ) {
       throw new Error("judge_demo_rebrand_transition_invalid");
     }
+  } else if (proof.kind === "invocation-integrity") {
+    const protocolPaths = proof.protocolExtension.treeChanges.map(({ path }) => path);
+    const implementationPaths = proof.implementation.treeChanges.map(({ path }) => path);
+    const expectedChain = [
+      JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_COMMIT,
+      JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_COMMIT,
+      proof.protocolExtension.commit,
+      proof.successorCommit
+    ];
+    if (
+      proof.ordinal !== 2 ||
+      proof.predecessorCommit !== JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_COMMIT ||
+      proof.predecessorEnvelopeHash !== JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_ENVELOPE_HASH ||
+      proof.protocolExtension.commit === proof.predecessorCommit ||
+      proof.protocolExtension.commit === JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_COMMIT ||
+      proof.protocolExtension.commit === proof.successorCommit ||
+      canonicalJson(proof.protocolExtension.changedPaths) !==
+        canonicalJson(JUDGE_DEMO_INVOCATION_INTEGRITY_PROTOCOL_PATHS) ||
+      canonicalJson(protocolPaths) !==
+        canonicalJson(JUDGE_DEMO_INVOCATION_INTEGRITY_PROTOCOL_PATHS) ||
+      canonicalJson(proof.protocolExtension.treeChanges) !==
+        canonicalJson(
+          [...proof.protocolExtension.treeChanges].sort((left, right) =>
+            left.path.localeCompare(right.path)
+          )
+        ) ||
+      (await canonicalSha256(proof.protocolExtension.treeChanges)) !==
+        proof.protocolExtension.gitTreeProjectionHash ||
+      canonicalJson(proof.implementation.changedPaths) !== canonicalJson(implementationPaths) ||
+      canonicalJson(proof.implementation.treeChanges) !==
+        canonicalJson(
+          [...proof.implementation.treeChanges].sort((left, right) =>
+            left.path.localeCompare(right.path)
+          )
+        ) ||
+      new Set(implementationPaths).size !== implementationPaths.length ||
+      JUDGE_DEMO_INVOCATION_INTEGRITY_IMPLEMENTATION_REQUIRED_PATHS.some(
+        (path) => !implementationPaths.includes(path)
+      ) ||
+      (await canonicalSha256(JUDGE_DEMO_INVOCATION_INTEGRITY_IMPLEMENTATION_REQUIRED_PATHS)) !==
+        proof.implementation.requiredPathsHash ||
+      (await canonicalSha256(proof.implementation.treeChanges)) !==
+        proof.implementation.gitTreeProjectionHash ||
+      proof.amendment.treeChange.path !== JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_PATH ||
+      proof.amendment.treeChange.status !== "A" ||
+      proof.amendment.treeChange.predecessorMode !== null ||
+      proof.amendment.treeChange.predecessorBlobOid !== null ||
+      proof.amendment.treeChange.successorMode !== "100644" ||
+      proof.amendment.treeChange.successorBlobOid === null ||
+      (await canonicalSha256([proof.amendment.treeChange])) !==
+        proof.amendment.gitTreeProjectionHash ||
+      (await canonicalSha256(expectedChain)) !== proof.firstParentChainHash ||
+      canonicalJson(proof.semanticEvidence.artifacts) !==
+        canonicalJson(JUDGE_DEMO_INVOCATION_INTEGRITY_PRESERVED_SEMANTIC_ARTIFACTS) ||
+      (await canonicalSha256(proof.semanticEvidence.artifacts)) !==
+        proof.semanticEvidence.artifactsProjectionHash ||
+      proof.immutableProjectionDelta.predecessorProjectionHash !== proof.immutableProjectionHash ||
+      proof.immutableProjectionDelta.predecessorProjectionHash ===
+        proof.immutableProjectionDelta.successorProjectionHash
+    ) {
+      throw new Error("judge_demo_invocation_integrity_transition_invalid");
+    }
+  } else if (proof.kind === "invocation-integrity-evidence") {
+    const evidencePaths = proof.evidence.treeChanges.map(({ path }) => path);
+    if (
+      proof.ordinal !== 3 ||
+      proof.evidence.executionBuildCommit !== proof.predecessorCommit ||
+      canonicalJson(proof.evidence.changedPaths) !== canonicalJson(evidencePaths) ||
+      canonicalJson(proof.evidence.treeChanges) !==
+        canonicalJson(
+          [...proof.evidence.treeChanges].sort((left, right) => left.path.localeCompare(right.path))
+        ) ||
+      new Set(evidencePaths).size !== evidencePaths.length ||
+      JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_REQUIRED_PATHS.some(
+        (path) => !evidencePaths.includes(path)
+      ) ||
+      (await canonicalSha256(JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_REQUIRED_PATHS)) !==
+        proof.evidence.requiredPathsHash ||
+      (await canonicalSha256(proof.evidence.treeChanges)) !==
+        proof.evidence.gitTreeProjectionHash ||
+      (await canonicalSha256([proof.predecessorCommit, proof.successorCommit])) !==
+        proof.firstParentChainHash
+    ) {
+      throw new Error("judge_demo_invocation_integrity_evidence_transition_invalid");
+    }
   } else {
     const changeKeys = proof.collateralChanges.map(({ path, field }) => `${path}\n${field}`);
-    const expectedOrdinal =
-      proof.version === JUDGE_DEMO_PRESENTATION_REBRAND_TRANSITION_VERSION ? 2 : 1;
+    const ordinalValid =
+      proof.version === JUDGE_DEMO_PRESENTATION_TRANSITION_VERSION
+        ? proof.ordinal === 1
+        : proof.version === JUDGE_DEMO_PRESENTATION_REBRAND_TRANSITION_VERSION
+          ? proof.ordinal === 2
+          : proof.ordinal === 3 || proof.ordinal === 4;
     if (
-      proof.ordinal !== expectedOrdinal ||
+      !ordinalValid ||
       new Set(changeKeys).size !== changeKeys.length ||
       proof.collateralChanges.some(
         ({ predecessorValue, successorValue }) => predecessorValue === successorValue

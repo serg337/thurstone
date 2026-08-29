@@ -1,10 +1,15 @@
 import { canonicalJson, canonicalSha256, sha256Hex } from "@/lib/evidence/digest";
+import {
+  JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_PATH,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_IMPLEMENTATION_ALLOWED_PATHS,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_PROTOCOL_PATHS
+} from "@/lib/judge/collateral-proof";
 import { gunzipSync } from "node:zlib";
 import { z } from "zod";
 
 export const GATE6_PRESENTATION_PROOF_VERSION = "toolproof-gate6-presentation-proof@1.0.0";
 export const GATE6_PRESENTATION_PROOF_ENV = "TOOLPROOF_GATE6_PRESENTATION_PROOF_B64";
-export const GATE6_PRESENTATION_CHANGED_PATH_LIMIT = 128 as const;
+export const GATE6_PRESENTATION_CHANGED_PATH_LIMIT = 192 as const;
 
 const sha256 = z.string().regex(/^[a-f0-9]{64}$/u);
 const commit = z.string().regex(/^[a-f0-9]{40}$/u);
@@ -36,6 +41,9 @@ const presentationProofSchema = z
 export type Gate6PresentationProof = z.infer<typeof presentationProofSchema>;
 
 const allowedExact = new Set([
+  JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_PATH,
+  ...JUDGE_DEMO_INVOCATION_INTEGRITY_PROTOCOL_PATHS,
+  ...JUDGE_DEMO_INVOCATION_INTEGRITY_IMPLEMENTATION_ALLOWED_PATHS,
   ".env.example",
   ".gitattributes",
   ".github/workflows/ci.yml",

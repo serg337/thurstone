@@ -1,8 +1,26 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { canonicalJson, canonicalSha256 } from "../lib/evidence/digest";
+import { type JudgeDemoInvocationIntegrityTransition } from "../lib/judge/collateral-proof";
+import { createJudgeDemoEnvelope } from "../lib/judge/envelope";
+import {
+  JUDGE_DEMO_INVOCATION_INTEGRITY_BINDING_VERSION,
+  JUDGE_DEMO_PRESENTATION_BINDING_ENV,
+  JUDGE_DEMO_PRESENTATION_MODE_ENV,
+  configuredJudgeDemoPresentationBinding,
+  decodeJudgeDemoPresentationBinding,
+  judgeDemoPresentationBindingSchema
+} from "../lib/judge/presentation-binding.server";
+
+const observationCommit = "88deff46d4e06bb109158f7ef8a68e704f9fcc08";
+const invocationIntegrityCriticalExceptions = new Set([
+  "lib/domain/checkout-schemas.ts",
+  "lib/domain/checkout.ts"
+]);
 
 function assertFirstParentAncestor(ancestor: string, descendant: string): void {
   let cursor = descendant;
@@ -20,23 +38,97 @@ function assertFirstParentAncestor(ancestor: string, descendant: string): void {
   throw new Error("direct_observation_ancestry_depth_exceeded");
 }
 
-const observationCommit = "88deff46d4e06bb109158f7ef8a68e704f9fcc08";
-const activeCommit =
-  process.env.VERCEL_GIT_COMMIT_SHA?.trim() ||
-  process.env.TOOLPROOF_COMMIT_SHA?.trim() ||
-  execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
-if (!/^[a-f0-9]{40}$/u.test(activeCommit)) {
-  throw new Error("direct_observation_active_commit_invalid");
+export interface DirectObservationCriticalBlobInput {
+  readonly path: string;
+  readonly checkedOutBlobOid: string;
+  readonly observationBlobOid: string;
+  readonly activeBlobOid: string;
+  readonly invocationIntegrityTransition: JudgeDemoInvocationIntegrityTransition | null;
 }
-try {
-  execFileSync("git", ["cat-file", "-e", `${observationCommit}^{commit}`]);
-  execFileSync("git", ["cat-file", "-e", `${activeCommit}^{commit}`]);
-} catch {
-  throw new Error(
-    "direct_observation_verified_git_objects_missing:run_gate6_presentation_verify_first"
+
+/**
+ * Keeps the historical observation blob mandatory unless the fully verified v4 transition binds
+ * one of the two frozen domain changes from that exact predecessor blob to the active blob.
+ */
+export function verifyDirectObservationCriticalBlob(
+  input: DirectObservationCriticalBlobInput
+): "unchanged-observation-blob" | "verified-invocation-integrity-transition" {
+  if (input.checkedOutBlobOid !== input.activeBlobOid) {
+    throw new Error(`direct_observation_critical_git_blob_mismatch:${input.path}`);
+  }
+  if (input.activeBlobOid === input.observationBlobOid) return "unchanged-observation-blob";
+  const transition = input.invocationIntegrityTransition;
+  const treeChange = transition?.implementation.treeChanges.find(({ path }) => path === input.path);
+  if (
+    !invocationIntegrityCriticalExceptions.has(input.path) ||
+    !transition ||
+    !treeChange ||
+    treeChange.status !== "M" ||
+    treeChange.predecessorMode !== "100644" ||
+    treeChange.successorMode !== "100644" ||
+    treeChange.predecessorBlobOid !== input.observationBlobOid ||
+    treeChange.successorBlobOid !== input.activeBlobOid
+  ) {
+    throw new Error(`direct_observation_critical_git_blob_mismatch:${input.path}`);
+  }
+  return "verified-invocation-integrity-transition";
+}
+
+async function verifiedInvocationIntegrityTransition(
+  activeCommit: string
+): Promise<JudgeDemoInvocationIntegrityTransition | null> {
+  const encoded = process.env[JUDGE_DEMO_PRESENTATION_BINDING_ENV]?.trim() ?? "";
+  if (!encoded) return null;
+  const parsed = judgeDemoPresentationBindingSchema.parse(
+    await decodeJudgeDemoPresentationBinding(encoded)
   );
+  if (parsed.version !== JUDGE_DEMO_INVOCATION_INTEGRITY_BINDING_VERSION) return null;
+  const [rootEnvelope, activeEnvelope] = await Promise.all([
+    createJudgeDemoEnvelope(parsed.rootEvidenceCommit),
+    createJudgeDemoEnvelope(parsed.activeCommit)
+  ]);
+  const binding = await configuredJudgeDemoPresentationBinding({
+    environment: process.env,
+    rootEnvelope,
+    activeEnvelope,
+    rootReceiptDigest: parsed.rootReceiptDigest,
+    rootArtifactDigest: parsed.rootArtifactDigest,
+    rootStoredProjectionDigest: parsed.rootStoredProjectionDigest,
+    rootCapturedAt: parsed.rootCapturedAt
+  });
+  const transition = binding.transitions.find(
+    (candidate): candidate is JudgeDemoInvocationIntegrityTransition =>
+      candidate.kind === "invocation-integrity"
+  );
+  if (
+    process.env[JUDGE_DEMO_PRESENTATION_MODE_ENV]?.trim() !== "successor" ||
+    binding.activeCommit !== activeCommit ||
+    !transition ||
+    transition.semanticEvidence.sealedEvidenceBuildCommit !==
+      "768af2539ca20c29928a897644ad22ba897c580d" ||
+    transition.semanticEvidence.baselinePassed !== 23 ||
+    transition.semanticEvidence.revisedPassed !== 23 ||
+    transition.semanticEvidence.possible !== 24 ||
+    transition.semanticEvidence.noMeasuredImprovement !== true ||
+    transition.semanticEvidence.meaningMatrixCaseCount !== 24 ||
+    transition.semanticEvidence.meaningMatrixModified !== false ||
+    (await canonicalSha256(transition.semanticEvidence.artifacts)) !==
+      transition.semanticEvidence.artifactsProjectionHash ||
+    (await canonicalSha256(transition.implementation.treeChanges)) !==
+      transition.implementation.gitTreeProjectionHash
+  ) {
+    throw new Error("direct_observation_invocation_integrity_binding_invalid");
+  }
+  return transition;
 }
-assertFirstParentAncestor(observationCommit, activeCommit);
+
+function gitText(arguments_: readonly string[]): string {
+  return execFileSync("git", [...arguments_], { encoding: "utf8" }).trim();
+}
+
+function gitBlobOid(bytes: Buffer): string {
+  return createHash("sha1").update(`blob ${bytes.byteLength}\0`).update(bytes).digest("hex");
+}
 
 const criticalPaths = [
   "components/lab/lab-client.tsx",
@@ -62,93 +154,143 @@ const criticalPaths = [
   "lib/webmcp/runtime.ts",
   "lib/webmcp/tool-execution.ts"
 ] as const;
-const evidenceBytes = await readFile("evidence/direct-site-tools-observations.json", "utf8");
-const evidence = JSON.parse(evidenceBytes) as {
-  readonly observationBuildCommit?: unknown;
-  readonly implementationBinding?: {
-    readonly criticalFiles?: unknown;
-    readonly criticalProjectionHash?: unknown;
-    readonly dependencyProjectionHash?: unknown;
-  };
-};
-if (evidence.observationBuildCommit !== observationCommit) {
-  throw new Error("direct_observation_evidence_commit_mismatch");
-}
-const implementationBinding = evidence.implementationBinding;
-if (!implementationBinding) throw new Error("direct_observation_implementation_binding_missing");
-const criticalFiles = await Promise.all(
-  criticalPaths.map(async (path) => {
-    const checkedOutBytes = await readFile(path);
-    const checkedOutBlobOid = createHash("sha1")
-      .update(`blob ${checkedOutBytes.byteLength}\0`)
-      .update(checkedOutBytes)
-      .digest("hex");
-    const observationBlobOid = execFileSync("git", ["rev-parse", `${observationCommit}:${path}`], {
-      encoding: "utf8"
-    }).trim();
-    const activeBlobOid = execFileSync("git", ["rev-parse", `${activeCommit}:${path}`], {
-      encoding: "utf8"
-    }).trim();
-    if (checkedOutBlobOid !== observationBlobOid || checkedOutBlobOid !== activeBlobOid) {
-      throw new Error(`direct_observation_critical_git_blob_mismatch:${path}`);
-    }
-    return {
-      path,
-      sha256: createHash("sha256").update(checkedOutBytes).digest("hex")
-    };
-  })
-);
-const criticalProjectionHash = await canonicalSha256(criticalFiles);
-if (
-  canonicalJson(implementationBinding.criticalFiles) !== canonicalJson(criticalFiles) ||
-  implementationBinding.criticalProjectionHash !== criticalProjectionHash
-) {
-  throw new Error("direct_observation_critical_worktree_mismatch");
-}
+
 type PackageDocument = {
   readonly dependencies?: unknown;
   readonly devDependencies?: unknown;
   readonly engines?: unknown;
 };
+
 const projectDependencies = (document: PackageDocument) => ({
   dependencies: document.dependencies ?? null,
   devDependencies: document.devDependencies ?? null,
   engines: document.engines ?? null
 });
-const currentPackageDocument = JSON.parse(
-  await readFile("package.json", "utf8")
-) as PackageDocument;
-const observationPackageDocument = JSON.parse(
-  execFileSync("git", ["show", `${observationCommit}:package.json`], { encoding: "utf8" })
-) as PackageDocument;
-const activePackageDocument = JSON.parse(
-  execFileSync("git", ["show", `${activeCommit}:package.json`], { encoding: "utf8" })
-) as PackageDocument;
-const dependencyProjection = projectDependencies(currentPackageDocument);
-const observationDependencyProjection = projectDependencies(observationPackageDocument);
-const activeDependencyProjection = projectDependencies(activePackageDocument);
-const dependencyProjectionHash = await canonicalSha256(dependencyProjection);
-const observationDependencyProjectionHash = await canonicalSha256(observationDependencyProjection);
-const activeDependencyProjectionHash = await canonicalSha256(activeDependencyProjection);
-if (
-  dependencyProjectionHash !== implementationBinding.dependencyProjectionHash ||
-  observationDependencyProjectionHash !== implementationBinding.dependencyProjectionHash ||
-  activeDependencyProjectionHash !== implementationBinding.dependencyProjectionHash
-) {
-  throw new Error("direct_observation_dependency_hash_mismatch");
+
+async function main(): Promise<void> {
+  const activeCommit =
+    process.env.VERCEL_GIT_COMMIT_SHA?.trim() ||
+    process.env.TOOLPROOF_COMMIT_SHA?.trim() ||
+    gitText(["rev-parse", "HEAD"]);
+  if (!/^[a-f0-9]{40}$/u.test(activeCommit)) {
+    throw new Error("direct_observation_active_commit_invalid");
+  }
+  try {
+    execFileSync("git", ["cat-file", "-e", `${observationCommit}^{commit}`]);
+    execFileSync("git", ["cat-file", "-e", `${activeCommit}^{commit}`]);
+  } catch {
+    throw new Error(
+      "direct_observation_verified_git_objects_missing:run_gate6_presentation_verify_first"
+    );
+  }
+  assertFirstParentAncestor(observationCommit, activeCommit);
+  const invocationIntegrityTransition = await verifiedInvocationIntegrityTransition(activeCommit);
+
+  const evidenceBytes = await readFile("evidence/direct-site-tools-observations.json", "utf8");
+  const evidence = JSON.parse(evidenceBytes) as {
+    readonly observationBuildCommit?: unknown;
+    readonly implementationBinding?: {
+      readonly criticalFiles?: unknown;
+      readonly criticalProjectionHash?: unknown;
+      readonly dependencyProjectionHash?: unknown;
+    };
+  };
+  if (evidence.observationBuildCommit !== observationCommit) {
+    throw new Error("direct_observation_evidence_commit_mismatch");
+  }
+  const implementationBinding = evidence.implementationBinding;
+  if (!implementationBinding) throw new Error("direct_observation_implementation_binding_missing");
+
+  const authorizedInvocationIntegrityChanges: string[] = [];
+  const criticalProjections = await Promise.all(
+    criticalPaths.map(async (path) => {
+      const checkedOutBytes = await readFile(path);
+      const observationBytes = execFileSync("git", ["show", `${observationCommit}:${path}`], {
+        maxBuffer: 8_388_608
+      });
+      const checkedOutBlobOid = gitBlobOid(checkedOutBytes);
+      const observationBlobOid = gitText(["rev-parse", `${observationCommit}:${path}`]);
+      const activeBlobOid = gitText(["rev-parse", `${activeCommit}:${path}`]);
+      const disposition = verifyDirectObservationCriticalBlob({
+        path,
+        checkedOutBlobOid,
+        observationBlobOid,
+        activeBlobOid,
+        invocationIntegrityTransition
+      });
+      if (disposition === "verified-invocation-integrity-transition") {
+        authorizedInvocationIntegrityChanges.push(path);
+      }
+      return {
+        observation: {
+          path,
+          sha256: createHash("sha256").update(observationBytes).digest("hex")
+        },
+        active: {
+          path,
+          sha256: createHash("sha256").update(checkedOutBytes).digest("hex")
+        }
+      };
+    })
+  );
+  const observationCriticalFiles = criticalProjections.map(({ observation }) => observation);
+  const activeCriticalFiles = criticalProjections.map(({ active }) => active);
+  const criticalProjectionHash = await canonicalSha256(observationCriticalFiles);
+  const activeCriticalProjectionHash = await canonicalSha256(activeCriticalFiles);
+  if (
+    canonicalJson(implementationBinding.criticalFiles) !==
+      canonicalJson(observationCriticalFiles) ||
+    implementationBinding.criticalProjectionHash !== criticalProjectionHash
+  ) {
+    throw new Error("direct_observation_critical_worktree_mismatch");
+  }
+
+  const currentPackageDocument = JSON.parse(
+    await readFile("package.json", "utf8")
+  ) as PackageDocument;
+  const observationPackageDocument = JSON.parse(
+    execFileSync("git", ["show", `${observationCommit}:package.json`], { encoding: "utf8" })
+  ) as PackageDocument;
+  const activePackageDocument = JSON.parse(
+    execFileSync("git", ["show", `${activeCommit}:package.json`], { encoding: "utf8" })
+  ) as PackageDocument;
+  const dependencyProjection = projectDependencies(currentPackageDocument);
+  const observationDependencyProjection = projectDependencies(observationPackageDocument);
+  const activeDependencyProjection = projectDependencies(activePackageDocument);
+  const dependencyProjectionHash = await canonicalSha256(dependencyProjection);
+  const observationDependencyProjectionHash = await canonicalSha256(
+    observationDependencyProjection
+  );
+  const activeDependencyProjectionHash = await canonicalSha256(activeDependencyProjection);
+  if (
+    dependencyProjectionHash !== implementationBinding.dependencyProjectionHash ||
+    observationDependencyProjectionHash !== implementationBinding.dependencyProjectionHash ||
+    activeDependencyProjectionHash !== implementationBinding.dependencyProjectionHash
+  ) {
+    throw new Error("direct_observation_dependency_hash_mismatch");
+  }
+  process.stdout.write(
+    `${JSON.stringify({
+      ok: true,
+      mode: "direct-observation-presentation",
+      observationCommit,
+      activeCommit,
+      criticalFileCount: observationCriticalFiles.length,
+      criticalProjectionHash,
+      activeCriticalProjectionHash,
+      dependencyProjectionHash,
+      observationDependencyProjectionHash,
+      activeDependencyProjectionHash,
+      invocationIntegrityBindingUsed: invocationIntegrityTransition !== null,
+      authorizedInvocationIntegrityChanges: authorizedInvocationIntegrityChanges.sort(),
+      semanticArtifactsProjectionHash:
+        invocationIntegrityTransition?.semanticEvidence.artifactsProjectionHash ?? null,
+      evidenceRawSha256: createHash("sha256").update(evidenceBytes).digest("hex"),
+      providerCallsPerformed: 0,
+      storeWritesPerformed: 0
+    })}\n`
+  );
 }
-process.stdout.write(
-  `${JSON.stringify({
-    ok: true,
-    mode: "direct-observation-presentation",
-    observationCommit,
-    activeCommit,
-    criticalFileCount: criticalFiles.length,
-    criticalProjectionHash,
-    dependencyProjectionHash,
-    observationDependencyProjectionHash,
-    activeDependencyProjectionHash,
-    evidenceRawSha256: createHash("sha256").update(evidenceBytes).digest("hex"),
-    providerCallsPerformed: 0
-  })}\n`
-);
+
+const entryPath = process.argv[1] ? resolve(process.argv[1]) : "";
+if (entryPath === fileURLToPath(import.meta.url)) await main();
