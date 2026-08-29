@@ -6,12 +6,16 @@ submission manifest; pending language below describes the recorded Gate 8 checkp
 
 ## Before 25 August 2026
 
-- The ToolProof name, high-level semantic-invariance idea, and planning material existed before the challenge period.
+- The high-level semantic-invariance idea and planning material existed before the challenge period under the working name ToolProof.
 - No submitted public application code, WebMCP integration, deployment, evidence run, or release existed in this repository.
 
 ## Built during the challenge period
 
 Work began on 26 August 2026 and is linked to ordinary timestamped commits and authentic evidence. A sealed evidence artifact records what happened; it is not treated as a gate pass when its acceptance score fails.
+
+Sergio renamed the public product **Thurstone** on 29 August 2026, after the scored evidence was
+captured. The rename changes the current presentation only: immutable evidence and protocol
+identifiers retain the ToolProof working name, and no historical commit or receipt is rewritten.
 
 | Area              | Challenge-period work                                                                                                                                                                                                       | Commit evidence                                                                                                                                               |
 | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -27,4 +31,4 @@ Work began on 26 August 2026 and is linked to ordinary timestamped commits and a
 
 The evidence-root judge decision on `e2cf8d47375abfeeb4f32bd6f5973918acf4c091` selected `cart_get` with `{}` and is permanently sealed. Upstash's automatic JSON deserialization exposed a string-only archive-reader assumption after capture; the durable provider record, guard, and cost remain unchanged, with zero provider retries and zero store rewrites. The recovery build is limited to archive presentation and must collect a fresh current-build native replay because provider and native evidence are separate. A final Gate 9 release may add an optional link-only hop after recovery.
 
-History will not be backdated or rewritten to manufacture challenge-period evidence. Every 0/4 and 3/4 result remains a failure even though its evidence is complete; the later 4/4 calibration is separate. The first complete baseline and Repair remain disclosed as superseded protocol evidence and are never merged into the successor Matrix. The primary successor baseline and revised run both score `23/24`; ToolProof makes no improvement or stability claim from that one-trial result. Gate 7 completion is deployment-bound and is recorded by the live receipt and durable release manifest, not preclaimed by this source snapshot.
+History will not be backdated or rewritten to manufacture challenge-period evidence. Every 0/4 and 3/4 result remains a failure even though its evidence is complete; the later 4/4 calibration is separate. The first complete baseline and Repair remain disclosed as superseded protocol evidence and are never merged into the successor Matrix. The primary successor baseline and revised run both score `23/24`; Thurstone makes no improvement or stability claim from that one-trial result. Gate 7 completion is deployment-bound and is recorded by the live receipt and durable release manifest, not preclaimed by this source snapshot.

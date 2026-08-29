@@ -2,27 +2,33 @@
 
 Checked: 2026-08-29. This is a bounded release-risk review, not a trademark clearance or legal opinion.
 
-## Project-name search
+## Project-name search and rename continuity
 
-A quick exact-name web search found several pre-existing software uses of “ToolProof” or
-“Toolproof”:
+A fresh exact-name web search for **Thurstone** found an established scientific surname and method,
+plus a current open-source/PyPI software package using the bare lowercase name for Thurstone-model
+ability estimation:
 
-- `toolproof.app`, a test framework for command-line and web applications;
-- `toolproof.com`, an early-stage human/AI proof-based tools project;
-- `github.com/Moshe-ship/toolproof`, an agent tool-verification project; and
-- `kynth.studio/toolproof`, an AI-agent tooling measurement page.
+- `github.com/microprediction/thurstone`;
+- `pypi.org/project/thurstone/`; and
+- `thurstone.microprediction.org`.
 
-The overlap is material because at least two uses concern software testing or agent-tool
-verification. An indexed search did not establish an applicable registered mark, but absence of a
-search result is not clearance.
+These uses are in statistical/rating software rather than WebMCP semantic testing, but they make a
+claim of exclusivity inappropriate. The indexed search did not establish an applicable registered
+mark; absence from an indexed search is not trademark clearance or a legal conclusion.
 
-For this challenge release, the project therefore uses the compound identification **ToolProof by
-Invarra — created by Sergio Valencia** consistently, makes no claim to exclusivity, registration,
-certification, or endorsement, and uses neither `™` nor `®`. The repository, deployment, and
-submission describe the narrow WebMCP semantic-testing implementation rather than a broad product
-category. This is the accepted challenge-release risk treatment; a broader commercial launch,
-trademark filing, or enforcement decision requires a professional clearance review and a new human
-decision. Renaming the frozen challenge evidence is not part of this release.
+The earlier working-name review found several unrelated software uses of “ToolProof” or
+“Toolproof,” including agent/tool-testing projects. Sergio adopted **Thurstone** as the current
+public product name on 29 August 2026. The challenge evidence had already been captured under the
+ToolProof working name, so immutable evidence files, protocol/version identifiers, environment
+names, storage keys, and the original deployment origin retain that historical namespace. They are
+not current branding and are not rewritten.
+
+For this challenge release, the project uses the compound identification **Thurstone by Invarra —
+created by Sergio Valencia**, makes no claim to exclusivity, registration, certification, or
+endorsement, and uses neither `™` nor `®`. It does not claim affiliation with Louis Leon Thurstone,
+the statistical software package, its maintainers, or any other namesake. A broader commercial
+launch, trademark filing, or enforcement decision requires professional clearance and a new human
+decision.
 
 ## Third-party product names and interface capture
 
@@ -35,7 +41,7 @@ prominence than the project's own identity.
 The Direct Site Tools video excerpt is therefore limited to the minimum factual interface needed
 to show the request, discovered Site Tool, native result, and resulting page effect. Account data
 and unrelated interface are cropped; no OpenAI or Chrome logo is used in the thumbnail or end card;
-the ToolProof identity remains primary; and both the video and application state that no
+the Thurstone identity remains primary; and both the video and application state that no
 affiliation, certification, or endorsement is implied. The capture is demonstration evidence, not
 an extracted or redistributed product asset.
 
@@ -47,18 +53,29 @@ References checked:
 
 ## Project-authored image provenance
 
-`public/toolproof-results.jpg` is a 1280×720 sRGB JPEG captured from the signed-out `/results`
+`public/toolproof-results.jpg` is a legacy-path 1280×720 sRGB JPEG captured from the signed-out `/results`
 route at `https://toolproof-rust.vercel.app` on deployment commit
 `88deff46d4e06bb109158f7ef8a68e704f9fcc08` on 2026-08-29 at approximately `12:29:33Z`.
 Its SHA-256 is `16d414589500895629ab72bbbe8603439b7372a1dfd43db36ead5736de0bf93c`.
-It contains only the ToolProof interface and the authentic `23/24 → 23/24` result. Before the
-evidence-build freeze, the image must be rechecked against the candidate's visible Results values;
-if any visible claim differs, it must be recaptured from that candidate before commit.
+The retained evidence-build image shows the then-current ToolProof working name and the authentic
+`23/24 → 23/24` result. It remains byte-identical historical evidence.
 
-The image was rechecked on 2026-08-29 after the current evidence-candidate build and browser suite:
-the visible simulation notice, paired `23/24 → 23/24` result, Development `12/12 → 12/12`,
-Builder-blinded holdout `11/12 → 11/12`, and no-improvement claim remain exact. No visible claim
-depends on the later Direct-observation namespace or judge receipt.
+The current release uses a separate `public/thurstone-results.jpg`, captured from the signed-out
+evidence-build Results page at `2026-08-29T17:39:29.381Z`. Before the rebrand deployment existed, the
+page DOM changed only the project-owned `ToolProof`/`TP` header, footer, and document title to the
+exact pending source values `Thurstone`/`TH`; the trace-derived result content was not edited. The
+JPEG is 1280×720 sRGB, 113,108 bytes, with SHA-256
+`ba0813d9ae761358e483642b6730712456a4693d79558e25c25252b92a327d1f`. Its inherited browser ICC
+profile was removed without changing any decoded pixel (`compare -metric AE` returned `0`), so no
+third-party profile or copyright metadata is distributed. Gate 8 remains blocked until
+an automated capture from the exact deployed rebrand matches this file byte-for-byte; any mismatch
+requires a new ordinary asset finalization rather than relabeling the image. The older image is not
+overwritten or relabeled.
+
+The underlying Results claims used in both images were rechecked on 2026-08-29 after the evidence
+candidate and browser suite: the visible simulation notice, paired `23/24 → 23/24` result,
+Development `12/12 → 12/12`, Builder-blinded holdout `11/12 → 11/12`, and no-improvement claim
+remain exact. No visible claim depends on the later Direct-observation namespace or judge receipt.
 
 The release uses the project-authored screenshot-derived thumbnail specified in
 `docs/demo-script.md`. Any unrelated thumbnail already present in an authenticated Devpost draft

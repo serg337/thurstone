@@ -2,7 +2,7 @@
 
 ## Challenge safety boundary
 
-ToolProof is a deterministic simulated checkout/review sandbox. It has no real purchase, payment, account, inventory, email, messaging, or external mutation path. A checkout request creates only a local simulated pending-human-approval state; no WebMCP approval tool exists.
+Thurstone is a deterministic simulated checkout/review sandbox. It has no real purchase, payment, account, inventory, email, messaging, or external mutation path. A checkout request creates only a local simulated pending-human-approval state; no WebMCP approval tool exists.
 
 ## WebMCP boundary
 
@@ -15,14 +15,14 @@ ToolProof is a deterministic simulated checkout/review sandbox. It has no real p
 - Cancellation is latched through asynchronous evidence finalization. Duplicate operations, blocked admission, partial mutations, and unexpected failures remain explicitly distinguishable.
 - Registry transitions stop new admission, preserve in-flight calls, verify exact discovery, and fail closed or quarantine on bounded lifecycle failure.
 - Reset holds operation admission until state, registry, session-summary, archive, and full trace evidence agree.
-- The Gate 1 evidence download uses controlled project snapshots and explicit allowlisted runtime projections. Application payloads are synthetic; exact public origin and raw browser user agent are the limited runtime-provenance exception. It never reads or exports cookies, browser history, account data, storage outside ToolProof, live `Window`/ModelContext objects, handlers, signals, controllers, secrets, or environment variables.
+- The Gate 1 evidence download uses controlled project snapshots and explicit allowlisted runtime projections. Application payloads are synthetic; exact public origin and raw browser user agent are the limited runtime-provenance exception. It never reads or exports cookies, browser history, account data, storage outside Thurstone, live `Window`/ModelContext objects, handlers, signals, controllers, secrets, or environment variables.
 - Export fails closed on unfinished native attempts, journal faults/overflow, chain/digest mismatch, oversized output, credential-like material, email addresses, or absolute local paths. The file is downloaded locally through a temporary object URL and is never uploaded automatically.
 - One-button proof uses session storage only for a size-bounded, exact-key, build/path/expiry-bound reload request. It consumes the marker before parsing or awaiting, requires a real reload, never derives tool arguments from it, and never exports storage. The runner owns all Lab admission, does not retry native calls, stops on the first mismatch, and requests a download only after strict sequence verification. Because browsers may block programmatic downloads, the UI retains the immutable verified bundle for an identical manual retry and never claims the file was saved.
 - Unsupported clients receive an honest explanation and never a polyfilled native result.
 
 ## Model-backed lane
 
-The hosted Probe lane is disabled by default. Its migrated v0.5 challenge-lifetime policy permits exactly 160 provider attempts: 17 calibration, 70 baseline, 2 Repair Builder, 70 revised, and 1 bounded judge/reference call. Every granted attempt permanently commits 62,500,000 nano-USD, so 160 grants bind the USD $10 ceiling exactly and a resetting provider window cannot restore ToolProof capacity. Concurrency is one.
+The hosted Probe lane is disabled by default. Its migrated v0.5 challenge-lifetime policy permits exactly 160 provider attempts: 17 calibration, 70 baseline, 2 Repair Builder, 70 revised, and 1 bounded judge/reference call. Every granted attempt permanently commits 62,500,000 nano-USD, so 160 grants bind the USD $10 ceiling exactly and a resetting provider window cannot restore Thurstone capacity. Concurrency is one.
 
 The server-only guard uses signed short-lived authorizations and atomic Redis transitions: `ISSUED → IN_FLIGHT → KNOWN | UNCERTAIN`. Policy/counter/authorization/tombstone records have no reset TTL. Only an explicit fresh `GRANTED_NEW` receipt can authorize one future provider request. Ambiguous outcomes retain the reservation and quarantine the guard; critical drift or settlement conflicts halt it. Production routes never initialize missing state.
 
@@ -70,7 +70,7 @@ verifier, plus synthetic POSIX/Windows example-user paths used only to prove exp
 scanner binds the exact commits, blob object IDs, blob SHA-256 values, paths, line hashes, and token
 hashes; any additional occurrence fails publication.
 
-These fixtures do not point to a file used by ToolProof, contain no username, credential, private
+These fixtures do not point to a file used by Thurstone, contain no username, credential, private
 content, or dependency, and never appear in evidence, documentation, deployment output, or runtime
 configuration. The current verifier constructs generic root-pattern checks without retaining the
 historical workspace strings. Preserving the narrowly classified negative fixtures avoids

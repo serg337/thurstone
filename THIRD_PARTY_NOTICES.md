@@ -6,7 +6,7 @@ The complete npm dependency inventory is generated deterministically from the lo
 
 [`third_party/npm-transitive-inventory.json`](third_party/npm-transitive-inventory.json) enumerates every unique `package@version` represented by the npm v3 lockfile. Each record includes its source and npm URLs, normalized SPDX license expression, production/development/optional scope, compatibility classification, installed-versus-skipped-optional metadata source, and every contributing lockfile path.
 
-Platform-specific optional packages that npm does not install on the Linux verification host remain in the inventory. Their license and resolved source come from the integrity-bound lockfile and are explicitly labeled `lockfile-skipped-optional`; missing installed metadata is accepted for no other class. Licenses classified `compatible-notice-required`—including MPL-2.0, CC-BY-4.0, LGPL-3.0-or-later, and the recorded compound expressions—remain under their own terms and are not relicensed by ToolProof.
+Platform-specific optional packages that npm does not install on the Linux verification host remain in the inventory. Their license and resolved source come from the integrity-bound lockfile and are explicitly labeled `lockfile-skipped-optional`; missing installed metadata is accepted for no other class. Licenses classified `compatible-notice-required`—including MPL-2.0, CC-BY-4.0, LGPL-3.0-or-later, and the recorded compound expressions—remain under their own terms and are not relicensed by Thurstone.
 
 ### Notice-required npm packages
 
@@ -26,7 +26,7 @@ The inventory enumerates all 29 affected `package@version` records individually 
 
 | Service       | Provider | Official information           | Role                                                                     | Notice                                                                                                                                       |
 | ------------- | -------- | ------------------------------ | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Vercel        | Vercel   | https://vercel.com/docs        | Signed-out HTTPS application hosting and server-route runtime            | Managed deployment service governed by its provider terms; ToolProof redistributes no Vercel service source code.                            |
+| Vercel        | Vercel   | https://vercel.com/docs        | Signed-out HTTPS application hosting and server-route runtime            | Managed deployment service governed by its provider terms; Thurstone redistributes no Vercel service source code.                            |
 | Upstash Redis | Upstash  | https://upstash.com/docs/redis | Production-only durable replay, evidence, call-count, and spend controls | Managed data service governed by its provider terms; the separate MIT-licensed `@upstash/redis` client package appears in the npm inventory. |
 
 The generated inventory also records the official service documentation and terms URLs. Service names identify operational providers only and imply no affiliation or endorsement.
@@ -52,10 +52,10 @@ The generated inventory also records the official service documentation and term
 
 ## Adapted source
 
-ToolProof's native fallback bridge and pinned browser runtime adapt the narrow
+Thurstone's native fallback bridge and pinned browser runtime adapt the narrow
 `Page.webmcp.tools()` discovery, retained `WebMCPTool.execute()` invocation, and
 explicit Puppeteer launch patterns from `GoogleChromeLabs/webmcp-tools`.
-ToolProof changed those patterns to add exact executable verification, isolated
+Thurstone changed those patterns to add exact executable verification, isolated
 trial lifecycle, same-origin request controls, fail-closed catalog binding,
 cancellation/timeout handling, and evidence retention. The upstream evaluator,
 expected-call mapper, report generator, and shared-browser-context design are not
@@ -65,7 +65,8 @@ included.
 | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | GoogleChromeLabs `webmcp-evals` native browser pattern | commit `bcb6e93939d7fcf05747ccde913ed77a688e3b94`; subtree `b3329060567a1358b45490874a8d4eb0183d5731` | `webmcp-evals/src/evaluator/browser.ts`; blob `aa2ede5010fbf66627d583b30ed606978ccbbd03`; SHA-256 `d70f9ab511ecb5ab70f21000f12a56030f49e96c3cbb27557248a55ff7657bca` | Apache-2.0 | `third_party/licenses/googlechromelabs-webmcp-evals-APACHE-2.0.txt` (upstream bytes SHA-256 `58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd`) |
 
-The adapted ToolProof files carry prominent source and modification notices.
+The adapted files were developed under the ToolProof working name and retain those prominent
+historical source and modification notices; the current Thurstone release preserves them.
 Google and Chrome names are used only to identify origin; no affiliation or
 endorsement is implied.
 
@@ -79,9 +80,9 @@ the pinned `chrome` executable SHA-256 is
 `3b0be9872ea937893cb1e1523fde071d38c1ed4ef866b3f7976240094a868c93`.
 The artifact is an operator-local runtime dependency only: it is not committed,
 bundled into the application deployment, redistributed in release assets, or
-served by ToolProof. Its included `ABOUT`, `chrome://terms`, Chromium credits,
+served by Thurstone. Its included `ABOUT`, `chrome://terms`, Chromium credits,
 and component-specific notices govern that local binary; the archive also
-contains a separately licensed Widevine component. ToolProof neither modifies
+contains a separately licensed Widevine component. Thurstone neither modifies
 nor redistributes those binary files.
 
 ## Development and verification dependencies
@@ -121,4 +122,4 @@ nor redistributes those binary files.
 
 ## Assets
 
-The application uses project-authored CSS, text, and interface shapes with system fonts. The tracked public product screenshot is derived only from the ToolProof build and contains no third-party logo or stock asset. The final submission must use the verified project-authored screenshot-based thumbnail specified in `docs/demo-script.md`; any different pre-existing Devpost draft thumbnail remains unreviewed and cannot be used without separate rights/provenance confirmation. The project contains no third-party image, icon, music, video, sound, or dataset. The narrowly adapted runner source is disclosed above.
+The application uses project-authored CSS, text, and interface shapes with system fonts. Both tracked public screenshots are project-authored: one preserves the measured build's ToolProof working-name presentation, and one carries the current Thurstone presentation over the same authentic Results content. Neither contains a third-party logo or stock asset. The final submission must use the verified Thurstone screenshot-based thumbnail specified in `docs/demo-script.md`; any different pre-existing Devpost draft thumbnail remains unreviewed and cannot be used without separate rights/provenance confirmation. The project contains no third-party image, icon, music, video, sound, or dataset. The narrowly adapted runner source is disclosed above.

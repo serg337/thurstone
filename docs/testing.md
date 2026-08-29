@@ -1,6 +1,6 @@
 # Testing
 
-ToolProof keeps deterministic correctness, native WebMCP plumbing, model selection, and Direct ChatGPT observations as separate proof classes.
+Thurstone keeps deterministic correctness, native WebMCP plumbing, model selection, and Direct ChatGPT observations as separate proof classes.
 
 ## Commands
 
@@ -81,8 +81,8 @@ The production guard was initialized once from Git-linked commit `86584fe4fa3089
 Authentic release walkthroughs use one of two supported paths: (1) the latest ChatGPT desktop
 built-in browser with GPT-5.6 Sol or Terra, or (2) Chrome 149+ after enabling
 `chrome://flags/#enable-webmcp-testing` and relaunching the browser. Chrome's flag/relaunch is a
-browser prerequisite, not ToolProof setup; judges never install a ToolProof extension or provide a
-ToolProof/API key.
+browser prerequisite, not Thurstone setup; judges never install a Thurstone extension or provide a
+Thurstone/API key.
 
 - Unit tests prove deterministic domain, schema, canonicalization, and evaluator behavior.
 - Integration tests with controlled test doubles prove registration-manager logic but are not native WebMCP proof.

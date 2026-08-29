@@ -1,6 +1,6 @@
 # Contributing
 
-ToolProof is being built under a fixed challenge protocol. Contributions must preserve the semantic contract, evidence lineage, publication boundary, and human approval gates.
+Thurstone is being built under a fixed challenge protocol. Contributions must preserve the semantic contract, evidence lineage, publication boundary, and human approval gates.
 
 Before proposing a change:
 

@@ -7,6 +7,7 @@ import {
   type StudioReviewPackageView
 } from "@/components/studio/studio-client";
 import { canonicalJson } from "@/lib/evidence/digest";
+import { PRODUCT_NAME } from "@/lib/brand";
 import {
   gate3ReviewPackageCanonicalJson,
   type Gate3HumanReviewPackage
@@ -193,7 +194,7 @@ const PREPARING_REVIEW_PACKAGE: StudioReviewPackageView = Object.freeze({
     "No genuine Sergio review receipt exists."
   ]),
   contractDraft: Object.freeze({
-    title: "ToolProof checkout/review semantic contract",
+    title: `${PRODUCT_NAME} checkout/review semantic contract`,
     meaningPrinciple:
       "Human-approved meaning-equivalent requests must produce the same canonical single-step action signature; one declared semantic boundary may change that signature.",
     clarificationPolicy:
@@ -290,7 +291,7 @@ function exactReviewPackage(
           "No scored request is admitted before approval, freeze, Authoring Builder termination, and fresh-run readiness."
         ]),
     contractDraft: Object.freeze({
-      title: "ToolProof checkout/review semantic contract",
+      title: `${PRODUCT_NAME} checkout/review semantic contract`,
       meaningPrinciple: review.contract.equivalencePrinciple,
       clarificationPolicy:
         "Missing user-controlled intent or arguments require the exact approved clarification outcome and zero target calls.",

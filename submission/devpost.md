@@ -1,4 +1,7 @@
-# ToolProof by Invarra
+# Thurstone by Invarra
+
+_Previously developed and measured under the working name ToolProof; immutable evidence and
+protocol identifiers retain that legacy name for provenance._
 
 **Elevator pitch:** Semantic regression tests for WebMCP tools—unit tests for meaning, arguments, and effects.
 
@@ -8,17 +11,17 @@
 
 Agent-callable websites are often tested like ordinary APIs: did a tool exist, did the call return JSON, and did the page avoid crashing? Those checks miss the more important failure. Two requests can mean the same thing but trigger different tools, or one small change in intent can cross a consequential boundary without the system noticing.
 
-ToolProof asks a stricter question: **does WebMCP behavior track the meaning a human approved?** It makes tool selection, canonical arguments, observable effects, clarification behavior, and over-action independently inspectable.
+Thurstone asks a stricter question: **does WebMCP behavior track the meaning a human approved?** It makes tool selection, canonical arguments, observable effects, clarification behavior, and over-action independently inspectable.
 
 The project was inspired by the gap between integration tests that prove a tool can run and the human question that actually matters: did the agent do the same thing when the request meant the same thing, and stop or change course when one meaningful detail changed?
 
-## What ToolProof Does
+## What Thurstone Does
 
-ToolProof is a deterministic simulated checkout with five native WebMCP tools. Four appear on the initial fixture—`cart_get`, `cart_update`, `checkout_request`, and `order_review`—while `checkout_cancel` exists only when a simulated checkout is pending.
+Thurstone is a deterministic simulated checkout with five native WebMCP tools. Four appear on the initial fixture—`cart_get`, `cart_update`, `checkout_request`, and `order_review`—while `checkout_cancel` exists only when a simulated checkout is pending.
 
-A human reviews a semantic contract containing meaning-equivalent requests and matched boundaries. ToolProof freezes that contract, runs fresh model contexts against the live catalog, executes at most one native tool per case, captures before/after state and exact effects, and scores the trace outside the model context. Results remain filterable by version, Development versus Builder-blinded holdout, family, case, outcome, and error class.
+A human reviews a semantic contract containing meaning-equivalent requests and matched boundaries. Thurstone freezes that contract, runs fresh model contexts against the live catalog, executes at most one native tool per case, captures before/after state and exact effects, and scores the trace outside the model context. Results remain filterable by version, Development versus Builder-blinded holdout, family, case, outcome, and error class.
 
-The reference experiment contains 24 cases per version. Baseline and revised both scored `23/24`: Development stayed `12/12`, holdout stayed `11/12`, and the same tentative-checkout case abstained rather than asking the required clarification. The one-description revision therefore shows **no measured improvement** in this one-trial snapshot. ToolProof presents that result rather than optimizing it away.
+The reference experiment contains 24 cases per version. Baseline and revised both scored `23/24`: Development stayed `12/12`, holdout stayed `11/12`, and the same tentative-checkout case abstained rather than asking the required clarification. The one-description revision therefore shows **no measured improvement** in this one-trial snapshot. Thurstone presents that result rather than optimizing it away.
 
 | Metric                      | Baseline → revised |
 | --------------------------- | -----------------: |
@@ -36,7 +39,7 @@ The most useful lesson was negative: a clearer description did not improve this 
 
 ## Why WebMCP Is Essential
 
-WebMCP is the object under test and the execution substrate—not a decorative integration. The visible interface and the agent share one document-owned state store. ToolProof registers real top-level Site Tools, verifies the exact discovered catalog, supports the current native argument representations through one calibrated adapter, propagates cancellation, and binds each consumer call to one canonical handler trace and state effect.
+WebMCP is the object under test and the execution substrate—not a decorative integration. The visible interface and the agent share one document-owned state store. Thurstone registers real top-level Site Tools, verifies the exact discovered catalog, supports the current native argument representations through one calibrated adapter, propagates cancellation, and binds each consumer call to one canonical handler trace and state effect.
 
 That makes questions possible that a detached API benchmark cannot answer: Did the model select the tool actually available on this page? Did the visible UI update before result delivery? Did a pending-only tool appear at the right lifecycle boundary? Did reset restore both state and catalog? Did a prohibited action occur and later get hidden by compensating state?
 
@@ -48,13 +51,13 @@ Studio shows the frozen contract and human receipt. Lab exposes the deterministi
 
 ## Challenge-Period Build
 
-The ToolProof name and high-level concept predate the challenge. The public WebMCP product was built during the challenge period: the five-tool checkout domain, lifecycle-safe registry, native adapter, replay-safe operations, verified reset, trace ledger, evidence exports, blinded 24-case protocol, bounded model runner, Results inspector, signed-out judge lane, browser/accessibility suite, security controls, documentation, and release package.
+The high-level concept and planning predate the challenge under the working name ToolProof. The public WebMCP product was built during the challenge period: the five-tool checkout domain, lifecycle-safe registry, native adapter, replay-safe operations, verified reset, trace ledger, evidence exports, blinded 24-case protocol, bounded model runner, Results inspector, signed-out judge lane, browser/accessibility suite, security controls, documentation, and release package. Sergio adopted the current Thurstone name on 29 August 2026 after the scored evidence was captured; the rename does not rewrite historical receipts or protocol identifiers.
 
 OpenAI Codex assisted with implementation, testing, audits, and collateral. Controlled model decisions use the OpenAI Responses API with GPT-5.6 Terra. Every dependency and adapted upstream component is pinned and attributed; no generated answer is treated as human approval or authentic browser evidence.
 
 ## 60-Second Test
 
-1. In Chrome 149+, enable `chrome://flags/#enable-webmcp-testing`, relaunch the browser, and open the live Lab signed out. Alternatively, use the latest ChatGPT desktop built-in browser with GPT-5.6 Sol or Terra. No ToolProof login, judge-supplied key, extension, or ToolProof-specific setup is required.
+1. In Chrome 149+, enable `chrome://flags/#enable-webmcp-testing`, relaunch the browser, and open the live Lab signed out. Alternatively, use the latest ChatGPT desktop built-in browser with GPT-5.6 Sol or Terra. No Thurstone login, judge-supplied key, extension, or Thurstone-specific setup is required.
 2. Confirm `consumer-ready` and the clean four-tool catalog.
 3. In **One fixed decision, one verified native read**, load the already sealed bounded judge decision.
 4. Run the required fresh current-build native `cart_get`, then inspect or download the combined proof. The server accepts only its displayed judge-only request; its sole challenge-lifetime provider call was consumed on the evidence root, and archive recovery cannot make another model request.
@@ -64,7 +67,7 @@ For the official Site Tools experience, open the same Lab in the latest ChatGPT 
 
 ## Implementation
 
-ToolProof uses strict TypeScript, Next.js, and React. A serialized domain/session layer owns fixture state, schemas, idempotency tombstones, mutation admission, cancellation, and reset. A per-tool registry manager drains calls before catalog changes and verifies exact discovery. Append-only traces retain raw and canonical arguments, native results, before/after state, effect diffs, runtime identity, and hashes.
+Thurstone uses strict TypeScript, Next.js, and React. A serialized domain/session layer owns fixture state, schemas, idempotency tombstones, mutation admission, cancellation, and reset. A per-tool registry manager drains calls before catalog changes and verifies exact discovery. Append-only traces retain raw and canonical arguments, native results, before/after state, effect diffs, runtime identity, and hashes.
 
 The hardest engineering work was browser lifecycle correctness rather than drawing the UI: tolerating omitted native execution context while preserving cancellation; keeping pending-only registration synchronized across route remounts; proving committed state is visible before outer result delivery; making reset restore state, ledger, and catalog together; and surviving refresh, duplicate tabs, lost responses, and ambiguous dispatch without spending twice. Those failures drove the document-owned store, drain-before-registration transitions, append-only receipts, and conservative recovery rules.
 
@@ -74,7 +77,7 @@ The signed-out judge lane accepts no prompt, model, schema, URL, tool, or argume
 
 ## Impact
 
-ToolProof turns “the tool call worked” into an evidence-backed semantic regression question. The same approach can apply to editors, dashboards, support consoles, travel planners, and other agent-callable interfaces where equivalent phrasing should preserve behavior and a small intent change should not silently cross an action boundary.
+Thurstone turns “the tool call worked” into an evidence-backed semantic regression question. The same approach can apply to editors, dashboards, support consoles, travel planners, and other agent-callable interfaces where equivalent phrasing should preserve behavior and a small intent change should not silently cross an action boundary.
 
 The useful artifact is not a flattering aggregate. It is the combination of a human-approved contract, native page effects, trace-level provenance, separate failure classes, and a reproducible way to compare versions without exposing holdout truth during repair.
 
@@ -104,14 +107,14 @@ Submission receipt: recorded only in the durable private manifest after Sergio's
 
 ### Additional Devpost form values
 
-- **Project name:** ToolProof by Invarra
+- **Project name:** Thurstone by Invarra
 - **Elevator pitch:** Semantic regression tests for WebMCP tools—unit tests for meaning, arguments, and effects.
 - **Submitter Type:** Individual
 - **Country of residence:** Germany
 - **App Status:** New
-- **Existing-work explanation:** The ToolProof name and high-level concept predated the challenge; the submitted public WebMCP implementation, native checkout tools, evidence system, evaluation, and release package were built during the challenge period.
+- **Existing-work explanation:** The high-level concept and planning predated the challenge under the working name ToolProof. The submitted public WebMCP implementation, native checkout tools, evidence system, evaluation, and release package were built during the challenge period. The public product was renamed Thurstone on 29 August 2026 after evidence capture; immutable receipts retain the working name.
 - **Live URL:** https://toolproof-rust.vercel.app
-- **Testing instructions:** Use Chrome 149+ after enabling `chrome://flags/#enable-webmcp-testing` and relaunching, or the latest ChatGPT desktop built-in browser with GPT-5.6 Sol or Terra. Open `/lab` signed out, confirm the four-tool `consumer-ready` catalog, run the one fixed judge proof, inspect/download the sealed receipt, then open `/results`. No ToolProof login or judge-supplied key is required; checkout is simulated and no purchase occurs.
+- **Testing instructions:** Use Chrome 149+ after enabling `chrome://flags/#enable-webmcp-testing` and relaunching, or the latest ChatGPT desktop built-in browser with GPT-5.6 Sol or Terra. Open `/lab` signed out, confirm the four-tool `consumer-ready` catalog, run the one fixed judge proof, inspect/download the sealed receipt, then open `/results`. No Thurstone login or judge-supplied key is required; checkout is simulated and no purchase occurs.
 - **Public code repository:** populate only from the verified Gate 9 public-release field; never submit the private URL.
 - **Tested clients:** Chrome 151/152 native WebMCP; Codex in the ChatGPT desktop built-in browser using Site Tools; GPT-5.6 Terra through the bounded OpenAI Responses API Custom Probe.
 - **AI tools leveraged:** OpenAI Codex for implementation, testing, audits, and collateral; GPT-5.6 Terra for bounded calibration/reference decisions; Codex Site Tools observations in the ChatGPT desktop built-in browser.

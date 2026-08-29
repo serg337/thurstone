@@ -1,6 +1,6 @@
 # Architecture
 
-ToolProof separates authoring, execution, and results into three top-level documents so expected answers and repair hints do not share the active Lab trust surface.
+Thurstone separates authoring, execution, and results into three top-level documents so expected answers and repair hints do not share the active Lab trust surface.
 
 ```text
 /studio   draft, human review, freeze, phase-specific meta-tools
@@ -18,7 +18,7 @@ Every mutation requires a bounded operation ID. The same ID and canonical comman
 
 The Lab feature-detects provider registration separately from in-page discovery and execution. A central per-tool registry manager owns registration promises and `AbortController` lifecycles. It preserves unchanged tool identities, blocks new admission while transitioning, drains in-flight handlers, and verifies the exact discovered catalog. Direct native calls also hold the selected registration through outer consumer result delivery: Chrome 152 can still be settling `executeTool()` after the provider handler resolves, so a state-driven self-retirement must not abort that registration signal early. The transition reports `registering` and freezes admission immediately, then publishes only the exact state-appropriate catalog after the consumer hold releases. The document-scoped Lab environment preserves handler identities across same-document route remounts.
 
-The official ambient type package currently lacks `executeTool()`, while the draft and Chrome guide differ on object versus JSON-string arguments. ToolProof keeps this difference behind one narrow adapter. It detects one mode with exactly one harmless read-only `cart_get` call, freezes that mode for the document, owns a data-only snapshot of every later input, consumes each execution ID before asynchronous work, and never retries with another representation.
+The official ambient type package currently lacks `executeTool()`, while the draft and Chrome guide differ on object versus JSON-string arguments. Thurstone keeps this difference behind one narrow adapter. It detects one mode with exactly one harmless read-only `cart_get` call, freezes that mode for the document, owns a data-only snapshot of every later input, consumes each execution ID before asynchronous work, and never retries with another representation.
 
 Chrome 151's `getTools()` descriptor serializes `inputSchema`. Discovery parses that representation once and then requires the schema content, title, description, and annotations to match the provider declaration exactly.
 

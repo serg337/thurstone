@@ -1,4 +1,5 @@
 import { StatusPill } from "@/components/status-pill";
+import { PRODUCT_BYLINE, PRODUCT_NAME } from "@/lib/brand";
 
 const workflow = [
   {
@@ -29,10 +30,10 @@ export default function HomePage() {
             Unit tests for <span>meaning.</span>
           </h1>
           <p className="hero-lede">
-            ToolProof tests whether agent actions track declared human-approved meaning rather than
-            superficial wording.
+            {PRODUCT_NAME} tests whether agent actions track declared human-approved meaning rather
+            than superficial wording.
           </p>
-          <p className="byline">ToolProof by Invarra — created by Sergio Valencia.</p>
+          <p className="byline">{PRODUCT_BYLINE}</p>
           <div className="button-row">
             <a className="button button-primary" href="/lab">
               Open checkout lab
@@ -43,7 +44,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        <div className="meaning-card" aria-label="ToolProof principle">
+        <div className="meaning-card" aria-label={`${PRODUCT_NAME} principle`}>
           <div className="meaning-row">
             <span className="signal signal-same" aria-hidden="true" />
             <div>
@@ -97,7 +98,7 @@ export default function HomePage() {
           </p>
         </div>
         <ol>
-          <li>Open the Lab signed out; no key or ToolProof login is needed.</li>
+          <li>Open the Lab signed out; no key or {PRODUCT_NAME} login is needed.</li>
           <li>Confirm consumer-ready on the clean four-tool catalog.</li>
           <li>Run the bounded judge proof and inspect/download its receipts.</li>
           <li>Open Results for the separate 24-case paired evidence.</li>

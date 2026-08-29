@@ -10,7 +10,7 @@ export default function ErrorBoundary({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error("ToolProof route error", { name: error.name, digest: error.digest });
+    console.error("Thurstone route error", { name: error.name, digest: error.digest });
   }, [error]);
 
   return (

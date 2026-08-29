@@ -1,4 +1,4 @@
-# ToolProof execution plan
+# Thurstone execution plan
 
 Snapshot date: **2026-08-29, immediately before the evidence-build deployment**. This table is a
 historical execution checkpoint, not a mutable post-release dashboard. Gates 7–9 below intentionally
@@ -6,6 +6,13 @@ show the state at freeze preparation; the deployed health/status receipts, publi
 durable submission manifest are authoritative for later terminal state. Status values are `pending`,
 `in progress`, `human gate`, `blocked`, or `complete`. A gate is complete only with linked
 reproducible proof.
+
+Current continuation: Gates 0–8 subsequently passed on evidence build
+`768af2539ca20c29928a897644ad22ba897c580d`. Sergio adopted the public name **Thurstone** on
+29 August 2026 after evidence capture, so Gate 8 is temporarily reopened for a strictly
+provider-free branding/presentation transition, exact deployment, new screenshot, current-build
+native replay, and final clean-clone/publication audit. Frozen semantics and evidence remain
+unchanged; Gate 9 resumes only after this transition passes.
 
 | Gate | Scope                                                                                                                                     | Depends on | Pass evidence                                                                                            | Status                                    |
 | ---- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------- |

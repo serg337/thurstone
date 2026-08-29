@@ -1,4 +1,4 @@
-# ToolProof repository rules
+# Thurstone repository rules
 
 ## Authority and scope
 

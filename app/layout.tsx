@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 
 import { SimulationNotice } from "@/components/simulation-notice";
 import { SiteHeader } from "@/components/site-header";
+import { PRODUCT_BYLINE, PRODUCT_NAME } from "@/lib/brand";
 import { PROBE_RESULTS_COOKIE, PROBE_SESSION_COOKIE } from "@/lib/probe/session";
 import { SCORED_RESULTS_COOKIE, SCORED_SESSION_COOKIE } from "@/lib/scored/session.server";
 
@@ -10,12 +11,11 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "ToolProof — unit tests for WebMCP meaning",
-    template: "%s · ToolProof"
+    default: `${PRODUCT_NAME} — unit tests for WebMCP meaning`,
+    template: `%s · ${PRODUCT_NAME}`
   },
-  description:
-    "ToolProof tests whether WebMCP tool behavior follows human-approved meaning rather than superficial wording.",
-  applicationName: "ToolProof",
+  description: `${PRODUCT_NAME} tests whether WebMCP tool behavior follows human-approved meaning rather than superficial wording.`,
+  applicationName: PRODUCT_NAME,
   authors: [{ name: "Sergio Valencia" }]
 };
 
@@ -39,7 +39,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <SimulationNotice />
         <main id="main-content">{children}</main>
         <footer className="site-footer">
-          <span>ToolProof by Invarra — created by Sergio Valencia.</span>
+          <span>{PRODUCT_BYLINE}</span>
           <span>WebMCP is an evolving draft. No affiliation or endorsement is implied.</span>
         </footer>
       </body>

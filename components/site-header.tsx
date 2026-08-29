@@ -1,5 +1,7 @@
 /* eslint-disable @next/next/no-html-link-for-pages -- Trust-surface links intentionally force a new top-level document. */
 
+import { PRODUCT_NAME } from "@/lib/brand";
+
 const navigation = [
   { href: "/studio", label: "Studio" },
   { href: "/lab", label: "Lab" },
@@ -10,12 +12,12 @@ export function SiteHeader({ isolated = false }: { readonly isolated?: boolean }
   return (
     <header className="site-header">
       <div className="header-inner">
-        <a className="brand" href="/" aria-label="ToolProof home">
+        <a className="brand" href="/" aria-label={`${PRODUCT_NAME} home`}>
           <span className="brand-mark" aria-hidden="true">
-            TP
+            TH
           </span>
           <span>
-            <strong>ToolProof</strong>
+            <strong>{PRODUCT_NAME}</strong>
             <small>by Invarra</small>
           </span>
         </a>

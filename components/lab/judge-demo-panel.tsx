@@ -387,7 +387,7 @@ export function JudgeDemoPanel({
       {terminalNoCall ? (
         <p className="pending-notice" role="status">
           The sealed model outcome did not select cart_get. Its separate provider evidence remains
-          available, and ToolProof will not fabricate or repeatedly retry a native call.
+          available, and Thurstone will not fabricate or repeatedly retry a native call.
         </p>
       ) : null}
 

@@ -1,8 +1,14 @@
-# ToolProof
+# Thurstone
 
-> ToolProof tests whether agent actions track declared human-approved meaning rather than superficial wording.
+> Thurstone tests whether agent actions track declared human-approved meaning rather than superficial wording.
 
-**ToolProof by Invarra — created by Sergio Valencia.**
+**Thurstone by Invarra — created by Sergio Valencia.**
+
+Challenge evidence identity: **ToolProof by Invarra — created by Sergio Valencia.**
+
+Previously developed and measured under the working name **ToolProof**. Immutable evidence,
+protocol/version identifiers, configuration names, and the original public origin retain that
+legacy name so the authentic challenge record continues to verify; the history is not rewritten.
 
 Live app: https://toolproof-rust.vercel.app
 
@@ -14,17 +20,17 @@ Demo video: reserved for the verified Gate 9 link-only release commit
 
 Submission receipt: recorded only in the durable private manifest after Sergio's reserved final submission; the frozen public repository is not edited afterward.
 
-**Simulated checkout — no purchase occurs.** ToolProof contains no payment, account, inventory, messaging, or external transaction path.
+**Simulated checkout — no purchase occurs.** Thurstone contains no payment, account, inventory, messaging, or external transaction path.
 
 **60-second path:** in Chrome 149+, enable `chrome://flags/#enable-webmcp-testing` and relaunch, then open the live Lab signed out → confirm the exact four-tool `consumer-ready` catalog → load the already sealed fixed judge decision → run the required fresh current-build native `cart_get` replay → inspect or download the combined proof → open Results for the `23/24 → 23/24` paired evidence. The other supported Site Tools path is the latest ChatGPT desktop built-in browser with GPT-5.6 Sol or Terra.
 
 **Supported-path status:** native Chrome WebMCP and four fresh official ChatGPT desktop built-in-browser Site Tools observations are verified. The sole bounded server-side OpenAI judge decision is permanently sealed on evidence root `e2cf8d47375abfeeb4f32bd6f5973918acf4c091`; it selected `cart_get` with `{}`. The archive-reader compatibility recovery cannot retry the provider or rewrite the durable record. Source alone does not preclaim deployment verification: the live sealed/archive receipt and current-build native replay are authoritative.
 
-<img src="public/toolproof-results.jpg" alt="ToolProof Results showing the authentic 23/24 to 23/24 paired evidence and no measured improvement" width="720" />
+<img src="public/thurstone-results.jpg" alt="Thurstone Results showing the authentic 23/24 to 23/24 paired evidence and no measured improvement" width="720" />
 
 ## Current judge path
 
-1. Choose a supported path: Chrome 149+ with `chrome://flags/#enable-webmcp-testing` enabled followed by a browser relaunch, or the latest ChatGPT desktop built-in browser with GPT-5.6 Sol or Terra. Open `/lab` signed out. No ToolProof login, judge-supplied key, extension, or ToolProof-specific local setup is required.
+1. Choose a supported path: Chrome 149+ with `chrome://flags/#enable-webmcp-testing` enabled followed by a browser relaunch, or the latest ChatGPT desktop built-in browser with GPT-5.6 Sol or Terra. Open `/lab` signed out. No Thurstone login, judge-supplied key, extension, or Thurstone-specific local setup is required.
 2. Confirm the capability matrix reaches `consumer-ready` with the exact initial catalog: `cart_get`, `cart_update`, `checkout_request`, and `order_review`.
 3. In **One fixed decision, one verified native read**, load the sealed decision. The single challenge-lifetime provider allocation has already been consumed on the evidence root, so archive recovery cannot issue another provider request.
 4. Run and inspect the fresh current-build native `cart_get` receipt. Download the complete judge proof JSON only after the current deployment binds that native replay to the separately retained provider decision.
@@ -91,6 +97,9 @@ npm run verify:publication
 
 The application builds and serves the deterministic UI without a model key. Production-only model and durable controls use host secret/config storage; values must never enter Git, client bundles, logs, screenshots, examples, or command arguments.
 
+`TOOLPROOF_*` remains the evidence-bound compatibility prefix after the Thurstone rename. Renaming
+those variables would add no user value and would break exact deployment and receipt continuity.
+
 | Name                                                                                                                     | Purpose                                                                                                                       |
 | ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
 | `OPENAI_API_KEY`                                                                                                         | Dedicated restricted OpenAI project key; Sensitive and Production-only                                                        |
@@ -119,11 +128,11 @@ The public tree supports two explicit deployment modes:
 1. **Deterministic review deployment:** import the repository into a Node 22 Vercel project, set Install Command to `npm ci --no-fund --audit=false`, and Build Command to `npm run build`. No environment values are required. The application and deterministic fixture render, Results honestly says no permanent run is configured, and provider/evidence/judge operations fail closed. The tracked sample/reference artifacts remain inspectable and verifiable in the repository; this mode does not serve them as live permanent-store output and is not the official evidence-bound challenge deployment.
 2. **Official evidence-bound deployment:** use the same Install Command and set Build Command to `npm run vercel-build`. Run from a complete-history clone, or supply the digest-bound optional Git-object transport when the host checkout lacks the required commits; the build fails closed if neither proof source exists. Configure only the Production-scoped server values listed above and in [`.env.example`](.env.example), including the exact commit-bound Gate 3–6 proof values. Keep Preview free of provider, Redis-write, signing, activation, and judge values. Pin the deployment to the reviewed Git commit and verify `/api/health`, `/lab`, `/results`, and the signed-out readiness receipts after deployment.
 
-Vercel supplies `VERCEL`, `VERCEL_ENV`, `VERCEL_GIT_COMMIT_SHA`, `VERCEL_PROJECT_ID`, `VERCEL_DEPLOYMENT_ID`, and `VERCEL_URL`; do not set them manually. ToolProof accepts a complete `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN` pair first and otherwise falls back to `KV_REST_API_URL`/`KV_REST_API_TOKEN`. Integration-provided `KV_URL`, `REDIS_URL`, and `KV_REST_API_READ_ONLY_TOKEN` are not used by this boundary. `TOOLPROOF_BASE_URL` is only an optional deployed-browser-test target. A judge never supplies an API key: the official lane uses the restricted Production server key and exposes only a fixed synthetic request with one durable global allocation.
+Vercel supplies `VERCEL`, `VERCEL_ENV`, `VERCEL_GIT_COMMIT_SHA`, `VERCEL_PROJECT_ID`, `VERCEL_DEPLOYMENT_ID`, and `VERCEL_URL`; do not set them manually. Thurstone accepts a complete `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN` pair first and otherwise falls back to `KV_REST_API_URL`/`KV_REST_API_TOKEN`. Integration-provided `KV_URL`, `REDIS_URL`, and `KV_REST_API_READ_ONLY_TOKEN` are not used by this boundary. `TOOLPROOF_BASE_URL` is only an optional deployed-browser-test target. A judge never supplies an API key: the official lane uses the restricted Production server key and exposes only a fixed synthetic request with one durable global allocation.
 
 ## Architecture
 
-ToolProof uses separate `/studio`, `/lab`, and `/results` documents as distinct trust surfaces. A strict TypeScript domain/session layer owns deterministic state, schema validation, replay-safe operation IDs, reset admission, and document-lifetime tombstones. Normal UI controls and native WebMCP handlers share that store. A per-tool registry manager preserves unchanged registrations, drains in-flight handlers and outer consumer delivery before catalog changes, verifies discovery, and fails closed under lifecycle faults. The native adapter freezes one argument mode with a harmless `cart_get` call and binds each later direct call to exactly one canonical handler trace. Server-only Probe controls reserve one versioned challenge-lifetime call/spend slot before provider dispatch. Stored freezes and scored bundles preserve legacy hash domains while successor runs bind the acknowledged predecessor, prior Repair receipt, cumulative call offsets, and permanently terminated Authoring context. Successor/frozen Studio is read-only and registers no authoring meta-tools.
+Thurstone uses separate `/studio`, `/lab`, and `/results` documents as distinct trust surfaces. A strict TypeScript domain/session layer owns deterministic state, schema validation, replay-safe operation IDs, reset admission, and document-lifetime tombstones. Normal UI controls and native WebMCP handlers share that store. A per-tool registry manager preserves unchanged registrations, drains in-flight handlers and outer consumer delivery before catalog changes, verifies discovery, and fails closed under lifecycle faults. The native adapter freezes one argument mode with a harmless `cart_get` call and binds each later direct call to exactly one canonical handler trace. Server-only Probe controls reserve one versioned challenge-lifetime call/spend slot before provider dispatch. Stored freezes and scored bundles preserve legacy hash domains while successor runs bind the acknowledged predecessor, prior Repair receipt, cumulative call offsets, and permanently terminated Authoring context. Successor/frozen Studio is read-only and registers no authoring meta-tools.
 
 The calibration browser carries only opaque ciphertext. A one-time server-verified operator capability prevents the public Internet from claiming the sole calibration run; the raw capability is never stored server-side or shipped in public JavaScript. A short-lived signed session is recoverable through a separate fixed-expiry HttpOnly credential and a monotonic encrypted server-side run index. Losing browser storage, crossing the ordinary session TTL, receiving a duplicated tab, or losing an HTTP response cannot create another provider decision or native allowance. Per-document ownership is enforced in the same Redis transitions that issue authorization, begin provider dispatch, admit native execution, seal completion, and advance the index. Recovery never exposes prior requests, decisions, scores, or evidence to the active Lab.
 
@@ -135,7 +144,7 @@ See [architecture](docs/architecture.md), [methodology](docs/methodology.md), [t
 
 ## Evidence and claims
 
-ToolProof measures whether WebMCP behavior remains consistent across requests a human approved as meaning-equivalent and changes appropriately at declared semantic boundaries. It does not prove model understanding, guarantee safety, prevent all unintended actions, or provide a certification.
+Thurstone measures whether WebMCP behavior remains consistent across requests a human approved as meaning-equivalent and changes appropriately at declared semantic boundaries. It does not prove model understanding, guarantee safety, prevent all unintended actions, or provide a certification.
 
 | Public metric               | Baseline → revised |
 | --------------------------- | -----------------: |
@@ -153,6 +162,6 @@ The public evidence package keeps custom Probe, Direct Site Tools, calibration, 
 
 ## Ownership, assistance, and license
 
-Sergio Valencia is the individual entrant, repository owner, copyright owner, and prize recipient. The ToolProof name and high-level concept predate the challenge; the public WebMCP implementation is challenge-period work documented in [HACKATHON_BUILD.md](HACKATHON_BUILD.md). Codex assists with implementation, testing, and collateral under Sergio's review and reserved approvals.
+Sergio Valencia is the individual entrant, repository owner, copyright owner, and prize recipient. The high-level concept and planning predate the challenge under the working name ToolProof; Sergio adopted the current Thurstone name on 29 August 2026 during the challenge, after the scored evidence was captured. The public WebMCP implementation is challenge-period work documented in [HACKATHON_BUILD.md](HACKATHON_BUILD.md). Codex assists with implementation, testing, and collateral under Sergio's review and reserved approvals.
 
-Unless otherwise stated, original ToolProof repository material is MIT-licensed by Sergio Valencia. Third-party components and assets remain under the licenses recorded in `THIRD_PARTY_NOTICES.md`.
+Thurstone is the current public name. Unless otherwise stated, original ToolProof repository material is MIT-licensed by Sergio Valencia. Third-party components and assets remain under the licenses recorded in `THIRD_PARTY_NOTICES.md`.
