@@ -35,7 +35,7 @@ test("paired Results exposes exact metrics, filters, traces, provenance, and can
       .locator(".gate6-matrix .matrix-row:not(.matrix-header)")
       .getByText("commitment_holdout_anchor", { exact: true })
   ).toBeVisible();
-  await page.getByLabel("Version").selectOption("revised");
+  await page.getByRole("combobox", { name: "Version", exact: true }).selectOption("revised");
   await expect(page.getByRole("columnheader", { name: "Baseline outcome" })).toHaveCount(0);
   await expect(page.getByRole("columnheader", { name: "Revised outcome" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Inspect baseline" })).toHaveCount(0);
