@@ -23,8 +23,8 @@ The state-before and state-after hashes are both:
 The complete public row is bound by:
 
 - Row digest: `f92ffe35f8b60e4d90c18611c8ef1f887fd975f00d02adb60f222a17a44699e4`
-- Canonical package digest: `bec4e70c3a3098c356407c6630ee973345d4e8b9d0922c12019d19c16f4cdf7a`
-- Canonical JSON SHA-256: `dffb9cbe8472f7b86d5586d1e381846e52974b0d6fbb10fa5a3b81a31d214317`
+- Canonical package digest: `a449db4b1faacdbaab58777923d2ddbde75396b70fa4744b29d0eb8e97089a46`
+- Canonical JSON SHA-256: `fb272a4a68d9c1d3d4542a668b86b23f293cd55e714c1b826af32c7fcac0be26`
 
 Run `npm run verify:evidence` to recompute the package, all seven metrics, export parity, and a deterministic sample spanning every family, subset, version, and failure outcome.
 

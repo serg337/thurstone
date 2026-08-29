@@ -174,7 +174,7 @@ async function activation(
   const gitPackConfigured = Boolean(environment[JUDGE_DEMO_GIT_PACK_ENV]?.trim());
   if (
     (presentationMode === "predecessor" && (bindingConfigured || gitPackConfigured)) ||
-    (presentationMode === "successor" && (!bindingConfigured || !gitPackConfigured))
+    (presentationMode === "successor" && !bindingConfigured)
   ) {
     throw new JudgeDemoServiceError("judge_demo_presentation_mode_configuration_invalid", 503);
   }

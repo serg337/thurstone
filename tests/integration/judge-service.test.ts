@@ -470,7 +470,6 @@ async function successorEnvironment(input: {
   return {
     ...environment(input.successorCommit),
     TOOLPROOF_JUDGE_PRESENTATION_MODE: "successor",
-    TOOLPROOF_JUDGE_GIT_PACK_B64: "test_pack",
     [JUDGE_DEMO_PRESENTATION_BINDING_ENV]: gzipSync(Buffer.from(canonicalJson(binding))).toString(
       "base64url"
     ),
@@ -493,8 +492,7 @@ describe("single-use signed-out judge demo service", () => {
       inferencePerformed: true,
       projection: {
         evidenceClass: "non-scored-model-selection",
-        naturalLanguageRequest:
-          "Before discussing checkout, produce a two-column inventory of the simulated cart: product name and unit count only.",
+        naturalLanguageRequest: "Which current cart lines have a quantity greater than one?",
         decision: { kind: "call", tool: "cart_get", arguments: {} },
         nativeExecutionIncluded: false
       }
@@ -785,7 +783,6 @@ describe("single-use signed-out judge demo service", () => {
       environment: {
         ...dependencies.environment,
         TOOLPROOF_JUDGE_PRESENTATION_MODE: "successor",
-        TOOLPROOF_JUDGE_GIT_PACK_B64: "test_pack",
         [JUDGE_DEMO_PRESENTATION_BINDING_ENV]: "invalid_but_configured",
         [JUDGE_DEMO_PRESENTATION_BINDING_HASH_ENV]: "f".repeat(64)
       }

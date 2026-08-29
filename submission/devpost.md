@@ -10,6 +10,8 @@ Agent-callable websites are often tested like ordinary APIs: did a tool exist, d
 
 ToolProof asks a stricter question: **does WebMCP behavior track the meaning a human approved?** It makes tool selection, canonical arguments, observable effects, clarification behavior, and over-action independently inspectable.
 
+The project was inspired by the gap between integration tests that prove a tool can run and the human question that actually matters: did the agent do the same thing when the request meant the same thing, and stop or change course when one meaningful detail changed?
+
 ## What ToolProof Does
 
 ToolProof is a deterministic simulated checkout with five native WebMCP tools. Four appear on the initial fixture—`cart_get`, `cart_update`, `checkout_request`, and `order_review`—while `checkout_cancel` exists only when a simulated checkout is pending.
@@ -17,6 +19,18 @@ ToolProof is a deterministic simulated checkout with five native WebMCP tools. F
 A human reviews a semantic contract containing meaning-equivalent requests and matched boundaries. ToolProof freezes that contract, runs fresh model contexts against the live catalog, executes at most one native tool per case, captures before/after state and exact effects, and scores the trace outside the model context. Results remain filterable by version, Development versus Builder-blinded holdout, family, case, outcome, and error class.
 
 The reference experiment contains 24 cases per version. Baseline and revised both scored `23/24`: Development stayed `12/12`, holdout stayed `11/12`, and the same tentative-checkout case abstained rather than asking the required clarification. The one-description revision therefore shows **no measured improvement** in this one-trial snapshot. ToolProof presents that result rather than optimizing it away.
+
+| Metric                      | Baseline → revised |
+| --------------------------- | -----------------: |
+| Equivalence consistency     |        `8/8 → 8/8` |
+| Boundary sensitivity        |        `7/8 → 7/8` |
+| Approved tool/action        |    `23/24 → 23/24` |
+| Canonical arguments         |    `20/20 → 20/20` |
+| Observable effects          |    `24/24 → 24/24` |
+| Over-action                 |      `0/10 → 0/10` |
+| Deterministic clarification |        `3/4 → 3/4` |
+
+The most useful lesson was negative: a clearer description did not improve this frozen one-trial suite. Trace-level failure identity mattered more than a flattering aggregate, and the result justified preserving clarification as its own contract rather than treating every no-call as safe success. Broader usefulness remains a human claims decision, not a measured fact.
 
 **Simulated checkout — no purchase occurs.** There is no payment, inventory, account, messaging, shipment, or external transaction path.
 
@@ -40,7 +54,7 @@ OpenAI Codex assisted with implementation, testing, audits, and collateral. Cont
 
 ## 60-Second Test
 
-1. Open the live Lab signed out in a supported Chrome 149+ WebMCP build. No ToolProof login, judge key, extension, or local setup is required.
+1. In Chrome 149+, enable `chrome://flags/#enable-webmcp-testing`, relaunch the browser, and open the live Lab signed out. Alternatively, use the latest ChatGPT desktop built-in browser with GPT-5.6 Sol or Terra. No ToolProof login, judge-supplied key, extension, or ToolProof-specific setup is required.
 2. Confirm `consumer-ready` and the clean four-tool catalog.
 3. In **One fixed decision, one verified native read**, run the bounded judge proof.
 4. Inspect the sealed model projection and native `cart_get` receipt, or download the complete JSON. The server accepts only its displayed judge-only request and can consume at most one challenge-lifetime judge call; the archive replays without another model request.
@@ -51,6 +65,8 @@ For the official Site Tools experience, open the same Lab in the latest ChatGPT 
 ## Implementation
 
 ToolProof uses strict TypeScript, Next.js, and React. A serialized domain/session layer owns fixture state, schemas, idempotency tombstones, mutation admission, cancellation, and reset. A per-tool registry manager drains calls before catalog changes and verifies exact discovery. Append-only traces retain raw and canonical arguments, native results, before/after state, effect diffs, runtime identity, and hashes.
+
+The hardest engineering work was browser lifecycle correctness rather than drawing the UI: tolerating omitted native execution context while preserving cancellation; keeping pending-only registration synchronized across route remounts; proving committed state is visible before outer result delivery; making reset restore state, ledger, and catalog together; and surviving refresh, duplicate tabs, lost responses, and ambiguous dispatch without spending twice. Those failures drove the document-owned store, drain-before-registration transitions, append-only receipts, and conservative recovery rules.
 
 The model-backed boundary is stateless (`store:false`), fixed to one provider/model/settings projection, and permits one decision plus at most one target call. A durable Redis policy caps the entire challenge lifetime at 160 calls and USD `$10`, independent of provider-window resets. Signed single-use authorization, replay/rate/concurrency controls, encrypted permanent receipts, conservative uncertain settlement, origin/body limits, security headers, no source maps, secret scanning, and a dedicated project hard limit keep the public surface narrow.
 
@@ -77,6 +93,27 @@ The useful artifact is not a flattering aggregate. It is the combination of a hu
 
 Live app: https://toolproof-rust.vercel.app
 
-Public repository: https://github.com/serg337/toolproof
+Public repository: reserved for the verified Gate 9 link-only release commit
 
-The approved demo-video URL is added only during the final collateral-only release step after Sergio uploads the verified capture.
+Release: reserved for the verified Gate 9 link-only release commit
+
+Demo video: reserved for the verified Gate 9 link-only release commit
+
+Submission receipt: recorded only in the durable private manifest after Sergio's reserved final submission; the frozen public repository is not edited afterward.
+
+### Additional Devpost form values
+
+- **Project name:** ToolProof by Invarra
+- **Elevator pitch:** Semantic regression tests for WebMCP tools—unit tests for meaning, arguments, and effects.
+- **Submitter Type:** Individual
+- **Country of residence:** Germany
+- **App Status:** New
+- **Existing-work explanation:** The ToolProof name and high-level concept predated the challenge; the submitted public WebMCP implementation, native checkout tools, evidence system, evaluation, and release package were built during the challenge period.
+- **Live URL:** https://toolproof-rust.vercel.app
+- **Testing instructions:** Use Chrome 149+ after enabling `chrome://flags/#enable-webmcp-testing` and relaunching, or the latest ChatGPT desktop built-in browser with GPT-5.6 Sol or Terra. Open `/lab` signed out, confirm the four-tool `consumer-ready` catalog, run the one fixed judge proof, inspect/download the sealed receipt, then open `/results`. No ToolProof login or judge-supplied key is required; checkout is simulated and no purchase occurs.
+- **Public code repository:** populate only from the verified Gate 9 public-release field; never submit the private URL.
+- **Tested clients:** Chrome 151/152 native WebMCP; Codex in the ChatGPT desktop built-in browser using Site Tools; GPT-5.6 Terra through the bounded OpenAI Responses API Custom Probe.
+- **AI tools leveraged:** OpenAI Codex for implementation, testing, audits, and collateral; GPT-5.6 Terra for bounded calibration/reference decisions; Codex Site Tools observations in the ChatGPT desktop built-in browser.
+- **Level of learning:** Significant
+- **Career AI value:** Yes
+- **Video demo link:** populate only after Sergio uploads and verifies the final sub-three-minute narrated demo.

@@ -6,3 +6,9 @@
 *.gif binary
 *.webp binary
 *.woff2 binary
+
+# Preserve exact upstream license/notice bytes while keeping them text-readable. These three
+# source notices intentionally contain upstream whitespace that must not be normalized.
+third_party/licenses/nodejs-22.23.2-LICENSE.txt -whitespace
+third_party/licenses/npm/axe-core-4.13.0-THIRD-PARTY.txt -whitespace
+third_party/licenses/npm/caniuse-lite-1.0.30001810-CC-BY-4.0.txt -whitespace

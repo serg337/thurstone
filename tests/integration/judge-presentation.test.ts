@@ -2,9 +2,10 @@ import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { gzipSync } from "node:zlib";
 
-import { canonicalSha256 } from "@/lib/evidence/digest";
+import { canonicalJson, canonicalSha256 } from "@/lib/evidence/digest";
 import { verifyJudgeDemoCollateralCheckout } from "@/lib/judge/collateral-checkout-verifier.server";
 import {
   JUDGE_DEMO_COLLATERAL_PROOF_VERSION,
@@ -13,6 +14,11 @@ import {
   verifyJudgeDemoCollateralProof
 } from "@/lib/judge/collateral-proof";
 import { createJudgeDemoEnvelope } from "@/lib/judge/envelope";
+import {
+  JUDGE_DEMO_PRESENTATION_BINDING_ENV,
+  JUDGE_DEMO_PRESENTATION_BINDING_HASH_ENV,
+  JUDGE_DEMO_PRESENTATION_BINDING_VERSION
+} from "@/lib/judge/presentation-binding.server";
 import { dependencyProjectionHash } from "@/lib/results/presentation-proof";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -99,7 +105,7 @@ async function fixture(nonLinkChange = false) {
     ...payload,
     proofHash: await canonicalSha256(payload)
   });
-  return { cwd, proof };
+  return { cwd, proof, predecessorEnvelope, successorEnvelope };
 }
 
 afterEach(async () => {
@@ -108,12 +114,57 @@ afterEach(async () => {
 
 describe("judge collateral checkout verification", () => {
   it("verifies actual ancestry, exact diff, critical bytes, and dependency projection", async () => {
-    const { cwd, proof } = await fixture();
+    const { cwd, proof, predecessorEnvelope, successorEnvelope } = await fixture();
     await expect(verifyJudgeDemoCollateralCheckout({ cwd, proof })).resolves.toEqual({
       changedPathCount: 1,
       criticalFileCount: JUDGE_DEMO_CRITICAL_PATHS.length,
       dependencyProjectionHash: proof.dependencyProjectionHash
     });
+
+    const bindingPayload = {
+      version: JUDGE_DEMO_PRESENTATION_BINDING_VERSION,
+      predecessorCommit: proof.predecessorCommit,
+      successorCommit: proof.successorCommit,
+      predecessorEnvelopeHash: predecessorEnvelope.envelopeHash,
+      successorEnvelopeHash: successorEnvelope.envelopeHash,
+      predecessorReceiptDigest: proof.predecessorReceiptDigest,
+      immutableProjectionHash: proof.immutableProjectionHash,
+      collateralProof: proof,
+      collateralProofHash: proof.proofHash,
+      providerCallsPerformed: 0 as const,
+      replayOnly: true as const
+    };
+    const binding = {
+      ...bindingPayload,
+      bindingHash: await canonicalSha256(bindingPayload)
+    };
+    const script = spawnSync(
+      resolve("node_modules/.bin/tsx"),
+      [
+        "--tsconfig",
+        resolve("tsconfig.operator.json"),
+        resolve("scripts/verify-judge-presentation.ts")
+      ],
+      {
+        cwd,
+        env: {
+          ...process.env,
+          TOOLPROOF_JUDGE_LANE_MODE: "enabled",
+          TOOLPROOF_JUDGE_PRESENTATION_MODE: "successor",
+          TOOLPROOF_JUDGE_ACTIVE_COMMIT: proof.successorCommit,
+          TOOLPROOF_COMMIT_SHA: proof.successorCommit,
+          VERCEL_GIT_COMMIT_SHA: proof.successorCommit,
+          [JUDGE_DEMO_PRESENTATION_BINDING_ENV]: gzipSync(
+            Buffer.from(canonicalJson(binding))
+          ).toString("base64url"),
+          [JUDGE_DEMO_PRESENTATION_BINDING_HASH_ENV]: binding.bindingHash
+        },
+        encoding: "utf8",
+        maxBuffer: 1_048_576
+      }
+    );
+    expect(script.status, script.stderr).toBe(0);
+    expect(script.stdout).toContain('"gitProofTransport":"full-local-history"');
 
     await write(cwd, "lib/judge/service.server.ts", "tampered after approved release\n");
     await expect(verifyJudgeDemoCollateralCheckout({ cwd, proof })).rejects.toThrow(
@@ -136,7 +187,7 @@ describe("judge collateral checkout verification", () => {
     const wrongCollateralChanges = [
       {
         path: "submission/devpost.md" as const,
-        field: "devpost_submission" as const,
+        field: "release" as const,
         predecessorValue: "pending",
         successorValue: "https://devpost.example/submission"
       }

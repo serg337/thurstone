@@ -33,13 +33,7 @@ if (!laneEnabled && !presentationMode && !encoded && !bindingHash && !packEncode
   process.stdout.write(
     `${JSON.stringify({ ok: true, mode: "judge-presentation", status: "verified-predecessor" })}\n`
   );
-} else if (
-  laneEnabled &&
-  presentationMode === "successor" &&
-  encoded &&
-  bindingHash &&
-  packEncoded
-) {
+} else if (laneEnabled && presentationMode === "successor" && encoded && bindingHash) {
   const parsed = judgeDemoPresentationBindingSchema.parse(
     await decodeJudgeDemoPresentationBinding(encoded)
   );
@@ -64,22 +58,40 @@ if (!laneEnabled && !presentationMode && !encoded && !bindingHash && !packEncode
     throw new Error("judge_demo_presentation_build_identity_invalid");
   }
 
-  const pack = Buffer.from(packEncoded, "base64url");
-  if (
-    pack.length < 1 ||
-    pack.toString("base64url") !== packEncoded ||
-    createHash("sha256").update(pack).digest("hex") !== proof.gitProofPackSha256
-  ) {
-    throw new Error("judge_demo_presentation_git_pack_root_invalid");
+  let gitProofTransport: "verified-pack" | "full-local-history";
+  if (packEncoded) {
+    const pack = Buffer.from(packEncoded, "base64url");
+    if (
+      pack.length < 1 ||
+      pack.toString("base64url") !== packEncoded ||
+      createHash("sha256").update(pack).digest("hex") !== proof.gitProofPackSha256
+    ) {
+      throw new Error("judge_demo_presentation_git_pack_root_invalid");
+    }
+    execFileSync("git", ["init", "-q"], { cwd: process.cwd() });
+    const indexed = spawnSync("git", ["index-pack", "--stdin", "--fix-thin"], {
+      cwd: process.cwd(),
+      input: pack,
+      maxBuffer: 1_048_576
+    });
+    if (indexed.status !== 0) throw new Error("judge_demo_presentation_git_pack_invalid");
+    gitProofTransport = "verified-pack";
+  } else {
+    const predecessorAvailable = spawnSync(
+      "git",
+      ["cat-file", "-e", `${binding.predecessorCommit}^{commit}`],
+      { cwd: process.cwd() }
+    ).status;
+    const successorAvailable = spawnSync(
+      "git",
+      ["cat-file", "-e", `${binding.successorCommit}^{commit}`],
+      { cwd: process.cwd() }
+    ).status;
+    if (predecessorAvailable !== 0 || successorAvailable !== 0) {
+      throw new Error("judge_demo_presentation_verified_git_objects_missing");
+    }
+    gitProofTransport = "full-local-history";
   }
-
-  execFileSync("git", ["init", "-q"], { cwd: process.cwd() });
-  const indexed = spawnSync("git", ["index-pack", "--stdin", "--fix-thin"], {
-    cwd: process.cwd(),
-    input: pack,
-    maxBuffer: 1_048_576
-  });
-  if (indexed.status !== 0) throw new Error("judge_demo_presentation_git_pack_invalid");
   const checkout = await verifyJudgeDemoCollateralCheckout({ proof, cwd: process.cwd() });
 
   process.stdout.write(
@@ -94,6 +106,7 @@ if (!laneEnabled && !presentationMode && !encoded && !bindingHash && !packEncode
       immutableProjectionHash: binding.immutableProjectionHash,
       collateralProofHash: binding.collateralProofHash,
       bindingHash: binding.bindingHash,
+      gitProofTransport,
       providerCallsPerformed: 0
     })}\n`
   );

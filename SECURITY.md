@@ -58,6 +58,23 @@ The browser can execute only a digest-verified `cart_get` decision on the exact 
 
 Only synthetic challenge text and minimal fixture state may reach the disclosed provider. Preview deployments must not receive production provider, Redis-write, signing, or activation credentials.
 
+## Publication and local-path boundary
+
+The publication verifier scans the current tracked tree, every reachable commit, commit messages,
+and tags for user/workspace-root path material. The current candidate contains no such operational
+or artifact path. Reachable history contains exactly 92 occurrences from three byte-hashed blobs:
+two canonical workspace-root strings used only as negative fixtures by the evidence privacy
+verifier, plus synthetic POSIX/Windows example-user paths used only to prove export rejection. The
+scanner binds the exact commits, blob object IDs, blob SHA-256 values, paths, line hashes, and token
+hashes; any additional occurrence fails publication.
+
+These fixtures do not point to a file used by ToolProof, contain no username, credential, private
+content, or dependency, and never appear in evidence, documentation, deployment output, or runtime
+configuration. The current verifier constructs generic root-pattern checks without retaining the
+historical workspace strings. Preserving the narrowly classified negative fixtures avoids
+rewriting authentic deployment/observation lineage while maintaining a fail-closed actual-leak
+boundary.
+
 ## Reporting a vulnerability
 
 Until the public repository exists, report a security issue privately to the repository owner. After release, use GitHub private vulnerability reporting if enabled. Do not include live credentials, personal data, or unsafe proof-of-concept payloads in a public issue.

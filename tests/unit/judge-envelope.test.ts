@@ -47,7 +47,7 @@ describe("source-fixed judge demo envelope", () => {
       sourceFixed: true,
       arbitraryPromptAccepted: false,
       naturalLanguageRequest: JUDGE_DEMO_REQUEST,
-      publicCaseId: "judge_cart_inventory_v1"
+      publicCaseId: "judge_multi_quantity_lines_v1"
     });
     expect(envelope.liveManifest.tools.map(({ name }) => name).sort()).toEqual([
       "cart_get",

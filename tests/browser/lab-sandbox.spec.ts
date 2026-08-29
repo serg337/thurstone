@@ -39,9 +39,8 @@ function createJudgeProjection(
     replayPolicy: "archived-decision-may-be-executed-locally-without-model-call",
     appCommit: "e".repeat(40),
     evidenceAppCommit: "e".repeat(40),
-    caseId: "judge_cart_inventory_v1",
-    naturalLanguageRequest:
-      "Before discussing checkout, produce a two-column inventory of the simulated cart: product name and unit count only.",
+    caseId: "judge_multi_quantity_lines_v1",
+    naturalLanguageRequest: "Which current cart lines have a quantity greater than one?",
     fixtureHash: "a9889565b0e5c8a60c7667cab2110f058774e72c1e89c08d1f255124c07ea457",
     manifestHash,
     evidenceManifestHash: manifestHash,

@@ -31,9 +31,9 @@ import { createCheckoutLiveManifest } from "@/lib/webmcp/live-manifest.server";
 import { z } from "zod";
 
 export const JUDGE_DEMO_ENVELOPE_VERSION = "toolproof-judge-demo-envelope@1.0.0";
-export const JUDGE_DEMO_CASE_ID = "judge_cart_inventory_v1" as const;
+export const JUDGE_DEMO_CASE_ID = "judge_multi_quantity_lines_v1" as const;
 export const JUDGE_DEMO_REQUEST =
-  "Before discussing checkout, produce a two-column inventory of the simulated cart: product name and unit count only." as const;
+  "Which current cart lines have a quantity greater than one?" as const;
 export const JUDGE_DEMO_RUNNER_SETTINGS_VERSION = "toolproof-judge-demo-runner-settings@1.0.0";
 
 export const JUDGE_DEMO_RUNNER_SETTINGS = Object.freeze({

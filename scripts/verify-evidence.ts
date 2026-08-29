@@ -68,9 +68,14 @@ const evidenceOrigin = (
     throw new Error("gate6_clean_recompute_byte_mismatch");
   }
 }
-const forbidden = ["/Volumes/Invarra", "/mnt/invarra", ".toolproof-local", "authorizationJti"];
+const forbiddenLiterals = [".toolproof-local", "authorizationJti"];
+const localAbsolutePath = /\/(?:Users|Volumes|mnt)\/[A-Za-z0-9._-]+(?:\/|\b)/u;
 if (
-  forbidden.some((sentinel) => jsonBytes.includes(sentinel) || markdownBytes.includes(sentinel))
+  forbiddenLiterals.some(
+    (sentinel) => jsonBytes.includes(sentinel) || markdownBytes.includes(sentinel)
+  ) ||
+  localAbsolutePath.test(jsonBytes) ||
+  localAbsolutePath.test(markdownBytes)
 ) {
   throw new Error("gate6_public_evidence_private_boundary_violation");
 }

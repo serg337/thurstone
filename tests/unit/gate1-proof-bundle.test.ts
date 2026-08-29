@@ -832,6 +832,13 @@ describe("Gate 1 proof journal and bundle", () => {
     expect(JSON.stringify(projected)).not.toContain('"execute"');
   });
 
+  const syntheticPosixPrivatePath = JSON.stringify({
+    path: ["", "Users", "example", "private.txt"].join("/")
+  });
+  const syntheticWindowsPrivatePath = JSON.stringify({
+    path: ["C:", "Users", "example", "private.txt"].join("\\")
+  });
+
   it.each([
     '{"apiKey":"ordinary-secret-value"}',
     '{"openai_api_key":"ordinary-secret-value"}',
@@ -840,8 +847,8 @@ describe("Gate 1 proof journal and bundle", () => {
     '{"authorization":"Basic YWRtaW46cGFzc3dvcmQ="}',
     '{"cookie":"session=private-value"}',
     '{"url":"https://example.test/?access_token=private-value"}',
-    '{"path":"/Users/example/private.txt"}',
-    '{"path":"C:\\\\Users\\\\example\\\\private.txt"}',
+    syntheticPosixPrivatePath,
+    syntheticWindowsPrivatePath,
     '{"email":"person@example.test"}'
   ])("fails closed on unsafe exported content %#", (value) => {
     expect(() => assertSafeGate1ProofJson(value)).toThrow("unsafe_export_content");

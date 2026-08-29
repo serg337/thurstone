@@ -21,23 +21,44 @@ if (activeCommit === measuredV2) {
   if (!encoded) throw new Error("gate6_presentation_proof_missing");
   const proof = await decodeGate6PresentationProof(encoded);
   const packEncoded = process.env.TOOLPROOF_GATE6_GIT_PACK_B64?.trim() ?? "";
-  const pack = Buffer.from(packEncoded, "base64url");
-  if (
-    process.env.TOOLPROOF_GATE6_PRESENTATION_PROOF_HASH?.trim() !== proof.proofHash ||
-    pack.length < 1 ||
-    pack.toString("base64url") !== packEncoded ||
-    createHash("sha256").update(pack).digest("hex") !== proof.gitProofPackSha256
-  ) {
+  if (process.env.TOOLPROOF_GATE6_PRESENTATION_PROOF_HASH?.trim() !== proof.proofHash) {
     throw new Error("gate6_presentation_proof_root_invalid");
   }
-  execFileSync("git", ["init", "-q"], { cwd: process.cwd() });
-  const indexed = spawnSync("git", ["index-pack", "--stdin", "--fix-thin"], {
-    cwd: process.cwd(),
-    input: pack,
-    maxBuffer: 1_048_576
-  });
-  if (indexed.status !== 0) {
-    throw new Error("gate6_presentation_git_pack_invalid");
+  let gitProofTransport: "verified-pack" | "full-local-history";
+  if (packEncoded) {
+    const pack = Buffer.from(packEncoded, "base64url");
+    if (
+      pack.length < 1 ||
+      pack.toString("base64url") !== packEncoded ||
+      createHash("sha256").update(pack).digest("hex") !== proof.gitProofPackSha256
+    ) {
+      throw new Error("gate6_presentation_proof_root_invalid");
+    }
+    execFileSync("git", ["init", "-q"], { cwd: process.cwd() });
+    const indexed = spawnSync("git", ["index-pack", "--stdin", "--fix-thin"], {
+      cwd: process.cwd(),
+      input: pack,
+      maxBuffer: 1_048_576
+    });
+    if (indexed.status !== 0) {
+      throw new Error("gate6_presentation_git_pack_invalid");
+    }
+    gitProofTransport = "verified-pack";
+  } else {
+    const measuredAvailable = spawnSync(
+      "git",
+      ["cat-file", "-e", `${proof.measuredV2Commit}^{commit}`],
+      { cwd: process.cwd() }
+    ).status;
+    const presentationAvailable = spawnSync(
+      "git",
+      ["cat-file", "-e", `${proof.presentationCommit}^{commit}`],
+      { cwd: process.cwd() }
+    ).status;
+    if (measuredAvailable !== 0 || presentationAvailable !== 0) {
+      throw new Error("gate6_presentation_verified_git_objects_missing");
+    }
+    gitProofTransport = "full-local-history";
   }
   execFileSync("git", ["merge-base", "--is-ancestor", proof.measuredV2Commit, activeCommit], {
     cwd: process.cwd()
@@ -103,6 +124,7 @@ if (activeCommit === measuredV2) {
       criticalProjectionHash: proof.criticalProjectionHash,
       dependencyProjectionHash: proof.dependencyProjectionHash,
       gitProofPackSha256: proof.gitProofPackSha256,
+      gitProofTransport,
       proofHash: proof.proofHash
     })}\n`
   );

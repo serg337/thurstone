@@ -180,7 +180,7 @@ export async function readPublicProbeControlStatus(environment: EnvironmentLike 
       policy,
       reason: migrationRequired
         ? "The exact terminal-thirteen v0.4 guard is verified and awaits the approved atomic v0.5 migration."
-        : "The lifetime guard is verified and calibration is closed; scored execution remains unavailable until the human-approved Gate 3 freeze.",
+        : "The lifetime guard is verified; calibration and scored runs are complete and unavailable. The separate source-fixed judge lane reports its own status.",
       ...(migrationRequired ? { migration: "required" as const } : {}),
       commit
     };

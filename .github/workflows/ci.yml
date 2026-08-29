@@ -33,6 +33,8 @@ jobs:
         run: npm ci --no-fund --audit=false
       - name: Verify dependency tree
         run: npm run install:check
+      - name: Verify complete third-party inventory
+        run: npm run verify:third-party
       - name: Audit full dependency tree
         run: npm audit --audit-level=high
       - name: Audit production dependency tree
@@ -51,6 +53,10 @@ jobs:
         run: npm run judge-presentation:verify
       - name: Verify public sample evidence
         run: npm run verify:sample-evidence
+      - name: Verify Direct Site Tools evidence
+        run: npm run verify:direct-site-tools
+      - name: Verify Direct Site Tools build lineage
+        run: npm run verify:direct-observation-presentation
       - name: Run integration tests
         run: npm run test:integration
       - name: Build production app

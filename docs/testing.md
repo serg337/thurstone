@@ -4,6 +4,18 @@ ToolProof keeps deterministic correctness, native WebMCP plumbing, model selecti
 
 ## Commands
 
+From a clean Linux clone, install the pinned dependency tree and Playwright's ordinary Chromium
+test runtime before running the commands below:
+
+```text
+npm ci --no-fund --audit=false
+npx playwright install --with-deps chromium
+```
+
+That Playwright browser is only for ordinary regression/accessibility checks. Authentic native
+WebMCP fallback evidence uses the separately hash-pinned Chrome for Testing 151 operator artifact
+described below; installing Playwright does not reproduce or substitute for that lane.
+
 ```text
 npm run format:check
 npm run lint
@@ -11,6 +23,7 @@ npm run typecheck
 npm run test
 npm run test:integration
 npm run test:browser:safe
+npm run verify:third-party
 npm run gate7:verify-adversarial
 npm run build
 npm audit --audit-level=high
@@ -25,11 +38,19 @@ npm run verify:probe-no-leakage
 npm run verify:publication
 npm run verify:evidence
 npm run verify:sample-evidence
+npm run verify:direct-site-tools
+npm run verify:direct-observation-presentation
 ```
 
 `verify:evidence` fails closed unless the canonical JSON and Markdown reference exports both exist. It verifies canonical bytes, the package digest, all seven recomputed metric denominators, baseline/revised `23/24` identities, namespace/privacy sentinels, export parity, and a package-seeded trace sample spanning every family, subset, and version plus each failure outcome. Paid model calls never run in ordinary CI.
 
 `verify:sample-evidence` binds the compact public sample and report back to one exact row in the canonical package, including request, decision, arguments, result, effect, runtime, row digest, package digest, and the honest aggregate limitation. It fails if the sample drifts or is presented as an independent aggregate.
+
+`verify:direct-site-tools` validates four separately labeled fresh-context observations from the official Codex in-app-browser Site Tools surface: two equivalent `order_review` requests with identical results/effects, a tentative checkout clarify/no-call, and an explicit one-call simulated `checkout_request` with the pending catalog transition. It binds the observation deployment, catalog, arguments, result/effect hashes, call counts, safety boundary, and privacy sentinels without treating the four observations as a score or rate.
+
+`verify:direct-observation-presentation` proves the observation commit is an ancestor of the current evidence build and byte-compares every target-domain, WebMCP catalog/handler, registry/runtime, trace, and Lab integration file. It also binds dependency identity and the retained observation file hash. Later evidence/docs/image additions therefore cannot be presented as if a different Site Tools implementation produced the observations.
+
+`verify:third-party` deterministically rebuilds the complete npm v3 lockfile inventory from installed package metadata, retains explicitly labeled lockfile metadata for platform-specific optional packages unavailable on the Linux host, and fails on drift, missing non-optional packages, unknown licenses, or incompatible licenses. The tracked inventory records source, npm URL, exact version, scope, license, compatibility, and required notices for every transitive dependency.
 
 `gate7:verify-adversarial` byte-verifies the retained current-source matrix and its exact source hashes. The matrix maps and executes 21 fail-closed cases covering forged/replayed/expired authorization, case/manifest drift, duplicate mutation and tabs, invalid/oversized input, stale fixtures, concurrency, interruption, timeout, cancellation, reset/registration/partial-mutation failures, refusal, malformed model output, unsupported runtime, and depleted call/spend ceilings. Infrastructure, provider, runtime, cancellation, and quota outcomes remain excluded from semantic model scores; the verifier itself makes zero provider calls. CI also fails on high/critical vulnerabilities in both the full and production dependency trees.
 
@@ -47,7 +68,7 @@ The deployed Results browser check independently exercises the Development/Holdo
 
 The signed-out judge route has its own provider-free envelope, service, store, and browser tests. They prove a strict fixed request body, same-origin and 128-byte request limits, exact build/fixture/manifest/runner binding, one `judge` reservation at the existing 91-call boundary, one stateless provider dispatch in fake tests, encrypted permanent capture before settlement, captured-receipt recovery, hard-interruption quarantine, safe error redaction, archived replay without another call, collateral-only successor binding, and native `cart_get` execution only on a clean halt-free fixture. The real global call is never executed by CI, build, preview, or a local test.
 
-The Vercel production build verifies the measured-to-presentation Git proof and retained Gate 7 adversarial matrix before the durable-store check, isolated real Redis suite, encrypted-continuation suite, confirmed guard bootstrap/status-or-migration check, zero-token provider metadata check, application build, and client-leakage scan. Preview has no production credentials and therefore fails closed before any provider request. Initialization, migration, and reaping are mutually exclusive operator intents and each requires Vercel's independently supplied Git commit/project identity plus its own exact one-time confirmation.
+The Vercel production build verifies the measured-to-presentation Git proof and retained Gate 7 adversarial matrix before the durable-store check, isolated real Redis suite, encrypted-continuation suite, confirmed guard bootstrap/status-or-migration check, zero-token provider metadata check, application build, and client-leakage scan. Git ancestry/diff verification accepts either the exact digest-bound minimal Git-object transport or a complete local history containing every bound commit; missing objects fail closed. The optional Gate 6/judge Git-pack variables are build transports and are unnecessary at runtime after a full-history verification. Preview has no production credentials and therefore fails closed before any provider request. Initialization, migration, and reaping are mutually exclusive operator intents and each requires Vercel's independently supplied Git commit/project identity plus its own exact one-time confirmation.
 
 The production Vercel project is linked to `serg337/toolproof` on branch `main`. Vercel's system-provided `VERCEL_GIT_COMMIT_SHA` is the authoritative deployment-source identity for guard initialization and confirmed reaping; a manually claimed commit variable cannot substitute for it.
 
@@ -55,15 +76,21 @@ The production guard was initialized once from Git-linked commit `86584fe4fa3089
 
 ## Proof boundaries
 
+Authentic release walkthroughs use one of two supported paths: (1) the latest ChatGPT desktop
+built-in browser with GPT-5.6 Sol or Terra, or (2) Chrome 149+ after enabling
+`chrome://flags/#enable-webmcp-testing` and relaunching the browser. Chrome's flag/relaunch is a
+browser prerequisite, not ToolProof setup; judges never install a ToolProof extension or provide a
+ToolProof/API key.
+
 - Unit tests prove deterministic domain, schema, canonicalization, and evaluator behavior.
 - Integration tests with controlled test doubles prove registration-manager logic but are not native WebMCP proof.
 - Ordinary Playwright tests prove the signed-out shell, responsive layouts, diagnostics, accessibility, error states, shared UI/native state, dynamic four/five-tool registration, reset locking, object mode, JSON-string mode, and the actual downloaded Gate 1 JSON bytes. Their in-page consumer is explicitly emulated and is not supported-runtime proof.
 - Descriptor tests cover Chrome's serialized-schema representation while continuing to reject malformed or semantically different schemas and wrong titles.
 - Native proof requires the deployed HTTPS origin in the supported ChatGPT browser or exact Chrome/WebMCP build, with the active tool and invocation visible in the supported runtime/DevTools path.
-- Gate 0 native proof was observed in Chrome 151 for `cart_get`. Gate 1 requires fresh exact-deployment discovery/execution receipts for every active tool, the pending-only cancel transition, argument mode, raw/canonical result, state/effect binding, and reset receipt. Direct ChatGPT remains a separate later evidence lane.
+- Gate 0 native proof was observed in Chrome 151 for `cart_get`. Gate 1 retains fresh exact-deployment discovery/execution receipts for every active tool, the pending-only cancel transition, argument mode, raw/canonical result, state/effect binding, and reset receipt. Four authentic Direct Site Tools observations are retained separately and never enter the scored denominator.
 - Direct expected calls prove plumbing only. Model-selection evidence requires a fresh model decision from natural language followed by native execution.
 - Direct ChatGPT and custom Probe observations remain separately labeled.
 
 The Gate 1 browser harness delays canonical trace finalization for one mutation and verifies that committed state is visible before the registered handler settles. It also exercises same-document route remounting, mutation replay versus fresh IDs, post-reset fresh operation IDs, both canceled-before-handler-completion and Chrome-style consumer-canceled-after-handler-completion timing, and Chrome 152 self-retirement timing where `checkout_cancel` must deliver its outer native result before its registration signal is aborted. The one-button test deliberately dirties a document, clicks once, proves exactly one clean reload/new session, validates all 11 timed steps and the strict ten-attempt sequence, receives one automatic download, retries identical verified bytes, and proves a later reload does not rerun. Injected native failure stops before reset/download, and malformed markers are consumed without native execution. Dynamic-state accessibility, keyboard focus, and mobile horizontal overflow are covered too. These remain deterministic export checks, not authentic native proof.
 
-The release record will include exact commands, browser/build, deployment/commit, registry fingerprint, raw trace location, failures, retries, and limitations.
+The terminal release record is required to include exact commands, browser/build, deployment/commit, registry fingerprint, raw trace location, failures, retries, and limitations. That deployment/release record—not this pre-deployment test guide—is authoritative for the final receipt state.

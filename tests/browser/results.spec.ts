@@ -43,6 +43,9 @@ test("paired Results exposes exact metrics, filters, traces, provenance, and can
   await expect(page.getByRole("heading", { name: "Trace inspector" })).toBeVisible();
   await expect(page.getByText("decision_action_class", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Contract version diff" })).toBeVisible();
+  await expect(page.getByLabel("Sanitized human revision approval receipt")).toContainText(
+    "Human-approved revision · Sergio Valencia"
+  );
   await expect(page.getByRole("heading", { name: "One truthful identity chain" })).toBeVisible();
   await expect(page.getByText("custom-probe", { exact: true })).toBeVisible();
   await expect(page.getByText("direct-chatgpt", { exact: true })).toBeVisible();

@@ -865,7 +865,7 @@ export async function readSemanticResults(
         }),
         Object.freeze({
           id: "direct-chatgpt" as const,
-          status: "separate authentic observations pending Gate 7",
+          status: "four authentic fresh-context Codex Site Tools observations retained separately",
           includedInPrimaryDenominator: false
         }),
         Object.freeze({

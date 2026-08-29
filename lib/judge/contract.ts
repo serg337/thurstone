@@ -35,10 +35,8 @@ export const judgeDemoProjectionSchema = z
     replayPolicy: z.literal("archived-decision-may-be-executed-locally-without-model-call"),
     appCommit: gitCommit,
     evidenceAppCommit: gitCommit,
-    caseId: z.literal("judge_cart_inventory_v1"),
-    naturalLanguageRequest: z.literal(
-      "Before discussing checkout, produce a two-column inventory of the simulated cart: product name and unit count only."
-    ),
+    caseId: z.literal("judge_multi_quantity_lines_v1"),
+    naturalLanguageRequest: z.literal("Which current cart lines have a quantity greater than one?"),
     fixtureHash: sha256,
     manifestHash: sha256,
     evidenceManifestHash: sha256,

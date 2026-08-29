@@ -314,11 +314,7 @@ export function JudgeDemoPanel({
 
       <p>
         The server accepts no prompt, model, schema, URL, or tool choice from this page. Its only
-        request is:{" "}
-        <q>
-          Before discussing checkout, produce a two-column inventory of the simulated cart: product
-          name and unit count only.
-        </q>
+        request is: <q>Which current cart lines have a quantity greater than one?</q>
       </p>
       <p className="trace-note">
         This is a separate, non-scored demonstration. A fresh decision can consume the single

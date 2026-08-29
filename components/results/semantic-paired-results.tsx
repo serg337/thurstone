@@ -530,6 +530,11 @@ export function SemanticPairedResults({ results }: { readonly results: Paired })
           Exactly one line in <code>{evidence.contractDiff.path}</code> · proof{" "}
           <code>{evidence.contractDiff.sourceDiffProofHash}</code>
         </p>
+        <div className="runtime-receipt" aria-label="Sanitized human revision approval receipt">
+          <span>Human-approved revision · Sergio Valencia</span>
+          <strong>One-description revision frozen before the revised run</strong>
+          <small>Sanitized freeze receipt {evidence.contractDiff.revisionFreezeHash}</small>
+        </div>
       </section>
 
       <section className="gate6-section" aria-labelledby="provenance-title">

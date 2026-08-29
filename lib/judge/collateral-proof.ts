@@ -7,9 +7,18 @@ export const JUDGE_DEMO_COLLATERAL_PROOF_VERSION = "toolproof-judge-demo-collate
 
 export const JUDGE_DEMO_CRITICAL_PATHS = Object.freeze(
   [
+    ".env.example",
+    ".gitattributes",
+    "CHALLENGE.md",
+    "SECURITY.md",
+    "THIRD_PARTY_NOTICES.md",
     "app/api/judge-demo/route.ts",
     "components/lab/judge-demo-panel.tsx",
     "components/lab/lab-client.tsx",
+    "docs/rights-review.md",
+    "evidence/direct-site-tools-observations.json",
+    "evidence/toolproof-reference-evidence.json",
+    "evidence/toolproof-reference-evidence.md",
     "lib/domain/checkout-reset.ts",
     "lib/domain/checkout.ts",
     "lib/evidence/digest.ts",
@@ -38,8 +47,25 @@ export const JUDGE_DEMO_CRITICAL_PATHS = Object.freeze(
     "lib/webmcp/runtime.ts",
     "package-lock.json",
     "package.json",
+    "public/toolproof-results.jpg",
     "scripts/verify-judge-presentation.ts",
-    "scripts/verify-sample-evidence.ts"
+    "scripts/verify-publication.mjs",
+    "scripts/verify-direct-site-tools-evidence.ts",
+    "scripts/verify-direct-observation-presentation.ts",
+    "scripts/verify-sample-evidence.ts",
+    "scripts/verify-third-party-inventory.mjs",
+    "third_party/licenses/nodejs-22.23.2-LICENSE.txt",
+    "third_party/licenses/npm/LGPL-3.0-or-later.txt",
+    "third_party/licenses/npm/MIT-terms.txt",
+    "third_party/licenses/npm/axe-core-4.13.0-MPL-2.0.txt",
+    "third_party/licenses/npm/axe-core-4.13.0-THIRD-PARTY.txt",
+    "third_party/licenses/npm/caniuse-lite-1.0.30001810-CC-BY-4.0.txt",
+    "third_party/licenses/npm/lightningcss-1.33.0-MPL-2.0.txt",
+    "third_party/licenses/npm/sharp-0.35.4-Apache-2.0.txt",
+    "third_party/licenses/npm/sharp-libvips-linux-x64-1.3.3-NOTICE.md",
+    "third_party/licenses/npm/sharp-libvips-linuxmusl-x64-1.3.3-NOTICE.md",
+    "third_party/licenses/npm/sharp-wasm32-0.35.4-NOTICE.md",
+    "third_party/npm-transitive-inventory.json"
   ].sort()
 );
 
@@ -53,8 +79,7 @@ export const JUDGE_DEMO_COLLATERAL_FIELD_PREFIXES = Object.freeze({
   live_app: "Live app: ",
   public_repository: "Public repository: ",
   release: "Release: ",
-  demo_video: "Demo video: ",
-  devpost_submission: "Devpost submission: "
+  demo_video: "Demo video: "
 });
 
 export type JudgeDemoCollateralField = keyof typeof JUDGE_DEMO_COLLATERAL_FIELD_PREFIXES;
@@ -130,8 +155,8 @@ export interface JudgeDemoImmutableProjection {
     readonly purpose: "judge";
     readonly sourceFixed: true;
     readonly arbitraryPromptAccepted: false;
-    readonly publicCaseId: "judge_cart_inventory_v1";
-    readonly naturalLanguageRequest: "Before discussing checkout, produce a two-column inventory of the simulated cart: product name and unit count only.";
+    readonly publicCaseId: "judge_multi_quantity_lines_v1";
+    readonly naturalLanguageRequest: "Which current cart lines have a quantity greater than one?";
   };
   readonly fixtureHash: string;
   readonly fixture: JudgeDemoEnvelope["fixture"];
