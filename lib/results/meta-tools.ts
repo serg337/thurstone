@@ -1,3 +1,5 @@
+import type { Gate6EvidencePackage } from "@/lib/results/evidence-package";
+
 export const TOOLPROOF_GET_RESULTS_TOOL_NAME = "toolproof_get_results";
 export const TOOLPROOF_PROPOSE_REVISION_TOOL_NAME = "toolproof_propose_revision";
 
@@ -129,7 +131,7 @@ export function createResultsMetaTools(input: {
 }
 
 export function createPairedResultsMetaTool(
-  results: ToolProofPairedResultsProjection
+  results: ToolProofPairedResultsProjection | Gate6EvidencePackage
 ): WebMCP.ModelContextTool {
   return {
     name: TOOLPROOF_GET_RESULTS_TOOL_NAME,

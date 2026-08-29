@@ -6,8 +6,10 @@ import { readRepairProviderReceipt } from "@/lib/repair/store.server";
 import { readPermanentScoredRunById } from "@/lib/scored/run-store.server";
 import {
   BASELINE_EVIDENCE_DIGEST_ENV,
-  BASELINE_RUN_ID_ENV
-} from "@/lib/results/semantic-results.server";
+  BASELINE_RUN_ID_ENV,
+  REVISED_EVIDENCE_DIGEST_ENV,
+  REVISED_RUN_ID_ENV
+} from "@/lib/results/config";
 import { createGate3TargetContractBinding } from "@/lib/semantic/checkout-candidate.server";
 import {
   GATE3_FROZEN_PROTOCOL_HASH_ENV,
@@ -19,6 +21,10 @@ import {
   decodeGate5SourceDiffProofBase64Url
 } from "@/lib/semantic/gate5-source-diff-proof";
 import {
+  GATE6_PRESENTATION_PROOF_ENV,
+  decodeGate6PresentationProof
+} from "@/lib/results/presentation-proof";
+import {
   buildGate5RevisionFreeze,
   type Gate5RevisionFreeze
 } from "@/lib/semantic/revision-freeze.server";
@@ -26,6 +32,8 @@ import { readGate5RevisionFreeze } from "@/lib/semantic/revision-store.server";
 
 export const GATE5_REVISION_APPROVAL_ENV = "TOOLPROOF_GATE5_REVISION_APPROVAL_B64";
 export const GATE5_REVISION_FREEZE_HASH_ENV = "TOOLPROOF_GATE5_REVISION_FREEZE_HASH";
+export const GATE5_PRESENTATION_COMMIT_ENV = "TOOLPROOF_GATE5_PRESENTATION_COMMIT";
+const SCORED_OPERATOR_PHASE_ENV = "TOOLPROOF_SCORED_OPERATOR_PHASE";
 
 type EnvironmentLike = Readonly<Record<string, string | undefined>>;
 
@@ -33,6 +41,24 @@ export interface Gate5RevisionConfiguration {
   readonly status: "awaiting-repair" | "awaiting-human" | "ready" | "invalid";
   readonly revision: Gate5RevisionFreeze | null;
   readonly issue: string | null;
+}
+
+export function assertGate5TerminalPresentationBinding(input: {
+  readonly currentAppCommit: string;
+  readonly allowedPresentationCommit: string | undefined;
+  readonly scoredOperatorPhase: string | undefined;
+  readonly revisedRunId: string | undefined;
+  readonly revisedEvidenceDigest: string | undefined;
+}): void {
+  if (
+    !/^[a-f0-9]{40}$/u.test(input.currentAppCommit) ||
+    input.allowedPresentationCommit !== input.currentAppCommit ||
+    Boolean(input.scoredOperatorPhase?.trim()) ||
+    !/^run_[A-Za-z0-9_-]{22}$/u.test(input.revisedRunId ?? "") ||
+    !/^[a-f0-9]{64}$/u.test(input.revisedEvidenceDigest ?? "")
+  ) {
+    throw new Error("gate5_terminal_presentation_binding_invalid");
+  }
 }
 
 export function assertStoredGate5RevisionLineage(input: {
@@ -124,6 +150,43 @@ export async function configuredGate5Revision(
     const sourceDiffProof = environment[GATE5_SOURCE_DIFF_ENV]?.trim();
     if (!sourceDiffProof) throw new Error("gate5_source_diff_proof_missing");
     const revisionApproval = decode(approval);
+    const currentAppCommit = activeCommit(environment);
+    const storedRevisionHash = environment[GATE5_REVISION_FREEZE_HASH_ENV]?.trim();
+    const stored = storedRevisionHash
+      ? await readGate5RevisionFreeze(redis, {
+          revisionFreezeHash: storedRevisionHash,
+          artifactSecret
+        })
+      : null;
+    if (storedRevisionHash && !stored) throw new Error("gate5_stored_revision_mismatch");
+    const terminalPresentation = Boolean(stored && stored.v2AppCommit !== currentAppCommit);
+    const revisedRunId = environment[REVISED_RUN_ID_ENV]?.trim();
+    const revisedEvidenceDigest = environment[REVISED_EVIDENCE_DIGEST_ENV]?.trim();
+    if (terminalPresentation) {
+      assertGate5TerminalPresentationBinding({
+        currentAppCommit,
+        allowedPresentationCommit: environment[GATE5_PRESENTATION_COMMIT_ENV]?.trim(),
+        scoredOperatorPhase: environment[SCORED_OPERATOR_PHASE_ENV]?.trim(),
+        revisedRunId,
+        revisedEvidenceDigest
+      });
+      const presentationProof = await decodeGate6PresentationProof(
+        environment[GATE6_PRESENTATION_PROOF_ENV]?.trim() ?? ""
+      );
+      if (
+        environment.TOOLPROOF_GATE6_PRESENTATION_PROOF_HASH?.trim() !==
+          presentationProof.proofHash ||
+        presentationProof.measuredV2Commit !== stored!.v2AppCommit ||
+        presentationProof.presentationCommit !== currentAppCommit ||
+        presentationProof.baselineRawSha256 !==
+          "edf0f0e3a2a3438be58a17e27594e57e6230f713c68501a3d26900cb731d7dfb" ||
+        presentationProof.revisedRawSha256 !==
+          "26c436e38fecd8a128a0204af510556b3edf555ceeb421254d0248c0b23302fa"
+      ) {
+        throw new Error("gate6_presentation_proof_binding_invalid");
+      }
+    }
+    const measuredV2Commit = stored?.v2AppCommit ?? currentAppCommit;
     const rebuilt = await buildGate5RevisionFreeze({
       gate3ReviewPackage: gate3.reviewPackage,
       gate3FrozenProtocol: gate3.frozenProtocol,
@@ -131,24 +194,39 @@ export async function configuredGate5Revision(
       baselineEvidenceDigest: baselineEvidenceDigest!,
       repairBuilderReceipt: repair.repairBuilderReceipt,
       revisionApproval,
-      v2TargetContract: await createGate3TargetContractBinding(activeCommit(environment)),
+      v2TargetContract: await createGate3TargetContractBinding(measuredV2Commit),
       sourceDiffProof: await decodeGate5SourceDiffProofBase64Url(sourceDiffProof)
     });
-    const storedRevisionHash = environment[GATE5_REVISION_FREEZE_HASH_ENV]?.trim();
-    if (storedRevisionHash) {
-      const stored = await readGate5RevisionFreeze(redis, {
-        revisionFreezeHash: storedRevisionHash,
-        artifactSecret
-      });
-      if (!stored) throw new Error("gate5_stored_revision_mismatch");
+    if (storedRevisionHash && stored) {
       assertStoredGate5RevisionLineage({
         stored,
         rebuilt,
-        activeCommit: activeCommit(environment),
+        activeCommit: measuredV2Commit,
         gate3FrozenProtocolHash: gate3Hash!,
         baselineRunId: baselineRunId!,
         baselineEvidenceDigest: baselineEvidenceDigest!
       });
+      if (terminalPresentation) {
+        const revised = await readPermanentScoredRunById(redis, {
+          phase: "revised",
+          frozenProtocolHash: stored.revisionFreezeHash,
+          runId: revisedRunId!,
+          artifactSecret
+        });
+        if (
+          !revised ||
+          revised.status !== "acknowledged" ||
+          revised.terminalStatus !== "terminal-complete" ||
+          revised.completedCount !== 24 ||
+          revised.evidenceDigest !== revisedEvidenceDigest ||
+          revised.identity.appCommit !== stored.v2AppCommit ||
+          revised.identity.frozenProtocolHash !== stored.revisionFreezeHash ||
+          revised.identity.reviewPackageHash !== stored.gate3ReviewPackageHash ||
+          revised.identity.freezeCandidateHash !== gate3.reviewPackage.freezeHash
+        ) {
+          throw new Error("gate5_terminal_presentation_evidence_mismatch");
+        }
+      }
       return Object.freeze({ status: "ready", revision: stored, issue: null });
     }
     return Object.freeze({ status: "ready", revision: rebuilt, issue: null });

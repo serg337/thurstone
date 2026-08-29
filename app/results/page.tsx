@@ -38,16 +38,18 @@ export default async function ResultsPage() {
           <p className="eyebrow">Results · post-unlock trust surface</p>
           <h1>Evidence appears only after authentic terminal runs.</h1>
           <p>
-            The Meaning Matrix will be derived from sealed traces—not prefilled labels, screenshots,
+            The Meaning Matrix is derived from sealed traces—not prefilled labels, screenshots,
             direct expected calls, or hand-edited rows.
           </p>
         </div>
         <StatusPill state={scoredAvailable || terminalEvidence ? "ready" : "neutral"}>
-          {scoredAvailable
-            ? "Baseline development evidence"
-            : terminalEvidence
-              ? "Final evidence ready"
-              : "No run yet"}
+          {semanticResults.status === "paired-comparison"
+            ? "Paired reference evidence"
+            : scoredAvailable
+              ? "Baseline development evidence"
+              : terminalEvidence
+                ? "Final evidence ready"
+                : "No run yet"}
         </StatusPill>
       </header>
 

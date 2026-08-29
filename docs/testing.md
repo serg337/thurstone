@@ -23,7 +23,9 @@ npm run verify:publication
 npm run verify:evidence
 ```
 
-`verify:evidence` fails closed until a real frozen-run manifest exists. Paid model calls never run in ordinary CI.
+`verify:evidence` fails closed unless the canonical JSON and Markdown reference exports both exist. It verifies canonical bytes, the package digest, all seven recomputed metric denominators, baseline/revised `23/24` identities, namespace/privacy sentinels, export parity, and a package-seeded trace sample spanning every family, subset, and version plus each failure outcome. Paid model calls never run in ordinary CI.
+
+The deployed Results browser check independently exercises the Development/Holdout views, family/case/version/outcome/error filters, the residual Fail→Fail row, trace inspector, contract diff, provenance, evidence namespaces, and both browser downloads. The server builds the UI, read-only Results Site Tool, JSON, and Markdown from one safe projection of the acknowledged permanent snapshots; authorization identifiers and local paths never enter that projection.
 
 `verify:probe-no-leakage` inspects every supported production static-output tree, binds Lab chunks to the Lab client-reference manifest, rejects server-truth sentinels and all production source maps, and separately proves that retained-attempt lineages occur only in post-unlock Results chunks. The fake-provider service test runs all four final fallback cases from the migrated 13-call base through signed issuance, bound transport IDs, decision receipts, authentic domain traces, post-reset evaluation, sealing, settlement, cumulative-cost reconciliation, and terminal reveal without network inference. The browser fake-provider test repeats the four trials across fresh documents, checks the DOM/URL/network/session-storage boundary before every completion, and remains explicitly emulated evidence rather than Gate 2 proof. The actual prior v1 3/4 bundle is also reverified under frozen historical identities.
 

@@ -53,59 +53,87 @@ if (configured.status === "awaiting-repair" || configured.status === "awaiting-h
   const revision = configured.revision;
   const activeCommit =
     process.env.VERCEL_GIT_COMMIT_SHA?.trim() ?? process.env.TOOLPROOF_COMMIT_SHA?.trim() ?? "";
-  const [resolvedV1, resolvedV2, v1RawSource, v2RawSource, patch, changedNames] = await Promise.all(
-    [
-      git(["rev-parse", "--verify", `${revision.v1AppCommit}^{commit}`]),
-      git(["rev-parse", "--verify", `${revision.v2AppCommit}^{commit}`]),
-      git(["show", `${revision.v1AppCommit}:${GATE5_SOURCE_DIFF_PATH}`]),
-      git(["show", `${revision.v2AppCommit}:${GATE5_SOURCE_DIFF_PATH}`]),
-      git(patchArguments(revision.v1AppCommit, revision.v2AppCommit)),
-      git([
-        "-c",
-        "core.quotePath=false",
-        "diff",
-        "--name-only",
-        "--no-ext-diff",
-        "--no-renames",
-        revision.v1AppCommit,
-        revision.v2AppCommit,
-        "--"
-      ])
-    ]
-  );
-  const changedPaths = changedNames
-    .split(/\r?\n/u)
-    .map((value) => value.trim())
-    .filter(Boolean);
-  const rebuilt = await buildGate5SourceDiffProof({
-    changedPaths,
-    v1AppCommit: resolvedV1.trim(),
-    v2AppCommit: resolvedV2.trim(),
-    oldJsonStringLiteral: JSON.stringify(revision.oldDescription),
-    newJsonStringLiteral: JSON.stringify(revision.newDescription),
-    v1RawSource,
-    v2RawSource,
-    patch
-  });
+  const terminalPresentation = activeCommit !== revision.v2AppCommit;
   if (
-    activeCommit !== revision.v2AppCommit ||
-    resolvedV1.trim() !== revision.v1AppCommit ||
-    resolvedV2.trim() !== revision.v2AppCommit ||
-    canonicalJson(rebuilt) !== canonicalJson(revision.sourceDiffProof)
+    terminalPresentation &&
+    (process.env.TOOLPROOF_GATE5_PRESENTATION_COMMIT?.trim() !== activeCommit ||
+      process.env.TOOLPROOF_SCORED_OPERATOR_PHASE?.trim() ||
+      !/^run_[A-Za-z0-9_-]{22}$/u.test(process.env.TOOLPROOF_REVISED_RUN_ID?.trim() ?? "") ||
+      !/^[a-f0-9]{64}$/u.test(process.env.TOOLPROOF_REVISED_EVIDENCE_DIGEST?.trim() ?? ""))
   ) {
-    throw new Error("gate5_source_diff_not_exactly_one_description");
+    throw new Error("gate5_terminal_presentation_binding_invalid");
   }
-  process.stdout.write(
-    `${JSON.stringify({
-      ok: true,
-      mode: "gate5-one-variable",
-      status: "verified",
-      changedField: revision.changedField,
-      file: GATE5_SOURCE_DIFF_PATH,
-      v1AppCommit: revision.v1AppCommit,
-      v2AppCommit: revision.v2AppCommit,
-      sourceDiffProofHash: revision.sourceDiffProof.proofHash,
-      revisionFreezeHash: revision.revisionFreezeHash
-    })}\n`
-  );
+  if (terminalPresentation) {
+    process.stdout.write(
+      `${JSON.stringify({
+        ok: true,
+        mode: "gate5-one-variable",
+        status: "verified-terminal-reference-presentation",
+        changedField: revision.changedField,
+        file: GATE5_SOURCE_DIFF_PATH,
+        v1AppCommit: revision.v1AppCommit,
+        v2AppCommit: revision.v2AppCommit,
+        presentationCommit: activeCommit,
+        sourceDiffProofHash: revision.sourceDiffProof.proofHash,
+        revisionFreezeHash: revision.revisionFreezeHash
+      })}\n`
+    );
+  } else {
+    const [resolvedV1, resolvedV2, v1RawSource, v2RawSource, patch, changedNames] =
+      await Promise.all([
+        git(["rev-parse", "--verify", `${revision.v1AppCommit}^{commit}`]),
+        git(["rev-parse", "--verify", `${revision.v2AppCommit}^{commit}`]),
+        git(["show", `${revision.v1AppCommit}:${GATE5_SOURCE_DIFF_PATH}`]),
+        git(["show", `${revision.v2AppCommit}:${GATE5_SOURCE_DIFF_PATH}`]),
+        git(patchArguments(revision.v1AppCommit, revision.v2AppCommit)),
+        git([
+          "-c",
+          "core.quotePath=false",
+          "diff",
+          "--name-only",
+          "--no-ext-diff",
+          "--no-renames",
+          revision.v1AppCommit,
+          revision.v2AppCommit,
+          "--"
+        ])
+      ]);
+    const changedPaths = changedNames
+      .split(/\r?\n/u)
+      .map((value) => value.trim())
+      .filter(Boolean);
+    const rebuilt = await buildGate5SourceDiffProof({
+      changedPaths,
+      v1AppCommit: resolvedV1.trim(),
+      v2AppCommit: resolvedV2.trim(),
+      oldJsonStringLiteral: JSON.stringify(revision.oldDescription),
+      newJsonStringLiteral: JSON.stringify(revision.newDescription),
+      v1RawSource,
+      v2RawSource,
+      patch
+    });
+    if (
+      activeCommit !== revision.v2AppCommit ||
+      resolvedV1.trim() !== revision.v1AppCommit ||
+      resolvedV2.trim() !== revision.v2AppCommit ||
+      canonicalJson(rebuilt) !== canonicalJson(revision.sourceDiffProof)
+    ) {
+      throw new Error("gate5_source_diff_not_exactly_one_description");
+    }
+    process.stdout.write(
+      `${JSON.stringify({
+        ok: true,
+        mode: "gate5-one-variable",
+        status: "verified",
+        changedField: revision.changedField,
+        file: GATE5_SOURCE_DIFF_PATH,
+        v1AppCommit: revision.v1AppCommit,
+        v2AppCommit: revision.v2AppCommit,
+        presentationCommit: activeCommit,
+        terminalPresentation: false,
+        sourceDiffProofHash: revision.sourceDiffProof.proofHash,
+        revisionFreezeHash: revision.revisionFreezeHash
+      })}\n`
+    );
+  }
 }

@@ -4,7 +4,7 @@
 
 **ToolProof by Invarra — created by Sergio Valencia.**
 
-Status: Gates 0–3 are complete. Gate 2 passed authentically at 4/4 on the exact pinned Chrome 151 fallback after all failed preferred/fallback attempts, calls, costs, receipts, and the expired pre-dispatch authorization tombstone were preserved. The first frozen 24-case baseline completed and was acknowledged; its Development result is 11/12 while its Builder-blinded holdout remains sealed. A first isolated Repair Builder call also completed. A later disabled v2 deployment exposed a source-versioning defect before any revised model call, so that baseline and Repair remain immutable **superseded-protocol** evidence. ToolProof is preparing a source-bound successor protocol that reruns complete v1 and v2 schedules under the unchanged `17/70/2/70/1`, 160-call, and USD $10 caps. Public repository release, revised results, video, and Devpost submission are not yet claimed.
+Status: Gates 0–5 are complete and Gate 6 evidence-product work is in progress. Gate 2 passed authentically at 4/4 on the exact pinned Chrome 151 fallback after every failed attempt, call, cost, receipt, and the expired pre-dispatch authorization tombstone was preserved. The replacement frozen 24-case baseline and unchanged one-description rerun are terminal and acknowledged: both scored `23/24`, with Development `12/12` and Builder-blinded holdout `11/12`. The same tentative-checkout holdout failed both times because the model abstained instead of asking the required clarification, so the measured revision shows **no improvement** in this one-trial snapshot. An earlier baseline and Repair remain immutable **superseded-protocol** evidence and are never merged into the primary Matrix. Public release, video, and Devpost submission are not yet claimed.
 
 **Simulated checkout — no purchase occurs.** ToolProof contains no payment, account, inventory, messaging, or external transaction path. When enabled later, model-backed evaluation may send synthetic prompts to the disclosed provider.
 
@@ -29,7 +29,7 @@ Direct native-plumbing controls are deterministic Gate 1 diagnostics, not model-
 | In-page execution via `executeTool()`                          | Authentically verified for every active tool, replay/error/reset/cancellation boundaries |
 | Direct ChatGPT observations                                    | Not collected                                                                            |
 | Judge-accessible model-backed lane                             | Gate 2 fallback passed 4/4; scored execution remains operator- and freeze-gated          |
-| Authentic baseline/revised results                             | First baseline acknowledged; preserved as superseded evidence; successor pair pending    |
+| Authentic baseline/revised results                             | Terminal and paired: `23/24 → 23/24`; exact traces retained; no measured improvement     |
 
 Mocks, direct domain calls, unit tests, and Playwright's ordinary browser build are never counted as native WebMCP or model-selection evidence.
 
@@ -60,7 +60,7 @@ npm run verify:publication
 
 `npm run fallback:smoke:native` uses the exact local Chrome-for-Testing pin for native plumbing only and makes zero provider calls. `npm run fallback:calibrate` is the historical human-gated paid operator command used for the completed Gate 2 run; it refuses to start without exact activation and a hidden one-time capability. Do not rerun it: the calibration allocation is terminal and no v0.6 exists.
 
-`npm run verify:evidence` deliberately fails closed until an authentic frozen-run manifest exists.
+`npm run verify:evidence` verifies the canonical public reference package and, when the ignored raw artifacts are supplied locally, recomputes it byte-for-byte from those sealed inputs.
 
 ## Architecture
 
@@ -76,7 +76,7 @@ See [architecture](docs/architecture.md), [methodology](docs/methodology.md), [t
 
 ToolProof measures whether WebMCP behavior remains consistent across requests a human approved as meaning-equivalent and changes appropriately at declared semantic boundaries. It does not prove model understanding, guarantee safety, prevent all unintended actions, or provide a certification.
 
-The future public evidence package will keep custom Probe, Direct ChatGPT, calibration, native plumbing, and exploratory observations in separate namespaces and denominators.
+The public evidence package keeps custom Probe, Direct ChatGPT, calibration, native plumbing, and exploratory observations in separate namespaces and denominators. The scored reference evidence was measured on baseline commit `3431a2b876d058eb562b7e6075570ad05b165ea0` and revised commit `251c44be34456ecc022839da6c8b85fe1c10e1fc`. Post-measurement commit `b5ab0f812b0c0fd39f5372603ff80ac1a4f341a1` changes only four test files; it is disclosed separately and is never called the measured v2 build.
 
 ## Ownership, assistance, and license
 

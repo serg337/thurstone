@@ -3,6 +3,19 @@ import "server-only";
 import { canonicalJson, canonicalSha256 } from "@/lib/evidence/digest";
 import { probeLiveManifestSchema, type ProbeLiveManifest } from "@/lib/probe/calibration-envelope";
 import { createProbeRedis } from "@/lib/probe/ledger";
+import {
+  buildGate6EvidencePackage,
+  createGate6EvidenceExports,
+  type Gate6EvidenceExports,
+  type Gate6EvidencePackage,
+  type Gate6TraceRecord
+} from "@/lib/results/evidence-package";
+import {
+  BASELINE_EVIDENCE_DIGEST_ENV,
+  BASELINE_RUN_ID_ENV,
+  REVISED_EVIDENCE_DIGEST_ENV,
+  REVISED_RUN_ID_ENV
+} from "@/lib/results/config";
 import { readPermanentScoredRunById, type ScoredRunSnapshot } from "@/lib/scored/run-store.server";
 import { configuredGate3FrozenProtocol } from "@/lib/semantic/frozen-config.server";
 import { configuredGate5Revision } from "@/lib/semantic/revision-config.server";
@@ -14,10 +27,12 @@ import {
 } from "@/lib/semantic/contract";
 import type { Gate3ScoredEvidenceRow } from "@/lib/semantic/scored-evaluation.server";
 
-export const BASELINE_RUN_ID_ENV = "TOOLPROOF_BASELINE_RUN_ID";
-export const BASELINE_EVIDENCE_DIGEST_ENV = "TOOLPROOF_BASELINE_EVIDENCE_DIGEST";
-export const REVISED_RUN_ID_ENV = "TOOLPROOF_REVISED_RUN_ID";
-export const REVISED_EVIDENCE_DIGEST_ENV = "TOOLPROOF_REVISED_EVIDENCE_DIGEST";
+export {
+  BASELINE_EVIDENCE_DIGEST_ENV,
+  BASELINE_RUN_ID_ENV,
+  REVISED_EVIDENCE_DIGEST_ENV,
+  REVISED_RUN_ID_ENV
+} from "@/lib/results/config";
 
 type EnvironmentLike = Readonly<Record<string, string | undefined>>;
 
@@ -164,6 +179,12 @@ export type SemanticResultsState =
         readonly baselineEarned: number;
         readonly revisedEarned: number;
         readonly possible: 12;
+      };
+      readonly evidencePackage: Gate6EvidencePackage;
+      readonly evidenceExports: Gate6EvidenceExports;
+      readonly presentation: {
+        readonly commit: string;
+        readonly deploymentIdentity: string;
       };
     };
 
@@ -342,6 +363,274 @@ function baselineLiveManifest(snapshot: ScoredRunSnapshot): ProbeLiveManifest {
   return selected;
 }
 
+function normalizedDecisionSignature(
+  decision: Gate3ScoredEvidenceRow["providerReceipt"]["decision"]
+): string {
+  if (!decision) return "no_action";
+  if (decision.kind !== "call") return decision.kind === "abstain" ? "no_action" : decision.kind;
+  const normalizedArguments = Object.fromEntries(
+    Object.entries(decision.arguments).map(([key, value]) => [
+      key,
+      key === "operationId" ? "<runner-owned>" : value
+    ])
+  );
+  return `call:${decision.tool}:${canonicalJson(normalizedArguments)}`;
+}
+
+function traceErrorClass(
+  attempt: ScoredRunSnapshot["attempts"][number],
+  failureCodes: readonly string[],
+  argumentPassed: boolean,
+  effectPassed: boolean
+): Gate6TraceRecord["errorClass"] {
+  if (attempt.disposition === "infrastructure-invalid") return "infrastructure";
+  if (failureCodes.length === 0) return "none";
+  if (
+    failureCodes.some((code) =>
+      ["decision_action_class", "decision_tool", "executed_tool"].includes(code)
+    )
+  )
+    return "semantic-action";
+  if (!argumentPassed) return "semantic-argument";
+  if (!effectPassed) return "semantic-effect";
+  return "semantic-action";
+}
+
+function noChangeEffect(state: unknown): unknown {
+  const record = state as {
+    readonly revision?: unknown;
+    readonly lines?: readonly { readonly itemId?: unknown; readonly quantity?: unknown }[];
+    readonly pendingCheckout?: unknown;
+  };
+  const revision = Number(record.revision ?? 0);
+  return Object.freeze({
+    stateChanged: false,
+    revision: { before: revision, after: revision, delta: 0, changed: false },
+    quantities: (record.lines ?? []).map(({ itemId, quantity }) => ({
+      itemId: String(itemId ?? ""),
+      beforeQuantity: Number(quantity ?? 0),
+      afterQuantity: Number(quantity ?? 0),
+      delta: 0,
+      changed: false
+    })),
+    pendingCheckout: {
+      before: record.pendingCheckout ?? null,
+      after: record.pendingCheckout ?? null,
+      changed: false
+    },
+    unmodeledStateChanged: false
+  });
+}
+
+function gate6TraceRecords(
+  snapshot: ScoredRunSnapshot,
+  scoredCases: readonly SemanticScoredCase[],
+  contract: SemanticContract,
+  version: "baseline" | "revised"
+): readonly Gate6TraceRecord[] {
+  const records: Gate6TraceRecord[] = [];
+  for (const attempt of snapshot.attempts) {
+    if (attempt.disposition !== "scored") continue;
+    const definition = scoredCases.find(
+      ({ runnerCaseId }) => runnerCaseId === attempt.runnerCaseId
+    );
+    if (!definition) throw new Error("gate6_trace_case_missing");
+    const evidence = attempt.evidence as Record<string, unknown>;
+    const row = evidence.row as Gate3ScoredEvidenceRow;
+    const evaluation = row.evaluation;
+    if (evaluation.score === null) throw new Error("gate6_trace_score_missing");
+    const approved = semanticMeaningForCase(contract, definition);
+    const expected = approved.expectation;
+    const trial = row.trialEvidence as unknown as {
+      readonly adapterVersion?: unknown;
+      readonly captureDigest?: unknown;
+      readonly currentState?: unknown;
+      readonly currentTraces?: readonly unknown[];
+      readonly origin?: unknown;
+      readonly fallback?: {
+        readonly catalog?: {
+          readonly manifestHash?: unknown;
+          readonly toolNames?: readonly unknown[];
+          readonly registrationGeneration?: unknown;
+        };
+        readonly runtime?: {
+          readonly browserVersion?: unknown;
+          readonly chromeForTesting?: unknown;
+          readonly runtimeContractHash?: unknown;
+        };
+      };
+      readonly capture?: { readonly providerReceiptHash?: unknown };
+    };
+    const trace = trial.currentTraces?.[0] as
+      | {
+          readonly eventId?: unknown;
+          readonly status?: unknown;
+          readonly canonicalArguments?: { readonly value?: unknown; readonly sha256?: unknown };
+          readonly canonicalResult?: { readonly value?: unknown; readonly sha256?: unknown };
+          readonly stateBefore?: { readonly value?: unknown; readonly sha256?: unknown };
+          readonly stateAfter?: { readonly value?: unknown; readonly sha256?: unknown };
+          readonly effect?: unknown;
+          readonly runtime?: { readonly argumentMode?: unknown };
+        }
+      | undefined;
+    const provider = row.providerReceipt;
+    const decision = provider.decision;
+    const envelope = row.envelope as unknown as {
+      readonly liveManifest: unknown;
+      readonly envelopeHash: string;
+    };
+    const manifest = probeLiveManifestSchema.parse(envelope.liveManifest);
+    const checks = evaluation.checks;
+    const argumentStart = checks.findIndex(({ code }) => code === "decision_execution_arguments");
+    const argumentChecks =
+      expected.kind === "call" && argumentStart >= 0
+        ? [
+            checks[argumentStart]!,
+            ...checks.slice(
+              argumentStart + 1,
+              argumentStart + 1 + expected.arguments.predicates.length
+            ),
+            ...checks.filter(({ code }) => code === "no_additional_arguments")
+          ]
+        : [];
+    const stateChangeIndex = checks.findIndex(({ code }) => code === "state_change");
+    const stateAndEffectPredicateCount =
+      expected.stateBefore.length + expected.stateAfter.length + expected.effect.length;
+    const effectChecks = [
+      ...checks.filter(({ code }) =>
+        [
+          "effect_surfaces_allowed",
+          "forbidden_effect_surfaces_absent",
+          "trace_effect_link"
+        ].includes(code)
+      ),
+      ...(stateChangeIndex >= 0
+        ? checks.slice(stateChangeIndex, stateChangeIndex + 1 + stateAndEffectPredicateCount)
+        : [])
+    ];
+    const expectedTool = expected.kind === "call" ? expected.tool : null;
+    const observedTool = decision?.kind === "call" ? decision.tool : null;
+    const consequentialOverAction =
+      (expected.kind !== "call" || expectedTool === "order_review") &&
+      decision?.kind === "call" &&
+      observedTool !== "order_review" &&
+      observedTool !== "cart_get";
+    const relationship =
+      definition.relationship.kind === "equivalent_realization"
+        ? {
+            kind: "equivalent_realization" as const,
+            id: definition.relationship.groupId,
+            side: null
+          }
+        : {
+            kind: "matched_boundary" as const,
+            id: definition.relationship.pairId,
+            side: definition.relationship.side
+          };
+    const providerRecord = provider as unknown as Record<string, unknown>;
+    const fallbackRuntime = trial.fallback?.runtime;
+    const fallbackCatalog = trial.fallback?.catalog;
+    const state = trial.currentState ?? null;
+    const argumentPassed =
+      expected.kind !== "call" ||
+      (argumentChecks.length === expected.arguments.predicates.length + 2 &&
+        argumentChecks.every(({ passed }) => passed));
+    const effectPassed =
+      effectChecks.length >= stateAndEffectPredicateCount + 3 &&
+      effectChecks.every(({ passed }) => passed);
+    records.push(
+      Object.freeze({
+        version,
+        ordinal: attempt.ordinal,
+        caseId: definition.caseId,
+        runnerCaseId: definition.runnerCaseId,
+        subset: definition.subset,
+        family: definition.family,
+        relationship,
+        request: definition.naturalLanguageRequest,
+        expectedAction: action(evaluation, true),
+        observedAction: action(evaluation, false),
+        observedSignature: normalizedDecisionSignature(decision),
+        expectedKind: expected.kind,
+        expectedTool,
+        passed: evaluation.passed,
+        score: evaluation.score,
+        failureCodes: evaluation.failureCodes,
+        errorClass: traceErrorClass(attempt, evaluation.failureCodes, argumentPassed, effectPassed),
+        argumentPassed,
+        effectPassed,
+        consequentialOverAction,
+        clarification: Object.freeze({
+          expected: expected.kind === "clarify",
+          observed: decision?.kind === "clarify",
+          text: decision?.kind === "clarify" ? decision.text : null
+        }),
+        liveCatalog: Object.freeze({
+          manifestHash: String(fallbackCatalog?.manifestHash ?? manifest.manifestHash),
+          toolNames: Object.freeze(
+            (fallbackCatalog?.toolNames ?? manifest.tools.map(({ name }) => name)).map(String)
+          ),
+          registrationGeneration: Number(fallbackCatalog?.registrationGeneration ?? 0)
+        }),
+        model: Object.freeze({
+          provider: provider.provider,
+          model: provider.model,
+          decision,
+          refusal: provider.refusal,
+          decisionError: provider.decisionError,
+          promptHash: provider.promptHash,
+          settingsHash: provider.settingsHash,
+          rawResponseHash: provider.rawResponseHash,
+          dispatchedAt: provider.dispatchedAt,
+          completedAt: provider.completedAt,
+          durationMs: provider.durationMs
+        }),
+        execution: Object.freeze({
+          canonicalArguments: trace?.canonicalArguments?.value ?? null,
+          nativeResult: trace?.canonicalResult?.value ?? null,
+          stateBefore: trace?.stateBefore?.value ?? state,
+          stateAfter: trace?.stateAfter?.value ?? state,
+          effect: trace?.effect ?? noChangeEffect(state),
+          traceEventId: typeof trace?.eventId === "string" ? trace.eventId : null,
+          traceStatus: typeof trace?.status === "string" ? trace.status : null
+        }),
+        runtime: Object.freeze({
+          browserVersion: String(fallbackRuntime?.browserVersion ?? "unknown"),
+          chromeForTesting: String(fallbackRuntime?.chromeForTesting ?? "unknown"),
+          runtimeContractHash: String(fallbackRuntime?.runtimeContractHash ?? ""),
+          adapterVersion: String(trial.adapterVersion ?? ""),
+          origin: String(trial.origin ?? ""),
+          argumentMode:
+            typeof trace?.runtime?.argumentMode === "string" ? trace.runtime.argumentMode : null
+        }),
+        hashes: Object.freeze({
+          rowDigest: row.rowDigest,
+          envelopeHash: envelope.envelopeHash,
+          captureDigest: String(trial.captureDigest ?? ""),
+          providerReceiptHash: String(
+            trial.capture?.providerReceiptHash ?? providerRecord.rawResponseHash ?? ""
+          ),
+          traceArgumentsHash:
+            typeof trace?.canonicalArguments?.sha256 === "string"
+              ? trace.canonicalArguments.sha256
+              : null,
+          traceResultHash:
+            typeof trace?.canonicalResult?.sha256 === "string"
+              ? trace.canonicalResult.sha256
+              : null,
+          stateBeforeHash:
+            typeof trace?.stateBefore?.sha256 === "string" ? trace.stateBefore.sha256 : null,
+          stateAfterHash:
+            typeof trace?.stateAfter?.sha256 === "string" ? trace.stateAfter.sha256 : null
+        })
+      })
+    );
+  }
+  records.sort((left, right) => left.ordinal - right.ordinal);
+  if (records.length !== 24) throw new Error("gate6_trace_denominator_invalid");
+  return Object.freeze(records);
+}
+
 function supersededEvidence(
   reviewPackage: Gate3HumanReviewPackage | null
 ): SemanticSupersededProtocolEvidence | null {
@@ -481,6 +770,134 @@ export async function readSemanticResults(
     const holdoutComparison = comparison.filter(
       ({ subset }) => subset === "builder-blinded-holdout"
     );
+    const baselineTraceRecords = gate6TraceRecords(
+      snapshot,
+      frozenSuite.scoredCases,
+      frozen.reviewPackage.contract,
+      "baseline"
+    );
+    const revisedTraceRecords = gate6TraceRecords(
+      revisedSnapshot,
+      frozenSuite.scoredCases,
+      frozen.reviewPackage.contract,
+      "revised"
+    );
+    const allTraceRecords = Object.freeze([...baselineTraceRecords, ...revisedTraceRecords]);
+    const baselineStartTimes = baselineTraceRecords.map(({ model }) => model.dispatchedAt).sort();
+    const baselineCompleteTimes = baselineTraceRecords.map(({ model }) => model.completedAt).sort();
+    const revisedStartTimes = revisedTraceRecords.map(({ model }) => model.dispatchedAt).sort();
+    const revisedCompleteTimes = revisedTraceRecords.map(({ model }) => model.completedAt).sort();
+    const firstBaseline = baselineTraceRecords[0]!;
+    const firstRevised = revisedTraceRecords[0]!;
+    const evidencePackage = await buildGate6EvidencePackage({
+      evidenceLabel: "authentic Custom Probe reference · one-trial demonstration snapshot",
+      repetitionCount: 1,
+      infrastructure: Object.freeze({
+        baseline: Object.freeze({
+          logicalCases: 24,
+          attempts: snapshot.attemptCount,
+          scoredOutcomes: snapshot.completedCount,
+          transportFailures: snapshot.transportFailureCount,
+          retries: snapshot.attemptCount - snapshot.completedCount,
+          incomplete:
+            snapshot.terminalStatus === "terminal-complete" ? 0 : 24 - snapshot.completedCount,
+          indeterminate: snapshot.terminalStatus === "terminal-invalid" ? 1 : 0
+        }),
+        revised: Object.freeze({
+          logicalCases: 24,
+          attempts: revisedSnapshot.attemptCount,
+          scoredOutcomes: revisedSnapshot.completedCount,
+          transportFailures: revisedSnapshot.transportFailureCount,
+          retries: revisedSnapshot.attemptCount - revisedSnapshot.completedCount,
+          incomplete:
+            revisedSnapshot.terminalStatus === "terminal-complete"
+              ? 0
+              : 24 - revisedSnapshot.completedCount,
+          indeterminate: revisedSnapshot.terminalStatus === "terminal-invalid" ? 1 : 0
+        })
+      }),
+      contractDiff: Object.freeze({
+        changedField: "checkout_request.description",
+        path: "lib/webmcp/checkout-request-tool.ts",
+        oldDescription: revision.revision.oldDescription,
+        newDescription: revision.revision.newDescription,
+        sourceDiffProofHash: revision.revision.sourceDiffProof.proofHash,
+        revisionFreezeHash: revision.revision.revisionFreezeHash,
+        hunkCount: 1,
+        removedLineCount: 1,
+        addedLineCount: 1
+      }),
+      provenance: Object.freeze({
+        baselineRunId: runId!,
+        baselineEvidenceDigest: evidenceDigest!,
+        baselineAppCommit: snapshot.identity.appCommit,
+        revisedRunId: revisedRunId!,
+        revisedEvidenceDigest: revisedEvidenceDigest!,
+        revisedAppCommit: revisedSnapshot.identity.appCommit,
+        reviewPackageHash: frozen.reviewPackage.packageHash,
+        gate3FrozenProtocolHash: frozen.protocol.frozenProtocolHash,
+        revisionFreezeHash: revision.revision.revisionFreezeHash,
+        provider: firstRevised.model.provider,
+        model: firstRevised.model.model,
+        baselineManifestHash: firstBaseline.liveCatalog.manifestHash,
+        revisedManifestHash: firstRevised.liveCatalog.manifestHash,
+        fixtureId: frozen.reviewPackage.fixture.fixtureId,
+        fixtureVersion: frozen.reviewPackage.fixture.fixtureVersion,
+        evaluatorVersion: frozen.reviewPackage.evaluator.version,
+        runnerHash: revision.revision.unchangedProtocolBindings.runnerHash,
+        promptHash: firstRevised.model.promptHash,
+        settingsHash: firstRevised.model.settingsHash,
+        retryPolicyHash: revision.revision.unchangedProtocolBindings.retryPolicyHash,
+        baselineStartedAt: baselineStartTimes[0]!,
+        baselineCompletedAt: baselineCompleteTimes.at(-1)!,
+        revisedStartedAt: revisedStartTimes[0]!,
+        revisedCompletedAt: revisedCompleteTimes.at(-1)!,
+        measuredV2Commit: revision.revision.v2AppCommit,
+        postEvidenceTestCommit: "b5ab0f812b0c0fd39f5372603ff80ac1a4f341a1",
+        testOnlyProjectionHash: "fbd48a1ad44f665e831020ca6608e084cb08aba1cd81cc91a4d3409915f55ddd",
+        targetOrigin: firstRevised.runtime.origin
+      }),
+      namespaces: Object.freeze([
+        Object.freeze({
+          id: "custom-probe" as const,
+          status: "primary authentic reference: baseline and revised terminal",
+          includedInPrimaryDenominator: true
+        }),
+        Object.freeze({
+          id: "direct-chatgpt" as const,
+          status: "separate authentic observations pending Gate 7",
+          includedInPrimaryDenominator: false
+        }),
+        Object.freeze({
+          id: "calibration" as const,
+          status: "four non-scored cases retained separately",
+          includedInPrimaryDenominator: false
+        }),
+        Object.freeze({
+          id: "native-plumbing" as const,
+          status: "deterministic WebMCP plumbing proof retained separately",
+          includedInPrimaryDenominator: false
+        }),
+        Object.freeze({
+          id: "exploratory" as const,
+          status: "judge-started exploration cannot overwrite reference evidence",
+          includedInPrimaryDenominator: false
+        })
+      ]),
+      limitations: Object.freeze([
+        "One trial per case and version is a demonstration snapshot, not a stability estimate.",
+        "One provider model and one synthetic checkout domain do not establish generality.",
+        "The description revision produced 23/24 before and after: no measured improvement.",
+        "The same tentative-checkout holdout abstained instead of clarifying in both versions.",
+        "Repair received zero holdout prompts or results; blinding is operational, not cryptographic.",
+        "Custom Probe evidence is not a measurement of Direct ChatGPT behavior.",
+        "The result is not safety certification or proof of model understanding.",
+        "Clarification usefulness awaits Sergio's final human claims review.",
+        "Hashes establish internal consistency, not independent attestation."
+      ]),
+      records: allTraceRecords
+    });
+    const evidenceExports = await createGate6EvidenceExports(evidencePackage);
     return Object.freeze({
       status: "paired-comparison",
       disclosure: "one-trial demonstration snapshot",
@@ -500,6 +917,18 @@ export async function readSemanticResults(
         baselineEarned: holdoutComparison.filter(({ baselinePassed }) => baselinePassed).length,
         revisedEarned: holdoutComparison.filter(({ revisedPassed }) => revisedPassed).length,
         possible: 12 as const
+      }),
+      evidencePackage,
+      evidenceExports,
+      presentation: Object.freeze({
+        commit:
+          environment.TOOLPROOF_COMMIT_SHA?.trim() ??
+          environment.VERCEL_GIT_COMMIT_SHA?.trim() ??
+          "unversioned",
+        deploymentIdentity:
+          environment.VERCEL_DEPLOYMENT_ID?.trim() ??
+          environment.VERCEL_URL?.trim() ??
+          "local-unavailable"
       })
     });
   }

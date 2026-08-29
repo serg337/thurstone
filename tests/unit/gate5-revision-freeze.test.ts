@@ -11,7 +11,10 @@ import {
   buildGate5RevisionFreeze,
   verifyGate5RevisionFreezeIntegrity
 } from "@/lib/semantic/revision-freeze.server";
-import { assertStoredGate5RevisionLineage } from "@/lib/semantic/revision-config.server";
+import {
+  assertGate5TerminalPresentationBinding,
+  assertStoredGate5RevisionLineage
+} from "@/lib/semantic/revision-config.server";
 import { buildGate5SourceDiffProof } from "@/lib/semantic/gate5-source-diff-proof";
 import { describe, expect, it } from "vitest";
 
@@ -83,6 +86,27 @@ async function gate3() {
 }
 
 describe("Gate 5 one-variable revision freeze", () => {
+  it("allows only one exact terminal presentation commit with scored execution absent", () => {
+    const input = {
+      currentAppCommit: "c".repeat(40),
+      allowedPresentationCommit: "c".repeat(40),
+      scoredOperatorPhase: undefined,
+      revisedRunId: `run_${"r".repeat(22)}`,
+      revisedEvidenceDigest: "e".repeat(64)
+    };
+    expect(() => assertGate5TerminalPresentationBinding(input)).not.toThrow();
+    for (const changed of [
+      { allowedPresentationCommit: "d".repeat(40) },
+      { scoredOperatorPhase: "revised" },
+      { revisedRunId: undefined },
+      { revisedEvidenceDigest: "invalid" }
+    ]) {
+      expect(() => assertGate5TerminalPresentationBinding({ ...input, ...changed })).toThrow(
+        /gate5_terminal_presentation_binding_invalid/u
+      );
+    }
+  });
+
   it("accepts only an approved checkout_request description diff with unchanged protocol", async () => {
     const { review, frozen } = await gate3();
     const proposedDescription =

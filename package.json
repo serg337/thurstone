@@ -36,6 +36,7 @@
     "gate5-revision:bootstrap": "tsx --tsconfig tsconfig.operator.json scripts/gate5-revision-bootstrap.ts",
     "gate5:prepare-source-diff": "tsx --tsconfig tsconfig.operator.json scripts/prepare-gate5-source-diff.ts",
     "gate5:verify-one-variable": "tsx --tsconfig tsconfig.operator.json scripts/verify-gate5-one-variable.ts",
+    "gate6-presentation:verify": "tsx --tsconfig tsconfig.operator.json scripts/verify-gate6-presentation.ts",
     "probe-controls:reap": "tsx --tsconfig tsconfig.operator.json scripts/probe-controls.ts reap",
     "probe-controls:status": "tsx --tsconfig tsconfig.operator.json scripts/probe-controls.ts status",
     "provider:check": "node scripts/check-openai-entitlement.mjs",
@@ -46,8 +47,8 @@
     "test:coverage": "vitest run --coverage",
     "test:integration": "vitest run tests/integration",
     "typecheck": "next typegen && tsc --noEmit -p tsconfig.typecheck.json",
-    "vercel-build": "npm run durable-store:check && npm run probe-controls:integration && npm run probe-continuation:integration && npm run scored-run-store:integration && npm run probe-controls:bootstrap && npm run provider:check && npm run build && npm run verify:probe-no-leakage && npm run gate3-freeze:bootstrap && npm run gate5:verify-one-variable && npm run gate5-revision:bootstrap",
-    "verify:evidence": "node scripts/verify-evidence.mjs",
+    "vercel-build": "npm run gate6-presentation:verify && npm run durable-store:check && npm run probe-controls:integration && npm run probe-continuation:integration && npm run scored-run-store:integration && npm run probe-controls:bootstrap && npm run provider:check && npm run build && npm run verify:probe-no-leakage && npm run gate3-freeze:bootstrap && npm run gate5:verify-one-variable && npm run gate5-revision:bootstrap",
+    "verify:evidence": "tsx --tsconfig tsconfig.operator.json scripts/verify-evidence.ts",
     "verify:probe-no-leakage": "node scripts/verify-probe-no-leakage.mjs",
     "verify:publication": "node scripts/verify-publication.mjs"
   },
