@@ -46,7 +46,6 @@ const criticalPaths = [
   "lib/webmcp/runtime.ts",
   "lib/webmcp/tool-execution.ts"
 ] as const;
-execFileSync("git", ["diff", "--quiet", observationCommit, activeCommit, "--", ...criticalPaths]);
 const evidenceBytes = await readFile("evidence/direct-site-tools-observations.json", "utf8");
 const evidence = JSON.parse(evidenceBytes) as {
   readonly observationBuildCommit?: unknown;
@@ -64,6 +63,19 @@ if (!implementationBinding) throw new Error("direct_observation_implementation_b
 const criticalFiles = await Promise.all(
   criticalPaths.map(async (path) => {
     const checkedOutBytes = await readFile(path);
+    const checkedOutBlobOid = createHash("sha1")
+      .update(`blob ${checkedOutBytes.byteLength}\0`)
+      .update(checkedOutBytes)
+      .digest("hex");
+    const observationBlobOid = execFileSync("git", ["rev-parse", `${observationCommit}:${path}`], {
+      encoding: "utf8"
+    }).trim();
+    const activeBlobOid = execFileSync("git", ["rev-parse", `${activeCommit}:${path}`], {
+      encoding: "utf8"
+    }).trim();
+    if (checkedOutBlobOid !== observationBlobOid || checkedOutBlobOid !== activeBlobOid) {
+      throw new Error(`direct_observation_critical_git_blob_mismatch:${path}`);
+    }
     return {
       path,
       sha256: createHash("sha256").update(checkedOutBytes).digest("hex")
@@ -90,29 +102,42 @@ const projectDependencies = (document: PackageDocument) => ({
 const currentPackageDocument = JSON.parse(
   await readFile("package.json", "utf8")
 ) as PackageDocument;
+const observationPackageDocument = JSON.parse(
+  execFileSync("git", ["show", `${observationCommit}:package.json`], { encoding: "utf8" })
+) as PackageDocument;
+const activePackageDocument = JSON.parse(
+  execFileSync("git", ["show", `${activeCommit}:package.json`], { encoding: "utf8" })
+) as PackageDocument;
 const dependencyProjection = projectDependencies(currentPackageDocument);
+const observationDependencyProjection = projectDependencies(observationPackageDocument);
+const activeDependencyProjection = projectDependencies(activePackageDocument);
 const dependencyProjectionHash = await canonicalSha256(dependencyProjection);
-if (dependencyProjectionHash !== implementationBinding.dependencyProjectionHash) {
+const observationDependencyProjectionHash = await canonicalSha256(observationDependencyProjection);
+const activeDependencyProjectionHash = await canonicalSha256(activeDependencyProjection);
+if (
+  dependencyProjectionHash !== implementationBinding.dependencyProjectionHash ||
+  observationDependencyProjectionHash !== implementationBinding.dependencyProjectionHash ||
+  activeDependencyProjectionHash !== implementationBinding.dependencyProjectionHash
+) {
   throw new Error("direct_observation_dependency_hash_mismatch");
 }
-const changedPathCount = execFileSync(
-  "git",
-  ["diff", "--name-only", "--no-renames", observationCommit, activeCommit, "--"],
-  { encoding: "utf8" }
-)
-  .split(/\r?\n/u)
-  .filter(Boolean).length;
+const descendantCommitCount = Number(
+  execFileSync("git", ["rev-list", "--count", `${observationCommit}..${activeCommit}`], {
+    encoding: "utf8"
+  }).trim()
+);
 process.stdout.write(
   `${JSON.stringify({
     ok: true,
     mode: "direct-observation-presentation",
     observationCommit,
     activeCommit,
-    changedPathCount,
+    descendantCommitCount,
     criticalFileCount: criticalFiles.length,
     criticalProjectionHash,
     dependencyProjectionHash,
-    observationDependencyProjectionHash: implementationBinding.dependencyProjectionHash,
+    observationDependencyProjectionHash,
+    activeDependencyProjectionHash,
     evidenceRawSha256: createHash("sha256").update(evidenceBytes).digest("hex"),
     providerCallsPerformed: 0
   })}\n`
