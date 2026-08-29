@@ -804,6 +804,7 @@ async function invocationIntegrityTransitionFixture() {
     },
     protocolExtension: {
       commit: protocolCommit,
+      commitCount: 1,
       tree: "8".repeat(40),
       changedPaths: [...JUDGE_DEMO_INVOCATION_INTEGRITY_PROTOCOL_PATHS],
       treeChanges: protocolChanges,
@@ -987,6 +988,22 @@ describe("judge provider-free presentation lineage", () => {
       providerCallsPerformed: 0,
       storeWritesPerformed: 0,
       replayOnly: true
+    });
+    const finalizedProtocol = structuredClone(await invocationIntegrityTransitionFixture());
+    if (finalizedProtocol.kind !== "invocation-integrity") {
+      throw new Error("test_transition_kind_mismatch");
+    }
+    finalizedProtocol.protocolExtension.commitCount = 2;
+    const finalizedPayload: Record<string, unknown> = { ...finalizedProtocol };
+    delete finalizedPayload.proofHash;
+    await expect(
+      verifyJudgeDemoPresentationTransition({
+        ...finalizedPayload,
+        proofHash: await canonicalSha256(finalizedPayload)
+      })
+    ).resolves.toMatchObject({
+      kind: "invocation-integrity",
+      protocolExtension: { commitCount: 2 }
     });
     await expect(invocationIntegrityEvidenceTransitionFixture()).resolves.toMatchObject({
       kind: "invocation-integrity-evidence",

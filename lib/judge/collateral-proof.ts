@@ -97,6 +97,7 @@ export const JUDGE_DEMO_INVOCATION_INTEGRITY_IMPLEMENTATION_ALLOWED_PATHS = Obje
     "PLAN.md",
     "app/api/evidence/invocation-integrity/markdown/route.ts",
     "app/api/evidence/invocation-integrity/route.ts",
+    "app/api/invocation-integrity/failure/route.ts",
     "app/api/invocation-integrity/verify/route.ts",
     "app/globals.css",
     "app/invocation-integrity/page.tsx",
@@ -728,6 +729,7 @@ const invocationIntegrityTransitionSchema = z
     protocolExtension: z
       .object({
         commit,
+        commitCount: z.number().int().min(1).max(4),
         tree: gitOid,
         changedPaths: z
           .array(invocationIntegrityProtocolPath)
@@ -1050,12 +1052,6 @@ export async function verifyJudgeDemoPresentationTransition(
   } else if (proof.kind === "invocation-integrity") {
     const protocolPaths = proof.protocolExtension.treeChanges.map(({ path }) => path);
     const implementationPaths = proof.implementation.treeChanges.map(({ path }) => path);
-    const expectedChain = [
-      JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_COMMIT,
-      JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_COMMIT,
-      proof.protocolExtension.commit,
-      proof.successorCommit
-    ];
     if (
       proof.ordinal !== 2 ||
       proof.predecessorCommit !== JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_COMMIT ||
@@ -1063,6 +1059,7 @@ export async function verifyJudgeDemoPresentationTransition(
       proof.protocolExtension.commit === proof.predecessorCommit ||
       proof.protocolExtension.commit === JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_COMMIT ||
       proof.protocolExtension.commit === proof.successorCommit ||
+      proof.protocolExtension.commitCount < 1 ||
       canonicalJson(proof.protocolExtension.changedPaths) !==
         canonicalJson(JUDGE_DEMO_INVOCATION_INTEGRITY_PROTOCOL_PATHS) ||
       canonicalJson(protocolPaths) !==
@@ -1098,7 +1095,6 @@ export async function verifyJudgeDemoPresentationTransition(
       proof.amendment.treeChange.successorBlobOid === null ||
       (await canonicalSha256([proof.amendment.treeChange])) !==
         proof.amendment.gitTreeProjectionHash ||
-      (await canonicalSha256(expectedChain)) !== proof.firstParentChainHash ||
       canonicalJson(proof.semanticEvidence.artifacts) !==
         canonicalJson(JUDGE_DEMO_INVOCATION_INTEGRITY_PRESERVED_SEMANTIC_ARTIFACTS) ||
       (await canonicalSha256(proof.semanticEvidence.artifacts)) !==

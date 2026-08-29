@@ -553,14 +553,14 @@ async function verifyInvocationIntegrity(input: {
   readonly firstParentChain: readonly string[];
 }): Promise<void> {
   const protocolCommit = input.transition.protocolExtension.commit;
-  const expectedChain = [
-    JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_COMMIT,
-    JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_COMMIT,
-    protocolCommit,
-    input.transition.successorCommit
-  ];
+  const protocolCommits = input.firstParentChain.slice(2, -1);
   if (
-    canonicalJson(input.firstParentChain) !== canonicalJson(expectedChain) ||
+    input.firstParentChain.length !== input.transition.protocolExtension.commitCount + 3 ||
+    input.firstParentChain[0] !== JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_COMMIT ||
+    input.firstParentChain[1] !== JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_COMMIT ||
+    protocolCommits.length !== input.transition.protocolExtension.commitCount ||
+    protocolCommits.at(-1) !== protocolCommit ||
+    input.firstParentChain.at(-1) !== input.transition.successorCommit ||
     commitTree(input.cwd, JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_COMMIT) !==
       JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_TREE ||
     commitTree(input.cwd, JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_COMMIT) !==
@@ -589,6 +589,20 @@ async function verifyInvocationIntegrity(input: {
     protocolCommit,
     input.transition.successorCommit
   );
+  let priorProtocolCommit = JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_COMMIT;
+  for (const currentProtocolCommit of protocolCommits) {
+    const stepChanges = gitTreeChanges(input.cwd, priorProtocolCommit, currentProtocolCommit);
+    if (
+      stepChanges.length === 0 ||
+      stepChanges.some(({ path }) => !JUDGE_DEMO_INVOCATION_INTEGRITY_PROTOCOL_PATHS.includes(path))
+    ) {
+      throw new Error("judge_demo_invocation_protocol_step_scope_invalid");
+    }
+    for (const change of stepChanges) {
+      assertSafeMaterialTreeMutation(change, "judge_demo_invocation_protocol_mode_invalid");
+    }
+    priorProtocolCommit = currentProtocolCommit;
+  }
   if (
     amendmentChanges.length !== 1 ||
     amendmentChanges[0]?.path !== JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_PATH ||
@@ -620,9 +634,6 @@ async function verifyInvocationIntegrity(input: {
     amendmentChanges[0]!,
     "judge_demo_invocation_amendment_mode_invalid"
   );
-  for (const change of protocolChanges) {
-    assertSafeMaterialTreeMutation(change, "judge_demo_invocation_protocol_mode_invalid");
-  }
   for (const change of implementationChanges) {
     assertSafeMaterialTreeMutation(change, "judge_demo_invocation_implementation_mode_invalid");
   }

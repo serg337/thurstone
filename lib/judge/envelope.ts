@@ -10,6 +10,7 @@ import {
 import { JUDGE_DEMO_LANE } from "@/lib/judge/contract";
 import {
   PROBE_FIXTURE_SYNOPSIS_VERSION,
+  PROBE_LIVE_MANIFEST_VERSION,
   PROBE_MODEL_INPUT_VERSION,
   assertNoProbeExpectationLeakage,
   createProbeFixtureSynopsis,
@@ -40,6 +41,19 @@ export const JUDGE_DEMO_RUNNER_SETTINGS_VERSION = "toolproof-judge-demo-runner-s
 export const JUDGE_DEMO_EVIDENCE_ROOT_COMMIT = "e2cf8d47375abfeeb4f32bd6f5973918acf4c091";
 export const JUDGE_DEMO_EVIDENCE_ROOT_ENVELOPE_HASH =
   "bc8ef35d5df7136dc88d19ec6850d76bd804cbf6f52f343e7754bd25d9b26687";
+const JUDGE_DEMO_HISTORICAL_PRESENTATION_COMMITS = new Set([
+  JUDGE_DEMO_EVIDENCE_ROOT_COMMIT,
+  "6211ebc63efe1e65992cfd04e36ebc438b545c9a",
+  "4443650f5513840dd1bf64b9378cc984bb5a706b",
+  "768af2539ca20c29928a897644ad22ba897c580d",
+  "ca18dd438c5499107bbf9937460cc2faaab14ade"
+]);
+const HISTORICAL_HANDLER_VERSION_BY_TOOL = Object.freeze({
+  cart_get: "cart_get@1.0.0",
+  cart_update: "cart_update@1.0.0",
+  checkout_request: "checkout_request@1.0.0",
+  order_review: "order_review@1.0.0"
+} as const);
 
 export const JUDGE_DEMO_RUNNER_SETTINGS = Object.freeze({
   version: JUDGE_DEMO_RUNNER_SETTINGS_VERSION,
@@ -139,11 +153,33 @@ async function frozenEvidenceRootEnvelope(): Promise<JudgeDemoEnvelope> {
   return deepFreeze(JSON.parse(canonicalJson(parsed)) as JudgeDemoEnvelope);
 }
 
+async function historicalLiveManifest(appCommit: string) {
+  const root = await frozenEvidenceRootEnvelope();
+  const tools = JSON.parse(
+    canonicalJson(root.liveManifest.tools)
+  ) as typeof root.liveManifest.tools;
+  const readinessManifest = {
+    catalogState: "initial",
+    toolsetVersion: "checkout-toolset-v1@1.0.0",
+    domainVersion: "checkout-domain@1.0.0",
+    appCommit,
+    tools: tools.map((tool) => ({
+      ...tool,
+      handlerVersion:
+        HISTORICAL_HANDLER_VERSION_BY_TOOL[
+          tool.name as keyof typeof HISTORICAL_HANDLER_VERSION_BY_TOOL
+        ]
+    }))
+  };
+  return probeLiveManifestSchema.parse({
+    version: PROBE_LIVE_MANIFEST_VERSION,
+    manifestHash: await canonicalSha256(readinessManifest),
+    tools
+  });
+}
+
 export async function createJudgeDemoEnvelope(appCommit: string): Promise<JudgeDemoEnvelope> {
   if (!/^[a-f0-9]{40}$/u.test(appCommit)) throw new TypeError("judge_demo_commit_invalid");
-  if (appCommit === JUDGE_DEMO_EVIDENCE_ROOT_COMMIT) {
-    return frozenEvidenceRootEnvelope();
-  }
   const identitySeed = await canonicalSha256({
     version: JUDGE_DEMO_ENVELOPE_VERSION,
     lane: JUDGE_DEMO_LANE,
@@ -157,7 +193,9 @@ export async function createJudgeDemoEnvelope(appCommit: string): Promise<JudgeD
     trialId: id("trial", await canonicalSha256({ identitySeed, kind: "trial" }))
   };
   const fixture = createCheckoutFixture();
-  const liveManifest = await createCheckoutLiveManifest(fixture, appCommit);
+  const liveManifest = JUDGE_DEMO_HISTORICAL_PRESENTATION_COMMITS.has(appCommit)
+    ? await historicalLiveManifest(appCommit)
+    : await createCheckoutLiveManifest(fixture, appCommit);
   const transport = await createProbeTransportBinding(identity);
   const [promptHash, settingsHash, toolDefinitionsHash, noCallSchemaHash, runnerHash] =
     await Promise.all([
@@ -196,6 +234,12 @@ export async function createJudgeDemoEnvelope(appCommit: string): Promise<JudgeD
     envelopeHash: await canonicalSha256(unsigned)
   });
   assertNoProbeExpectationLeakage(envelope);
+  if (
+    appCommit === JUDGE_DEMO_EVIDENCE_ROOT_COMMIT &&
+    canonicalJson(envelope) !== canonicalJson(await frozenEvidenceRootEnvelope())
+  ) {
+    throw new Error("judge_demo_root_envelope_reconstruction_mismatch");
+  }
   return deepFreeze(JSON.parse(canonicalJson(envelope)) as JudgeDemoEnvelope);
 }
 
