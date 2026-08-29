@@ -4,6 +4,22 @@ import { readFile } from "node:fs/promises";
 
 import { canonicalJson, canonicalSha256 } from "../lib/evidence/digest";
 
+function assertFirstParentAncestor(ancestor: string, descendant: string): void {
+  let cursor = descendant;
+  for (let depth = 0; depth <= 512; depth += 1) {
+    if (cursor === ancestor) return;
+    const parents = execFileSync("git", ["cat-file", "-p", cursor], {
+      encoding: "utf8",
+      maxBuffer: 1_048_576
+    })
+      .split(/\r?\n/u)
+      .flatMap((line) => (/^parent ([a-f0-9]{40})$/u.exec(line)?.[1] ? [line.slice(7)] : []));
+    if (parents.length !== 1) throw new Error("direct_observation_non_linear_ancestry");
+    cursor = parents[0]!;
+  }
+  throw new Error("direct_observation_ancestry_depth_exceeded");
+}
+
 const observationCommit = "88deff46d4e06bb109158f7ef8a68e704f9fcc08";
 const activeCommit =
   process.env.VERCEL_GIT_COMMIT_SHA?.trim() ||
@@ -20,7 +36,7 @@ try {
     "direct_observation_verified_git_objects_missing:run_gate6_presentation_verify_first"
   );
 }
-execFileSync("git", ["merge-base", "--is-ancestor", observationCommit, activeCommit]);
+assertFirstParentAncestor(observationCommit, activeCommit);
 
 const criticalPaths = [
   "components/lab/lab-client.tsx",

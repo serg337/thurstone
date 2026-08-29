@@ -25,6 +25,25 @@ function gitFile(cwd: string, commit: string, path: string): string | null {
   }
 }
 
+function assertFirstParentAncestor(cwd: string, ancestor: string, descendant: string): void {
+  let cursor = descendant;
+  for (let depth = 0; depth <= 64; depth += 1) {
+    if (cursor === ancestor) return;
+    const parents = execFileSync("git", ["cat-file", "-p", cursor], {
+      cwd,
+      encoding: "utf8",
+      maxBuffer: 1_048_576
+    })
+      .split(/\r?\n/u)
+      .flatMap((line) => (/^parent ([a-f0-9]{40})$/u.exec(line)?.[1] ? [line.slice(7)] : []));
+    if (parents.length !== 1) {
+      throw new Error("judge_demo_presentation_non_linear_ancestry");
+    }
+    cursor = parents[0]!;
+  }
+  throw new Error("judge_demo_presentation_ancestry_depth_exceeded");
+}
+
 function collateralFields(source: string | null): {
   readonly remainder: string;
   readonly values: Readonly<Partial<Record<JudgeDemoCollateralField, string>>>;
@@ -71,11 +90,7 @@ export async function verifyJudgeDemoCollateralCheckout(input: {
   if (predecessor !== input.proof.predecessorCommit || successor !== input.proof.successorCommit) {
     throw new Error("judge_demo_presentation_git_identity_invalid");
   }
-  execFileSync(
-    "git",
-    ["merge-base", "--is-ancestor", input.proof.predecessorCommit, input.proof.successorCommit],
-    { cwd: input.cwd }
-  );
+  assertFirstParentAncestor(input.cwd, input.proof.predecessorCommit, input.proof.successorCommit);
   const changedPaths = execFileSync(
     "git",
     [

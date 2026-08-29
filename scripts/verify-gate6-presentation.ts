@@ -9,6 +9,23 @@ import {
   dependencyProjectionHash
 } from "../lib/results/presentation-proof";
 
+function assertFirstParentAncestor(ancestor: string, descendant: string): void {
+  let cursor = descendant;
+  for (let depth = 0; depth <= 512; depth += 1) {
+    if (cursor === ancestor) return;
+    const parents = execFileSync("git", ["cat-file", "-p", cursor], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      maxBuffer: 1_048_576
+    })
+      .split(/\r?\n/u)
+      .flatMap((line) => (/^parent ([a-f0-9]{40})$/u.exec(line)?.[1] ? [line.slice(7)] : []));
+    if (parents.length !== 1) throw new Error("gate6_presentation_non_linear_ancestry");
+    cursor = parents[0]!;
+  }
+  throw new Error("gate6_presentation_ancestry_depth_exceeded");
+}
+
 const activeCommit =
   process.env.VERCEL_GIT_COMMIT_SHA?.trim() ?? process.env.TOOLPROOF_COMMIT_SHA?.trim() ?? "";
 const measuredV2 = "251c44be34456ecc022839da6c8b85fe1c10e1fc";
@@ -60,9 +77,7 @@ if (activeCommit === measuredV2) {
     }
     gitProofTransport = "full-local-history";
   }
-  execFileSync("git", ["merge-base", "--is-ancestor", proof.measuredV2Commit, activeCommit], {
-    cwd: process.cwd()
-  });
+  assertFirstParentAncestor(proof.measuredV2Commit, activeCommit);
   const actualChangedPaths = execFileSync(
     "git",
     [
