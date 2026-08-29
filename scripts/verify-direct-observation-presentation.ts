@@ -121,18 +121,12 @@ if (
 ) {
   throw new Error("direct_observation_dependency_hash_mismatch");
 }
-const descendantCommitCount = Number(
-  execFileSync("git", ["rev-list", "--count", `${observationCommit}..${activeCommit}`], {
-    encoding: "utf8"
-  }).trim()
-);
 process.stdout.write(
   `${JSON.stringify({
     ok: true,
     mode: "direct-observation-presentation",
     observationCommit,
     activeCommit,
-    descendantCommitCount,
     criticalFileCount: criticalFiles.length,
     criticalProjectionHash,
     dependencyProjectionHash,
