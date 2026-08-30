@@ -23,6 +23,8 @@ export const JUDGE_DEMO_GATE9_CI_PORTABILITY_INVARIANT =
   "accept-enoent-only-for-packed-legacy-unlink-and-require-cat-file-absence-for-missing-blob-case" as const;
 export const JUDGE_DEMO_IMPACT_EXECUTION_FINALIZATION_VERSION =
   "thurstone-impact-execution-finalization@1.0.0";
+export const JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_REPAIR_VERSION =
+  "thurstone-impact-execution-ci-timeout-repair@1.0.0";
 export const JUDGE_DEMO_GATE9_GIT_PACK_TRANSPORT = "brotli-wrapped-git-pack@1.0.0" as const;
 // Retained as an import-compatible name for release tooling. The proof is now a
 // discriminated transition rather than an unrestricted one-hop collateral proof.
@@ -268,6 +270,79 @@ export const JUDGE_DEMO_IMPACT_EXECUTION_ACTIVE_IMMUTABLE_PROJECTION_HASH =
   "d57635dbef0eab70c81e9b8aa56b1d02c30db32ad0067609db17575c12ba10a6" as const;
 export const JUDGE_DEMO_IMPACT_EXECUTION_DEPENDENCY_PROJECTION_HASH =
   "88debea5e360f0df9b482e058b9e67199b12eb9e158952281be890fb0fd99024" as const;
+export const JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_PREDECESSOR_COMMIT =
+  "b0dcd98fc83fd0c1452dad9e787e512084912dee" as const; // gitleaks:allow -- Git commit
+export const JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_PREDECESSOR_TREE =
+  "07ea11b5edbd905807a5c4538ccf2a91ff440dcd" as const; // gitleaks:allow -- Git tree
+export const JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_PREDECESSOR_GATE6_PROOF_HASH =
+  "2b7e783a9aecb2267277a4925653943bd26b58c8f6d25124f194564fef638585" as const;
+export const JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_PREDECESSOR_BINDING_HASH =
+  "6e64eb6c1f6e3e185cc04c4feffc85b535081551a4ed72a88ab69371db88a29e" as const;
+export const JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_PREDECESSOR_TRANSITION_PROOF_HASH =
+  "7cce4dc73bee888505fe12d34eecc6d1f7450e67600e9b36e7ed9fc85c7bdb21" as const;
+export const JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_PREDECESSOR_ENVELOPE_HASH =
+  "e891ec6024f350a6e1698a1b81c2fc6e5f5ef306c05c4ff509d587bf9f32ed9d" as const;
+export const JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_FAILURE_CLASS =
+  "github-actions-git-heavy-integration-timeout" as const;
+export const JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_RUN_ID = 33_327_304_737 as const;
+export const JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_FAILED_ATTEMPT_COUNT = 2 as const;
+export const JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_SUCCESSOR_MS = 45_000 as const;
+export const JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_PATH =
+  "tests/integration/judge-presentation.test.ts" as const;
+export const JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_REPAIR_PATHS = Object.freeze(
+  [
+    "lib/judge/collateral-checkout-verifier.server.ts",
+    "lib/judge/collateral-proof.ts",
+    "scripts/verify-direct-observation-presentation.ts",
+    "tests/integration/judge-presentation.test.ts",
+    "tests/unit/direct-observation-presentation.test.ts"
+  ].sort(judgeDemoInvocationIntegrityEvidencePathCompare)
+);
+export const JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_REPAIR_PATHS_HASH =
+  "0bf23f1b96391e55b34f664e61eab72b7ef253aa010704e684adf6921cd7d3a3" as const;
+export const JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_FAILURE_EVIDENCE = Object.freeze([
+  Object.freeze({
+    runAttempt: 1,
+    jobId: 99_299_619_108,
+    observedMilliseconds: Object.freeze([27_656, 20_418, 20_858])
+  }),
+  Object.freeze({
+    runAttempt: 2,
+    jobId: 99_300_682_225,
+    observedMilliseconds: Object.freeze([27_496, 19_598, 21_314])
+  })
+]);
+export const JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_FAILURE_EVIDENCE_HASH =
+  "d0b44a78404bd357f51f8729d39a9581a2def422c5e0298e381b22c62ae9a239" as const;
+export const JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_REPLACEMENTS = Object.freeze([
+  Object.freeze({
+    test: "verifies the exact Q-to-P-to-U Impact/Execution checkout boundary",
+    predecessorTimeoutMs: 15_000,
+    successorTimeoutMs: JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_SUCCESSOR_MS
+  }),
+  Object.freeze({
+    test: "rejects collateral mode, newline, relocation, and whitespace drift",
+    predecessorTimeoutMs: 19_000,
+    successorTimeoutMs: JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_SUCCESSOR_MS
+  }),
+  Object.freeze({
+    test: "rejects tree substitution, chain discontinuity, writes, and non-link release edits",
+    predecessorTimeoutMs: 20_000,
+    successorTimeoutMs: JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_SUCCESSOR_MS
+  })
+]);
+export const JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_REPLACEMENTS_HASH =
+  "c731698dd8afbdcc1d2797e2778f555a430fd9071438cfa0a59b912836693b41" as const;
+export const JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_PREDECESSOR_TEST_BLOB_OID =
+  "84081dac9556758223fe4848f120d1e42510b337" as const; // gitleaks:allow -- Git blob
+export const JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_PREDECESSOR_TEST_SHA256 =
+  "f28ba073ef588d54e6bafbb02a645df11928fa05403481c16d35fd88683b2add" as const;
+export const JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_PREDECESSOR_TEST_BYTES = 178_925 as const;
+export const JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_SUCCESSOR_TEST_BLOB_OID =
+  "6541e7f5bb005d8f21577b614bb23620d964f4f3" as const; // gitleaks:allow -- Git blob
+export const JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_SUCCESSOR_TEST_SHA256 =
+  "86fe8a72d2751c8ac83e0c37a7370b489c3a2091f106884475f1a1691d8a2cf0" as const;
+export const JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_SUCCESSOR_TEST_BYTES = 178_925 as const;
 export const JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_PATH =
   "components/lab/lab-client.tsx" as const;
 export const JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_BLOB_OID =
@@ -1935,6 +2010,9 @@ const gate9CiFinalizationPath = z.enum(
 const gate9CiPortabilityRepairPath = z.enum(
   JUDGE_DEMO_GATE9_CI_PORTABILITY_REPAIR_PATHS as unknown as [string, ...string[]]
 );
+const impactExecutionCiTimeoutRepairPath = z.enum(
+  JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_REPAIR_PATHS as unknown as [string, ...string[]]
+);
 const collateralPath = z.enum(JUDGE_DEMO_COLLATERAL_PATHS);
 const collateralField = z.enum(
   Object.keys(JUDGE_DEMO_COLLATERAL_FIELD_PREFIXES) as [
@@ -1996,6 +2074,9 @@ const gate9CiFinalizationTreeChangeSchema = z
   .strict();
 const gate9CiPortabilityRepairTreeChangeSchema = z
   .object({ path: gate9CiPortabilityRepairPath, ...transitionTreeChangeShape })
+  .strict();
+const impactExecutionCiTimeoutRepairTreeChangeSchema = z
+  .object({ path: impactExecutionCiTimeoutRepairPath, ...transitionTreeChangeShape })
   .strict();
 const invocationIntegrityAmendmentTreeChangeSchema = z
   .object({
@@ -2514,7 +2595,26 @@ const gate9TerminalFinalizationSchema = z
             directObservationCallsPerformed: z.literal(0),
             storeWritesPerformed: z.literal(0)
           })
+          .strict(),
+        ciTimeoutRepair: z
+          .object({
+            version: z.literal(JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_REPAIR_VERSION),
+            successorCommit: commit,
+            successorTree: gitOid,
+            treeChanges: z
+              .array(impactExecutionCiTimeoutRepairTreeChangeSchema)
+              .length(JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_REPAIR_PATHS.length),
+            gitTreeProjectionHash: sha256,
+            assertionBodiesChanged: z.literal(false),
+            providerCallsPerformed: z.literal(0),
+            modelCallsPerformed: z.literal(0),
+            scoredCallsPerformed: z.literal(0),
+            calibrationCallsPerformed: z.literal(0),
+            directObservationCallsPerformed: z.literal(0),
+            storeWritesPerformed: z.literal(0)
+          })
           .strict()
+          .optional()
       })
       .strict()
       .optional()
@@ -2852,6 +2952,9 @@ export async function verifyJudgeDemoPresentationTransition(
     const ciPortabilityRepair = terminal?.ciPortabilityRepair ?? null;
     const ciPortabilityRepairPaths = ciPortabilityRepair?.treeChanges.map(({ path }) => path) ?? [];
     const impactExecutionFinalization = terminal?.impactExecutionFinalization ?? null;
+    const impactExecutionCiTimeoutRepair = impactExecutionFinalization?.ciTimeoutRepair ?? null;
+    const impactExecutionCiTimeoutRepairPaths =
+      impactExecutionCiTimeoutRepair?.treeChanges.map(({ path }) => path) ?? [];
     const expectedFirstParentChain =
       terminal === null
         ? [proof.predecessorCommit, proof.protocolExtension.commit, proof.successorCommit]
@@ -2867,9 +2970,45 @@ export async function verifyJudgeDemoPresentationTransition(
               ? []
               : [
                   impactExecutionFinalization.protocol.successorCommit,
-                  impactExecutionFinalization.presentation.successorCommit
+                  impactExecutionFinalization.presentation.successorCommit,
+                  ...(impactExecutionCiTimeoutRepair === null
+                    ? []
+                    : [impactExecutionCiTimeoutRepair.successorCommit])
                 ])
           ];
+    const impactExecutionCiTimeoutRepairValid =
+      impactExecutionCiTimeoutRepair === null ||
+      (impactExecutionFinalization !== null &&
+        impactExecutionFinalization.presentation.successorCommit ===
+          JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_PREDECESSOR_COMMIT &&
+        impactExecutionFinalization.presentation.successorTree ===
+          JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_PREDECESSOR_TREE &&
+        impactExecutionCiTimeoutRepair.successorCommit === proof.successorCommit &&
+        impactExecutionCiTimeoutRepair.successorCommit !==
+          JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_PREDECESSOR_COMMIT &&
+        canonicalJson(impactExecutionCiTimeoutRepairPaths) ===
+          canonicalJson(JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_REPAIR_PATHS) &&
+        canonicalJson(impactExecutionCiTimeoutRepair.treeChanges) ===
+          canonicalJson(
+            [...impactExecutionCiTimeoutRepair.treeChanges].sort((left, right) =>
+              judgeDemoInvocationIntegrityEvidencePathCompare(left.path, right.path)
+            )
+          ) &&
+        impactExecutionCiTimeoutRepair.treeChanges.every(
+          (change) =>
+            change.status === "M" &&
+            change.predecessorMode === "100644" &&
+            change.successorMode === "100644" &&
+            change.predecessorBlobOid !== null &&
+            change.successorBlobOid !== null &&
+            change.predecessorBlobOid !== change.successorBlobOid
+        ) &&
+        (await canonicalSha256(impactExecutionCiTimeoutRepair.treeChanges)) ===
+          impactExecutionCiTimeoutRepair.gitTreeProjectionHash &&
+        (await canonicalSha256(JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_FAILURE_EVIDENCE)) ===
+          JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_FAILURE_EVIDENCE_HASH &&
+        (await canonicalSha256(JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_REPLACEMENTS)) ===
+          JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_REPLACEMENTS_HASH);
     const impactExecutionFinalizationValid =
       impactExecutionFinalization === null ||
       (terminal !== null &&
@@ -2884,7 +3023,10 @@ export async function verifyJudgeDemoPresentationTransition(
           impactExecutionFinalization.presentation.predecessorTree &&
         impactExecutionFinalization.protocol.successorCommit !==
           impactExecutionFinalization.protocol.predecessorCommit &&
-        impactExecutionFinalization.presentation.successorCommit === proof.successorCommit &&
+        impactExecutionFinalization.presentation.successorCommit ===
+          (impactExecutionCiTimeoutRepair === null
+            ? proof.successorCommit
+            : JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_PREDECESSOR_COMMIT) &&
         impactExecutionFinalization.presentation.successorCommit !==
           impactExecutionFinalization.presentation.predecessorCommit &&
         impactExecutionFinalization.protocol.changedPathCount ===
@@ -2894,7 +3036,8 @@ export async function verifyJudgeDemoPresentationTransition(
         impactExecutionFinalization.protocol.changedPathsHash ===
           JUDGE_DEMO_IMPACT_EXECUTION_PROTOCOL_PATHS_HASH &&
         impactExecutionFinalization.presentation.changedPathsHash ===
-          JUDGE_DEMO_IMPACT_EXECUTION_PRESENTATION_PATHS_HASH);
+          JUDGE_DEMO_IMPACT_EXECUTION_PRESENTATION_PATHS_HASH &&
+        impactExecutionCiTimeoutRepairValid);
     const ciPortabilityRepairValid =
       ciPortabilityRepair === null ||
       (terminal !== null &&

@@ -9,6 +9,8 @@ import {
   JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_BLOB_OID,
   JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_PATH,
   JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_SHA256,
+  JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_PREDECESSOR_COMMIT,
+  JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_PREDECESSOR_TREE,
   JUDGE_DEMO_IMPACT_EXECUTION_LAB_CLIENT_U_BLOB_OID,
   JUDGE_DEMO_IMPACT_EXECUTION_PREDECESSOR_COMMIT,
   type JudgeDemoInvocationIntegrityEvidenceTransition,
@@ -89,7 +91,13 @@ export function verifyDirectObservationCriticalBlob(
       JUDGE_DEMO_IMPACT_EXECUTION_PREDECESSOR_COMMIT &&
     impactExecution.protocol.successorCommit === impactExecution.presentation.predecessorCommit &&
     impactExecution.protocol.successorTree === impactExecution.presentation.predecessorTree &&
-    impactExecution.presentation.successorCommit === input.activeCommit &&
+    (impactExecution.ciTimeoutRepair?.successorCommit ??
+      impactExecution.presentation.successorCommit) === input.activeCommit &&
+    (impactExecution.ciTimeoutRepair === undefined ||
+      (impactExecution.presentation.successorCommit ===
+        JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_PREDECESSOR_COMMIT &&
+        impactExecution.presentation.successorTree ===
+          JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_PREDECESSOR_TREE)) &&
     impactExecution.presentation.successorCommit !==
       impactExecution.presentation.predecessorCommit &&
     impactExecution.presentation.frozenLabClientPath ===
@@ -179,7 +187,8 @@ async function verifiedPresentationTransitions(activeCommit: string): Promise<{
     (await canonicalSha256(transition.implementation.treeChanges)) !==
       transition.implementation.gitTreeProjectionHash ||
     (impactExecutionFinalization !== null &&
-      (impactExecutionFinalization.presentation.successorCommit !== activeCommit ||
+      ((impactExecutionFinalization.ciTimeoutRepair?.successorCommit ??
+        impactExecutionFinalization.presentation.successorCommit) !== activeCommit ||
         impactExecutionFinalization.protocol.predecessorCommit !==
           JUDGE_DEMO_IMPACT_EXECUTION_PREDECESSOR_COMMIT))
   ) {

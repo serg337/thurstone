@@ -3083,7 +3083,7 @@ describe("judge provider-free presentation lineage", () => {
         }
       })
     ).rejects.toThrow(/impact_execution_projection_invalid/u);
-  }, 15_000);
+  }, 45_000);
 
   it("checks the exact P10-to-Q repair through the real checkout verifier", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "toolproof-gate9-ci-portability-"));
@@ -3811,7 +3811,7 @@ describe("judge provider-free presentation lineage", () => {
           : /judge_demo_presentation_non_link_change/u
       );
     }
-  }, 19_000);
+  }, 45_000);
 
   it("verifies recovery then a provider-free presentation rebrand anchored to build768", async () => {
     const value = await presentationRebrandFixture();
@@ -4176,5 +4176,5 @@ describe("judge provider-free presentation lineage", () => {
     await expect(
       verifyJudgeDemoPresentationCheckout({ cwd: nonLink.cwd, binding: nonLinkBinding })
     ).rejects.toThrow(/judge_demo_presentation_non_link_change/u);
-  }, 20_000);
+  }, 45_000);
 });
