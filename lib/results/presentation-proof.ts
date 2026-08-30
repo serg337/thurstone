@@ -69,6 +69,7 @@ const allowedExact = new Set([
   "app/studio/page.tsx",
   "components/lab/judge-demo-panel.tsx",
   "components/lab/lab-client.tsx",
+  "components/lab/probe-launch-panel.tsx",
   "components/results/semantic-paired-results.tsx",
   "components/site-header.tsx",
   "docs/OFFICIAL_SOURCE_CHECK.md",
@@ -109,7 +110,9 @@ const allowedExact = new Set([
   "third_party/licenses/npm/sharp-wasm32-0.35.4-NOTICE.md",
   "third_party/npm-transitive-inventory.json",
   "tests/browser/gate7-browser.spec.ts",
+  "tests/browser/accessibility.spec.ts",
   "tests/browser/lab-sandbox.spec.ts",
+  "tests/browser/probe-calibration.spec.ts",
   "tests/browser/results.spec.ts",
   "tests/browser/shell.spec.ts",
   "tests/browser/studio.spec.ts",
@@ -123,6 +126,7 @@ const allowedExact = new Set([
   "tests/unit/judge-store-reader.test.ts",
   "tests/unit/repair-provider.test.ts",
   "tests/unit/results-evidence-package.test.ts",
+  "tests/unit/results-meta-tools.test.ts",
   "tests/unit/results-presentation-proof.test.ts"
 ]);
 const allowedPrefixes = [

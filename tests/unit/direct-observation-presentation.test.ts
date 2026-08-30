@@ -1,4 +1,12 @@
-import type { JudgeDemoInvocationIntegrityTransition } from "@/lib/judge/collateral-proof";
+import {
+  JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_BLOB_OID,
+  JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_PATH,
+  JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_SHA256,
+  JUDGE_DEMO_IMPACT_EXECUTION_LAB_CLIENT_U_BLOB_OID,
+  JUDGE_DEMO_IMPACT_EXECUTION_PREDECESSOR_COMMIT,
+  type JudgeDemoInvocationIntegrityEvidenceTransition,
+  type JudgeDemoInvocationIntegrityTransition
+} from "@/lib/judge/collateral-proof";
 import { verifyDirectObservationCriticalBlob } from "@/scripts/verify-direct-observation-presentation";
 import { describe, expect, it } from "vitest";
 
@@ -24,6 +32,28 @@ function transition(
       ]
     }
   } as unknown as JudgeDemoInvocationIntegrityTransition;
+}
+
+function impactExecutionFinalization() {
+  return {
+    protocol: {
+      predecessorCommit: JUDGE_DEMO_IMPACT_EXECUTION_PREDECESSOR_COMMIT,
+      successorCommit: "c".repeat(40),
+      successorTree: "d".repeat(40)
+    },
+    presentation: {
+      predecessorCommit: "c".repeat(40),
+      predecessorTree: "d".repeat(40),
+      successorCommit: "e".repeat(40),
+      frozenLabClientPath: JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_PATH,
+      frozenLabClientBlobOid: JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_BLOB_OID,
+      frozenLabClientSha256: JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_SHA256
+    }
+  } as unknown as NonNullable<
+    NonNullable<
+      JudgeDemoInvocationIntegrityEvidenceTransition["terminalFinalization"]
+    >["impactExecutionFinalization"]
+  >;
 }
 
 describe("Direct observation presentation critical blobs", () => {
@@ -92,5 +122,74 @@ describe("Direct observation presentation critical blobs", () => {
         invocationIntegrityTransition: transition("lib/domain/checkout.ts")
       })
     ).toThrow("direct_observation_critical_git_blob_mismatch:lib/domain/checkout.ts");
+  });
+
+  it("accepts only the exact Lab-client delta bound by Impact/Execution finalization", () => {
+    expect(
+      verifyDirectObservationCriticalBlob({
+        path: JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_PATH,
+        activeCommit: "e".repeat(40),
+        checkedOutBlobOid: JUDGE_DEMO_IMPACT_EXECUTION_LAB_CLIENT_U_BLOB_OID,
+        observationBlobOid: JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_BLOB_OID,
+        activeBlobOid: JUDGE_DEMO_IMPACT_EXECUTION_LAB_CLIENT_U_BLOB_OID,
+        invocationIntegrityTransition: null,
+        impactExecutionFinalization: impactExecutionFinalization()
+      })
+    ).toBe("verified-impact-execution-transition");
+
+    const wrongFrozenPath = structuredClone(impactExecutionFinalization());
+    wrongFrozenPath.presentation.frozenLabClientPath = "components/lab/other.tsx" as never;
+    const wrongPredecessor = structuredClone(impactExecutionFinalization());
+    wrongPredecessor.protocol.predecessorCommit = "0".repeat(40) as never;
+    for (const candidate of [
+      {
+        path: JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_PATH,
+        activeCommit: "e".repeat(40),
+        activeBlobOid: "f".repeat(40),
+        impactExecutionFinalization: impactExecutionFinalization()
+      },
+      {
+        path: JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_PATH,
+        activeCommit: "e".repeat(40),
+        activeBlobOid: JUDGE_DEMO_IMPACT_EXECUTION_LAB_CLIENT_U_BLOB_OID,
+        impactExecutionFinalization: null
+      },
+      {
+        path: JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_PATH,
+        activeCommit: "0".repeat(40),
+        activeBlobOid: JUDGE_DEMO_IMPACT_EXECUTION_LAB_CLIENT_U_BLOB_OID,
+        impactExecutionFinalization: impactExecutionFinalization()
+      },
+      {
+        path: JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_PATH,
+        activeCommit: "e".repeat(40),
+        activeBlobOid: JUDGE_DEMO_IMPACT_EXECUTION_LAB_CLIENT_U_BLOB_OID,
+        impactExecutionFinalization: wrongFrozenPath
+      },
+      {
+        path: JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_PATH,
+        activeCommit: "e".repeat(40),
+        activeBlobOid: JUDGE_DEMO_IMPACT_EXECUTION_LAB_CLIENT_U_BLOB_OID,
+        impactExecutionFinalization: wrongPredecessor
+      },
+      {
+        path: "lib/domain/checkout-session.ts",
+        activeCommit: "e".repeat(40),
+        activeBlobOid: JUDGE_DEMO_IMPACT_EXECUTION_LAB_CLIENT_U_BLOB_OID,
+        impactExecutionFinalization: impactExecutionFinalization()
+      }
+    ]) {
+      expect(() =>
+        verifyDirectObservationCriticalBlob({
+          path: candidate.path,
+          activeCommit: candidate.activeCommit,
+          checkedOutBlobOid: candidate.activeBlobOid,
+          observationBlobOid: JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_BLOB_OID,
+          activeBlobOid: candidate.activeBlobOid,
+          invocationIntegrityTransition: null,
+          impactExecutionFinalization: candidate.impactExecutionFinalization
+        })
+      ).toThrow(`direct_observation_critical_git_blob_mismatch:${candidate.path}`);
+    }
   });
 });

@@ -5,7 +5,16 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { canonicalJson, canonicalSha256 } from "../lib/evidence/digest";
-import { type JudgeDemoInvocationIntegrityTransition } from "../lib/judge/collateral-proof";
+import {
+  JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_BLOB_OID,
+  JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_PATH,
+  JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_SHA256,
+  JUDGE_DEMO_IMPACT_EXECUTION_LAB_CLIENT_U_BLOB_OID,
+  JUDGE_DEMO_IMPACT_EXECUTION_PREDECESSOR_COMMIT,
+  type JudgeDemoInvocationIntegrityEvidenceTransition,
+  type JudgeDemoInvocationIntegrityTransition
+} from "../lib/judge/collateral-proof";
+import { verifyJudgeDemoPresentationCheckout } from "../lib/judge/collateral-checkout-verifier.server";
 import { createJudgeDemoEnvelope } from "../lib/judge/envelope";
 import {
   JUDGE_DEMO_INVOCATION_INTEGRITY_BINDING_VERSION,
@@ -23,6 +32,12 @@ const invocationIntegrityCriticalExceptions = new Set([
   "lib/domain/checkout-schemas.ts",
   "lib/domain/checkout.ts"
 ]);
+
+type ImpactExecutionFinalization = NonNullable<
+  NonNullable<
+    JudgeDemoInvocationIntegrityEvidenceTransition["terminalFinalization"]
+  >["impactExecutionFinalization"]
+>;
 
 function assertFirstParentAncestor(ancestor: string, descendant: string): void {
   let cursor = descendant;
@@ -43,9 +58,11 @@ function assertFirstParentAncestor(ancestor: string, descendant: string): void {
 export interface DirectObservationCriticalBlobInput {
   readonly path: string;
   readonly checkedOutBlobOid: string;
+  readonly activeCommit?: string;
   readonly observationBlobOid: string;
   readonly activeBlobOid: string;
   readonly invocationIntegrityTransition: JudgeDemoInvocationIntegrityTransition | null;
+  readonly impactExecutionFinalization?: ImpactExecutionFinalization | null;
 }
 
 /**
@@ -54,11 +71,36 @@ export interface DirectObservationCriticalBlobInput {
  */
 export function verifyDirectObservationCriticalBlob(
   input: DirectObservationCriticalBlobInput
-): "unchanged-observation-blob" | "verified-invocation-integrity-transition" {
+):
+  | "unchanged-observation-blob"
+  | "verified-impact-execution-transition"
+  | "verified-invocation-integrity-transition" {
   if (input.checkedOutBlobOid !== input.activeBlobOid) {
     throw new Error(`direct_observation_critical_git_blob_mismatch:${input.path}`);
   }
   if (input.activeBlobOid === input.observationBlobOid) return "unchanged-observation-blob";
+  const impactExecution = input.impactExecutionFinalization;
+  if (
+    input.path === JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_PATH &&
+    input.observationBlobOid === JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_BLOB_OID &&
+    input.activeBlobOid === JUDGE_DEMO_IMPACT_EXECUTION_LAB_CLIENT_U_BLOB_OID &&
+    input.activeCommit !== undefined &&
+    impactExecution?.protocol.predecessorCommit ===
+      JUDGE_DEMO_IMPACT_EXECUTION_PREDECESSOR_COMMIT &&
+    impactExecution.protocol.successorCommit === impactExecution.presentation.predecessorCommit &&
+    impactExecution.protocol.successorTree === impactExecution.presentation.predecessorTree &&
+    impactExecution.presentation.successorCommit === input.activeCommit &&
+    impactExecution.presentation.successorCommit !==
+      impactExecution.presentation.predecessorCommit &&
+    impactExecution.presentation.frozenLabClientPath ===
+      JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_PATH &&
+    impactExecution.presentation.frozenLabClientBlobOid ===
+      JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_BLOB_OID &&
+    impactExecution.presentation.frozenLabClientSha256 ===
+      JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_SHA256
+  ) {
+    return "verified-impact-execution-transition";
+  }
   const transition = input.invocationIntegrityTransition;
   const treeChange = transition?.implementation.treeChanges.find(({ path }) => path === input.path);
   if (
@@ -76,15 +118,26 @@ export function verifyDirectObservationCriticalBlob(
   return "verified-invocation-integrity-transition";
 }
 
-async function verifiedInvocationIntegrityTransition(
-  activeCommit: string
-): Promise<JudgeDemoInvocationIntegrityTransition | null> {
+async function verifiedPresentationTransitions(activeCommit: string): Promise<{
+  readonly invocationIntegrityTransition: JudgeDemoInvocationIntegrityTransition | null;
+  readonly impactExecutionFinalization: ImpactExecutionFinalization | null;
+}> {
   const encoded = process.env[JUDGE_DEMO_PRESENTATION_BINDING_ENV]?.trim() ?? "";
-  if (!encoded) return null;
+  if (!encoded) {
+    return Object.freeze({
+      invocationIntegrityTransition: null,
+      impactExecutionFinalization: null
+    });
+  }
   const parsed = judgeDemoPresentationBindingSchema.parse(
     await decodeJudgeDemoPresentationBinding(encoded)
   );
-  if (parsed.version !== JUDGE_DEMO_INVOCATION_INTEGRITY_BINDING_VERSION) return null;
+  if (parsed.version !== JUDGE_DEMO_INVOCATION_INTEGRITY_BINDING_VERSION) {
+    return Object.freeze({
+      invocationIntegrityTransition: null,
+      impactExecutionFinalization: null
+    });
+  }
   const [rootEnvelope, activeEnvelope] = await Promise.all([
     createJudgeDemoEnvelope(parsed.rootEvidenceCommit),
     createJudgeDemoEnvelope(parsed.activeCommit)
@@ -98,10 +151,17 @@ async function verifiedInvocationIntegrityTransition(
     rootStoredProjectionDigest: parsed.rootStoredProjectionDigest,
     rootCapturedAt: parsed.rootCapturedAt
   });
+  await verifyJudgeDemoPresentationCheckout({ binding, cwd: process.cwd() });
   const transition = binding.transitions.find(
     (candidate): candidate is JudgeDemoInvocationIntegrityTransition =>
       candidate.kind === "invocation-integrity"
   );
+  const evidenceTransition = binding.transitions.find(
+    (candidate): candidate is JudgeDemoInvocationIntegrityEvidenceTransition =>
+      candidate.kind === "invocation-integrity-evidence"
+  );
+  const impactExecutionFinalization =
+    evidenceTransition?.terminalFinalization?.impactExecutionFinalization ?? null;
   if (
     process.env[JUDGE_DEMO_PRESENTATION_MODE_ENV]?.trim() !== "successor" ||
     binding.activeCommit !== activeCommit ||
@@ -117,11 +177,15 @@ async function verifiedInvocationIntegrityTransition(
     (await canonicalSha256(transition.semanticEvidence.artifacts)) !==
       transition.semanticEvidence.artifactsProjectionHash ||
     (await canonicalSha256(transition.implementation.treeChanges)) !==
-      transition.implementation.gitTreeProjectionHash
+      transition.implementation.gitTreeProjectionHash ||
+    (impactExecutionFinalization !== null &&
+      (impactExecutionFinalization.presentation.successorCommit !== activeCommit ||
+        impactExecutionFinalization.protocol.predecessorCommit !==
+          JUDGE_DEMO_IMPACT_EXECUTION_PREDECESSOR_COMMIT))
   ) {
     throw new Error("direct_observation_invocation_integrity_binding_invalid");
   }
-  return transition;
+  return Object.freeze({ invocationIntegrityTransition: transition, impactExecutionFinalization });
 }
 
 function gitText(arguments_: readonly string[]): string {
@@ -186,7 +250,8 @@ async function main(): Promise<void> {
     );
   }
   assertFirstParentAncestor(observationCommit, activeCommit);
-  const invocationIntegrityTransition = await verifiedInvocationIntegrityTransition(activeCommit);
+  const { invocationIntegrityTransition, impactExecutionFinalization } =
+    await verifiedPresentationTransitions(activeCommit);
 
   const evidenceBytes = await readFile("evidence/direct-site-tools-observations.json", "utf8");
   const evidence = JSON.parse(evidenceBytes) as {
@@ -225,6 +290,7 @@ async function main(): Promise<void> {
   );
 
   const authorizedInvocationIntegrityChanges: string[] = [];
+  const authorizedImpactExecutionChanges: string[] = [];
   const criticalProjections = await Promise.all(
     criticalPaths.map(async (path) => {
       const checkedOutBytes = await readFile(path);
@@ -234,12 +300,16 @@ async function main(): Promise<void> {
       const disposition = verifyDirectObservationCriticalBlob({
         path,
         checkedOutBlobOid,
+        activeCommit,
         observationBlobOid,
         activeBlobOid,
-        invocationIntegrityTransition
+        invocationIntegrityTransition,
+        impactExecutionFinalization
       });
       if (disposition === "verified-invocation-integrity-transition") {
         authorizedInvocationIntegrityChanges.push(path);
+      } else if (disposition === "verified-impact-execution-transition") {
+        authorizedImpactExecutionChanges.push(path);
       }
       const observationSha256 =
         observationBlobOid === activeBlobOid
@@ -264,6 +334,18 @@ async function main(): Promise<void> {
   const activeCriticalFiles = criticalProjections.map(({ active }) => active);
   const criticalProjectionHash = await canonicalSha256(observationCriticalFiles);
   const activeCriticalProjectionHash = await canonicalSha256(activeCriticalFiles);
+  if (
+    canonicalJson(authorizedInvocationIntegrityChanges.sort()) !==
+      canonicalJson([...invocationIntegrityCriticalExceptions].sort()) ||
+    canonicalJson(authorizedImpactExecutionChanges.sort()) !==
+      canonicalJson(
+        impactExecutionFinalization === null
+          ? []
+          : [JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_PATH]
+      )
+  ) {
+    throw new Error("direct_observation_authorized_changes_invalid");
+  }
   if (
     canonicalJson(declaredCriticalFiles) !== canonicalJson(observationCriticalFiles) ||
     implementationBinding.criticalProjectionHash !== criticalProjectionHash
@@ -309,7 +391,9 @@ async function main(): Promise<void> {
       observationDependencyProjectionHash,
       activeDependencyProjectionHash,
       invocationIntegrityBindingUsed: invocationIntegrityTransition !== null,
+      impactExecutionBindingUsed: impactExecutionFinalization !== null,
       authorizedInvocationIntegrityChanges: authorizedInvocationIntegrityChanges.sort(),
+      authorizedImpactExecutionChanges: authorizedImpactExecutionChanges.sort(),
       semanticArtifactsProjectionHash:
         invocationIntegrityTransition?.semanticEvidence.artifactsProjectionHash ?? null,
       evidenceRawSha256: createHash("sha256").update(evidenceBytes).digest("hex"),

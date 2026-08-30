@@ -2,7 +2,10 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
-import { lstat, readFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { brotliDecompressSync } from "node:zlib";
 
 import { canonicalJson, canonicalSha256 } from "@/lib/evidence/digest";
 import {
@@ -15,6 +18,92 @@ import {
   JUDGE_DEMO_GATE9_CI_PORTABILITY_REPAIR_PATHS,
   JUDGE_DEMO_GATE9_COLLATERAL_PREPARATION_PATHS,
   JUDGE_DEMO_GATE9_PROTOCOL_FINALIZATION_PATHS,
+  JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_BLOB_OID,
+  JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_PATH,
+  JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_SHA256,
+  JUDGE_DEMO_IMPACT_EXECUTION_FINAL_U_FILE_IDENTITIES,
+  JUDGE_DEMO_IMPACT_EXECUTION_INTEGRITY_BANNER_Q,
+  JUDGE_DEMO_IMPACT_EXECUTION_INTEGRITY_BANNER_U,
+  JUDGE_DEMO_IMPACT_EXECUTION_INTEGRITY_STATUS_Q,
+  JUDGE_DEMO_IMPACT_EXECUTION_INTEGRITY_STATUS_U,
+  JUDGE_DEMO_IMPACT_EXECUTION_INTEGRITY_CLIENT_IMPORT,
+  JUDGE_DEMO_IMPACT_EXECUTION_INTEGRITY_RETURN_Q,
+  JUDGE_DEMO_IMPACT_EXECUTION_INTEGRITY_RETURN_U,
+  JUDGE_DEMO_IMPACT_EXECUTION_INTEGRITY_RETURN_U_SHA256,
+  JUDGE_DEMO_IMPACT_EXECUTION_INVOCATION_HEADING_Q,
+  JUDGE_DEMO_IMPACT_EXECUTION_INVOCATION_HEADING_U,
+  JUDGE_DEMO_IMPACT_EXECUTION_JUDGE_MOUNT_ANCHOR,
+  JUDGE_DEMO_IMPACT_EXECUTION_JUDGE_MOUNT_SNIPPET,
+  JUDGE_DEMO_IMPACT_EXECUTION_JUDGE_MOUNT_SNIPPET_SHA256,
+  JUDGE_DEMO_IMPACT_EXECUTION_JUDGE_DIAGNOSTICS_MARKER,
+  JUDGE_DEMO_IMPACT_EXECUTION_JUDGE_DIAGNOSTICS_SUMMARY,
+  JUDGE_DEMO_IMPACT_EXECUTION_JUDGE_FULL_U_LENGTH,
+  JUDGE_DEMO_IMPACT_EXECUTION_JUDGE_FULL_U_SHA256,
+  JUDGE_DEMO_IMPACT_EXECUTION_JUDGE_PORTAL_IMPORT,
+  JUDGE_DEMO_IMPACT_EXECUTION_JUDGE_REACT_IMPORT_Q,
+  JUDGE_DEMO_IMPACT_EXECUTION_JUDGE_REACT_IMPORT_U,
+  JUDGE_DEMO_IMPACT_EXECUTION_JUDGE_REACT_IMPORT_U_SHA256,
+  JUDGE_DEMO_IMPACT_EXECUTION_JUDGE_RETURN_END_Q,
+  JUDGE_DEMO_IMPACT_EXECUTION_JUDGE_RETURN_END_U,
+  JUDGE_DEMO_IMPACT_EXECUTION_JUDGE_RETURN_START_Q,
+  JUDGE_DEMO_IMPACT_EXECUTION_JUDGE_RETURN_START_U,
+  JUDGE_DEMO_IMPACT_EXECUTION_LAB_CLIENT_IMPORT,
+  JUDGE_DEMO_IMPACT_EXECUTION_LAB_CLIENT_U_BLOB_OID,
+  JUDGE_DEMO_IMPACT_EXECUTION_LAB_CLIENT_U_SHA256,
+  JUDGE_DEMO_IMPACT_EXECUTION_LAB_RECEIPT_SELECTOR_COUNT,
+  JUDGE_DEMO_IMPACT_EXECUTION_LAB_RECEIPT_SELECTOR_U,
+  JUDGE_DEMO_IMPACT_EXECUTION_LAB_RETURN_Q,
+  JUDGE_DEMO_IMPACT_EXECUTION_LAB_RETURN_U,
+  JUDGE_DEMO_IMPACT_EXECUTION_LAB_RETURN_U_SHA256,
+  JUDGE_DEMO_IMPACT_EXECUTION_LAZY_HELPER_TEMPLATE,
+  JUDGE_DEMO_IMPACT_EXECUTION_LAZY_HELPER_TEMPLATE_SHA256,
+  JUDGE_DEMO_IMPACT_EXECUTION_Q_MIXED_FILE_IDENTITIES,
+  JUDGE_DEMO_IMPACT_EXECUTION_Q_ROUTE_IDENTITIES,
+  JUDGE_DEMO_IMPACT_EXECUTION_Q_TEST_FILE_IDENTITIES,
+  JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_BRIDGE_TEMPLATE,
+  JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_BRIDGE_TEMPLATE_SHA256,
+  JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_BRIDGE_IMPORT_Q,
+  JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_BRIDGE_IMPORT_U,
+  JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_BRIDGE_RENDER,
+  JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_BRIDGE_USAGE,
+  JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_COMPACT_END,
+  JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_COMPACT_START,
+  JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_COMPACT_BLOCK_TEMPLATE,
+  JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_COMPACT_BLOCK_TEMPLATE_SHA256,
+  JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_COMPONENT_IMPORT_Q,
+  JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_COMPONENT_IMPORT_U,
+  JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_FUNCTION_Q,
+  JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_FUNCTION_U,
+  JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_FULL_QUERY,
+  JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_FULL_BRANCH,
+  JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_INVOCATION_ARTIFACT_IMPORT,
+  JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_INVOCATION_COMPONENT_IMPORT,
+  JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_SEMANTIC_ARTIFACT_IMPORT,
+  JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_SUMMARY_CALL,
+  JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_VIEW_SWITCH,
+  JUDGE_DEMO_IMPACT_EXECUTION_STUDIO_CLIENT_IMPORT,
+  JUDGE_DEMO_IMPACT_EXECUTION_STUDIO_PREFIX_LENGTH,
+  JUDGE_DEMO_IMPACT_EXECUTION_STUDIO_PREFIX_SHA256,
+  JUDGE_DEMO_IMPACT_EXECUTION_STUDIO_PRESENTATION_MARKER,
+  JUDGE_DEMO_IMPACT_EXECUTION_STUDIO_RETURN_Q,
+  JUDGE_DEMO_IMPACT_EXECUTION_STUDIO_RETURN_U,
+  JUDGE_DEMO_IMPACT_EXECUTION_STUDIO_RETURN_U_SHA256,
+  JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_SUMMARY_TEMPLATE,
+  JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_SUMMARY_TEMPLATE_SHA256,
+  JUDGE_DEMO_IMPACT_EXECUTION_SESSION_SEGMENTS,
+  JUDGE_DEMO_IMPACT_EXECUTION_TEST_BLOCK_END,
+  JUDGE_DEMO_IMPACT_EXECUTION_TEST_BLOCK_START,
+  JUDGE_DEMO_IMPACT_EXECUTION_TEST_REPLACEMENTS,
+  JUDGE_DEMO_IMPACT_EXECUTION_TEST_REPLACEMENTS_HASH,
+  JUDGE_DEMO_IMPACT_EXECUTION_U_PATCH_BROTLI_BASE64URL,
+  JUDGE_DEMO_IMPACT_EXECUTION_U_PATCH_BROTLI_SHA256,
+  JUDGE_DEMO_IMPACT_EXECUTION_U_PATCH_RAW_BYTES,
+  JUDGE_DEMO_IMPACT_EXECUTION_U_PATCH_SHA256,
+  JUDGE_DEMO_IMPACT_EXECUTION_U_PRESENTATION_PROJECTION_TREE,
+  JUDGE_DEMO_IMPACT_EXECUTION_PRESENTATION_PATHS,
+  JUDGE_DEMO_IMPACT_EXECUTION_PRESENTATION_PATHS_HASH,
+  JUDGE_DEMO_IMPACT_EXECUTION_PROTOCOL_PATHS,
+  JUDGE_DEMO_IMPACT_EXECUTION_PROTOCOL_PATHS_HASH,
   JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_COMMIT,
   JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_PATH,
   JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_SHA256,
@@ -108,8 +197,190 @@ function sha256(bytes: Buffer | string): string {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
+function impactExecutionProspectivePatch(): Buffer {
+  const compressed = Buffer.from(JUDGE_DEMO_IMPACT_EXECUTION_U_PATCH_BROTLI_BASE64URL, "base64url");
+  if (sha256(compressed) !== JUDGE_DEMO_IMPACT_EXECUTION_U_PATCH_BROTLI_SHA256) {
+    throw new Error("judge_demo_impact_execution_patch_transport_invalid");
+  }
+  const patch = brotliDecompressSync(compressed);
+  if (
+    patch.length !== JUDGE_DEMO_IMPACT_EXECUTION_U_PATCH_RAW_BYTES ||
+    sha256(patch) !== JUDGE_DEMO_IMPACT_EXECUTION_U_PATCH_SHA256
+  ) {
+    throw new Error("judge_demo_impact_execution_patch_invalid");
+  }
+  return patch;
+}
+
+function impactExecutionGitPatch(input: {
+  readonly cwd: string;
+  readonly predecessorCommit: string;
+  readonly successorCommit: string;
+}): Buffer | null {
+  const result = spawnSync(
+    "git",
+    [
+      "diff",
+      "--binary",
+      "--full-index",
+      input.predecessorCommit,
+      input.successorCommit,
+      "--",
+      ...JUDGE_DEMO_IMPACT_EXECUTION_PRESENTATION_PATHS
+    ],
+    { cwd: input.cwd, encoding: null, maxBuffer: 4_194_304 }
+  );
+  return result.status === 0 && Buffer.isBuffer(result.stdout) ? result.stdout : null;
+}
+
 function blobOid(bytes: Buffer): string {
   return createHash("sha1").update(`blob ${bytes.length}\0`).update(bytes).digest("hex");
+}
+
+async function verifyImpactExecutionPatchEffect(input: {
+  readonly cwd: string;
+  readonly predecessorCommit: string;
+  readonly successorCommit: string;
+  readonly expectedPatch: Buffer;
+}): Promise<"git-diff" | "reverse-reconstruction"> {
+  const actualPatch = impactExecutionGitPatch(input);
+  if (actualPatch !== null) {
+    if (!actualPatch.equals(input.expectedPatch)) {
+      throw new Error("judge_demo_impact_execution_patch_checkout_invalid");
+    }
+    return "git-diff";
+  }
+
+  const directory = await mkdtemp(join(tmpdir(), "thurstone-impact-patch-"));
+  try {
+    for (const path of JUDGE_DEMO_IMPACT_EXECUTION_PRESENTATION_PATHS) {
+      const bytes = await activeCheckoutBlobBytes(input.cwd, input.successorCommit, path);
+      const target = join(directory, path);
+      await mkdir(dirname(target), { recursive: true });
+      await writeFile(target, bytes, { mode: 0o600 });
+    }
+    const environment = { ...process.env };
+    delete environment.GIT_DIR;
+    delete environment.GIT_WORK_TREE;
+    const reversed = spawnSync(
+      "git",
+      ["apply", "--no-index", "--reverse", "--binary", "--whitespace=nowarn", "-"],
+      {
+        cwd: directory,
+        env: environment,
+        input: input.expectedPatch,
+        encoding: null,
+        maxBuffer: 4_194_304
+      }
+    );
+    if (reversed.status !== 0) {
+      throw new Error("judge_demo_impact_execution_patch_reconstruction_failed");
+    }
+    for (const path of JUDGE_DEMO_IMPACT_EXECUTION_PRESENTATION_PATHS) {
+      const predecessorEntry = treeEntry(input.cwd, input.predecessorCommit, path);
+      const reconstructed = await readFile(join(directory, path));
+      if (
+        predecessorEntry?.mode !== "100644" ||
+        predecessorEntry.blobOid !== blobOid(reconstructed)
+      ) {
+        throw new Error(`judge_demo_impact_execution_patch_reconstruction_invalid:${path}`);
+      }
+    }
+    return "reverse-reconstruction";
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
+interface ProjectedGitTreeNode {
+  readonly files: Map<string, GitTreeEntry>;
+  readonly directories: Map<string, ProjectedGitTreeNode>;
+}
+
+function projectedGitTreeOid(entries: ReadonlyMap<string, GitTreeEntry>): string {
+  const root: ProjectedGitTreeNode = {
+    files: new Map(),
+    directories: new Map()
+  };
+  for (const [path, entry] of entries) {
+    const segments = path.split("/");
+    const filename = segments.pop();
+    if (!filename || segments.some((segment) => segment.length === 0)) {
+      throw new Error("judge_demo_impact_execution_projected_tree_path_invalid");
+    }
+    let directory = root;
+    for (const segment of segments) {
+      let child = directory.directories.get(segment);
+      if (!child) {
+        child = { files: new Map(), directories: new Map() };
+        directory.directories.set(segment, child);
+      }
+      directory = child;
+    }
+    directory.files.set(filename, entry);
+  }
+
+  const hashTree = (directory: ProjectedGitTreeNode): string => {
+    const children = [
+      ...[...directory.files].map(([name, entry]) => ({
+        name,
+        mode: entry.mode,
+        oid: entry.blobOid,
+        directory: false
+      })),
+      ...[...directory.directories].map(([name, child]) => ({
+        name,
+        mode: "40000",
+        oid: hashTree(child),
+        directory: true
+      }))
+    ].sort((left, right) =>
+      Buffer.compare(
+        Buffer.from(`${left.name}${left.directory ? "/" : ""}`, "utf8"),
+        Buffer.from(`${right.name}${right.directory ? "/" : ""}`, "utf8")
+      )
+    );
+    const body = Buffer.concat(
+      children.flatMap((child) => [
+        Buffer.from(`${child.mode} ${child.name}\0`, "utf8"),
+        Buffer.from(child.oid, "hex")
+      ])
+    );
+    return createHash("sha1").update(`tree ${body.length}\0`).update(body).digest("hex");
+  };
+
+  return hashTree(root);
+}
+
+function impactExecutionPresentationProjectionTree(input: {
+  readonly cwd: string;
+  readonly predecessorCommit: string;
+  readonly successorCommit: string;
+}): string {
+  const result = spawnSync("git", ["ls-tree", "-r", "-z", "--full-tree", input.predecessorCommit], {
+    cwd: input.cwd,
+    encoding: null,
+    maxBuffer: MAX_GIT_BYTES
+  });
+  if (result.status !== 0 || !Buffer.isBuffer(result.stdout)) {
+    throw new Error("judge_demo_impact_execution_projected_tree_unavailable");
+  }
+  const source = new TextDecoder("utf-8", { fatal: true }).decode(result.stdout);
+  const entries = new Map<string, GitTreeEntry>();
+  for (const record of source.split("\0")) {
+    if (record.length === 0) continue;
+    const match = /^([0-7]{6}) (?:blob|commit) ([a-f0-9]{40})\t(.+)$/u.exec(record);
+    if (!match) throw new Error("judge_demo_impact_execution_projected_tree_entry_invalid");
+    entries.set(match[3]!, { mode: match[1]!, blobOid: match[2]! });
+  }
+  for (const path of JUDGE_DEMO_IMPACT_EXECUTION_PRESENTATION_PATHS) {
+    const entry = treeEntry(input.cwd, input.successorCommit, path);
+    if (entry?.mode !== "100644") {
+      throw new Error(`judge_demo_impact_execution_projected_tree_entry_invalid:${path}`);
+    }
+    entries.set(path, entry);
+  }
+  return projectedGitTreeOid(entries);
 }
 
 function treeEntry(cwd: string, commit: string, path: string): GitTreeEntry | null {
@@ -141,6 +412,23 @@ function gitBlobBytes(cwd: string, commit: string, path: string): Buffer | null 
     throw new Error(`judge_demo_presentation_referenced_blob_missing:${commit}:${path}`);
   }
   return result.stdout;
+}
+
+/**
+ * Returns historical bytes when the object store contains them. A transport-only checkout may
+ * intentionally retain the exact commit/tree/blob identity without carrying that historical blob;
+ * callers must still require a separately frozen digest and verify the bytes in the full source
+ * repository before producing the transport.
+ */
+function availableGitBlobBytes(cwd: string, commit: string, path: string): Buffer | null {
+  const entry = treeEntry(cwd, commit, path);
+  if (entry === null) return null;
+  const available = spawnSync("git", ["cat-file", "-e", `${entry.blobOid}^{blob}`], {
+    cwd,
+    encoding: null,
+    maxBuffer: 1_048_576
+  });
+  return available.status === 0 ? gitBlobBytes(cwd, commit, path) : null;
 }
 
 /** Bind an active regular checkout file to the blob OID named by a transported Git tree. */
@@ -787,6 +1075,671 @@ async function verifyInvocationIntegrity(input: {
   }
 }
 
+type ImpactExecutionFinalization = NonNullable<
+  NonNullable<
+    JudgeDemoInvocationIntegrityEvidenceTransition["terminalFinalization"]
+  >["impactExecutionFinalization"]
+>;
+
+function occurrenceCount(source: string, value: string): number {
+  if (value.length === 0) return 0;
+  return source.split(value).length - 1;
+}
+
+function jsxTagIndexes(source: string, name: string): readonly number[] {
+  return [...source.matchAll(new RegExp(`<\\s*${name}\\b`, "gu"))].map((match) => match.index);
+}
+
+function identifierCount(source: string, name: string): number {
+  return source.match(new RegExp(`\\b${name}\\b`, "gu"))?.length ?? 0;
+}
+
+function routeWrapperUsesDynamicConstruction(source: string): boolean {
+  return /\b(?:eval|Function)\s*\(|\b(?:React\.)?createElement\s*\(|\bReflect\.(?:get|construct)\b|\b(?:globalThis|window|document)\s*\[/u.test(
+    source
+  );
+}
+
+function exactImportPresent(source: string, exactImport: string, modulePath: string): boolean {
+  return occurrenceCount(source, exactImport) === 1 && occurrenceCount(source, modulePath) === 1;
+}
+
+function replaceExactOnce(source: string, expected: string, replacement: string, label: string) {
+  if (occurrenceCount(source, expected) !== 1) {
+    throw new Error(`judge_demo_impact_execution_normalization_invalid:${label}`);
+  }
+  return source.replace(expected, replacement);
+}
+
+function replaceExactCount(
+  source: string,
+  expected: string,
+  replacement: string,
+  expectedOccurrenceCount: number,
+  label: string
+) {
+  if (occurrenceCount(source, expected) !== expectedOccurrenceCount) {
+    throw new Error(`judge_demo_impact_execution_normalization_invalid:${label}`);
+  }
+  return source.split(expected).join(replacement);
+}
+
+function normalizeImpactExecutionTest(path: string, source: string): string {
+  const start = source.indexOf(JUDGE_DEMO_IMPACT_EXECUTION_TEST_BLOCK_START);
+  const end = source.indexOf(JUDGE_DEMO_IMPACT_EXECUTION_TEST_BLOCK_END);
+  if (
+    start < 0 ||
+    end <= start ||
+    source.slice(start - 2, start) !== "\n\n" ||
+    source[start - 3] === "\n" ||
+    occurrenceCount(source, JUDGE_DEMO_IMPACT_EXECUTION_TEST_BLOCK_START) !== 1 ||
+    occurrenceCount(source, JUDGE_DEMO_IMPACT_EXECUTION_TEST_BLOCK_END) !== 1
+  ) {
+    throw new Error(`judge_demo_impact_execution_test_marker_invalid:${path}`);
+  }
+  const block = source.slice(start, end + JUDGE_DEMO_IMPACT_EXECUTION_TEST_BLOCK_END.length);
+  const trailing = source.slice(end + JUDGE_DEMO_IMPACT_EXECUTION_TEST_BLOCK_END.length);
+  if (
+    (trailing !== "" && trailing !== "\n") ||
+    block
+      .replace(JUDGE_DEMO_IMPACT_EXECUTION_TEST_BLOCK_START, "")
+      .replace(JUDGE_DEMO_IMPACT_EXECUTION_TEST_BLOCK_END, "")
+      .trim().length === 0 ||
+    !/\b(?:test|it)\(/u.test(block) ||
+    !/\bexpect\(/u.test(block) ||
+    /\b(?:test|it|describe)\.(?:skip|fixme|only|beforeEach|afterEach|beforeAll|afterAll|use)\b|\bdescribe\.configure\b|\btest\.setTimeout\b|\btimeout\s*:|\.slow\(/u.test(
+      block
+    )
+  ) {
+    throw new Error(`judge_demo_impact_execution_test_block_invalid:${path}`);
+  }
+  let normalized = source.slice(0, start - 1);
+  if (
+    path === "tests/browser/lab-sandbox.spec.ts" &&
+    occurrenceCount(normalized, JUDGE_DEMO_IMPACT_EXECUTION_LAB_RECEIPT_SELECTOR_U) !==
+      JUDGE_DEMO_IMPACT_EXECUTION_LAB_RECEIPT_SELECTOR_COUNT
+  ) {
+    throw new Error("judge_demo_impact_execution_normalization_invalid:lab-receipt-selector-count");
+  }
+  for (const replacement of JUDGE_DEMO_IMPACT_EXECUTION_TEST_REPLACEMENTS) {
+    if (replacement.path !== path) continue;
+    normalized = replaceExactCount(
+      normalized,
+      replacement.successor,
+      replacement.predecessor,
+      replacement.expectedOccurrenceCount,
+      `test-replacement:${replacement.label}`
+    );
+  }
+  if (
+    path === "tests/browser/results.spec.ts" ||
+    path === "tests/browser/invocation-integrity-results.spec.ts"
+  ) {
+    normalized = replaceExactOnce(
+      normalized,
+      `page.goto("${JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_FULL_QUERY}")`,
+      'page.goto("/results")',
+      `results-query:${path}`
+    );
+  }
+  return normalized;
+}
+
+function normalizeImpactExecutionMixedSource(path: string, source: string): string {
+  let normalized = source;
+  if (path === "components/lab/judge-demo-panel.tsx") {
+    normalized = replaceExactOnce(
+      normalized,
+      JUDGE_DEMO_IMPACT_EXECUTION_JUDGE_REACT_IMPORT_U,
+      JUDGE_DEMO_IMPACT_EXECUTION_JUDGE_REACT_IMPORT_Q,
+      "judge-react-import"
+    );
+    normalized = replaceExactOnce(
+      normalized,
+      JUDGE_DEMO_IMPACT_EXECUTION_JUDGE_PORTAL_IMPORT,
+      "",
+      "judge-import"
+    );
+    normalized = replaceExactOnce(
+      normalized,
+      JUDGE_DEMO_IMPACT_EXECUTION_JUDGE_MOUNT_SNIPPET,
+      JUDGE_DEMO_IMPACT_EXECUTION_JUDGE_MOUNT_ANCHOR,
+      "judge-mount"
+    );
+    normalized = replaceExactOnce(
+      normalized,
+      JUDGE_DEMO_IMPACT_EXECUTION_JUDGE_RETURN_START_U,
+      JUDGE_DEMO_IMPACT_EXECUTION_JUDGE_RETURN_START_Q,
+      "judge-return-start"
+    );
+    normalized = replaceExactOnce(
+      normalized,
+      JUDGE_DEMO_IMPACT_EXECUTION_JUDGE_RETURN_END_U,
+      JUDGE_DEMO_IMPACT_EXECUTION_JUDGE_RETURN_END_Q,
+      "judge-return-end"
+    );
+  } else if (path === "components/invocation-integrity/invocation-integrity-client.tsx") {
+    normalized = replaceExactOnce(
+      normalized,
+      JUDGE_DEMO_IMPACT_EXECUTION_INTEGRITY_STATUS_U,
+      JUDGE_DEMO_IMPACT_EXECUTION_INTEGRITY_STATUS_Q,
+      "integrity-status"
+    );
+    normalized = replaceExactOnce(
+      normalized,
+      JUDGE_DEMO_IMPACT_EXECUTION_INTEGRITY_BANNER_U,
+      JUDGE_DEMO_IMPACT_EXECUTION_INTEGRITY_BANNER_Q,
+      "integrity-banner"
+    );
+  } else if (path === "components/results/invocation-integrity-results.tsx") {
+    normalized = replaceExactOnce(
+      normalized,
+      JUDGE_DEMO_IMPACT_EXECUTION_INVOCATION_HEADING_U,
+      JUDGE_DEMO_IMPACT_EXECUTION_INVOCATION_HEADING_Q,
+      "invocation-heading"
+    );
+  } else if (path === "components/results/semantic-paired-results.tsx") {
+    normalized = replaceExactOnce(
+      normalized,
+      JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_BRIDGE_TEMPLATE,
+      "",
+      "results-bridge"
+    );
+    normalized = replaceExactOnce(
+      normalized,
+      JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_BRIDGE_IMPORT_U,
+      JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_BRIDGE_IMPORT_Q,
+      "results-bridge-import"
+    );
+  } else if (path === "lib/results/meta-tools.ts") {
+    normalized = replaceExactOnce(
+      normalized,
+      JUDGE_DEMO_IMPACT_EXECUTION_LAZY_HELPER_TEMPLATE,
+      "",
+      "lazy-helper"
+    );
+  }
+  return normalized;
+}
+
+function normalizeImpactExecutionRouteSource(path: string, source: string): string {
+  let normalized = source;
+  if (path === "app/lab/page.tsx") {
+    normalized = replaceExactOnce(
+      normalized,
+      JUDGE_DEMO_IMPACT_EXECUTION_LAB_RETURN_U,
+      JUDGE_DEMO_IMPACT_EXECUTION_LAB_RETURN_Q,
+      "lab-route"
+    );
+  } else if (path === "app/studio/page.tsx") {
+    normalized = replaceExactOnce(
+      normalized,
+      JUDGE_DEMO_IMPACT_EXECUTION_STUDIO_RETURN_U,
+      JUDGE_DEMO_IMPACT_EXECUTION_STUDIO_RETURN_Q,
+      "studio-route"
+    );
+  } else if (path === "app/invocation-integrity/page.tsx") {
+    normalized = replaceExactOnce(
+      normalized,
+      JUDGE_DEMO_IMPACT_EXECUTION_INTEGRITY_RETURN_U,
+      JUDGE_DEMO_IMPACT_EXECUTION_INTEGRITY_RETURN_Q,
+      "integrity-route"
+    );
+  } else if (path === "app/results/page.tsx") {
+    normalized = replaceExactOnce(
+      normalized,
+      `${JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_SEMANTIC_ARTIFACT_IMPORT}\n${JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_INVOCATION_ARTIFACT_IMPORT}\n`,
+      "",
+      "results-artifact-imports"
+    );
+    normalized = replaceExactOnce(
+      normalized,
+      JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_COMPONENT_IMPORT_U,
+      JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_COMPONENT_IMPORT_Q,
+      "results-component-import"
+    );
+    normalized = replaceExactOnce(
+      normalized,
+      JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_SUMMARY_TEMPLATE,
+      "",
+      "results-summary"
+    );
+    normalized = replaceExactOnce(
+      normalized,
+      JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_FUNCTION_U,
+      JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_FUNCTION_Q,
+      "results-function"
+    );
+    normalized = replaceExactOnce(
+      normalized,
+      `${JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_COMPACT_BLOCK_TEMPLATE}\n`,
+      "",
+      "results-compact-block"
+    );
+  }
+  return normalized;
+}
+
+export async function verifyImpactExecutionOperationalSourceProjection(input: {
+  readonly path: string;
+  readonly source: string;
+}): Promise<void> {
+  const finalIdentity = JUDGE_DEMO_IMPACT_EXECUTION_FINAL_U_FILE_IDENTITIES.find(
+    ({ path }) => path === input.path
+  );
+  if (
+    finalIdentity !== undefined &&
+    Buffer.byteLength(input.source, "utf8") === finalIdentity.length &&
+    sha256(input.source) === finalIdentity.sha256
+  ) {
+    return;
+  }
+  const mixed = JUDGE_DEMO_IMPACT_EXECUTION_Q_MIXED_FILE_IDENTITIES.find(
+    ({ path }) => path === input.path
+  );
+  if (mixed !== undefined) {
+    if (input.path === "components/lab/judge-demo-panel.tsx") {
+      if (
+        Buffer.byteLength(input.source, "utf8") !==
+          JUDGE_DEMO_IMPACT_EXECUTION_JUDGE_FULL_U_LENGTH ||
+        sha256(input.source) !== JUDGE_DEMO_IMPACT_EXECUTION_JUDGE_FULL_U_SHA256
+      ) {
+        throw new Error(`judge_demo_impact_execution_operational_projection_invalid:${mixed.path}`);
+      }
+    } else {
+      const normalized = normalizeImpactExecutionMixedSource(input.path, input.source);
+      if (
+        Buffer.byteLength(normalized, "utf8") !== mixed.length ||
+        sha256(normalized) !== mixed.sha256
+      ) {
+        throw new Error(`judge_demo_impact_execution_operational_projection_invalid:${mixed.path}`);
+      }
+    }
+  }
+  if (input.path === "components/lab/judge-demo-panel.tsx") {
+    const detailsStart = input.source.indexOf('<details className="judge-diagnostics">');
+    const detailsEnd = input.source.indexOf("      </details>", detailsStart);
+    const primary = input.source.indexOf('className="button button-primary"');
+    const refresh = input.source.indexOf("Refresh judge status");
+    const rawReceipt = input.source.indexOf('className="runtime-receipt"');
+    const statusSummary = input.source.indexOf("judge-status-summary");
+    if (
+      occurrenceCount(input.source, JUDGE_DEMO_IMPACT_EXECUTION_JUDGE_DIAGNOSTICS_MARKER) !== 1 ||
+      occurrenceCount(input.source, JUDGE_DEMO_IMPACT_EXECUTION_JUDGE_DIAGNOSTICS_SUMMARY) !== 1 ||
+      occurrenceCount(input.source, '<details className="judge-diagnostics">') !== 1 ||
+      occurrenceCount(input.source, "judge-status-summary") !== 2 ||
+      detailsStart < 0 ||
+      detailsEnd <= detailsStart ||
+      primary < 0 ||
+      primary >= detailsStart ||
+      statusSummary < primary ||
+      statusSummary >= detailsStart ||
+      refresh <= detailsStart ||
+      refresh >= detailsEnd ||
+      rawReceipt <= detailsStart ||
+      rawReceipt >= detailsEnd ||
+      input.source.indexOf("The server accepts no prompt", detailsStart) <= detailsStart
+    ) {
+      throw new Error("judge_demo_impact_execution_judge_disclosure_invalid");
+    }
+  }
+  const route = JUDGE_DEMO_IMPACT_EXECUTION_Q_ROUTE_IDENTITIES.find(
+    ({ path }) => path === input.path
+  );
+  if (route !== undefined) {
+    const normalized = normalizeImpactExecutionRouteSource(input.path, input.source);
+    if (
+      Buffer.byteLength(normalized, "utf8") !== route.length ||
+      sha256(normalized) !== route.sha256
+    ) {
+      throw new Error(`judge_demo_impact_execution_route_projection_invalid:${route.path}`);
+    }
+  }
+  const expected = JUDGE_DEMO_IMPACT_EXECUTION_Q_TEST_FILE_IDENTITIES.find(
+    ({ path }) => path === input.path
+  );
+  if (
+    expected !== undefined &&
+    sha256(normalizeImpactExecutionTest(input.path, input.source)) !== expected.sha256
+  ) {
+    throw new Error(`judge_demo_impact_execution_test_projection_invalid:${expected.path}`);
+  }
+  const session = JUDGE_DEMO_IMPACT_EXECUTION_SESSION_SEGMENTS.find(
+    ({ path }) => path === input.path
+  );
+  if (session !== undefined) {
+    const start = input.source.indexOf(session.startMarker);
+    const end = session.useLastEnd
+      ? input.source.lastIndexOf(session.endMarker)
+      : input.source.indexOf(session.endMarker);
+    const value = start < 0 || end <= start ? "" : input.source.slice(start, end);
+    if (Buffer.byteLength(value, "utf8") !== session.length || sha256(value) !== session.sha256) {
+      throw new Error(`judge_demo_impact_execution_session_projection_invalid:${input.path}`);
+    }
+  }
+  if (
+    input.path === "app/results/page.tsx" &&
+    occurrenceCount(input.source, JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_SUMMARY_TEMPLATE) !== 1
+  ) {
+    throw new Error("judge_demo_impact_execution_results_summary_invalid");
+  }
+  if (input.path === "app/results/page.tsx") {
+    for (const token of [
+      JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_SEMANTIC_ARTIFACT_IMPORT,
+      JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_INVOCATION_ARTIFACT_IMPORT,
+      JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_COMPONENT_IMPORT_U,
+      JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_VIEW_SWITCH,
+      JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_SUMMARY_CALL,
+      JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_BRIDGE_RENDER,
+      JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_COMPACT_START,
+      JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_COMPACT_END
+    ]) {
+      if (occurrenceCount(input.source, token) !== 1) {
+        throw new Error("judge_demo_impact_execution_results_composition_invalid");
+      }
+    }
+    const compactStart = input.source.indexOf(JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_COMPACT_START);
+    const compactEnd = input.source.indexOf(JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_COMPACT_END);
+    const compact = input.source.slice(compactStart, compactEnd);
+    const bridgeTags = jsxTagIndexes(input.source, "PairedResultsToolBridge");
+    const semanticTags = jsxTagIndexes(input.source, "SemanticPairedResults");
+    const integrityTags = jsxTagIndexes(input.source, "InvocationIntegrityResults");
+    if (
+      compactStart < 0 ||
+      compactEnd <= compactStart ||
+      !compact.includes("return (") ||
+      !compact.includes(JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_BRIDGE_USAGE) ||
+      /SemanticPairedResults|InvocationIntegrityResults|readSemanticResults|readInvocationIntegrityResults/u.test(
+        compact
+      ) ||
+      input.source.indexOf("const semanticResults = await readSemanticResults") < compactEnd ||
+      input.source.indexOf(
+        "const invocationIntegrityResults = await readInvocationIntegrityResults"
+      ) < compactEnd ||
+      bridgeTags.length !== 1 ||
+      semanticTags.length !== 1 ||
+      integrityTags.length !== 1 ||
+      identifierCount(input.source, "PairedResultsToolBridge") !== 2 ||
+      identifierCount(input.source, "SemanticPairedResults") !== 2 ||
+      identifierCount(input.source, "InvocationIntegrityResults") !== 2 ||
+      routeWrapperUsesDynamicConstruction(input.source) ||
+      !exactImportPresent(
+        input.source,
+        JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_COMPONENT_IMPORT_U,
+        "@/components/results/semantic-paired-results"
+      ) ||
+      !exactImportPresent(
+        input.source,
+        JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_INVOCATION_COMPONENT_IMPORT,
+        "@/components/results/invocation-integrity-results"
+      ) ||
+      !input.source.includes(JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_FULL_BRANCH) ||
+      /23\s*\/\s*24|3\s*\/\s*3|no measured improvement|commitment_holdout_anchor/iu.test(compact)
+    ) {
+      throw new Error("judge_demo_impact_execution_results_composition_invalid");
+    }
+  }
+  if (input.path === "app/lab/page.tsx") {
+    const labTags = jsxTagIndexes(input.source, "LabClient");
+    const mount = input.source.indexOf('id="impact-execution-judge-action"');
+    if (
+      occurrenceCount(input.source, 'id="impact-execution-judge-action"') !== 1 ||
+      labTags.length !== 1 ||
+      identifierCount(input.source, "LabClient") !== 2 ||
+      routeWrapperUsesDynamicConstruction(input.source) ||
+      mount < 0 ||
+      mount > labTags[0]! ||
+      !exactImportPresent(
+        input.source,
+        JUDGE_DEMO_IMPACT_EXECUTION_LAB_CLIENT_IMPORT,
+        "@/components/lab/lab-client"
+      )
+    ) {
+      throw new Error("judge_demo_impact_execution_lab_composition_invalid");
+    }
+  }
+  if (input.path === "app/studio/page.tsx") {
+    const marker = input.source.indexOf(JUDGE_DEMO_IMPACT_EXECUTION_STUDIO_PRESENTATION_MARKER);
+    const prefix = marker < 0 ? "" : input.source.slice(0, marker);
+    const wrapper =
+      marker < 0
+        ? ""
+        : input.source.slice(
+            marker + JUDGE_DEMO_IMPACT_EXECUTION_STUDIO_PRESENTATION_MARKER.length
+          );
+    if (
+      occurrenceCount(input.source, JUDGE_DEMO_IMPACT_EXECUTION_STUDIO_PRESENTATION_MARKER) !== 1 ||
+      Buffer.byteLength(prefix, "utf8") !== JUDGE_DEMO_IMPACT_EXECUTION_STUDIO_PREFIX_LENGTH ||
+      sha256(prefix) !== JUDGE_DEMO_IMPACT_EXECUTION_STUDIO_PREFIX_SHA256 ||
+      jsxTagIndexes(input.source, "StudioClient").length !== 1 ||
+      identifierCount(input.source, "StudioClient") !== 2 ||
+      routeWrapperUsesDynamicConstruction(wrapper) ||
+      !wrapper.includes(
+        "<StudioClient target={LAST_VERIFIED_TARGET} reviewPackage={reviewPackage} />"
+      ) ||
+      /\b(?:fetch|registerTool|executeTool|useEffect|useState|useMemo|onClick|onSubmit)\b/u.test(
+        wrapper
+      ) ||
+      !exactImportPresent(
+        input.source,
+        JUDGE_DEMO_IMPACT_EXECUTION_STUDIO_CLIENT_IMPORT,
+        "@/components/studio/studio-client"
+      )
+    ) {
+      throw new Error("judge_demo_impact_execution_studio_composition_invalid");
+    }
+  }
+  if (
+    input.path === "app/invocation-integrity/page.tsx" &&
+    (jsxTagIndexes(input.source, "InvocationIntegrityClient").length !== 1 ||
+      identifierCount(input.source, "InvocationIntegrityClient") !== 2 ||
+      routeWrapperUsesDynamicConstruction(input.source) ||
+      !exactImportPresent(
+        input.source,
+        JUDGE_DEMO_IMPACT_EXECUTION_INTEGRITY_CLIENT_IMPORT,
+        "@/components/invocation-integrity/invocation-integrity-client"
+      ))
+  ) {
+    throw new Error("judge_demo_impact_execution_integrity_composition_invalid");
+  }
+  if (finalIdentity !== undefined) {
+    throw new Error(`judge_demo_impact_execution_final_u_file_invalid:${input.path}`);
+  }
+}
+
+async function verifyImpactExecutionOperationalProjections(input: {
+  readonly cwd: string;
+  readonly successorCommit: string;
+}): Promise<void> {
+  if (
+    sha256(JUDGE_DEMO_IMPACT_EXECUTION_LAZY_HELPER_TEMPLATE) !==
+      JUDGE_DEMO_IMPACT_EXECUTION_LAZY_HELPER_TEMPLATE_SHA256 ||
+    sha256(JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_BRIDGE_TEMPLATE) !==
+      JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_BRIDGE_TEMPLATE_SHA256 ||
+    sha256(JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_SUMMARY_TEMPLATE) !==
+      JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_SUMMARY_TEMPLATE_SHA256 ||
+    sha256(JUDGE_DEMO_IMPACT_EXECUTION_LAB_RETURN_U) !==
+      JUDGE_DEMO_IMPACT_EXECUTION_LAB_RETURN_U_SHA256 ||
+    sha256(JUDGE_DEMO_IMPACT_EXECUTION_STUDIO_RETURN_U) !==
+      JUDGE_DEMO_IMPACT_EXECUTION_STUDIO_RETURN_U_SHA256 ||
+    sha256(JUDGE_DEMO_IMPACT_EXECUTION_INTEGRITY_RETURN_U) !==
+      JUDGE_DEMO_IMPACT_EXECUTION_INTEGRITY_RETURN_U_SHA256 ||
+    sha256(JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_COMPACT_BLOCK_TEMPLATE) !==
+      JUDGE_DEMO_IMPACT_EXECUTION_RESULTS_COMPACT_BLOCK_TEMPLATE_SHA256 ||
+    sha256(JUDGE_DEMO_IMPACT_EXECUTION_JUDGE_REACT_IMPORT_U) !==
+      JUDGE_DEMO_IMPACT_EXECUTION_JUDGE_REACT_IMPORT_U_SHA256 ||
+    sha256(JUDGE_DEMO_IMPACT_EXECUTION_JUDGE_MOUNT_SNIPPET) !==
+      JUDGE_DEMO_IMPACT_EXECUTION_JUDGE_MOUNT_SNIPPET_SHA256 ||
+    (await canonicalSha256(JUDGE_DEMO_IMPACT_EXECUTION_TEST_REPLACEMENTS)) !==
+      JUDGE_DEMO_IMPACT_EXECUTION_TEST_REPLACEMENTS_HASH
+  ) {
+    throw new Error("judge_demo_impact_execution_template_hash_invalid");
+  }
+  impactExecutionProspectivePatch();
+  const paths = JUDGE_DEMO_IMPACT_EXECUTION_FINAL_U_FILE_IDENTITIES.map(({ path }) => path);
+  for (const path of paths) {
+    const source = new TextDecoder("utf-8", { fatal: true }).decode(
+      await activeCheckoutBlobBytes(input.cwd, input.successorCommit, path)
+    );
+    await verifyImpactExecutionOperationalSourceProjection({ path, source });
+  }
+}
+
+export async function verifyImpactExecutionFinalizationCheckout(input: {
+  readonly cwd: string;
+  readonly finalization: ImpactExecutionFinalization;
+}): Promise<{
+  readonly protocolChanges: readonly GitTreeChange[];
+  readonly presentationChanges: readonly GitTreeChange[];
+}> {
+  const expectedChain = [
+    input.finalization.protocol.predecessorCommit,
+    input.finalization.protocol.successorCommit,
+    input.finalization.presentation.successorCommit
+  ];
+  if (
+    canonicalJson(
+      firstParentCommitChain(
+        input.cwd,
+        input.finalization.protocol.predecessorCommit,
+        input.finalization.presentation.successorCommit
+      )
+    ) !== canonicalJson(expectedChain) ||
+    commitTree(input.cwd, input.finalization.protocol.predecessorCommit) !==
+      input.finalization.protocol.predecessorTree ||
+    commitTree(input.cwd, input.finalization.protocol.successorCommit) !==
+      input.finalization.protocol.successorTree ||
+    input.finalization.protocol.successorCommit !==
+      input.finalization.presentation.predecessorCommit ||
+    input.finalization.protocol.successorTree !== input.finalization.presentation.predecessorTree ||
+    commitTree(input.cwd, input.finalization.presentation.successorCommit) !==
+      input.finalization.presentation.successorTree
+  ) {
+    throw new Error("judge_demo_impact_execution_chain_invalid");
+  }
+  const protocolChanges = [
+    ...gitTreeChanges(
+      input.cwd,
+      input.finalization.protocol.predecessorCommit,
+      input.finalization.protocol.successorCommit
+    )
+  ].sort((left, right) => judgeDemoInvocationIntegrityEvidencePathCompare(left.path, right.path));
+  const presentationChanges = [
+    ...gitTreeChanges(
+      input.cwd,
+      input.finalization.presentation.predecessorCommit,
+      input.finalization.presentation.successorCommit
+    )
+  ].sort((left, right) => judgeDemoInvocationIntegrityEvidencePathCompare(left.path, right.path));
+  const validMutation = (change: GitTreeChange) =>
+    change.status === "M" &&
+    change.predecessorMode === "100644" &&
+    change.successorMode === "100644" &&
+    change.predecessorBlobOid !== null &&
+    change.successorBlobOid !== null &&
+    change.predecessorBlobOid !== change.successorBlobOid;
+  if (
+    canonicalJson(protocolChanges.map(({ path }) => path)) !==
+      canonicalJson(JUDGE_DEMO_IMPACT_EXECUTION_PROTOCOL_PATHS) ||
+    canonicalJson(presentationChanges.map(({ path }) => path)) !==
+      canonicalJson(JUDGE_DEMO_IMPACT_EXECUTION_PRESENTATION_PATHS) ||
+    (await canonicalSha256(JUDGE_DEMO_IMPACT_EXECUTION_PROTOCOL_PATHS)) !==
+      JUDGE_DEMO_IMPACT_EXECUTION_PROTOCOL_PATHS_HASH ||
+    (await canonicalSha256(JUDGE_DEMO_IMPACT_EXECUTION_PRESENTATION_PATHS)) !==
+      JUDGE_DEMO_IMPACT_EXECUTION_PRESENTATION_PATHS_HASH ||
+    (await canonicalSha256(protocolChanges)) !==
+      input.finalization.protocol.gitTreeProjectionHash ||
+    (await canonicalSha256(presentationChanges)) !==
+      input.finalization.presentation.gitTreeProjectionHash ||
+    protocolChanges.some((change) => !validMutation(change)) ||
+    presentationChanges.some((change) => !validMutation(change))
+  ) {
+    throw new Error("judge_demo_impact_execution_projection_invalid");
+  }
+  const expectedPatch = impactExecutionProspectivePatch();
+  await verifyImpactExecutionPatchEffect({
+    cwd: input.cwd,
+    predecessorCommit: input.finalization.protocol.successorCommit,
+    successorCommit: input.finalization.presentation.successorCommit,
+    expectedPatch
+  });
+  if (
+    impactExecutionPresentationProjectionTree({
+      cwd: input.cwd,
+      predecessorCommit: input.finalization.protocol.predecessorCommit,
+      successorCommit: input.finalization.presentation.successorCommit
+    }) !== JUDGE_DEMO_IMPACT_EXECUTION_U_PRESENTATION_PROJECTION_TREE
+  ) {
+    throw new Error("judge_demo_impact_execution_presentation_projection_tree_invalid");
+  }
+  for (const path of JUDGE_DEMO_IMPACT_EXECUTION_PROTOCOL_PATHS) {
+    const protocolEntry = treeEntry(input.cwd, input.finalization.protocol.successorCommit, path);
+    const presentationEntry = treeEntry(
+      input.cwd,
+      input.finalization.presentation.successorCommit,
+      path
+    );
+    if (
+      protocolEntry === null ||
+      presentationEntry === null ||
+      protocolEntry.mode !== "100644" ||
+      canonicalJson(protocolEntry) !== canonicalJson(presentationEntry)
+    ) {
+      throw new Error(`judge_demo_impact_execution_protocol_checkout_drift:${path}`);
+    }
+    await activeCheckoutBlobBytes(input.cwd, input.finalization.presentation.successorCommit, path);
+  }
+  for (const path of JUDGE_DEMO_IMPACT_EXECUTION_PRESENTATION_PATHS) {
+    await activeCheckoutBlobBytes(input.cwd, input.finalization.presentation.successorCommit, path);
+  }
+  const frozenLabPredecessorEntry = treeEntry(
+    input.cwd,
+    input.finalization.protocol.successorCommit,
+    JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_PATH
+  );
+  const frozenLabPredecessorBytes = availableGitBlobBytes(
+    input.cwd,
+    input.finalization.protocol.successorCommit,
+    JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_PATH
+  );
+  if (
+    input.finalization.presentation.frozenLabClientPath !==
+      JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_PATH ||
+    input.finalization.presentation.frozenLabClientBlobOid !==
+      JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_BLOB_OID ||
+    input.finalization.presentation.frozenLabClientSha256 !==
+      JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_SHA256 ||
+    frozenLabPredecessorEntry?.mode !== "100644" ||
+    frozenLabPredecessorEntry.blobOid !== JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_BLOB_OID ||
+    (frozenLabPredecessorBytes !== null &&
+      sha256(frozenLabPredecessorBytes) !== JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_SHA256)
+  ) {
+    throw new Error("judge_demo_impact_execution_lab_client_predecessor_invalid");
+  }
+  const frozenLabEntry = treeEntry(
+    input.cwd,
+    input.finalization.presentation.successorCommit,
+    JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_PATH
+  );
+  const frozenLabBytes = await activeCheckoutBlobBytes(
+    input.cwd,
+    input.finalization.presentation.successorCommit,
+    JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_PATH
+  );
+  if (
+    frozenLabEntry?.mode !== "100644" ||
+    frozenLabEntry.blobOid !== JUDGE_DEMO_IMPACT_EXECUTION_LAB_CLIENT_U_BLOB_OID ||
+    sha256(frozenLabBytes) !== JUDGE_DEMO_IMPACT_EXECUTION_LAB_CLIENT_U_SHA256
+  ) {
+    throw new Error("judge_demo_impact_execution_lab_client_presentation_invalid");
+  }
+  await verifyImpactExecutionOperationalProjections({
+    cwd: input.cwd,
+    successorCommit: input.finalization.presentation.successorCommit
+  });
+  return Object.freeze({ protocolChanges, presentationChanges });
+}
+
 export async function verifyInvocationIntegrityEvidenceCheckout(input: {
   readonly cwd: string;
   readonly transition: JudgeDemoInvocationIntegrityEvidenceTransition;
@@ -796,6 +1749,7 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
   const terminal = input.transition.terminalFinalization ?? null;
   const ciFinalization = terminal?.ciFinalization ?? null;
   const ciPortabilityRepair = terminal?.ciPortabilityRepair ?? null;
+  const impactExecutionFinalization = terminal?.impactExecutionFinalization ?? null;
   const evidenceMaterialCommit =
     terminal?.evidenceMaterialCommit ?? input.transition.successorCommit;
   const expectedChain =
@@ -808,7 +1762,13 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
           terminal.protocolFinalization.successorCommit,
           terminal.collateralPreparation.successorCommit,
           ...(ciFinalization === null ? [] : [ciFinalization.successorCommit]),
-          ...(ciPortabilityRepair === null ? [] : [ciPortabilityRepair.successorCommit])
+          ...(ciPortabilityRepair === null ? [] : [ciPortabilityRepair.successorCommit]),
+          ...(impactExecutionFinalization === null
+            ? []
+            : [
+                impactExecutionFinalization.protocol.successorCommit,
+                impactExecutionFinalization.presentation.successorCommit
+              ])
         ];
   if (
     canonicalJson(input.firstParentChain) !== canonicalJson(expectedChain) ||
@@ -825,7 +1785,12 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
           commitTree(input.cwd, ciFinalization.successorCommit) !== ciFinalization.successorTree) ||
         (ciPortabilityRepair !== null &&
           commitTree(input.cwd, ciPortabilityRepair.successorCommit) !==
-            ciPortabilityRepair.successorTree)))
+            ciPortabilityRepair.successorTree) ||
+        (impactExecutionFinalization !== null &&
+          (commitTree(input.cwd, impactExecutionFinalization.protocol.successorCommit) !==
+            impactExecutionFinalization.protocol.successorTree ||
+            commitTree(input.cwd, impactExecutionFinalization.presentation.successorCommit) !==
+              impactExecutionFinalization.presentation.successorTree))))
   ) {
     throw new Error("judge_demo_invocation_evidence_chain_invalid");
   }
@@ -883,6 +1848,15 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
         ].sort((left, right) =>
           judgeDemoInvocationIntegrityEvidencePathCompare(left.path, right.path)
         );
+  const impactExecutionCheckout =
+    impactExecutionFinalization === null
+      ? null
+      : await verifyImpactExecutionFinalizationCheckout({
+          cwd: input.cwd,
+          finalization: impactExecutionFinalization
+        });
+  const impactExecutionProtocolChanges = impactExecutionCheckout?.protocolChanges ?? [];
+  const impactExecutionPresentationChanges = impactExecutionCheckout?.presentationChanges ?? [];
   if (
     canonicalJson(protocolChanges.map(({ path }) => path)) !==
       canonicalJson(JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_PROTOCOL_PATHS) ||
@@ -925,7 +1899,20 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
             canonicalJson(ciPortabilityRepairChanges) !==
               canonicalJson(ciPortabilityRepair.treeChanges) ||
             (await canonicalSha256(ciPortabilityRepairChanges)) !==
-              ciPortabilityRepair.gitTreeProjectionHash))))
+              ciPortabilityRepair.gitTreeProjectionHash)) ||
+        (impactExecutionFinalization !== null &&
+          (canonicalJson(impactExecutionProtocolChanges.map(({ path }) => path)) !==
+            canonicalJson(JUDGE_DEMO_IMPACT_EXECUTION_PROTOCOL_PATHS) ||
+            canonicalJson(impactExecutionPresentationChanges.map(({ path }) => path)) !==
+              canonicalJson(JUDGE_DEMO_IMPACT_EXECUTION_PRESENTATION_PATHS) ||
+            (await canonicalSha256(JUDGE_DEMO_IMPACT_EXECUTION_PROTOCOL_PATHS)) !==
+              impactExecutionFinalization.protocol.changedPathsHash ||
+            (await canonicalSha256(JUDGE_DEMO_IMPACT_EXECUTION_PRESENTATION_PATHS)) !==
+              impactExecutionFinalization.presentation.changedPathsHash ||
+            (await canonicalSha256(impactExecutionProtocolChanges)) !==
+              impactExecutionFinalization.protocol.gitTreeProjectionHash ||
+            (await canonicalSha256(impactExecutionPresentationChanges)) !==
+              impactExecutionFinalization.presentation.gitTreeProjectionHash))))
   ) {
     throw new Error("judge_demo_invocation_evidence_projection_invalid");
   }
@@ -980,11 +1967,88 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
       throw new Error(`judge_demo_gate9_ci_portability_mode_invalid:${change.path}`);
     }
   }
+  for (const change of impactExecutionProtocolChanges) {
+    if (
+      change.status !== "M" ||
+      change.predecessorMode !== "100644" ||
+      change.successorMode !== "100644" ||
+      change.predecessorBlobOid === null ||
+      change.successorBlobOid === null ||
+      change.predecessorBlobOid === change.successorBlobOid
+    ) {
+      throw new Error(`judge_demo_impact_execution_protocol_mode_invalid:${change.path}`);
+    }
+  }
+  for (const change of impactExecutionPresentationChanges) {
+    if (
+      change.status !== "M" ||
+      change.predecessorMode !== "100644" ||
+      change.successorMode !== "100644" ||
+      change.predecessorBlobOid === null ||
+      change.successorBlobOid === null ||
+      change.predecessorBlobOid === change.successorBlobOid
+    ) {
+      throw new Error(`judge_demo_impact_execution_presentation_mode_invalid:${change.path}`);
+    }
+  }
+  if (impactExecutionFinalization !== null) {
+    for (const path of JUDGE_DEMO_IMPACT_EXECUTION_PROTOCOL_PATHS) {
+      const protocolEntry = treeEntry(
+        input.cwd,
+        impactExecutionFinalization.protocol.successorCommit,
+        path
+      );
+      const presentationEntry = treeEntry(
+        input.cwd,
+        impactExecutionFinalization.presentation.successorCommit,
+        path
+      );
+      if (
+        protocolEntry === null ||
+        presentationEntry === null ||
+        protocolEntry.mode !== "100644" ||
+        canonicalJson(protocolEntry) !== canonicalJson(presentationEntry)
+      ) {
+        throw new Error(`judge_demo_impact_execution_protocol_checkout_drift:${path}`);
+      }
+      await activeCheckoutBlobBytes(
+        input.cwd,
+        impactExecutionFinalization.presentation.successorCommit,
+        path
+      );
+    }
+    for (const path of JUDGE_DEMO_IMPACT_EXECUTION_PRESENTATION_PATHS) {
+      await activeCheckoutBlobBytes(
+        input.cwd,
+        impactExecutionFinalization.presentation.successorCommit,
+        path
+      );
+    }
+    const frozenLabEntry = treeEntry(
+      input.cwd,
+      impactExecutionFinalization.presentation.successorCommit,
+      JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_PATH
+    );
+    const frozenLabBytes = await activeCheckoutBlobBytes(
+      input.cwd,
+      impactExecutionFinalization.presentation.successorCommit,
+      JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_PATH
+    );
+    if (
+      frozenLabEntry?.mode !== "100644" ||
+      frozenLabEntry.blobOid !== JUDGE_DEMO_IMPACT_EXECUTION_LAB_CLIENT_U_BLOB_OID ||
+      sha256(frozenLabBytes) !== JUDGE_DEMO_IMPACT_EXECUTION_LAB_CLIENT_U_SHA256
+    ) {
+      throw new Error("judge_demo_impact_execution_lab_client_presentation_invalid");
+    }
+  }
   if (ciFinalization !== null) {
     const testSource = new TextDecoder("utf-8", { fatal: true }).decode(
       await activeCheckoutBlobBytes(
         input.cwd,
-        ciPortabilityRepair?.successorCommit ?? ciFinalization.successorCommit,
+        impactExecutionFinalization?.presentation.successorCommit ??
+          ciPortabilityRepair?.successorCommit ??
+          ciFinalization.successorCommit,
         "tests/integration/judge-presentation.test.ts"
       )
     );
@@ -1176,7 +2240,14 @@ async function verifyTransitionGit(input: {
                     []),
                   ...(input.transition.terminalFinalization?.ciFinalization?.changedPaths ?? []),
                   ...(input.transition.terminalFinalization?.ciPortabilityRepair?.changedPaths ??
-                    [])
+                    []),
+                  ...(input.transition.terminalFinalization?.impactExecutionFinalization ===
+                  undefined
+                    ? []
+                    : [
+                        ...JUDGE_DEMO_IMPACT_EXECUTION_PROTOCOL_PATHS,
+                        ...JUDGE_DEMO_IMPACT_EXECUTION_PRESENTATION_PATHS
+                      ])
                 ])
               ].sort(judgeDemoInvocationIntegrityEvidencePathCompare)
             : [...new Set(input.transition.collateralChanges.map(({ path }) => path))].sort();
@@ -1239,6 +2310,11 @@ async function verifyTransitionGit(input: {
           !(
             transition.terminalFinalization?.ciPortabilityRepair?.changedPaths.includes(path) ??
             false
+          ) &&
+          !(
+            transition.terminalFinalization?.impactExecutionFinalization !== undefined &&
+            (JUDGE_DEMO_IMPACT_EXECUTION_PROTOCOL_PATHS.includes(path) ||
+              JUDGE_DEMO_IMPACT_EXECUTION_PRESENTATION_PATHS.includes(path))
           )
       )) ||
     (transition.kind === "collateral-links" && changedCriticalPaths.length !== 0)
