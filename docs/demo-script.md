@@ -13,6 +13,36 @@ This is the pre-capture production plan frozen for a `2:47` English demo. The do
 - Never present native diagnostic buttons as model selection. Never merge Custom Probe, Direct Site Tools, native-plumbing, or judge evidence into one denominator.
 - Use the lane labels in the shot list without abbreviation. They are part of the truth boundary.
 
+## Gate 8.5 capture addendum — authoritative final timing
+
+The final cut remains under three minutes at `2:59`. Keep `0:00–2:38` unchanged, then replace the
+old `2:38–2:47` closing shot with these two segments:
+
+| Time        | On-screen lane                                     | Exact narration                                                                                                                                                                                                          |
+| ----------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `2:38–2:54` | Live `/results`; `INVOCATION INTEGRITY · SEPARATE` | “Invocation Integrity is separate from semantic accuracy. Three fixed hostile cases—privileged fields, a nonexistent item, and an exact replay—pass three of three against trusted server state, with zero model calls.” |
+| `2:54–2:59` | Closing truth card                                 | “Separate evidence, simulated effects, no certification—and no endorsement implied.”                                                                                                                                     |
+
+For the Gate 8.5 shot, show the separate **Invocation Integrity Matrix**, its three rows, score
+`3/3`, execution build, and zero-model-call/separate-denominator labels. Do not replay the native
+sequence for video: use the sealed supplemental Results evidence. The authentic one-shot receipt is
+`b74494dd66ada6febd9cf75d1dfec0ded61f849f354c9c10611d1c69b5496796` on build
+`0b6f907a07c09d193e26f5e35dc5a5b3ad1b9786`.
+
+```vtt
+00:02:38.000 --> 00:02:46.000
+Invocation Integrity is separate from semantic accuracy.
+Three fixed hostile cases preserve declared invariants.
+
+00:02:46.000 --> 00:02:54.000
+Privileged fields, a nonexistent item, and an exact replay
+pass three of three, with zero model calls.
+
+00:02:54.000 --> 00:02:59.000
+Separate evidence, simulated effects, no certification—
+and no endorsement implied.
+```
+
 ## Word-timed spoken script
 
 Delivery target: `2:47`, 374 spoken words, approximately 134 words per minute. Read naturally; the edit must follow the time boxes rather than speeding narration. A short breath is included at each cut.

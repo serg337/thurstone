@@ -158,6 +158,19 @@ Thurstone measures whether WebMCP behavior remains consistent across requests a 
 
 These are one-trial-per-case demonstration results and show no measured improvement. Broader usefulness is never auto-credited from the metric table; any final human claim decision is recorded in the release/submission receipt rather than mutable source prose.
 
+### Invocation Integrity — separate supplemental result
+
+The production Gate 8.5 lane passed `3/3` deterministic direct WebMCP cases: privileged-field
+injection, a schema-valid nonexistent item, and exact replay/idempotency. It used four native calls,
+zero model calls, and a source-fixed independent server replay. Its score is separate from the
+Meaning Matrix and does not change `23/24 → 23/24` or the no-measured-improvement conclusion.
+
+> **Thurstone tests both sides of a declared WebMCP contract: whether benign requests produce the represented effects, and whether tested hostile invocations preserve site-defined invariants.**
+
+This is a testing/audit result on three frozen synthetic cases and one exact build—not runtime
+enforcement, certification, guaranteed security, arbitrary-site verification, or proof that a
+malicious website will behave identically after testing.
+
 The public evidence package keeps custom Probe, Direct Site Tools, calibration, native plumbing, the one-call judge lane, and exploratory observations in separate namespaces and denominators. [Four fresh Direct Codex Site Tools observations](evidence/direct-site-tools-observations.json) on commit `88deff46d4e06bb109158f7ef8a68e704f9fcc08` include two equivalent `order_review` calls with identical no-effect results, one tentative clarify/no-call, and one explicit simulated `checkout_request`; they are verified by `npm run verify:direct-site-tools` and never enter the 24-case score. The scored reference evidence was measured on baseline commit `3431a2b876d058eb562b7e6075570ad05b165ea0` and revised commit `251c44be34456ecc022839da6c8b85fe1c10e1fc`. Post-measurement commit `b5ab0f812b0c0fd39f5372603ff80ac1a4f341a1` changes only four test files; it is disclosed separately and is never called the measured v2 build.
 
 ## Ownership, assistance, and license

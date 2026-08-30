@@ -35,6 +35,17 @@ The reference experiment contains 24 cases per version. Baseline and revised bot
 
 The most useful lesson was negative: a clearer description did not improve this frozen one-trial suite. Trace-level failure identity mattered more than a flattering aggregate, and the result justified preserving clarification as its own contract rather than treating every no-call as safe success. Broader usefulness remains a human claims decision, not a measured fact.
 
+Thurstone also includes a separately scored **Invocation Integrity Matrix**. Three deterministic,
+provider-free native WebMCP cases test privileged-field injection, a schema-valid nonexistent item,
+and exact replay/idempotency. The production result is `3/3` on execution build
+`0b6f907a07c09d193e26f5e35dc5a5b3ad1b9786`; it is never combined with semantic accuracy.
+
+> **Thurstone tests both sides of a declared WebMCP contract: whether benign requests produce the represented effects, and whether tested hostile invocations preserve site-defined invariants.**
+
+Limitations: Thurstone is a testing/audit system, not runtime enforcement, certification,
+guaranteed security, arbitrary-site verification, or proof that a malicious website will behave
+identically after testing.
+
 **Simulated checkout — no purchase occurs.** There is no payment, inventory, account, messaging, shipment, or external transaction path.
 
 ## Why WebMCP Is Essential
@@ -96,6 +107,8 @@ The useful artifact is not a flattering aggregate. It is the combination of a hu
 ## Links
 
 Live app: https://toolproof-rust.vercel.app
+
+Invocation Integrity: https://toolproof-rust.vercel.app/invocation-integrity
 
 Public repository: reserved for the verified Gate 9 link-only release commit
 
