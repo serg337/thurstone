@@ -16,6 +16,7 @@ import {
   JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_SHA256,
   JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_TREE,
   JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_ALLOWED_PATHS,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_PROTOCOL_PATHS,
   JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_REQUIRED_PATHS,
   JUDGE_DEMO_INVOCATION_INTEGRITY_IMPLEMENTATION_ALLOWED_PATHS,
   JUDGE_DEMO_INVOCATION_INTEGRITY_IMPLEMENTATION_REQUIRED_PATHS,
@@ -44,6 +45,7 @@ import {
   JUDGE_DEMO_RECOVERY_IMPLEMENTATION_TREE,
   JUDGE_DEMO_RECOVERY_PATHS,
   JUDGE_DEMO_TRUTH_STATUS_FINALIZATION_PATHS,
+  judgeDemoInvocationIntegrityEvidencePathCompare,
   type JudgeDemoCollateralField,
   type JudgeDemoInvocationIntegrityEvidenceTransition,
   type JudgeDemoInvocationIntegrityTransition,
@@ -753,60 +755,84 @@ async function verifyInvocationIntegrity(input: {
   }
 }
 
-async function verifyInvocationIntegrityEvidence(input: {
+export async function verifyInvocationIntegrityEvidenceCheckout(input: {
   readonly cwd: string;
   readonly transition: JudgeDemoInvocationIntegrityEvidenceTransition;
   readonly firstParentChain: readonly string[];
 }): Promise<void> {
+  const protocolCommit = input.transition.protocolExtension.commit;
+  const expectedChain = [
+    input.transition.predecessorCommit,
+    protocolCommit,
+    input.transition.successorCommit
+  ];
   if (
-    input.firstParentChain.length !== 2 ||
-    input.firstParentChain[0] !== input.transition.predecessorCommit ||
-    input.firstParentChain[1] !== input.transition.successorCommit ||
+    canonicalJson(input.firstParentChain) !== canonicalJson(expectedChain) ||
+    input.transition.evidence.executionBuildCommit !== input.transition.predecessorCommit ||
+    commitTree(input.cwd, protocolCommit) !== input.transition.protocolExtension.tree ||
     commitTree(input.cwd, input.transition.successorCommit) !== input.transition.evidence.tree
   ) {
     throw new Error("judge_demo_invocation_evidence_chain_invalid");
   }
-  const changes = gitTreeChanges(
-    input.cwd,
-    input.transition.predecessorCommit,
-    input.transition.successorCommit
-  );
+  const protocolChanges = [
+    ...gitTreeChanges(input.cwd, input.transition.predecessorCommit, protocolCommit)
+  ].sort((left, right) => judgeDemoInvocationIntegrityEvidencePathCompare(left.path, right.path));
+  const evidenceChanges = [
+    ...gitTreeChanges(input.cwd, protocolCommit, input.transition.successorCommit)
+  ].sort((left, right) => judgeDemoInvocationIntegrityEvidencePathCompare(left.path, right.path));
   if (
-    canonicalJson(changes.map(({ path }) => path)) !==
+    canonicalJson(protocolChanges.map(({ path }) => path)) !==
+      canonicalJson(JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_PROTOCOL_PATHS) ||
+    canonicalJson(protocolChanges) !==
+      canonicalJson(input.transition.protocolExtension.treeChanges) ||
+    (await canonicalSha256(protocolChanges)) !==
+      input.transition.protocolExtension.gitTreeProjectionHash ||
+    canonicalJson(evidenceChanges.map(({ path }) => path)) !==
       canonicalJson(input.transition.evidence.changedPaths) ||
-    canonicalJson(changes) !== canonicalJson(input.transition.evidence.treeChanges) ||
-    changes.some(
+    canonicalJson(evidenceChanges) !== canonicalJson(input.transition.evidence.treeChanges) ||
+    evidenceChanges.some(
       ({ path }) => !JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_ALLOWED_PATHS.includes(path)
     ) ||
     JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_REQUIRED_PATHS.some(
-      (path) => !changes.some((change) => change.path === path)
+      (path) => !evidenceChanges.some((change) => change.path === path)
     ) ||
-    (await canonicalSha256(changes)) !== input.transition.evidence.gitTreeProjectionHash
+    (await canonicalSha256(evidenceChanges)) !== input.transition.evidence.gitTreeProjectionHash
   ) {
     throw new Error("judge_demo_invocation_evidence_projection_invalid");
   }
-  for (const change of changes) {
+  for (const change of protocolChanges) {
+    const valid =
+      change.status === "M" &&
+      change.predecessorMode === "100644" &&
+      change.successorMode === "100644" &&
+      change.predecessorBlobOid !== null &&
+      change.successorBlobOid !== null &&
+      change.predecessorBlobOid !== change.successorBlobOid;
+    if (!valid) {
+      throw new Error(`judge_demo_invocation_evidence_protocol_mode_invalid:${change.path}`);
+    }
+  }
+  for (const change of evidenceChanges) {
     assertSafeMaterialTreeMutation(change, "judge_demo_invocation_evidence_mode_invalid");
   }
-  const jsonBytes = gitBlobBytes(
-    input.cwd,
-    input.transition.successorCommit,
-    "evidence/thurstone-invocation-integrity.json"
-  );
-  const markdownBytes = gitBlobBytes(
-    input.cwd,
-    input.transition.successorCommit,
-    "evidence/thurstone-invocation-integrity.md"
-  );
-  const measuredBytes = gitBlobBytes(
-    input.cwd,
-    input.transition.successorCommit,
-    "lib/results/invocation-integrity-measured.ts"
-  );
+  const [jsonBytes, markdownBytes, measuredBytes] = await Promise.all([
+    activeCheckoutBlobBytes(
+      input.cwd,
+      input.transition.successorCommit,
+      "evidence/thurstone-invocation-integrity.json"
+    ),
+    activeCheckoutBlobBytes(
+      input.cwd,
+      input.transition.successorCommit,
+      "evidence/thurstone-invocation-integrity.md"
+    ),
+    activeCheckoutBlobBytes(
+      input.cwd,
+      input.transition.successorCommit,
+      "lib/results/invocation-integrity-measured.ts"
+    )
+  ]);
   if (
-    !jsonBytes ||
-    !markdownBytes ||
-    !measuredBytes ||
     sha256(jsonBytes) !== input.transition.evidence.jsonExportSha256 ||
     sha256(markdownBytes) !== input.transition.evidence.markdownExportSha256 ||
     sha256(measuredBytes) !== input.transition.evidence.measuredSourceSha256
@@ -883,7 +909,7 @@ async function verifyTransitionGit(input: {
       firstParentChain: actualFirstParentChain
     });
   } else if (input.transition.kind === "invocation-integrity-evidence") {
-    await verifyInvocationIntegrityEvidence({
+    await verifyInvocationIntegrityEvidenceCheckout({
       cwd: input.cwd,
       transition: input.transition,
       firstParentChain: actualFirstParentChain
@@ -894,7 +920,13 @@ async function verifyTransitionGit(input: {
   if ((await canonicalSha256(actualFirstParentChain)) !== input.transition.firstParentChainHash) {
     throw new Error("judge_demo_presentation_first_parent_chain_mismatch");
   }
-  const actualTreeChanges = gitTreeChanges(input.cwd, predecessor, successor);
+  const rawTreeChanges = gitTreeChanges(input.cwd, predecessor, successor);
+  const actualTreeChanges =
+    input.transition.kind === "invocation-integrity-evidence"
+      ? [...rawTreeChanges].sort((left, right) =>
+          judgeDemoInvocationIntegrityEvidencePathCompare(left.path, right.path)
+        )
+      : rawTreeChanges;
   if (
     input.transition.kind === "collateral-links" &&
     actualTreeChanges.some(
@@ -911,7 +943,12 @@ async function verifyTransitionGit(input: {
   if ((await canonicalSha256(actualTreeChanges)) !== input.transition.gitTreeProjectionHash) {
     throw new Error("judge_demo_presentation_git_tree_projection_mismatch");
   }
-  const actualChangedPaths = actualTreeChanges.map(({ path }) => path).sort();
+  const actualChangedPaths = actualTreeChanges.map(({ path }) => path);
+  actualChangedPaths.sort(
+    input.transition.kind === "invocation-integrity-evidence"
+      ? judgeDemoInvocationIntegrityEvidencePathCompare
+      : undefined
+  );
   const expectedChangedPaths =
     input.transition.kind === "sealed-reader-compatibility-recovery"
       ? JUDGE_DEMO_RECOVERY_PATHS
@@ -924,7 +961,10 @@ async function verifyTransitionGit(input: {
               ...input.transition.implementation.changedPaths
             ].sort()
           : input.transition.kind === "invocation-integrity-evidence"
-            ? input.transition.evidence.changedPaths
+            ? [
+                ...JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_PROTOCOL_PATHS,
+                ...input.transition.evidence.changedPaths
+              ].sort(judgeDemoInvocationIntegrityEvidencePathCompare)
             : [...new Set(input.transition.collateralChanges.map(({ path }) => path))].sort();
   if (canonicalJson(actualChangedPaths) !== canonicalJson(expectedChangedPaths)) {
     throw new Error("judge_demo_presentation_actual_diff_mismatch");
@@ -967,7 +1007,11 @@ async function verifyTransitionGit(input: {
           !transition.implementation.changedPaths.includes(path)
       )) ||
     (transition.kind === "invocation-integrity-evidence" &&
-      changedCriticalPaths.some((path) => !transition.evidence.changedPaths.includes(path))) ||
+      changedCriticalPaths.some(
+        (path) =>
+          !JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_PROTOCOL_PATHS.includes(path) &&
+          !transition.evidence.changedPaths.includes(path)
+      )) ||
     (transition.kind === "collateral-links" && changedCriticalPaths.length !== 0)
   ) {
     throw new Error("judge_demo_presentation_critical_invariant_mismatch");

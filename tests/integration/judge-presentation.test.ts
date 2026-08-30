@@ -1,12 +1,15 @@
 import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, symlink, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { gzipSync } from "node:zlib";
 
 import { canonicalJson, canonicalSha256 } from "@/lib/evidence/digest";
-import { verifyJudgeDemoPresentationCheckout } from "@/lib/judge/collateral-checkout-verifier.server";
+import {
+  verifyInvocationIntegrityEvidenceCheckout,
+  verifyJudgeDemoPresentationCheckout
+} from "@/lib/judge/collateral-checkout-verifier.server";
 import {
   JUDGE_DEMO_CI_TIMEOUT_COUNT,
   JUDGE_DEMO_CI_TIMEOUT_MS,
@@ -17,6 +20,8 @@ import {
   JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_PATH,
   JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_SHA256,
   JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_TREE,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_ALLOWED_PATHS,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_PROTOCOL_PATHS,
   JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_REQUIRED_PATHS,
   JUDGE_DEMO_INVOCATION_INTEGRITY_IMPLEMENTATION_REQUIRED_PATHS,
   JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_BINDING_ARTIFACT_SHA256,
@@ -50,9 +55,11 @@ import {
   JUDGE_DEMO_TRUTH_STATUS_FINALIZATION_PATHS,
   JUDGE_DEMO_TRUTH_STATUS_FINALIZATION_VERSION,
   JUDGE_DEMO_TRUTH_STATUS_FORBIDDEN_README_PHRASE,
+  judgeDemoInvocationIntegrityEvidencePathCompare,
   judgeDemoImmutableProjectionHash,
   verifyJudgeDemoPresentationTransition,
   type JudgeDemoCollateralTransition,
+  type JudgeDemoInvocationIntegrityEvidenceTransition,
   type JudgeDemoPresentationTransition,
   type JudgeDemoRebrandTransition,
   type JudgeDemoRecoveryTransition
@@ -158,6 +165,12 @@ function rawTreeChanges(cwd: string, predecessorCommit: string, successorCommit:
       };
     })
     .sort((left, right) => left.path.localeCompare(right.path));
+}
+
+function evidenceTreeChanges(cwd: string, predecessorCommit: string, successorCommit: string) {
+  return [...rawTreeChanges(cwd, predecessorCommit, successorCommit)].sort((left, right) =>
+    judgeDemoInvocationIntegrityEvidencePathCompare(left.path, right.path)
+  );
 }
 
 async function transitionCommon(input: {
@@ -867,9 +880,19 @@ async function invocationIntegrityTransitionFixture() {
 
 async function invocationIntegrityEvidenceTransitionFixture() {
   const predecessorCommit = "e".repeat(40);
+  const protocolCommit = "d".repeat(40);
   const successorCommit = "f".repeat(40);
-  const changes = JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_REQUIRED_PATHS.map((path) =>
-    boundedTreeChange(path, true)
+  const protocolChanges = JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_PROTOCOL_PATHS.map((path) =>
+    boundedTreeChange(path)
+  );
+  const evidencePaths = [
+    "PLAN.md",
+    "README.md",
+    ...JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_REQUIRED_PATHS
+  ].sort(judgeDemoInvocationIntegrityEvidencePathCompare);
+  const changes = evidencePaths.map((path) => boundedTreeChange(path, true));
+  const aggregateChanges = [...protocolChanges, ...changes].sort((left, right) =>
+    judgeDemoInvocationIntegrityEvidencePathCompare(left.path, right.path)
   );
   const payload = {
     version: JUDGE_DEMO_INVOCATION_INTEGRITY_TRANSITION_VERSION,
@@ -886,13 +909,24 @@ async function invocationIntegrityEvidenceTransitionFixture() {
     rootStoredProjectionDigest,
     rootCapturedAt,
     immutableProjectionHash: "3".repeat(64),
-    firstParentChainHash: await canonicalSha256([predecessorCommit, successorCommit]),
-    gitTreeProjectionHash: await canonicalSha256(changes),
+    firstParentChainHash: await canonicalSha256([
+      predecessorCommit,
+      protocolCommit,
+      successorCommit
+    ]),
+    gitTreeProjectionHash: await canonicalSha256(aggregateChanges),
     criticalProjectionHash: "6".repeat(64),
     dependencyProjectionHash: "7".repeat(64),
     providerCallsPerformed: 0 as const,
     storeWritesPerformed: 0 as const,
     replayOnly: true as const,
+    protocolExtension: {
+      commit: protocolCommit,
+      tree: "7".repeat(40),
+      changedPaths: [...JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_PROTOCOL_PATHS],
+      treeChanges: protocolChanges,
+      gitTreeProjectionHash: await canonicalSha256(protocolChanges)
+    },
     evidence: {
       executionBuildCommit: predecessorCommit,
       tree: "8".repeat(40),
@@ -927,6 +961,172 @@ async function invocationIntegrityEvidenceTransitionFixture() {
     ...payload,
     proofHash: await canonicalSha256(payload)
   });
+}
+
+async function invocationIntegrityEvidenceCheckoutFixture() {
+  const cwd = await mkdtemp(join(tmpdir(), "toolproof-invocation-evidence-"));
+  temporaryRoots.push(cwd);
+  git(cwd, ["init", "-q"]);
+
+  for (const path of JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_PROTOCOL_PATHS) {
+    await write(cwd, path, `protocol predecessor: ${path}\n`);
+  }
+  const evidencePaths = [
+    "PLAN.md",
+    "README.md",
+    "docs/demo-script.md",
+    ...JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_REQUIRED_PATHS,
+    "submission/devpost.md"
+  ].sort(judgeDemoInvocationIntegrityEvidencePathCompare);
+  if (
+    evidencePaths.some(
+      (path) => !JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_ALLOWED_PATHS.includes(path)
+    )
+  ) {
+    throw new Error("test_invocation_evidence_path_not_allowed");
+  }
+  for (const path of evidencePaths) {
+    if (path.startsWith("evidence/")) continue;
+    await write(cwd, path, `evidence predecessor: ${path}\n`);
+  }
+  await write(
+    cwd,
+    "lib/results/invocation-integrity-measured.ts",
+    "export const MEASURED_INVOCATION_INTEGRITY_EVIDENCE = null;\n"
+  );
+  const predecessorPaths = [
+    ...JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_PROTOCOL_PATHS,
+    ...evidencePaths.filter((path) => !path.startsWith("evidence/"))
+  ].sort(judgeDemoInvocationIntegrityEvidencePathCompare);
+  git(cwd, ["add", "--", ...predecessorPaths]);
+  git(cwd, ["commit", "-q", "-m", "invocation evidence execution build"]);
+  const predecessorCommit = git(cwd, ["rev-parse", "HEAD"]);
+
+  for (const path of JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_PROTOCOL_PATHS) {
+    await write(cwd, path, `protocol successor: ${path}\n`);
+  }
+  git(cwd, ["add", "--", ...JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_PROTOCOL_PATHS]);
+  git(cwd, ["commit", "-q", "-m", "freeze invocation evidence transport"]);
+  const protocolCommit = git(cwd, ["rev-parse", "HEAD"]);
+
+  const supplementalPackageDigest = "9".repeat(64);
+  const evidenceDocument = `${JSON.stringify({
+    evidenceClass: "supplemental-invocation-integrity",
+    modelCallCount: 0,
+    includedInSemanticDenominator: false,
+    packageDigest: supplementalPackageDigest,
+    score: { earned: 3, possible: 3 }
+  })}\n`;
+  const successorContents = new Map<string, Buffer>([
+    ["PLAN.md", Buffer.from("Gate 8.5 complete; Gate 9 human gate.\n")],
+    ["README.md", Buffer.from("Invocation Integrity is separately scored 3/3.\n")],
+    ["docs/demo-script.md", Buffer.from("Show the separate Invocation Integrity Matrix.\n")],
+    ["evidence/thurstone-invocation-integrity.json", Buffer.from(evidenceDocument)],
+    [
+      "evidence/thurstone-invocation-integrity.md",
+      Buffer.from("# Invocation Integrity\n\nSeparate score: 3/3.\n")
+    ],
+    [
+      "lib/results/invocation-integrity-measured.ts",
+      Buffer.from("export const MEASURED_INVOCATION_INTEGRITY_EVIDENCE = Object.freeze({});\n")
+    ],
+    ["submission/devpost.md", Buffer.from("Invocation Integrity is separately scored 3/3.\n")]
+  ]);
+  for (const [path, bytes] of successorContents) {
+    await mkdir(dirname(join(cwd, path)), { recursive: true });
+    await writeFile(join(cwd, path), bytes);
+  }
+  git(cwd, ["add", "--", ...evidencePaths]);
+  git(cwd, ["commit", "-q", "-m", "seal invocation integrity evidence"]);
+  const successorCommit = git(cwd, ["rev-parse", "HEAD"]);
+
+  const protocolChanges = evidenceTreeChanges(cwd, predecessorCommit, protocolCommit);
+  const evidenceChanges = evidenceTreeChanges(cwd, protocolCommit, successorCommit);
+  const aggregateChanges = evidenceTreeChanges(cwd, predecessorCommit, successorCommit);
+  const payload = {
+    version: JUDGE_DEMO_INVOCATION_INTEGRITY_TRANSITION_VERSION,
+    kind: "invocation-integrity-evidence" as const,
+    ordinal: 3,
+    predecessorCommit,
+    successorCommit,
+    predecessorEnvelopeHash: "1".repeat(64),
+    successorEnvelopeHash: "2".repeat(64),
+    rootEvidenceCommit,
+    rootEnvelopeHash: "4".repeat(64),
+    rootReceiptDigest,
+    rootArtifactDigest,
+    rootStoredProjectionDigest,
+    rootCapturedAt,
+    immutableProjectionHash: "3".repeat(64),
+    firstParentChainHash: await canonicalSha256([
+      predecessorCommit,
+      protocolCommit,
+      successorCommit
+    ]),
+    gitTreeProjectionHash: await canonicalSha256(aggregateChanges),
+    criticalProjectionHash: "6".repeat(64),
+    dependencyProjectionHash: "7".repeat(64),
+    providerCallsPerformed: 0 as const,
+    storeWritesPerformed: 0 as const,
+    replayOnly: true as const,
+    protocolExtension: {
+      commit: protocolCommit,
+      tree: git(cwd, ["rev-parse", `${protocolCommit}^{tree}`]),
+      changedPaths: [...JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_PROTOCOL_PATHS],
+      treeChanges: protocolChanges,
+      gitTreeProjectionHash: await canonicalSha256(protocolChanges)
+    },
+    evidence: {
+      executionBuildCommit: predecessorCommit,
+      tree: git(cwd, ["rev-parse", `${successorCommit}^{tree}`]),
+      changedPaths: evidenceChanges.map(({ path }) => path),
+      treeChanges: evidenceChanges,
+      requiredPathsHash: await canonicalSha256(
+        JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_REQUIRED_PATHS
+      ),
+      gitTreeProjectionHash: await canonicalSha256(evidenceChanges),
+      supplementalPackageDigest,
+      jsonExportSha256: sha256(
+        successorContents.get("evidence/thurstone-invocation-integrity.json")!
+      ),
+      markdownExportSha256: sha256(
+        successorContents.get("evidence/thurstone-invocation-integrity.md")!
+      ),
+      measuredSourceSha256: sha256(
+        successorContents.get("lib/results/invocation-integrity-measured.ts")!
+      ),
+      scoreEarned: 3 as const,
+      scorePossible: 3 as const,
+      modelCallCount: 0 as const,
+      includedInSemanticDenominator: false as const,
+      semanticEvidenceBuildCommit: JUDGE_DEMO_INVOCATION_INTEGRITY_SEALED_EVIDENCE_BUILD,
+      semanticPackageDigest: JUDGE_DEMO_INVOCATION_INTEGRITY_SEMANTIC_PACKAGE_DIGEST,
+      semanticBaselinePassed: 23 as const,
+      semanticRevisedPassed: 23 as const,
+      semanticPossible: 24 as const,
+      semanticNoMeasuredImprovement: true as const,
+      immutableProjectionHash: "d".repeat(64)
+    },
+    gate6PresentationProofHash: "e".repeat(64),
+    gate6CriticalProjectionHash: "f".repeat(64),
+    modelCallsPerformed: 0 as const,
+    scoredCallsPerformed: 0 as const
+  };
+  const transition = await verifyJudgeDemoPresentationTransition({
+    ...payload,
+    proofHash: await canonicalSha256(payload)
+  });
+  if (transition.kind !== "invocation-integrity-evidence") {
+    throw new Error("test_invocation_evidence_transition_kind_invalid");
+  }
+  return {
+    cwd,
+    predecessorCommit,
+    protocolCommit,
+    successorCommit,
+    successorContents,
+    transition
+  };
 }
 
 afterEach(async () => {
@@ -1037,6 +1237,83 @@ describe("judge provider-free presentation lineage", () => {
         proofHash: await canonicalSha256(payload)
       })
     ).rejects.toThrow(/invocation_integrity|too_small/u);
+  });
+
+  it("uses deterministic codepoint order for mixed-case evidence paths", async () => {
+    const transition = structuredClone(await invocationIntegrityEvidenceTransitionFixture());
+    if (transition.kind !== "invocation-integrity-evidence") {
+      throw new Error("test_transition_kind_mismatch");
+    }
+    expect(transition.evidence.changedPaths.slice(0, 2)).toEqual(["PLAN.md", "README.md"]);
+    transition.evidence.changedPaths.sort((left, right) => left.localeCompare(right));
+    transition.evidence.treeChanges.sort((left, right) => left.path.localeCompare(right.path));
+    transition.evidence.gitTreeProjectionHash = await canonicalSha256(
+      transition.evidence.treeChanges
+    );
+    const payload: Record<string, unknown> = { ...transition };
+    delete payload.proofHash;
+    await expect(
+      verifyJudgeDemoPresentationTransition({
+        ...payload,
+        proofHash: await canonicalSha256(payload)
+      })
+    ).rejects.toThrow(/judge_demo_invocation_integrity_evidence_transition_invalid/u);
+  });
+
+  it("binds evidence checkout bytes without transporting their Git blobs", async () => {
+    const value = await invocationIntegrityEvidenceCheckoutFixture();
+    const firstParentChain = [value.predecessorCommit, value.protocolCommit, value.successorCommit];
+    const verify = (
+      transition: JudgeDemoInvocationIntegrityEvidenceTransition = value.transition,
+      chain: readonly string[] = firstParentChain
+    ) =>
+      verifyInvocationIntegrityEvidenceCheckout({
+        cwd: value.cwd,
+        transition,
+        firstParentChain: chain
+      });
+
+    for (const path of JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_REQUIRED_PATHS) {
+      const oid = git(value.cwd, ["rev-parse", `${value.successorCommit}:${path}`]);
+      await unlink(join(value.cwd, ".git", "objects", oid.slice(0, 2), oid.slice(2)));
+    }
+    await expect(verify()).resolves.toBeUndefined();
+
+    const jsonPath = "evidence/thurstone-invocation-integrity.json";
+    const jsonBytes = value.successorContents.get(jsonPath)!;
+    await rm(join(value.cwd, jsonPath));
+    await expect(verify()).rejects.toThrow(/active_checkout_mismatch/u);
+    await writeFile(join(value.cwd, jsonPath), jsonBytes);
+
+    await writeFile(join(value.cwd, jsonPath), "modified evidence\n");
+    await expect(verify()).rejects.toThrow(/active_checkout_mismatch/u);
+    await writeFile(join(value.cwd, jsonPath), jsonBytes);
+
+    await chmod(join(value.cwd, jsonPath), 0o755);
+    await expect(verify()).rejects.toThrow(/active_checkout_mismatch/u);
+    await chmod(join(value.cwd, jsonPath), 0o644);
+
+    await rm(join(value.cwd, jsonPath));
+    await symlink("thurstone-invocation-integrity.md", join(value.cwd, jsonPath));
+    await expect(verify()).rejects.toThrow(/active_checkout_type/u);
+    await rm(join(value.cwd, jsonPath));
+    await writeFile(join(value.cwd, jsonPath), jsonBytes);
+
+    await expect(
+      verify({
+        ...value.transition,
+        evidence: { ...value.transition.evidence, tree: value.transition.protocolExtension.tree }
+      })
+    ).rejects.toThrow(/invocation_evidence_chain_invalid/u);
+    await expect(
+      verify({
+        ...value.transition,
+        evidence: { ...value.transition.evidence, jsonExportSha256: "0".repeat(64) }
+      })
+    ).rejects.toThrow(/invocation_evidence_file_digest_invalid/u);
+    await expect(verify(value.transition, firstParentChain.slice(0, 2))).rejects.toThrow(
+      /invocation_evidence_chain_invalid/u
+    );
   });
 
   it("verifies the exact e2-style sealed-reader recovery and active checkout", async () => {

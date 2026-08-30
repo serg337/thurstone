@@ -160,7 +160,24 @@ export const JUDGE_DEMO_INVOCATION_INTEGRITY_IMPLEMENTATION_REQUIRED_PATHS = Obj
   ].sort()
 );
 
-/** Strict I -> E supplemental-evidence/Gate-9-preparation boundary. */
+/** Locale-independent ordering used only by the prospective I -> P -> E evidence transition. */
+export function judgeDemoInvocationIntegrityEvidencePathCompare(
+  left: string,
+  right: string
+): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+/** Exact prospective I -> P evidence-transport protocol boundary. */
+export const JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_PROTOCOL_PATHS = Object.freeze(
+  [
+    "lib/judge/collateral-checkout-verifier.server.ts",
+    "lib/judge/collateral-proof.ts",
+    "tests/integration/judge-presentation.test.ts"
+  ].sort(judgeDemoInvocationIntegrityEvidencePathCompare)
+);
+
+/** Strict P -> E supplemental-evidence/Gate-9-preparation boundary. */
 export const JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_ALLOWED_PATHS = Object.freeze(
   [
     "CHALLENGE.md",
@@ -181,14 +198,14 @@ export const JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_ALLOWED_PATHS = Object.fre
     "submission/devpost.md",
     "tests/browser/results.spec.ts",
     "tests/unit/invocation-integrity-evidence.test.ts"
-  ].sort()
+  ].sort(judgeDemoInvocationIntegrityEvidencePathCompare)
 );
 export const JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_REQUIRED_PATHS = Object.freeze(
   [
     "evidence/thurstone-invocation-integrity.json",
     "evidence/thurstone-invocation-integrity.md",
     "lib/results/invocation-integrity-measured.ts"
-  ].sort()
+  ].sort(judgeDemoInvocationIntegrityEvidencePathCompare)
 );
 
 export const JUDGE_DEMO_INVOCATION_INTEGRITY_PRESERVED_SEMANTIC_ARTIFACTS = Object.freeze([
@@ -429,6 +446,9 @@ const invocationIntegrityProtocolPath = z.enum(
 const invocationIntegrityImplementationPath = z.enum(
   JUDGE_DEMO_INVOCATION_INTEGRITY_IMPLEMENTATION_ALLOWED_PATHS as unknown as [string, ...string[]]
 );
+const invocationIntegrityEvidenceProtocolPath = z.enum(
+  JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_PROTOCOL_PATHS as unknown as [string, ...string[]]
+);
 const invocationIntegrityEvidencePath = z.enum(
   JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_ALLOWED_PATHS as unknown as [string, ...string[]]
 );
@@ -475,6 +495,9 @@ const invocationIntegrityProtocolTreeChangeSchema = z
   .strict();
 const invocationIntegrityImplementationTreeChangeSchema = z
   .object({ path: invocationIntegrityImplementationPath, ...transitionTreeChangeShape })
+  .strict();
+const invocationIntegrityEvidenceProtocolTreeChangeSchema = z
+  .object({ path: invocationIntegrityEvidenceProtocolPath, ...transitionTreeChangeShape })
   .strict();
 const invocationIntegrityEvidenceTreeChangeSchema = z
   .object({ path: invocationIntegrityEvidencePath, ...transitionTreeChangeShape })
@@ -821,6 +844,19 @@ const invocationIntegrityEvidenceTransitionSchema = z
     ...transitionCommon,
     version: z.literal(JUDGE_DEMO_INVOCATION_INTEGRITY_TRANSITION_VERSION),
     kind: z.literal("invocation-integrity-evidence"),
+    protocolExtension: z
+      .object({
+        commit,
+        tree: gitOid,
+        changedPaths: z
+          .array(invocationIntegrityEvidenceProtocolPath)
+          .length(JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_PROTOCOL_PATHS.length),
+        treeChanges: z
+          .array(invocationIntegrityEvidenceProtocolTreeChangeSchema)
+          .length(JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_PROTOCOL_PATHS.length),
+        gitTreeProjectionHash: sha256
+      })
+      .strict(),
     evidence: z
       .object({
         executionBuildCommit: commit,
@@ -1121,14 +1157,31 @@ export async function verifyJudgeDemoPresentationTransition(
       throw new Error("judge_demo_invocation_integrity_transition_invalid");
     }
   } else if (proof.kind === "invocation-integrity-evidence") {
+    const protocolPaths = proof.protocolExtension.treeChanges.map(({ path }) => path);
     const evidencePaths = proof.evidence.treeChanges.map(({ path }) => path);
     if (
       proof.ordinal !== 3 ||
       proof.evidence.executionBuildCommit !== proof.predecessorCommit ||
+      proof.protocolExtension.commit === proof.predecessorCommit ||
+      proof.protocolExtension.commit === proof.successorCommit ||
+      canonicalJson(proof.protocolExtension.changedPaths) !==
+        canonicalJson(JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_PROTOCOL_PATHS) ||
+      canonicalJson(protocolPaths) !==
+        canonicalJson(JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_PROTOCOL_PATHS) ||
+      canonicalJson(proof.protocolExtension.treeChanges) !==
+        canonicalJson(
+          [...proof.protocolExtension.treeChanges].sort((left, right) =>
+            judgeDemoInvocationIntegrityEvidencePathCompare(left.path, right.path)
+          )
+        ) ||
+      (await canonicalSha256(proof.protocolExtension.treeChanges)) !==
+        proof.protocolExtension.gitTreeProjectionHash ||
       canonicalJson(proof.evidence.changedPaths) !== canonicalJson(evidencePaths) ||
       canonicalJson(proof.evidence.treeChanges) !==
         canonicalJson(
-          [...proof.evidence.treeChanges].sort((left, right) => left.path.localeCompare(right.path))
+          [...proof.evidence.treeChanges].sort((left, right) =>
+            judgeDemoInvocationIntegrityEvidencePathCompare(left.path, right.path)
+          )
         ) ||
       new Set(evidencePaths).size !== evidencePaths.length ||
       JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_REQUIRED_PATHS.some(
@@ -1138,8 +1191,11 @@ export async function verifyJudgeDemoPresentationTransition(
         proof.evidence.requiredPathsHash ||
       (await canonicalSha256(proof.evidence.treeChanges)) !==
         proof.evidence.gitTreeProjectionHash ||
-      (await canonicalSha256([proof.predecessorCommit, proof.successorCommit])) !==
-        proof.firstParentChainHash
+      (await canonicalSha256([
+        proof.predecessorCommit,
+        proof.protocolExtension.commit,
+        proof.successorCommit
+      ])) !== proof.firstParentChainHash
     ) {
       throw new Error("judge_demo_invocation_integrity_evidence_transition_invalid");
     }
