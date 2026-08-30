@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
+import { brotliDecompressSync } from "node:zlib";
 
 import { canonicalJson } from "../lib/evidence/digest";
 import {
@@ -8,6 +9,44 @@ import {
   decodeGate6PresentationProof,
   dependencyProjectionHash
 } from "../lib/results/presentation-proof";
+
+const MAX_GIT_PACK_TRANSPORT_CHARACTERS = 60_000;
+const MAX_EXPANDED_GIT_PACK_BYTES = 65_536;
+
+function decodeGitProofPack(
+  encoded: string,
+  expectedSha256: string
+): { readonly bytes: Buffer; readonly encoding: "raw" | "brotli" } {
+  if (
+    encoded.length < 1 ||
+    encoded.length > MAX_GIT_PACK_TRANSPORT_CHARACTERS ||
+    !/^[A-Za-z0-9_-]+$/u.test(encoded)
+  ) {
+    throw new Error("gate6_presentation_git_pack_encoding_invalid");
+  }
+  const transported = Buffer.from(encoded, "base64url");
+  if (transported.toString("base64url") !== encoded) {
+    throw new Error("gate6_presentation_git_pack_encoding_invalid");
+  }
+  const raw = transported.subarray(0, 4).toString("ascii") === "PACK";
+  let bytes: Buffer;
+  try {
+    bytes = raw
+      ? transported
+      : brotliDecompressSync(transported, { maxOutputLength: MAX_EXPANDED_GIT_PACK_BYTES });
+  } catch {
+    throw new Error("gate6_presentation_git_pack_encoding_invalid");
+  }
+  if (
+    bytes.length < 12 ||
+    bytes.length > MAX_EXPANDED_GIT_PACK_BYTES ||
+    bytes.subarray(0, 4).toString("ascii") !== "PACK" ||
+    createHash("sha256").update(bytes).digest("hex") !== expectedSha256
+  ) {
+    throw new Error("gate6_presentation_proof_root_invalid");
+  }
+  return Object.freeze({ bytes, encoding: raw ? "raw" : "brotli" });
+}
 
 function assertFirstParentAncestor(ancestor: string, descendant: string): void {
   let cursor = descendant;
@@ -42,25 +81,20 @@ if (activeCommit === measuredV2) {
     throw new Error("gate6_presentation_proof_root_invalid");
   }
   let gitProofTransport: "verified-pack" | "full-local-history";
+  let gitProofPackEncoding: "raw" | "brotli" | null = null;
   if (packEncoded) {
-    const pack = Buffer.from(packEncoded, "base64url");
-    if (
-      pack.length < 1 ||
-      pack.toString("base64url") !== packEncoded ||
-      createHash("sha256").update(pack).digest("hex") !== proof.gitProofPackSha256
-    ) {
-      throw new Error("gate6_presentation_proof_root_invalid");
-    }
+    const pack = decodeGitProofPack(packEncoded, proof.gitProofPackSha256);
     execFileSync("git", ["init", "-q"], { cwd: process.cwd() });
     const indexed = spawnSync("git", ["index-pack", "--stdin", "--fix-thin"], {
       cwd: process.cwd(),
-      input: pack,
+      input: pack.bytes,
       maxBuffer: 1_048_576
     });
     if (indexed.status !== 0) {
       throw new Error("gate6_presentation_git_pack_invalid");
     }
     gitProofTransport = "verified-pack";
+    gitProofPackEncoding = pack.encoding;
   } else {
     const measuredAvailable = spawnSync(
       "git",
@@ -140,6 +174,7 @@ if (activeCommit === measuredV2) {
       dependencyProjectionHash: proof.dependencyProjectionHash,
       gitProofPackSha256: proof.gitProofPackSha256,
       gitProofTransport,
+      gitProofPackEncoding,
       proofHash: proof.proofHash
     })}\n`
   );

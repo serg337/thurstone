@@ -3,11 +3,12 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { chmod, mkdir, mkdtemp, readFile, rm, symlink, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { gzipSync } from "node:zlib";
+import { brotliCompressSync, gzipSync } from "node:zlib";
 
 import { canonicalJson, canonicalSha256 } from "@/lib/evidence/digest";
 import {
   verifyInvocationIntegrityEvidenceCheckout,
+  verifyJudgeDemoCollateralCheckout,
   verifyJudgeDemoPresentationCheckout
 } from "@/lib/judge/collateral-checkout-verifier.server";
 import {
@@ -15,7 +16,20 @@ import {
   JUDGE_DEMO_CI_TIMEOUT_MS,
   JUDGE_DEMO_CI_TIMEOUT_PATH,
   JUDGE_DEMO_CI_TIMEOUT_VALIDATION_VERSION,
+  JUDGE_DEMO_COLLATERAL_FIELD_PREFIXES,
   JUDGE_DEMO_CRITICAL_PATHS,
+  JUDGE_DEMO_GATE9_COLLATERAL_PREPARATION_PATHS,
+  JUDGE_DEMO_GATE9_COLLATERAL_PREPARATION_VERSION,
+  JUDGE_DEMO_GATE9_COLLATERAL_PREDECESSOR_VALUE,
+  JUDGE_DEMO_GATE9_EVIDENCE_BINDING_HASH,
+  JUDGE_DEMO_GATE9_EVIDENCE_MATERIAL_COMMIT,
+  JUDGE_DEMO_GATE9_EVIDENCE_MATERIAL_TREE,
+  JUDGE_DEMO_GATE9_EVIDENCE_TRANSITION_PROOF_HASH,
+  JUDGE_DEMO_GATE9_GIT_PACK_TRANSPORT,
+  JUDGE_DEMO_GATE9_PROTOCOL_FINALIZATION_PATHS,
+  JUDGE_DEMO_GATE9_PROTOCOL_FINALIZATION_VERSION,
+  JUDGE_DEMO_GATE9_PUBLIC_REPOSITORY_URL,
+  JUDGE_DEMO_GATE9_RELEASE_URL,
   JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_COMMIT,
   JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_PATH,
   JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_SHA256,
@@ -82,7 +96,8 @@ import {
 import {
   GATE6_PRESENTATION_PROOF_ENV,
   GATE6_PRESENTATION_PROOF_VERSION,
-  dependencyProjectionHash
+  dependencyProjectionHash,
+  gate6PresentationPathAllowed
 } from "@/lib/results/presentation-proof";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -178,10 +193,11 @@ async function transitionCommon(input: {
   rootCommit: string;
   predecessorCommit: string;
   successorCommit: string;
-  ordinal: 0 | 1 | 2;
+  ordinal: 0 | 1 | 2 | 3 | 4;
   version?:
     | typeof JUDGE_DEMO_PRESENTATION_TRANSITION_VERSION
-    | typeof JUDGE_DEMO_PRESENTATION_REBRAND_TRANSITION_VERSION;
+    | typeof JUDGE_DEMO_PRESENTATION_REBRAND_TRANSITION_VERSION
+    | typeof JUDGE_DEMO_INVOCATION_INTEGRITY_TRANSITION_VERSION;
 }) {
   const [rootEnvelope, predecessorEnvelope, successorEnvelope] = await Promise.all([
     createJudgeDemoEnvelope(input.rootCommit, { historicalPresentation: true }),
@@ -353,10 +369,11 @@ async function collateralTransition(input: {
   recoveryCommit: string;
   releaseCommit: string;
   collateralChanges?: JudgeDemoCollateralTransition["collateralChanges"];
-  ordinal?: 1 | 2;
+  ordinal?: 1 | 2 | 3 | 4;
   version?:
     | typeof JUDGE_DEMO_PRESENTATION_TRANSITION_VERSION
-    | typeof JUDGE_DEMO_PRESENTATION_REBRAND_TRANSITION_VERSION;
+    | typeof JUDGE_DEMO_PRESENTATION_REBRAND_TRANSITION_VERSION
+    | typeof JUDGE_DEMO_INVOCATION_INTEGRITY_TRANSITION_VERSION;
 }): Promise<JudgeDemoCollateralTransition> {
   const common = await transitionCommon({
     cwd: input.cwd,
@@ -501,6 +518,7 @@ async function bindingFor(input: {
   version?:
     | typeof JUDGE_DEMO_PRESENTATION_BINDING_VERSION
     | typeof JUDGE_DEMO_PRESENTATION_REBRAND_BINDING_VERSION;
+  gitProofPackSha256?: string;
 }): Promise<JudgeDemoPresentationBinding> {
   const [rootEnvelope, activeEnvelope] = await Promise.all([
     createJudgeDemoEnvelope(input.rootCommit, { historicalPresentation: true }),
@@ -518,7 +536,7 @@ async function bindingFor(input: {
     rootCapturedAt,
     immutableProjectionHash: await judgeDemoImmutableProjectionHash(rootEnvelope),
     transitions: input.transitions,
-    gitProofPackSha256: "a".repeat(64),
+    gitProofPackSha256: input.gitProofPackSha256 ?? "a".repeat(64),
     providerCallsPerformed: 0 as const,
     storeWritesPerformed: 0 as const,
     replayOnly: true as const
@@ -963,7 +981,9 @@ async function invocationIntegrityEvidenceTransitionFixture() {
   });
 }
 
-async function invocationIntegrityEvidenceCheckoutFixture() {
+async function invocationIntegrityEvidenceCheckoutFixture(
+  options: { readonly terminalFinalization?: boolean } = {}
+) {
   const cwd = await mkdtemp(join(tmpdir(), "toolproof-invocation-evidence-"));
   temporaryRoots.push(cwd);
   git(cwd, ["init", "-q"]);
@@ -989,6 +1009,19 @@ async function invocationIntegrityEvidenceCheckoutFixture() {
     if (path.startsWith("evidence/")) continue;
     await write(cwd, path, `evidence predecessor: ${path}\n`);
   }
+  for (const path of JUDGE_DEMO_GATE9_PROTOCOL_FINALIZATION_PATHS) {
+    if (
+      !JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_PROTOCOL_PATHS.includes(path) &&
+      !evidencePaths.includes(path)
+    ) {
+      await write(cwd, path, `gate9 protocol predecessor: ${path}\n`);
+    }
+  }
+  for (const path of JUDGE_DEMO_GATE9_COLLATERAL_PREPARATION_PATHS) {
+    if (path !== "public/thurstone-devpost-thumbnail.jpg" && !evidencePaths.includes(path)) {
+      await write(cwd, path, `gate9 collateral predecessor: ${path}\n`);
+    }
+  }
   await write(
     cwd,
     "lib/results/invocation-integrity-measured.ts",
@@ -996,9 +1029,13 @@ async function invocationIntegrityEvidenceCheckoutFixture() {
   );
   const predecessorPaths = [
     ...JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_PROTOCOL_PATHS,
-    ...evidencePaths.filter((path) => !path.startsWith("evidence/"))
+    ...evidencePaths.filter((path) => !path.startsWith("evidence/")),
+    ...JUDGE_DEMO_GATE9_PROTOCOL_FINALIZATION_PATHS,
+    ...JUDGE_DEMO_GATE9_COLLATERAL_PREPARATION_PATHS.filter(
+      (path) => path !== "public/thurstone-devpost-thumbnail.jpg"
+    )
   ].sort(judgeDemoInvocationIntegrityEvidencePathCompare);
-  git(cwd, ["add", "--", ...predecessorPaths]);
+  git(cwd, ["add", "--", ...new Set(predecessorPaths)]);
   git(cwd, ["commit", "-q", "-m", "invocation evidence execution build"]);
   const predecessorCommit = git(cwd, ["rev-parse", "HEAD"]);
 
@@ -1038,10 +1075,50 @@ async function invocationIntegrityEvidenceCheckoutFixture() {
   }
   git(cwd, ["add", "--", ...evidencePaths]);
   git(cwd, ["commit", "-q", "-m", "seal invocation integrity evidence"]);
-  const successorCommit = git(cwd, ["rev-parse", "HEAD"]);
+  const evidenceMaterialCommit = git(cwd, ["rev-parse", "HEAD"]);
+
+  let protocolFinalizationCommit: string | null = null;
+  let successorCommit = evidenceMaterialCommit;
+  if (options.terminalFinalization === true) {
+    for (const path of JUDGE_DEMO_GATE9_PROTOCOL_FINALIZATION_PATHS) {
+      await write(cwd, path, `gate9 protocol finalized: ${path}\n`);
+    }
+    git(cwd, ["add", "--", ...JUDGE_DEMO_GATE9_PROTOCOL_FINALIZATION_PATHS]);
+    git(cwd, ["commit", "-q", "-m", "finalize gate9 proof transport"]);
+    protocolFinalizationCommit = git(cwd, ["rev-parse", "HEAD"]);
+
+    const preparedLinkDocument = [
+      "Live app: https://toolproof-rust.vercel.app",
+      "Public repository: reserved for the verified Gate 9 link-only release commit",
+      "Release: reserved for the verified Gate 9 link-only release commit",
+      "Demo video: reserved for the verified Gate 9 link-only release commit",
+      ""
+    ].join("\n");
+    for (const path of JUDGE_DEMO_GATE9_COLLATERAL_PREPARATION_PATHS) {
+      if (path === "public/thurstone-devpost-thumbnail.jpg") {
+        await mkdir(dirname(join(cwd, path)), { recursive: true });
+        await writeFile(join(cwd, path), Buffer.from("synthetic thumbnail bytes\n"));
+      } else if (path === "README.md" || path === "submission/devpost.md") {
+        await write(cwd, path, preparedLinkDocument);
+      } else {
+        await write(cwd, path, `gate9 collateral prepared: ${path}\n`);
+      }
+    }
+    git(cwd, ["add", "--", ...JUDGE_DEMO_GATE9_COLLATERAL_PREPARATION_PATHS]);
+    git(cwd, ["commit", "-q", "-m", "prepare gate9 collateral"]);
+    successorCommit = git(cwd, ["rev-parse", "HEAD"]);
+  }
 
   const protocolChanges = evidenceTreeChanges(cwd, predecessorCommit, protocolCommit);
-  const evidenceChanges = evidenceTreeChanges(cwd, protocolCommit, successorCommit);
+  const evidenceChanges = evidenceTreeChanges(cwd, protocolCommit, evidenceMaterialCommit);
+  const finalizationChanges =
+    protocolFinalizationCommit === null
+      ? []
+      : evidenceTreeChanges(cwd, evidenceMaterialCommit, protocolFinalizationCommit);
+  const preparationChanges =
+    protocolFinalizationCommit === null
+      ? []
+      : evidenceTreeChanges(cwd, protocolFinalizationCommit, successorCommit);
   const aggregateChanges = evidenceTreeChanges(cwd, predecessorCommit, successorCommit);
   const payload = {
     version: JUDGE_DEMO_INVOCATION_INTEGRITY_TRANSITION_VERSION,
@@ -1058,11 +1135,17 @@ async function invocationIntegrityEvidenceCheckoutFixture() {
     rootStoredProjectionDigest,
     rootCapturedAt,
     immutableProjectionHash: "3".repeat(64),
-    firstParentChainHash: await canonicalSha256([
-      predecessorCommit,
-      protocolCommit,
-      successorCommit
-    ]),
+    firstParentChainHash: await canonicalSha256(
+      protocolFinalizationCommit === null
+        ? [predecessorCommit, protocolCommit, successorCommit]
+        : [
+            predecessorCommit,
+            protocolCommit,
+            JUDGE_DEMO_GATE9_EVIDENCE_MATERIAL_COMMIT,
+            protocolFinalizationCommit,
+            successorCommit
+          ]
+    ),
     gitTreeProjectionHash: await canonicalSha256(aggregateChanges),
     criticalProjectionHash: "6".repeat(64),
     dependencyProjectionHash: "7".repeat(64),
@@ -1078,7 +1161,10 @@ async function invocationIntegrityEvidenceCheckoutFixture() {
     },
     evidence: {
       executionBuildCommit: predecessorCommit,
-      tree: git(cwd, ["rev-parse", `${successorCommit}^{tree}`]),
+      tree:
+        protocolFinalizationCommit === null
+          ? git(cwd, ["rev-parse", `${evidenceMaterialCommit}^{tree}`])
+          : JUDGE_DEMO_GATE9_EVIDENCE_MATERIAL_TREE,
       changedPaths: evidenceChanges.map(({ path }) => path),
       treeChanges: evidenceChanges,
       requiredPathsHash: await canonicalSha256(
@@ -1107,6 +1193,48 @@ async function invocationIntegrityEvidenceCheckoutFixture() {
       semanticNoMeasuredImprovement: true as const,
       immutableProjectionHash: "d".repeat(64)
     },
+    ...(protocolFinalizationCommit === null
+      ? {}
+      : {
+          terminalFinalization: {
+            predecessorBinding: {
+              activeCommit: JUDGE_DEMO_GATE9_EVIDENCE_MATERIAL_COMMIT,
+              activeTree: JUDGE_DEMO_GATE9_EVIDENCE_MATERIAL_TREE,
+              bindingHash: JUDGE_DEMO_GATE9_EVIDENCE_BINDING_HASH,
+              evidenceTransitionProofHash: JUDGE_DEMO_GATE9_EVIDENCE_TRANSITION_PROOF_HASH
+            },
+            evidenceMaterialCommit: JUDGE_DEMO_GATE9_EVIDENCE_MATERIAL_COMMIT,
+            evidenceMaterialTree: JUDGE_DEMO_GATE9_EVIDENCE_MATERIAL_TREE,
+            protocolFinalization: {
+              version: JUDGE_DEMO_GATE9_PROTOCOL_FINALIZATION_VERSION,
+              predecessorCommit: JUDGE_DEMO_GATE9_EVIDENCE_MATERIAL_COMMIT,
+              successorCommit: protocolFinalizationCommit,
+              successorTree: git(cwd, ["rev-parse", `${protocolFinalizationCommit}^{tree}`]),
+              changedPaths: [...JUDGE_DEMO_GATE9_PROTOCOL_FINALIZATION_PATHS],
+              treeChanges: finalizationChanges,
+              gitTreeProjectionHash: await canonicalSha256(finalizationChanges),
+              gitPackTransport: JUDGE_DEMO_GATE9_GIT_PACK_TRANSPORT,
+              providerCallsPerformed: 0 as const,
+              modelCallsPerformed: 0 as const,
+              scoredCallsPerformed: 0 as const,
+              storeWritesPerformed: 0 as const
+            },
+            collateralPreparation: {
+              version: JUDGE_DEMO_GATE9_COLLATERAL_PREPARATION_VERSION,
+              predecessorCommit: protocolFinalizationCommit,
+              successorCommit,
+              successorTree: git(cwd, ["rev-parse", `${successorCommit}^{tree}`]),
+              changedPaths: [...JUDGE_DEMO_GATE9_COLLATERAL_PREPARATION_PATHS],
+              treeChanges: preparationChanges,
+              gitTreeProjectionHash: await canonicalSha256(preparationChanges),
+              linkFieldsStatus: "reserved-for-final-link-only-release" as const,
+              providerCallsPerformed: 0 as const,
+              modelCallsPerformed: 0 as const,
+              scoredCallsPerformed: 0 as const,
+              storeWritesPerformed: 0 as const
+            }
+          }
+        }),
     gate6PresentationProofHash: "e".repeat(64),
     gate6CriticalProjectionHash: "f".repeat(64),
     modelCallsPerformed: 0 as const,
@@ -1123,6 +1251,8 @@ async function invocationIntegrityEvidenceCheckoutFixture() {
     cwd,
     predecessorCommit,
     protocolCommit,
+    evidenceMaterialCommit,
+    protocolFinalizationCommit,
     successorCommit,
     successorContents,
     transition
@@ -1316,6 +1446,61 @@ describe("judge provider-free presentation lineage", () => {
     );
   });
 
+  it("binds the exact E-to-F-to-C terminal evidence finalization", async () => {
+    const value = await invocationIntegrityEvidenceCheckoutFixture({ terminalFinalization: true });
+    if (value.protocolFinalizationCommit === null) {
+      throw new Error("test_gate9_protocol_finalization_missing");
+    }
+    expect(value.transition.terminalFinalization).toMatchObject({
+      predecessorBinding: {
+        activeCommit: JUDGE_DEMO_GATE9_EVIDENCE_MATERIAL_COMMIT,
+        activeTree: JUDGE_DEMO_GATE9_EVIDENCE_MATERIAL_TREE,
+        bindingHash: JUDGE_DEMO_GATE9_EVIDENCE_BINDING_HASH,
+        evidenceTransitionProofHash: JUDGE_DEMO_GATE9_EVIDENCE_TRANSITION_PROOF_HASH
+      },
+      evidenceMaterialCommit: JUDGE_DEMO_GATE9_EVIDENCE_MATERIAL_COMMIT,
+      protocolFinalization: {
+        predecessorCommit: JUDGE_DEMO_GATE9_EVIDENCE_MATERIAL_COMMIT,
+        successorCommit: value.protocolFinalizationCommit,
+        gitPackTransport: JUDGE_DEMO_GATE9_GIT_PACK_TRANSPORT
+      },
+      collateralPreparation: {
+        predecessorCommit: value.protocolFinalizationCommit,
+        successorCommit: value.successorCommit,
+        linkFieldsStatus: "reserved-for-final-link-only-release"
+      }
+    });
+    expect(gate6PresentationPathAllowed("public/thurstone-devpost-thumbnail.jpg")).toBe(true);
+
+    const tampered = structuredClone(value.transition);
+    if (!tampered.terminalFinalization) {
+      throw new Error("test_gate9_protocol_finalization_missing");
+    }
+    tampered.terminalFinalization.collateralPreparation.changedPaths =
+      tampered.terminalFinalization.collateralPreparation.changedPaths.slice(1);
+    await expect(
+      verifyJudgeDemoPresentationTransition({
+        ...tampered,
+        proofHash: await canonicalSha256(
+          Object.fromEntries(Object.entries(tampered).filter(([key]) => key !== "proofHash"))
+        )
+      })
+    ).rejects.toThrow();
+    await expect(
+      verifyJudgeDemoPresentationTransition({
+        ...value.transition,
+        firstParentChainHash: await canonicalSha256([
+          value.predecessorCommit,
+          value.protocolCommit,
+          JUDGE_DEMO_GATE9_EVIDENCE_MATERIAL_COMMIT,
+          value.successorCommit,
+          value.protocolFinalizationCommit
+        ]),
+        proofHash: value.transition.proofHash
+      })
+    ).rejects.toThrow();
+  });
+
   it("verifies the exact e2-style sealed-reader recovery and active checkout", async () => {
     const value = await fixture();
     git(value.cwd, ["reset", "--hard", "-q", value.recoveryCommit]);
@@ -1360,6 +1545,80 @@ describe("judge provider-free presentation lineage", () => {
     expect(script.status, script.stderr).toBe(0);
     expect(script.stdout).toContain('"status":"verified-provider-free-lineage"');
     expect(script.stdout).toContain('"storeWritesPerformed":0');
+
+    const objectIds = git(value.cwd, ["rev-list", "--objects", "--all"])
+      .split(/\r?\n/u)
+      .map((line) => line.split(" ", 1)[0])
+      .filter((oid): oid is string => typeof oid === "string" && oid.length === 40);
+    const packed = spawnSync(
+      "git",
+      ["pack-objects", "--stdout", "--no-reuse-delta", "--no-reuse-object", "--compression=0"],
+      {
+        cwd: value.cwd,
+        input: Buffer.from(`${objectIds.join("\n")}\n`),
+        maxBuffer: 8_388_608
+      }
+    );
+    expect(packed.status, String(packed.stderr)).toBe(0);
+    const rawPack = Buffer.from(packed.stdout);
+    const packHash = sha256(rawPack);
+    const transportBinding = await bindingFor({
+      rootCommit: value.rootCommit,
+      activeCommit: value.recoveryCommit,
+      transitions: [value.recovery],
+      gitProofPackSha256: packHash
+    });
+    const runPackTransport = (packValue: string) =>
+      spawnSync(
+        resolve("node_modules/.bin/tsx"),
+        [
+          "--tsconfig",
+          resolve("tsconfig.operator.json"),
+          resolve("scripts/verify-judge-presentation.ts")
+        ],
+        {
+          cwd: value.cwd,
+          env: {
+            ...process.env,
+            VERCEL: "1",
+            TOOLPROOF_JUDGE_LANE_MODE: "enabled",
+            TOOLPROOF_JUDGE_PRESENTATION_MODE: "successor",
+            TOOLPROOF_JUDGE_ACTIVE_COMMIT: value.recoveryCommit,
+            TOOLPROOF_COMMIT_SHA: value.recoveryCommit,
+            VERCEL_GIT_COMMIT_SHA: value.recoveryCommit,
+            [JUDGE_DEMO_PRESENTATION_BINDING_ENV]: gzipSync(
+              Buffer.from(canonicalJson(transportBinding))
+            ).toString("base64url"),
+            [JUDGE_DEMO_PRESENTATION_BINDING_HASH_ENV]: transportBinding.bindingHash,
+            [JUDGE_DEMO_SHARED_GIT_PACK_ENV]: packValue,
+            [JUDGE_DEMO_GIT_PACK_ENV]: ""
+          },
+          encoding: "utf8",
+          maxBuffer: 8_388_608
+        }
+      );
+    const rawTransport = runPackTransport(rawPack.toString("base64url"));
+    expect(rawTransport.status, rawTransport.stderr).toBe(0);
+    expect(rawTransport.stdout).toContain('"gitProofPackEncoding":"raw"');
+    const wrappedPack = brotliCompressSync(rawPack);
+    const brotliTransport = runPackTransport(wrappedPack.toString("base64url"));
+    expect(brotliTransport.status, brotliTransport.stderr).toBe(0);
+    expect(brotliTransport.stdout).toContain('"gitProofPackEncoding":"brotli"');
+
+    const wrongHashPack = Buffer.from(rawPack);
+    wrongHashPack[wrongHashPack.length - 1] = wrongHashPack.at(-1)! ^ 1;
+    const corruptWrapper = Buffer.from(wrappedPack);
+    const corruptIndex = Math.floor(corruptWrapper.length / 2);
+    corruptWrapper[corruptIndex] = corruptWrapper[corruptIndex]! ^ 1;
+    for (const invalid of [
+      wrongHashPack.toString("base64url"),
+      corruptWrapper.toString("base64url"),
+      Buffer.from("not-a-git-pack").toString("base64url"),
+      "A".repeat(60_001)
+    ]) {
+      const rejected = runPackTransport(invalid);
+      expect(rejected.status).not.toBe(0);
+    }
 
     for (const judgePack of [undefined, "AA"] as const) {
       const production = spawnSync(
@@ -1497,6 +1756,18 @@ describe("judge provider-free presentation lineage", () => {
       activeCommit: releaseCommit,
       transitions: [value.recovery, collateral]
     });
+    for (const path of ["README.md", "submission/devpost.md"] as const) {
+      const predecessorBlobOid = git(value.cwd, ["rev-parse", `${value.activeCommit}:${path}`]);
+      await unlink(
+        join(
+          value.cwd,
+          ".git",
+          "objects",
+          predecessorBlobOid.slice(0, 2),
+          predecessorBlobOid.slice(2)
+        )
+      );
+    }
     await expect(
       verifyJudgeDemoPresentationCheckout({ cwd: value.cwd, binding })
     ).resolves.toMatchObject({ transitionCount: 2 });
@@ -1507,12 +1778,140 @@ describe("judge provider-free presentation lineage", () => {
     );
   }, 20_000);
 
+  it("verifies the ordinal-four six-row release without predecessor document blobs", async () => {
+    const value = await truthStatusFinalizationFixture();
+    const placeholder = JUDGE_DEMO_GATE9_COLLATERAL_PREDECESSOR_VALUE;
+    const preparedLines = [
+      "Live app: https://toolproof-rust.vercel.app",
+      `Public repository: ${placeholder}`,
+      `Release: ${placeholder}`,
+      `Demo video: ${placeholder}`
+    ];
+    for (const path of ["README.md", "submission/devpost.md"] as const) {
+      const source = await readFile(join(value.cwd, path), "utf8");
+      const retained = source
+        .split("\n")
+        .filter((line) => !/^(?:Live app|Public repository|Release|Demo video): /u.test(line))
+        .join("\n")
+        .replace(/\n*$/u, "\n");
+      await write(value.cwd, path, `${retained}${preparedLines.join("\n")}\n`);
+    }
+    git(value.cwd, ["add", "--", "README.md", "submission/devpost.md"]);
+    git(value.cwd, ["commit", "-q", "-m", "prepare final collateral links"]);
+    const preparedCommit = git(value.cwd, ["rev-parse", "HEAD"]);
+
+    const successorValues = {
+      demo_video: "https://youtu.be/ABCDEFGHIJK",
+      public_repository: JUDGE_DEMO_GATE9_PUBLIC_REPOSITORY_URL,
+      release: JUDGE_DEMO_GATE9_RELEASE_URL
+    } as const;
+    const collateralChanges: JudgeDemoCollateralTransition["collateralChanges"] = [
+      "README.md",
+      "submission/devpost.md"
+    ].flatMap((path) =>
+      (["demo_video", "public_repository", "release"] as const).map((field) => ({
+        path: path as "README.md" | "submission/devpost.md",
+        field,
+        predecessorValue: placeholder,
+        successorValue: successorValues[field]
+      }))
+    );
+    for (const path of ["README.md", "submission/devpost.md"] as const) {
+      let source = await readFile(join(value.cwd, path), "utf8");
+      for (const change of collateralChanges.filter(({ path: candidate }) => candidate === path)) {
+        source = source.replace(
+          `${JUDGE_DEMO_COLLATERAL_FIELD_PREFIXES[change.field]}${placeholder}`,
+          `${JUDGE_DEMO_COLLATERAL_FIELD_PREFIXES[change.field]}${change.successorValue}`
+        );
+      }
+      await write(value.cwd, path, source);
+    }
+    git(value.cwd, ["add", "--", "README.md", "submission/devpost.md"]);
+    git(value.cwd, ["commit", "-q", "-m", "add final release links"]);
+    const releaseCommit = git(value.cwd, ["rev-parse", "HEAD"]);
+    const collateral = await collateralTransition({
+      cwd: value.cwd,
+      rootCommit: value.rootCommit,
+      recoveryCommit: preparedCommit,
+      releaseCommit,
+      collateralChanges,
+      ordinal: 4,
+      version: JUDGE_DEMO_INVOCATION_INTEGRITY_TRANSITION_VERSION
+    });
+    for (const path of ["README.md", "submission/devpost.md"] as const) {
+      const predecessorBlobOid = git(value.cwd, ["rev-parse", `${preparedCommit}:${path}`]);
+      await unlink(
+        join(
+          value.cwd,
+          ".git",
+          "objects",
+          predecessorBlobOid.slice(0, 2),
+          predecessorBlobOid.slice(2)
+        )
+      );
+    }
+    await expect(
+      verifyJudgeDemoCollateralCheckout({ cwd: value.cwd, proof: collateral })
+    ).resolves.toMatchObject({ changedPathCount: 2 });
+
+    const expectInvalidGate9Changes = async (
+      changes: JudgeDemoCollateralTransition["collateralChanges"]
+    ) => {
+      const ordered = [...changes].sort((left, right) =>
+        left.path === right.path
+          ? left.field.localeCompare(right.field)
+          : left.path.localeCompare(right.path)
+      );
+      const payload: Record<string, unknown> = {
+        ...collateral,
+        collateralChanges: ordered,
+        collateralChangesHash: await canonicalSha256(ordered)
+      };
+      delete payload.proofHash;
+      await expect(
+        verifyJudgeDemoPresentationTransition({
+          ...payload,
+          proofHash: await canonicalSha256(payload)
+        })
+      ).rejects.toThrow(/judge_demo_collateral_transition_invalid/u);
+    };
+    await expectInvalidGate9Changes(collateralChanges.slice(1));
+    await expectInvalidGate9Changes([
+      ...collateralChanges,
+      {
+        path: "README.md",
+        field: "live_app",
+        predecessorValue: "https://toolproof-rust.vercel.app",
+        successorValue: "https://toolproof-rust.vercel.app/results"
+      }
+    ]);
+    await expectInvalidGate9Changes(
+      collateralChanges.map((change, index) =>
+        index === 0 ? { ...change, predecessorValue: "wrong placeholder" } : change
+      )
+    );
+    await expectInvalidGate9Changes(
+      collateralChanges.map((change) =>
+        change.field === "public_repository"
+          ? { ...change, successorValue: "https://github.com/serg337/not-toolproof" }
+          : change
+      )
+    );
+    await expectInvalidGate9Changes(
+      collateralChanges.map((change) =>
+        change.field === "demo_video"
+          ? { ...change, successorValue: "https://example.com/video" }
+          : change
+      )
+    );
+  }, 19_000);
+
   it("rejects collateral mode, newline, relocation, and whitespace drift", async () => {
     const predecessorValue = "reserved for the verified Gate 9 link-only release commit";
     const successorValue = "https://github.com/serg337/toolproof";
     const predecessorLine = `Public repository: ${predecessorValue}`;
     const successorLine = `Public repository: ${successorValue}`;
-    for (const scenario of ["mode", "crlf", "relocation", "whitespace"] as const) {
+    for (const scenario of ["mode", "crlf", "relocation", "whitespace", "duplicate"] as const) {
       const value = await truthStatusFinalizationFixture();
       const source = await readFile(join(value.cwd, "README.md"), "utf8");
       let successor = source.replace(predecessorLine, successorLine);
@@ -1528,6 +1927,7 @@ describe("judge provider-free presentation lineage", () => {
       if (scenario === "whitespace") {
         successor = successor.replace(successorLine, `${successorLine} `);
       }
+      if (scenario === "duplicate") successor = `${successor}${successorLine}\n`;
       await write(value.cwd, "README.md", successor);
       git(value.cwd, ["add", "--", "README.md"]);
       if (scenario === "mode") {

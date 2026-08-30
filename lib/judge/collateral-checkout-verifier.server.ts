@@ -11,6 +11,8 @@ import {
   JUDGE_DEMO_CI_TIMEOUT_PATH,
   JUDGE_DEMO_COLLATERAL_FIELD_PREFIXES,
   JUDGE_DEMO_CRITICAL_PATHS,
+  JUDGE_DEMO_GATE9_COLLATERAL_PREPARATION_PATHS,
+  JUDGE_DEMO_GATE9_PROTOCOL_FINALIZATION_PATHS,
   JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_COMMIT,
   JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_PATH,
   JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_SHA256,
@@ -139,11 +141,6 @@ function gitBlobBytes(cwd: string, commit: string, path: string): Buffer | null 
   return result.stdout;
 }
 
-function gitText(cwd: string, commit: string, path: string): string | null {
-  const bytes = gitBlobBytes(cwd, commit, path);
-  return bytes === null ? null : new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-}
-
 /** Bind an active regular checkout file to the blob OID named by a transported Git tree. */
 async function activeCheckoutBlobBytes(cwd: string, commit: string, path: string): Promise<Buffer> {
   const [expected, actual] = await Promise.all([
@@ -192,6 +189,7 @@ function replaceCollateralFieldLineExactlyOnce(input: {
   readonly field: JudgeDemoCollateralField;
   readonly predecessorValue: string | null;
   readonly successorValue: string;
+  readonly direction?: "forward" | "reverse";
 }): string {
   if (input.predecessorValue === null) {
     throw new Error("judge_demo_presentation_collateral_predecessor_field_missing");
@@ -199,12 +197,17 @@ function replaceCollateralFieldLineExactlyOnce(input: {
   const prefix = JUDGE_DEMO_COLLATERAL_FIELD_PREFIXES[input.field];
   const predecessorLine = `${prefix}${input.predecessorValue}`;
   const successorLine = `${prefix}${input.successorValue}`;
+  const sourceLine = input.direction === "reverse" ? successorLine : predecessorLine;
+  const replacementLine = input.direction === "reverse" ? predecessorLine : successorLine;
   const lines = input.source.split("\n");
-  const indexes = lines.flatMap((line, index) => (line === predecessorLine ? [index] : []));
+  const indexes = lines.flatMap((line, index) => (line === sourceLine ? [index] : []));
   if (indexes.length !== 1) {
+    if (input.direction === "reverse") {
+      throw new Error("judge_demo_presentation_non_link_change");
+    }
     throw new Error("judge_demo_presentation_collateral_field_not_exactly_once");
   }
-  lines[indexes[0]!] = successorLine;
+  lines[indexes[0]!] = replacementLine;
   return lines.join("\n");
 }
 
@@ -414,20 +417,47 @@ async function verifyCollateralChanges(
   }
   const changedPaths = [...new Set(transition.collateralChanges.map(({ path }) => path))].sort();
   for (const path of changedPaths) {
-    const predecessorSource = gitText(cwd, transition.predecessorCommit, path);
-    if (predecessorSource === null) {
+    const [predecessorEntry, successorEntry, successorCheckout] = await Promise.all([
+      Promise.resolve(treeEntry(cwd, transition.predecessorCommit, path)),
+      Promise.resolve(treeEntry(cwd, transition.successorCommit, path)),
+      checkoutEntry(cwd, path)
+    ]);
+    if (predecessorEntry === null || predecessorEntry.mode !== "100644") {
       throw new Error("judge_demo_presentation_collateral_predecessor_missing");
     }
-    let successorSource: string;
-    try {
-      successorSource = await readFile(`${cwd}/${path}`, "utf8");
-    } catch {
+    if (
+      successorEntry === null ||
+      successorEntry.mode !== "100644" ||
+      successorCheckout === null ||
+      successorCheckout.mode !== "100644"
+    ) {
       throw new Error("judge_demo_presentation_collateral_successor_missing");
     }
-    let expectedSuccessor = predecessorSource;
-    for (const change of transition.collateralChanges.filter(
+    if (successorEntry.blobOid !== blobOid(successorCheckout.bytes)) {
+      throw new Error("judge_demo_presentation_non_link_change");
+    }
+    const successorSource = new TextDecoder("utf-8", { fatal: true }).decode(
+      successorCheckout.bytes
+    );
+    const changes = transition.collateralChanges.filter(
       ({ path: candidate }) => candidate === path
-    )) {
+    );
+    let reconstructedPredecessor = successorSource;
+    for (const change of [...changes].reverse()) {
+      reconstructedPredecessor = replaceCollateralFieldLineExactlyOnce({
+        source: reconstructedPredecessor,
+        field: change.field,
+        predecessorValue: change.predecessorValue,
+        successorValue: change.successorValue,
+        direction: "reverse"
+      });
+    }
+    const reconstructedBytes = Buffer.from(reconstructedPredecessor, "utf8");
+    if (blobOid(reconstructedBytes) !== predecessorEntry.blobOid) {
+      throw new Error("judge_demo_presentation_non_link_change");
+    }
+    let expectedSuccessor = reconstructedPredecessor;
+    for (const change of changes) {
       expectedSuccessor = replaceCollateralFieldLineExactlyOnce({
         source: expectedSuccessor,
         field: change.field,
@@ -435,7 +465,7 @@ async function verifyCollateralChanges(
         successorValue: change.successorValue
       });
     }
-    if (successorSource !== expectedSuccessor) {
+    if (!successorCheckout.bytes.equals(Buffer.from(expectedSuccessor, "utf8"))) {
       throw new Error("judge_demo_presentation_non_link_change");
     }
   }
@@ -761,16 +791,30 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
   readonly firstParentChain: readonly string[];
 }): Promise<void> {
   const protocolCommit = input.transition.protocolExtension.commit;
-  const expectedChain = [
-    input.transition.predecessorCommit,
-    protocolCommit,
-    input.transition.successorCommit
-  ];
+  const terminal = input.transition.terminalFinalization ?? null;
+  const evidenceMaterialCommit =
+    terminal?.evidenceMaterialCommit ?? input.transition.successorCommit;
+  const expectedChain =
+    terminal === null
+      ? [input.transition.predecessorCommit, protocolCommit, input.transition.successorCommit]
+      : [
+          input.transition.predecessorCommit,
+          protocolCommit,
+          evidenceMaterialCommit,
+          terminal.protocolFinalization.successorCommit,
+          terminal.collateralPreparation.successorCommit
+        ];
   if (
     canonicalJson(input.firstParentChain) !== canonicalJson(expectedChain) ||
     input.transition.evidence.executionBuildCommit !== input.transition.predecessorCommit ||
     commitTree(input.cwd, protocolCommit) !== input.transition.protocolExtension.tree ||
-    commitTree(input.cwd, input.transition.successorCommit) !== input.transition.evidence.tree
+    commitTree(input.cwd, evidenceMaterialCommit) !== input.transition.evidence.tree ||
+    (terminal !== null &&
+      (terminal.evidenceMaterialTree !== input.transition.evidence.tree ||
+        commitTree(input.cwd, terminal.protocolFinalization.successorCommit) !==
+          terminal.protocolFinalization.successorTree ||
+        commitTree(input.cwd, terminal.collateralPreparation.successorCommit) !==
+          terminal.collateralPreparation.successorTree))
   ) {
     throw new Error("judge_demo_invocation_evidence_chain_invalid");
   }
@@ -778,8 +822,32 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
     ...gitTreeChanges(input.cwd, input.transition.predecessorCommit, protocolCommit)
   ].sort((left, right) => judgeDemoInvocationIntegrityEvidencePathCompare(left.path, right.path));
   const evidenceChanges = [
-    ...gitTreeChanges(input.cwd, protocolCommit, input.transition.successorCommit)
+    ...gitTreeChanges(input.cwd, protocolCommit, evidenceMaterialCommit)
   ].sort((left, right) => judgeDemoInvocationIntegrityEvidencePathCompare(left.path, right.path));
+  const finalizationChanges =
+    terminal === null
+      ? []
+      : [
+          ...gitTreeChanges(
+            input.cwd,
+            evidenceMaterialCommit,
+            terminal.protocolFinalization.successorCommit
+          )
+        ].sort((left, right) =>
+          judgeDemoInvocationIntegrityEvidencePathCompare(left.path, right.path)
+        );
+  const preparationChanges =
+    terminal === null
+      ? []
+      : [
+          ...gitTreeChanges(
+            input.cwd,
+            terminal.protocolFinalization.successorCommit,
+            terminal.collateralPreparation.successorCommit
+          )
+        ].sort((left, right) =>
+          judgeDemoInvocationIntegrityEvidencePathCompare(left.path, right.path)
+        );
   if (
     canonicalJson(protocolChanges.map(({ path }) => path)) !==
       canonicalJson(JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_PROTOCOL_PATHS) ||
@@ -796,7 +864,20 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
     JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_REQUIRED_PATHS.some(
       (path) => !evidenceChanges.some((change) => change.path === path)
     ) ||
-    (await canonicalSha256(evidenceChanges)) !== input.transition.evidence.gitTreeProjectionHash
+    (await canonicalSha256(evidenceChanges)) !== input.transition.evidence.gitTreeProjectionHash ||
+    (terminal !== null &&
+      (canonicalJson(finalizationChanges.map(({ path }) => path)) !==
+        canonicalJson(JUDGE_DEMO_GATE9_PROTOCOL_FINALIZATION_PATHS) ||
+        canonicalJson(finalizationChanges) !==
+          canonicalJson(terminal.protocolFinalization.treeChanges) ||
+        (await canonicalSha256(finalizationChanges)) !==
+          terminal.protocolFinalization.gitTreeProjectionHash ||
+        canonicalJson(preparationChanges.map(({ path }) => path)) !==
+          canonicalJson(JUDGE_DEMO_GATE9_COLLATERAL_PREPARATION_PATHS) ||
+        canonicalJson(preparationChanges) !==
+          canonicalJson(terminal.collateralPreparation.treeChanges) ||
+        (await canonicalSha256(preparationChanges)) !==
+          terminal.collateralPreparation.gitTreeProjectionHash))
   ) {
     throw new Error("judge_demo_invocation_evidence_projection_invalid");
   }
@@ -814,6 +895,20 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
   }
   for (const change of evidenceChanges) {
     assertSafeMaterialTreeMutation(change, "judge_demo_invocation_evidence_mode_invalid");
+  }
+  for (const change of finalizationChanges) {
+    if (
+      change.status !== "M" ||
+      change.predecessorMode !== "100644" ||
+      change.successorMode !== "100644" ||
+      change.predecessorBlobOid === null ||
+      change.successorBlobOid === null
+    ) {
+      throw new Error(`judge_demo_gate9_protocol_finalization_mode_invalid:${change.path}`);
+    }
+  }
+  for (const change of preparationChanges) {
+    assertSafeMaterialTreeMutation(change, "judge_demo_gate9_collateral_preparation_mode_invalid");
   }
   const [jsonBytes, markdownBytes, measuredBytes] = await Promise.all([
     activeCheckoutBlobBytes(
@@ -962,8 +1057,14 @@ async function verifyTransitionGit(input: {
             ].sort()
           : input.transition.kind === "invocation-integrity-evidence"
             ? [
-                ...JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_PROTOCOL_PATHS,
-                ...input.transition.evidence.changedPaths
+                ...new Set([
+                  ...JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_PROTOCOL_PATHS,
+                  ...input.transition.evidence.changedPaths,
+                  ...(input.transition.terminalFinalization?.protocolFinalization.changedPaths ??
+                    []),
+                  ...(input.transition.terminalFinalization?.collateralPreparation.changedPaths ??
+                    [])
+                ])
               ].sort(judgeDemoInvocationIntegrityEvidencePathCompare)
             : [...new Set(input.transition.collateralChanges.map(({ path }) => path))].sort();
   if (canonicalJson(actualChangedPaths) !== canonicalJson(expectedChangedPaths)) {
@@ -1010,7 +1111,15 @@ async function verifyTransitionGit(input: {
       changedCriticalPaths.some(
         (path) =>
           !JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_PROTOCOL_PATHS.includes(path) &&
-          !transition.evidence.changedPaths.includes(path)
+          !transition.evidence.changedPaths.includes(path) &&
+          !(
+            transition.terminalFinalization?.protocolFinalization.changedPaths.includes(path) ??
+            false
+          ) &&
+          !(
+            transition.terminalFinalization?.collateralPreparation.changedPaths.includes(path) ??
+            false
+          )
       )) ||
     (transition.kind === "collateral-links" && changedCriticalPaths.length !== 0)
   ) {

@@ -82,6 +82,7 @@ const allowedExact = new Set([
   "lib/brand.ts",
   "package.json",
   "public/thurstone-results.jpg",
+  "public/thurstone-devpost-thumbnail.jpg",
   "public/toolproof-results.jpg",
   "scripts/verify-evidence.mjs",
   "scripts/verify-evidence.ts",

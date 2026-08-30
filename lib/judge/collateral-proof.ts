@@ -9,6 +9,11 @@ export const JUDGE_DEMO_PRESENTATION_REBRAND_TRANSITION_VERSION =
   "toolproof-judge-demo-presentation-transition@3.0.0";
 export const JUDGE_DEMO_INVOCATION_INTEGRITY_TRANSITION_VERSION =
   "toolproof-judge-demo-presentation-transition@4.0.0";
+export const JUDGE_DEMO_GATE9_PROTOCOL_FINALIZATION_VERSION =
+  "thurstone-judge-demo-gate9-protocol-finalization@1.0.0";
+export const JUDGE_DEMO_GATE9_COLLATERAL_PREPARATION_VERSION =
+  "thurstone-judge-demo-gate9-collateral-preparation@1.0.0";
+export const JUDGE_DEMO_GATE9_GIT_PACK_TRANSPORT = "brotli-wrapped-git-pack@1.0.0" as const;
 // Retained as an import-compatible name for release tooling. The proof is now a
 // discriminated transition rather than an unrestricted one-hop collateral proof.
 export const JUDGE_DEMO_COLLATERAL_PROOF_VERSION = JUDGE_DEMO_PRESENTATION_TRANSITION_VERSION;
@@ -205,6 +210,38 @@ export const JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_REQUIRED_PATHS = Object.fr
     "evidence/thurstone-invocation-integrity.json",
     "evidence/thurstone-invocation-integrity.md",
     "lib/results/invocation-integrity-measured.ts"
+  ].sort(judgeDemoInvocationIntegrityEvidencePathCompare)
+);
+export const JUDGE_DEMO_GATE9_EVIDENCE_MATERIAL_COMMIT =
+  "2e52711e4ac0f91c88df118d22d2db52842aadb1" as const;
+export const JUDGE_DEMO_GATE9_EVIDENCE_MATERIAL_TREE =
+  "e5aea740554404d53e916df9fb35d2f5abf68dc9" as const;
+export const JUDGE_DEMO_GATE9_EVIDENCE_BINDING_HASH =
+  "3a7efb6563cd75bd61393abfa45c9c74bb3f45346b0547a61d61d345d1c07541" as const;
+export const JUDGE_DEMO_GATE9_EVIDENCE_TRANSITION_PROOF_HASH =
+  "67a9105367acd6cbc2f9e04c6763ee9c3b93a2c3c2a9f6d3df4ddf1b5505bc67" as const;
+
+/** Exact E -> F build-proof repair required before the final Gate 9 collateral preparation. */
+export const JUDGE_DEMO_GATE9_PROTOCOL_FINALIZATION_PATHS = Object.freeze(
+  [
+    "lib/judge/collateral-checkout-verifier.server.ts",
+    "lib/judge/collateral-proof.ts",
+    "lib/results/presentation-proof.ts",
+    "scripts/verify-gate6-presentation.ts",
+    "scripts/verify-judge-presentation.ts",
+    "tests/integration/judge-presentation.test.ts"
+  ].sort(judgeDemoInvocationIntegrityEvidencePathCompare)
+);
+
+/** Exact F -> C public collateral preparation; link placeholder replacement remains C -> R only. */
+export const JUDGE_DEMO_GATE9_COLLATERAL_PREPARATION_PATHS = Object.freeze(
+  [
+    "README.md",
+    "THIRD_PARTY_NOTICES.md",
+    "docs/demo-script.md",
+    "docs/rights-review.md",
+    "public/thurstone-devpost-thumbnail.jpg",
+    "submission/devpost.md"
   ].sort(judgeDemoInvocationIntegrityEvidencePathCompare)
 );
 
@@ -423,6 +460,18 @@ export const JUDGE_DEMO_COLLATERAL_FIELD_PREFIXES = Object.freeze({
   demo_video: "Demo video: "
 });
 
+export const JUDGE_DEMO_GATE9_COLLATERAL_PREDECESSOR_VALUE =
+  "reserved for the verified Gate 9 link-only release commit" as const;
+export const JUDGE_DEMO_GATE9_PUBLIC_REPOSITORY_URL =
+  "https://github.com/serg337/toolproof" as const;
+export const JUDGE_DEMO_GATE9_RELEASE_URL =
+  "https://github.com/serg337/toolproof/releases/tag/challenge-submission-v1.0.0" as const;
+export const JUDGE_DEMO_GATE9_RELEASE_FIELDS = Object.freeze([
+  "demo_video",
+  "public_repository",
+  "release"
+] as const);
+
 export type JudgeDemoCollateralField = keyof typeof JUDGE_DEMO_COLLATERAL_FIELD_PREFIXES;
 
 export function judgeDemoCollateralPathAllowed(path: string): boolean {
@@ -451,6 +500,12 @@ const invocationIntegrityEvidenceProtocolPath = z.enum(
 );
 const invocationIntegrityEvidencePath = z.enum(
   JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_ALLOWED_PATHS as unknown as [string, ...string[]]
+);
+const gate9ProtocolFinalizationPath = z.enum(
+  JUDGE_DEMO_GATE9_PROTOCOL_FINALIZATION_PATHS as unknown as [string, ...string[]]
+);
+const gate9CollateralPreparationPath = z.enum(
+  JUDGE_DEMO_GATE9_COLLATERAL_PREPARATION_PATHS as unknown as [string, ...string[]]
 );
 const collateralPath = z.enum(JUDGE_DEMO_COLLATERAL_PATHS);
 const collateralField = z.enum(
@@ -501,6 +556,12 @@ const invocationIntegrityEvidenceProtocolTreeChangeSchema = z
   .strict();
 const invocationIntegrityEvidenceTreeChangeSchema = z
   .object({ path: invocationIntegrityEvidencePath, ...transitionTreeChangeShape })
+  .strict();
+const gate9ProtocolFinalizationTreeChangeSchema = z
+  .object({ path: gate9ProtocolFinalizationPath, ...transitionTreeChangeShape })
+  .strict();
+const gate9CollateralPreparationTreeChangeSchema = z
+  .object({ path: gate9CollateralPreparationPath, ...transitionTreeChangeShape })
   .strict();
 const invocationIntegrityAmendmentTreeChangeSchema = z
   .object({
@@ -839,6 +900,61 @@ const invocationIntegrityTransitionSchema = z
   })
   .strict();
 
+const gate9TerminalFinalizationSchema = z
+  .object({
+    predecessorBinding: z
+      .object({
+        activeCommit: z.literal(JUDGE_DEMO_GATE9_EVIDENCE_MATERIAL_COMMIT),
+        activeTree: z.literal(JUDGE_DEMO_GATE9_EVIDENCE_MATERIAL_TREE),
+        bindingHash: z.literal(JUDGE_DEMO_GATE9_EVIDENCE_BINDING_HASH),
+        evidenceTransitionProofHash: z.literal(JUDGE_DEMO_GATE9_EVIDENCE_TRANSITION_PROOF_HASH)
+      })
+      .strict(),
+    evidenceMaterialCommit: z.literal(JUDGE_DEMO_GATE9_EVIDENCE_MATERIAL_COMMIT),
+    evidenceMaterialTree: z.literal(JUDGE_DEMO_GATE9_EVIDENCE_MATERIAL_TREE),
+    protocolFinalization: z
+      .object({
+        version: z.literal(JUDGE_DEMO_GATE9_PROTOCOL_FINALIZATION_VERSION),
+        predecessorCommit: commit,
+        successorCommit: commit,
+        successorTree: gitOid,
+        changedPaths: z
+          .array(gate9ProtocolFinalizationPath)
+          .length(JUDGE_DEMO_GATE9_PROTOCOL_FINALIZATION_PATHS.length),
+        treeChanges: z
+          .array(gate9ProtocolFinalizationTreeChangeSchema)
+          .length(JUDGE_DEMO_GATE9_PROTOCOL_FINALIZATION_PATHS.length),
+        gitTreeProjectionHash: sha256,
+        gitPackTransport: z.literal(JUDGE_DEMO_GATE9_GIT_PACK_TRANSPORT),
+        providerCallsPerformed: z.literal(0),
+        modelCallsPerformed: z.literal(0),
+        scoredCallsPerformed: z.literal(0),
+        storeWritesPerformed: z.literal(0)
+      })
+      .strict(),
+    collateralPreparation: z
+      .object({
+        version: z.literal(JUDGE_DEMO_GATE9_COLLATERAL_PREPARATION_VERSION),
+        predecessorCommit: commit,
+        successorCommit: commit,
+        successorTree: gitOid,
+        changedPaths: z
+          .array(gate9CollateralPreparationPath)
+          .length(JUDGE_DEMO_GATE9_COLLATERAL_PREPARATION_PATHS.length),
+        treeChanges: z
+          .array(gate9CollateralPreparationTreeChangeSchema)
+          .length(JUDGE_DEMO_GATE9_COLLATERAL_PREPARATION_PATHS.length),
+        gitTreeProjectionHash: sha256,
+        linkFieldsStatus: z.literal("reserved-for-final-link-only-release"),
+        providerCallsPerformed: z.literal(0),
+        modelCallsPerformed: z.literal(0),
+        scoredCallsPerformed: z.literal(0),
+        storeWritesPerformed: z.literal(0)
+      })
+      .strict()
+  })
+  .strict();
+
 const invocationIntegrityEvidenceTransitionSchema = z
   .object({
     ...transitionCommon,
@@ -890,6 +1006,7 @@ const invocationIntegrityEvidenceTransitionSchema = z
         immutableProjectionHash: sha256
       })
       .strict(),
+    terminalFinalization: gate9TerminalFinalizationSchema.optional(),
     gate6PresentationProofHash: sha256,
     gate6CriticalProjectionHash: sha256,
     modelCallsPerformed: z.literal(0),
@@ -1159,6 +1276,78 @@ export async function verifyJudgeDemoPresentationTransition(
   } else if (proof.kind === "invocation-integrity-evidence") {
     const protocolPaths = proof.protocolExtension.treeChanges.map(({ path }) => path);
     const evidencePaths = proof.evidence.treeChanges.map(({ path }) => path);
+    const terminal = proof.terminalFinalization ?? null;
+    const finalizationPaths =
+      terminal?.protocolFinalization.treeChanges.map(({ path }) => path) ?? [];
+    const preparationPaths =
+      terminal?.collateralPreparation.treeChanges.map(({ path }) => path) ?? [];
+    const expectedFirstParentChain =
+      terminal === null
+        ? [proof.predecessorCommit, proof.protocolExtension.commit, proof.successorCommit]
+        : [
+            proof.predecessorCommit,
+            proof.protocolExtension.commit,
+            terminal.evidenceMaterialCommit,
+            terminal.protocolFinalization.successorCommit,
+            terminal.collateralPreparation.successorCommit
+          ];
+    const finalizationValid =
+      terminal === null ||
+      (terminal.evidenceMaterialCommit !== proof.predecessorCommit &&
+        terminal.evidenceMaterialCommit !== proof.protocolExtension.commit &&
+        terminal.evidenceMaterialTree === proof.evidence.tree &&
+        terminal.protocolFinalization.predecessorCommit === terminal.evidenceMaterialCommit &&
+        terminal.protocolFinalization.successorCommit !== terminal.evidenceMaterialCommit &&
+        terminal.collateralPreparation.predecessorCommit ===
+          terminal.protocolFinalization.successorCommit &&
+        terminal.collateralPreparation.successorCommit === proof.successorCommit &&
+        canonicalJson(terminal.protocolFinalization.changedPaths) ===
+          canonicalJson(JUDGE_DEMO_GATE9_PROTOCOL_FINALIZATION_PATHS) &&
+        canonicalJson(finalizationPaths) ===
+          canonicalJson(JUDGE_DEMO_GATE9_PROTOCOL_FINALIZATION_PATHS) &&
+        canonicalJson(terminal.protocolFinalization.treeChanges) ===
+          canonicalJson(
+            [...terminal.protocolFinalization.treeChanges].sort((left, right) =>
+              judgeDemoInvocationIntegrityEvidencePathCompare(left.path, right.path)
+            )
+          ) &&
+        terminal.protocolFinalization.treeChanges.every(
+          (change) =>
+            change.status === "M" &&
+            change.predecessorMode === "100644" &&
+            change.successorMode === "100644" &&
+            change.predecessorBlobOid !== null &&
+            change.successorBlobOid !== null &&
+            change.predecessorBlobOid !== change.successorBlobOid
+        ) &&
+        (await canonicalSha256(terminal.protocolFinalization.treeChanges)) ===
+          terminal.protocolFinalization.gitTreeProjectionHash &&
+        canonicalJson(terminal.collateralPreparation.changedPaths) ===
+          canonicalJson(JUDGE_DEMO_GATE9_COLLATERAL_PREPARATION_PATHS) &&
+        canonicalJson(preparationPaths) ===
+          canonicalJson(JUDGE_DEMO_GATE9_COLLATERAL_PREPARATION_PATHS) &&
+        canonicalJson(terminal.collateralPreparation.treeChanges) ===
+          canonicalJson(
+            [...terminal.collateralPreparation.treeChanges].sort((left, right) =>
+              judgeDemoInvocationIntegrityEvidencePathCompare(left.path, right.path)
+            )
+          ) &&
+        terminal.collateralPreparation.treeChanges.every((change) =>
+          change.path === "public/thurstone-devpost-thumbnail.jpg"
+            ? change.status === "A" &&
+              change.predecessorMode === null &&
+              change.successorMode === "100644" &&
+              change.predecessorBlobOid === null &&
+              change.successorBlobOid !== null
+            : change.status === "M" &&
+              change.predecessorMode === "100644" &&
+              change.successorMode === "100644" &&
+              change.predecessorBlobOid !== null &&
+              change.successorBlobOid !== null &&
+              change.predecessorBlobOid !== change.successorBlobOid
+        ) &&
+        (await canonicalSha256(terminal.collateralPreparation.treeChanges)) ===
+          terminal.collateralPreparation.gitTreeProjectionHash);
     if (
       proof.ordinal !== 3 ||
       proof.evidence.executionBuildCommit !== proof.predecessorCommit ||
@@ -1191,11 +1380,8 @@ export async function verifyJudgeDemoPresentationTransition(
         proof.evidence.requiredPathsHash ||
       (await canonicalSha256(proof.evidence.treeChanges)) !==
         proof.evidence.gitTreeProjectionHash ||
-      (await canonicalSha256([
-        proof.predecessorCommit,
-        proof.protocolExtension.commit,
-        proof.successorCommit
-      ])) !== proof.firstParentChainHash
+      !finalizationValid ||
+      (await canonicalSha256(expectedFirstParentChain)) !== proof.firstParentChainHash
     ) {
       throw new Error("judge_demo_invocation_integrity_evidence_transition_invalid");
     }
@@ -1207,8 +1393,32 @@ export async function verifyJudgeDemoPresentationTransition(
         : proof.version === JUDGE_DEMO_PRESENTATION_REBRAND_TRANSITION_VERSION
           ? proof.ordinal === 2
           : proof.ordinal === 3 || proof.ordinal === 4;
+    const gate9ExpectedKeys = JUDGE_DEMO_COLLATERAL_PATHS.flatMap((path) =>
+      JUDGE_DEMO_GATE9_RELEASE_FIELDS.map((field) => `${path}\n${field}`)
+    ).sort();
+    const gate9ReleaseValid =
+      proof.version !== JUDGE_DEMO_INVOCATION_INTEGRITY_TRANSITION_VERSION || proof.ordinal !== 4
+        ? true
+        : proof.collateralChanges.length === gate9ExpectedKeys.length &&
+          canonicalJson(changeKeys) === canonicalJson(gate9ExpectedKeys) &&
+          proof.collateralChanges.every(({ field, predecessorValue, successorValue }) => {
+            if (predecessorValue !== JUDGE_DEMO_GATE9_COLLATERAL_PREDECESSOR_VALUE) return false;
+            if (field === "public_repository") {
+              return successorValue === JUDGE_DEMO_GATE9_PUBLIC_REPOSITORY_URL;
+            }
+            if (field === "release") return successorValue === JUDGE_DEMO_GATE9_RELEASE_URL;
+            if (field !== "demo_video") return false;
+            const parsed = new URL(successorValue);
+            return (
+              (parsed.hostname === "youtu.be" && parsed.pathname.length > 1) ||
+              ((parsed.hostname === "youtube.com" || parsed.hostname === "www.youtube.com") &&
+                parsed.pathname === "/watch" &&
+                parsed.searchParams.get("v") !== null)
+            );
+          });
     if (
       !ordinalValid ||
+      !gate9ReleaseValid ||
       new Set(changeKeys).size !== changeKeys.length ||
       proof.collateralChanges.some(
         ({ predecessorValue, successorValue }) => predecessorValue === successorValue
