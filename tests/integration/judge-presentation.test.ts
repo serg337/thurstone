@@ -20,6 +20,12 @@ import {
   JUDGE_DEMO_CRITICAL_PATHS,
   JUDGE_DEMO_GATE9_COLLATERAL_PREPARATION_PATHS,
   JUDGE_DEMO_GATE9_COLLATERAL_PREPARATION_VERSION,
+  JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_BINDING_HASH,
+  JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_COMMIT,
+  JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_TRANSITION_PROOF_HASH,
+  JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_TREE,
+  JUDGE_DEMO_GATE9_CI_FINALIZATION_PATHS,
+  JUDGE_DEMO_GATE9_CI_FINALIZATION_VERSION,
   JUDGE_DEMO_GATE9_COLLATERAL_PREDECESSOR_VALUE,
   JUDGE_DEMO_GATE9_EVIDENCE_BINDING_HASH,
   JUDGE_DEMO_GATE9_EVIDENCE_MATERIAL_COMMIT,
@@ -1501,6 +1507,85 @@ describe("judge provider-free presentation lineage", () => {
     ).rejects.toThrow();
   });
 
+  it("binds the optional C-to-P10 CI finalization without changing prior terminal evidence", async () => {
+    const value = await invocationIntegrityEvidenceCheckoutFixture({ terminalFinalization: true });
+    const terminal = structuredClone(value.transition.terminalFinalization);
+    if (!terminal || value.protocolFinalizationCommit === null) {
+      throw new Error("test_gate9_protocol_finalization_missing");
+    }
+    const successorCommit = "9".repeat(40);
+    const successorTree = "8".repeat(40);
+    const ciChanges = JUDGE_DEMO_GATE9_CI_FINALIZATION_PATHS.map((path) => boundedTreeChange(path));
+    terminal.collateralPreparation.successorCommit = JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_COMMIT;
+    terminal.collateralPreparation.successorTree = JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_TREE;
+    terminal.ciFinalization = {
+      version: JUDGE_DEMO_GATE9_CI_FINALIZATION_VERSION,
+      predecessorBinding: {
+        activeCommit: JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_COMMIT,
+        activeTree: JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_TREE,
+        bindingHash: JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_BINDING_HASH,
+        evidenceTransitionProofHash: JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_TRANSITION_PROOF_HASH
+      },
+      predecessorCommit: JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_COMMIT,
+      predecessorTree: JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_TREE,
+      successorCommit,
+      successorTree,
+      changedPaths: [...JUDGE_DEMO_GATE9_CI_FINALIZATION_PATHS],
+      treeChanges: ciChanges,
+      gitTreeProjectionHash: await canonicalSha256(ciChanges),
+      dedupeInvariant: "unique-predecessor-blob-oids-unlinked-once",
+      providerCallsPerformed: 0,
+      modelCallsPerformed: 0,
+      scoredCallsPerformed: 0,
+      storeWritesPerformed: 0
+    };
+    const unsigned = {
+      ...value.transition,
+      successorCommit,
+      terminalFinalization: terminal,
+      firstParentChainHash: await canonicalSha256([
+        value.predecessorCommit,
+        value.protocolCommit,
+        JUDGE_DEMO_GATE9_EVIDENCE_MATERIAL_COMMIT,
+        value.protocolFinalizationCommit,
+        JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_COMMIT,
+        successorCommit
+      ])
+    };
+    delete (unsigned as Partial<typeof value.transition>).proofHash;
+    const verified = await verifyJudgeDemoPresentationTransition({
+      ...unsigned,
+      proofHash: await canonicalSha256(unsigned)
+    });
+    expect(verified).toMatchObject({
+      successorCommit,
+      terminalFinalization: {
+        ciFinalization: {
+          predecessorCommit: JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_COMMIT,
+          successorCommit,
+          dedupeInvariant: "unique-predecessor-blob-oids-unlinked-once"
+        }
+      }
+    });
+
+    const tampered = structuredClone(verified);
+    if (tampered.kind !== "invocation-integrity-evidence" || !tampered.terminalFinalization) {
+      throw new Error("test_gate9_ci_finalization_missing");
+    }
+    tampered.terminalFinalization.ciFinalization!.dedupeInvariant =
+      "unique-predecessor-blob-oids-unlinked-once";
+    tampered.terminalFinalization.ciFinalization!.treeChanges =
+      tampered.terminalFinalization.ciFinalization!.treeChanges.slice(1);
+    const tamperedPayload = { ...tampered } as Record<string, unknown>;
+    delete tamperedPayload.proofHash;
+    await expect(
+      verifyJudgeDemoPresentationTransition({
+        ...tamperedPayload,
+        proofHash: await canonicalSha256(tamperedPayload)
+      })
+    ).rejects.toThrow();
+  });
+
   it("verifies the exact e2-style sealed-reader recovery and active checkout", async () => {
     const value = await fixture();
     git(value.cwd, ["reset", "--hard", "-q", value.recoveryCommit]);
@@ -1756,8 +1841,12 @@ describe("judge provider-free presentation lineage", () => {
       activeCommit: releaseCommit,
       transitions: [value.recovery, collateral]
     });
-    for (const path of ["README.md", "submission/devpost.md"] as const) {
-      const predecessorBlobOid = git(value.cwd, ["rev-parse", `${value.activeCommit}:${path}`]);
+    const predecessorBlobOids = new Set(
+      (["README.md", "submission/devpost.md"] as const).map((path) =>
+        git(value.cwd, ["rev-parse", `${value.activeCommit}:${path}`])
+      )
+    );
+    for (const predecessorBlobOid of predecessorBlobOids) {
       await unlink(
         join(
           value.cwd,
@@ -1838,8 +1927,12 @@ describe("judge provider-free presentation lineage", () => {
       ordinal: 4,
       version: JUDGE_DEMO_INVOCATION_INTEGRITY_TRANSITION_VERSION
     });
-    for (const path of ["README.md", "submission/devpost.md"] as const) {
-      const predecessorBlobOid = git(value.cwd, ["rev-parse", `${preparedCommit}:${path}`]);
+    const predecessorBlobOids = new Set(
+      (["README.md", "submission/devpost.md"] as const).map((path) =>
+        git(value.cwd, ["rev-parse", `${preparedCommit}:${path}`])
+      )
+    );
+    for (const predecessorBlobOid of predecessorBlobOids) {
       await unlink(
         join(
           value.cwd,

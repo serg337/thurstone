@@ -11,6 +11,7 @@ import {
   JUDGE_DEMO_CI_TIMEOUT_PATH,
   JUDGE_DEMO_COLLATERAL_FIELD_PREFIXES,
   JUDGE_DEMO_CRITICAL_PATHS,
+  JUDGE_DEMO_GATE9_CI_FINALIZATION_PATHS,
   JUDGE_DEMO_GATE9_COLLATERAL_PREPARATION_PATHS,
   JUDGE_DEMO_GATE9_PROTOCOL_FINALIZATION_PATHS,
   JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_COMMIT,
@@ -792,6 +793,7 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
 }): Promise<void> {
   const protocolCommit = input.transition.protocolExtension.commit;
   const terminal = input.transition.terminalFinalization ?? null;
+  const ciFinalization = terminal?.ciFinalization ?? null;
   const evidenceMaterialCommit =
     terminal?.evidenceMaterialCommit ?? input.transition.successorCommit;
   const expectedChain =
@@ -802,7 +804,8 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
           protocolCommit,
           evidenceMaterialCommit,
           terminal.protocolFinalization.successorCommit,
-          terminal.collateralPreparation.successorCommit
+          terminal.collateralPreparation.successorCommit,
+          ...(ciFinalization === null ? [] : [ciFinalization.successorCommit])
         ];
   if (
     canonicalJson(input.firstParentChain) !== canonicalJson(expectedChain) ||
@@ -814,7 +817,9 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
         commitTree(input.cwd, terminal.protocolFinalization.successorCommit) !==
           terminal.protocolFinalization.successorTree ||
         commitTree(input.cwd, terminal.collateralPreparation.successorCommit) !==
-          terminal.collateralPreparation.successorTree))
+          terminal.collateralPreparation.successorTree ||
+        (ciFinalization !== null &&
+          commitTree(input.cwd, ciFinalization.successorCommit) !== ciFinalization.successorTree)))
   ) {
     throw new Error("judge_demo_invocation_evidence_chain_invalid");
   }
@@ -848,6 +853,18 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
         ].sort((left, right) =>
           judgeDemoInvocationIntegrityEvidencePathCompare(left.path, right.path)
         );
+  const ciFinalizationChanges =
+    ciFinalization === null
+      ? []
+      : [
+          ...gitTreeChanges(
+            input.cwd,
+            ciFinalization.predecessorCommit,
+            ciFinalization.successorCommit
+          )
+        ].sort((left, right) =>
+          judgeDemoInvocationIntegrityEvidencePathCompare(left.path, right.path)
+        );
   if (
     canonicalJson(protocolChanges.map(({ path }) => path)) !==
       canonicalJson(JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_PROTOCOL_PATHS) ||
@@ -877,7 +894,13 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
         canonicalJson(preparationChanges) !==
           canonicalJson(terminal.collateralPreparation.treeChanges) ||
         (await canonicalSha256(preparationChanges)) !==
-          terminal.collateralPreparation.gitTreeProjectionHash))
+          terminal.collateralPreparation.gitTreeProjectionHash ||
+        (ciFinalization !== null &&
+          (canonicalJson(ciFinalizationChanges.map(({ path }) => path)) !==
+            canonicalJson(JUDGE_DEMO_GATE9_CI_FINALIZATION_PATHS) ||
+            canonicalJson(ciFinalizationChanges) !== canonicalJson(ciFinalization.treeChanges) ||
+            (await canonicalSha256(ciFinalizationChanges)) !==
+              ciFinalization.gitTreeProjectionHash))))
   ) {
     throw new Error("judge_demo_invocation_evidence_projection_invalid");
   }
@@ -909,6 +932,32 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
   }
   for (const change of preparationChanges) {
     assertSafeMaterialTreeMutation(change, "judge_demo_gate9_collateral_preparation_mode_invalid");
+  }
+  for (const change of ciFinalizationChanges) {
+    if (
+      change.status !== "M" ||
+      change.predecessorMode !== "100644" ||
+      change.successorMode !== "100644" ||
+      change.predecessorBlobOid === null ||
+      change.successorBlobOid === null
+    ) {
+      throw new Error(`judge_demo_gate9_ci_finalization_mode_invalid:${change.path}`);
+    }
+  }
+  if (ciFinalization !== null) {
+    const testSource = new TextDecoder("utf-8", { fatal: true }).decode(
+      await activeCheckoutBlobBytes(
+        input.cwd,
+        ciFinalization.successorCommit,
+        "tests/integration/judge-presentation.test.ts"
+      )
+    );
+    const setCount = testSource.match(/const predecessorBlobOids = new Set\(/gu)?.length ?? 0;
+    const uniqueLoopCount =
+      testSource.match(/for \(const predecessorBlobOid of predecessorBlobOids\)/gu)?.length ?? 0;
+    if (setCount !== 2 || uniqueLoopCount !== 2) {
+      throw new Error("judge_demo_gate9_ci_finalization_dedupe_invariant_invalid");
+    }
   }
   const [jsonBytes, markdownBytes, measuredBytes] = await Promise.all([
     activeCheckoutBlobBytes(
@@ -1063,7 +1112,8 @@ async function verifyTransitionGit(input: {
                   ...(input.transition.terminalFinalization?.protocolFinalization.changedPaths ??
                     []),
                   ...(input.transition.terminalFinalization?.collateralPreparation.changedPaths ??
-                    [])
+                    []),
+                  ...(input.transition.terminalFinalization?.ciFinalization?.changedPaths ?? [])
                 ])
               ].sort(judgeDemoInvocationIntegrityEvidencePathCompare)
             : [...new Set(input.transition.collateralChanges.map(({ path }) => path))].sort();
@@ -1119,7 +1169,8 @@ async function verifyTransitionGit(input: {
           !(
             transition.terminalFinalization?.collateralPreparation.changedPaths.includes(path) ??
             false
-          )
+          ) &&
+          !(transition.terminalFinalization?.ciFinalization?.changedPaths.includes(path) ?? false)
       )) ||
     (transition.kind === "collateral-links" && changedCriticalPaths.length !== 0)
   ) {

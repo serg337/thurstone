@@ -13,6 +13,8 @@ export const JUDGE_DEMO_GATE9_PROTOCOL_FINALIZATION_VERSION =
   "thurstone-judge-demo-gate9-protocol-finalization@1.0.0";
 export const JUDGE_DEMO_GATE9_COLLATERAL_PREPARATION_VERSION =
   "thurstone-judge-demo-gate9-collateral-preparation@1.0.0";
+export const JUDGE_DEMO_GATE9_CI_FINALIZATION_VERSION =
+  "thurstone-judge-demo-gate9-ci-finalization@1.0.0";
 export const JUDGE_DEMO_GATE9_GIT_PACK_TRANSPORT = "brotli-wrapped-git-pack@1.0.0" as const;
 // Retained as an import-compatible name for release tooling. The proof is now a
 // discriminated transition rather than an unrestricted one-hop collateral proof.
@@ -220,6 +222,14 @@ export const JUDGE_DEMO_GATE9_EVIDENCE_BINDING_HASH =
   "3a7efb6563cd75bd61393abfa45c9c74bb3f45346b0547a61d61d345d1c07541" as const;
 export const JUDGE_DEMO_GATE9_EVIDENCE_TRANSITION_PROOF_HASH =
   "67a9105367acd6cbc2f9e04c6763ee9c3b93a2c3c2a9f6d3df4ddf1b5505bc67" as const;
+export const JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_COMMIT =
+  "b181cb7dd62a64a8faa2e8f5efb30ec595b57a44" as const;
+export const JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_TREE =
+  "9e279dee674b1080b3cb63e7641a9dc6e0800be7" as const;
+export const JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_BINDING_HASH =
+  "71b80f9b5aab6d685e4c3d4c57e6d4d93e6a6ddd2156cd87797289d8f7197ddf" as const;
+export const JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_TRANSITION_PROOF_HASH =
+  "50eb15e36caed74e3351581dce2d1a3a5d1c61d8fbaf19b70bbf7a70872fa92a" as const;
 
 /** Exact E -> F build-proof repair required before the final Gate 9 collateral preparation. */
 export const JUDGE_DEMO_GATE9_PROTOCOL_FINALIZATION_PATHS = Object.freeze(
@@ -242,6 +252,13 @@ export const JUDGE_DEMO_GATE9_COLLATERAL_PREPARATION_PATHS = Object.freeze(
     "docs/rights-review.md",
     "public/thurstone-devpost-thumbnail.jpg",
     "submission/devpost.md"
+  ].sort(judgeDemoInvocationIntegrityEvidencePathCompare)
+);
+export const JUDGE_DEMO_GATE9_CI_FINALIZATION_PATHS = Object.freeze(
+  [
+    "lib/judge/collateral-checkout-verifier.server.ts",
+    "lib/judge/collateral-proof.ts",
+    "tests/integration/judge-presentation.test.ts"
   ].sort(judgeDemoInvocationIntegrityEvidencePathCompare)
 );
 
@@ -507,6 +524,9 @@ const gate9ProtocolFinalizationPath = z.enum(
 const gate9CollateralPreparationPath = z.enum(
   JUDGE_DEMO_GATE9_COLLATERAL_PREPARATION_PATHS as unknown as [string, ...string[]]
 );
+const gate9CiFinalizationPath = z.enum(
+  JUDGE_DEMO_GATE9_CI_FINALIZATION_PATHS as unknown as [string, ...string[]]
+);
 const collateralPath = z.enum(JUDGE_DEMO_COLLATERAL_PATHS);
 const collateralField = z.enum(
   Object.keys(JUDGE_DEMO_COLLATERAL_FIELD_PREFIXES) as [
@@ -562,6 +582,9 @@ const gate9ProtocolFinalizationTreeChangeSchema = z
   .strict();
 const gate9CollateralPreparationTreeChangeSchema = z
   .object({ path: gate9CollateralPreparationPath, ...transitionTreeChangeShape })
+  .strict();
+const gate9CiFinalizationTreeChangeSchema = z
+  .object({ path: gate9CiFinalizationPath, ...transitionTreeChangeShape })
   .strict();
 const invocationIntegrityAmendmentTreeChangeSchema = z
   .object({
@@ -951,7 +974,39 @@ const gate9TerminalFinalizationSchema = z
         scoredCallsPerformed: z.literal(0),
         storeWritesPerformed: z.literal(0)
       })
+      .strict(),
+    ciFinalization: z
+      .object({
+        version: z.literal(JUDGE_DEMO_GATE9_CI_FINALIZATION_VERSION),
+        predecessorBinding: z
+          .object({
+            activeCommit: z.literal(JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_COMMIT),
+            activeTree: z.literal(JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_TREE),
+            bindingHash: z.literal(JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_BINDING_HASH),
+            evidenceTransitionProofHash: z.literal(
+              JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_TRANSITION_PROOF_HASH
+            )
+          })
+          .strict(),
+        predecessorCommit: z.literal(JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_COMMIT),
+        predecessorTree: z.literal(JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_TREE),
+        successorCommit: commit,
+        successorTree: gitOid,
+        changedPaths: z
+          .array(gate9CiFinalizationPath)
+          .length(JUDGE_DEMO_GATE9_CI_FINALIZATION_PATHS.length),
+        treeChanges: z
+          .array(gate9CiFinalizationTreeChangeSchema)
+          .length(JUDGE_DEMO_GATE9_CI_FINALIZATION_PATHS.length),
+        gitTreeProjectionHash: sha256,
+        dedupeInvariant: z.literal("unique-predecessor-blob-oids-unlinked-once"),
+        providerCallsPerformed: z.literal(0),
+        modelCallsPerformed: z.literal(0),
+        scoredCallsPerformed: z.literal(0),
+        storeWritesPerformed: z.literal(0)
+      })
       .strict()
+      .optional()
   })
   .strict();
 
@@ -1281,6 +1336,8 @@ export async function verifyJudgeDemoPresentationTransition(
       terminal?.protocolFinalization.treeChanges.map(({ path }) => path) ?? [];
     const preparationPaths =
       terminal?.collateralPreparation.treeChanges.map(({ path }) => path) ?? [];
+    const ciFinalization = terminal?.ciFinalization ?? null;
+    const ciFinalizationPaths = ciFinalization?.treeChanges.map(({ path }) => path) ?? [];
     const expectedFirstParentChain =
       terminal === null
         ? [proof.predecessorCommit, proof.protocolExtension.commit, proof.successorCommit]
@@ -1289,8 +1346,36 @@ export async function verifyJudgeDemoPresentationTransition(
             proof.protocolExtension.commit,
             terminal.evidenceMaterialCommit,
             terminal.protocolFinalization.successorCommit,
-            terminal.collateralPreparation.successorCommit
+            terminal.collateralPreparation.successorCommit,
+            ...(ciFinalization === null ? [] : [ciFinalization.successorCommit])
           ];
+    const ciFinalizationValid =
+      ciFinalization === null ||
+      (terminal !== null &&
+        terminal.collateralPreparation.successorCommit === ciFinalization.predecessorCommit &&
+        ciFinalization.successorCommit === proof.successorCommit &&
+        ciFinalization.successorCommit !== ciFinalization.predecessorCommit &&
+        canonicalJson(ciFinalization.changedPaths) ===
+          canonicalJson(JUDGE_DEMO_GATE9_CI_FINALIZATION_PATHS) &&
+        canonicalJson(ciFinalizationPaths) ===
+          canonicalJson(JUDGE_DEMO_GATE9_CI_FINALIZATION_PATHS) &&
+        canonicalJson(ciFinalization.treeChanges) ===
+          canonicalJson(
+            [...ciFinalization.treeChanges].sort((left, right) =>
+              judgeDemoInvocationIntegrityEvidencePathCompare(left.path, right.path)
+            )
+          ) &&
+        ciFinalization.treeChanges.every(
+          (change) =>
+            change.status === "M" &&
+            change.predecessorMode === "100644" &&
+            change.successorMode === "100644" &&
+            change.predecessorBlobOid !== null &&
+            change.successorBlobOid !== null &&
+            change.predecessorBlobOid !== change.successorBlobOid
+        ) &&
+        (await canonicalSha256(ciFinalization.treeChanges)) ===
+          ciFinalization.gitTreeProjectionHash);
     const finalizationValid =
       terminal === null ||
       (terminal.evidenceMaterialCommit !== proof.predecessorCommit &&
@@ -1300,7 +1385,8 @@ export async function verifyJudgeDemoPresentationTransition(
         terminal.protocolFinalization.successorCommit !== terminal.evidenceMaterialCommit &&
         terminal.collateralPreparation.predecessorCommit ===
           terminal.protocolFinalization.successorCommit &&
-        terminal.collateralPreparation.successorCommit === proof.successorCommit &&
+        terminal.collateralPreparation.successorCommit ===
+          (ciFinalization?.predecessorCommit ?? proof.successorCommit) &&
         canonicalJson(terminal.protocolFinalization.changedPaths) ===
           canonicalJson(JUDGE_DEMO_GATE9_PROTOCOL_FINALIZATION_PATHS) &&
         canonicalJson(finalizationPaths) ===
@@ -1347,7 +1433,8 @@ export async function verifyJudgeDemoPresentationTransition(
               change.predecessorBlobOid !== change.successorBlobOid
         ) &&
         (await canonicalSha256(terminal.collateralPreparation.treeChanges)) ===
-          terminal.collateralPreparation.gitTreeProjectionHash);
+          terminal.collateralPreparation.gitTreeProjectionHash &&
+        ciFinalizationValid);
     if (
       proof.ordinal !== 3 ||
       proof.evidence.executionBuildCommit !== proof.predecessorCommit ||
