@@ -67,20 +67,23 @@ exact pending source values `Thurstone`/`TH`; the trace-derived result content w
 JPEG is 1280×720 sRGB, 113,108 bytes, with SHA-256
 `ba0813d9ae761358e483642b6730712456a4693d79558e25c25252b92a327d1f`. Its inherited browser ICC
 profile was removed without changing any decoded pixel (`compare -metric AE` returned `0`), so no
-third-party profile or copyright metadata is distributed. Gate 8 remains blocked until
-an automated capture from the exact deployed rebrand matches this file byte-for-byte; any mismatch
-requires a new ordinary asset finalization rather than relabeling the image. The older image is not
-overwritten or relabeled.
+third-party profile or copyright metadata is distributed. After the exact rebrand deployment, the
+signed-out production asset returned 113,108 bytes with that same SHA-256. This exact deployed-byte
+receipt closed the Gate 8 equality condition; the older historical image remains unmodified and is
+not relabeled.
 
 The underlying Results claims used in both images were rechecked on 2026-08-29 after the evidence
 candidate and browser suite: the visible simulation notice, paired `23/24 → 23/24` result,
 Development `12/12 → 12/12`, Builder-blinded holdout `11/12 → 11/12`, and no-improvement claim
 remain exact. No visible claim depends on the later Direct-observation namespace or judge receipt.
 
-The release uses the project-authored screenshot-derived thumbnail specified in
-`docs/demo-script.md`. Any unrelated thumbnail already present in an authenticated Devpost draft
-must be replaced; it may be retained only if Sergio separately verifies its creator, source,
-license, and correspondence to the submitted build during the reserved final media review.
+The final Devpost image is `public/thurstone-devpost-thumbnail.jpg`, deterministically derived from
+the verified `public/thurstone-results.jpg` source using only a project-owned SVG text overlay. The
+thumbnail is a 1200×800 JPEG, 148,339 bytes, with SHA-256
+`9145872a26f156dadd9f2384b97c54eda7ef13a686c4e478eab384ef75121b15`; the source SHA-256 is
+`ba0813d9ae761358e483642b6730712456a4693d79558e25c25252b92a327d1f`. It contains no ICC, EXIF, or
+XMP metadata and no third-party logo, image, or font asset. The unrelated thumbnail already present
+in the authenticated Devpost draft must be replaced with this exact tracked file.
 
 No third-party stock image, icon, font file, music, video, sound, or dataset is distributed by the
 repository.
