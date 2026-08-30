@@ -24,8 +24,17 @@ import {
   JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_COMMIT,
   JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_TRANSITION_PROOF_HASH,
   JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_TREE,
+  JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_BINDING_HASH,
+  JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_COMMIT,
+  JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_PROOF_HASH,
+  JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_TRANSITION_PROOF_HASH,
+  JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_TREE,
   JUDGE_DEMO_GATE9_CI_FINALIZATION_PATHS,
   JUDGE_DEMO_GATE9_CI_FINALIZATION_VERSION,
+  JUDGE_DEMO_GATE9_CI_PORTABILITY_FAILURE_CLASS,
+  JUDGE_DEMO_GATE9_CI_PORTABILITY_INVARIANT,
+  JUDGE_DEMO_GATE9_CI_PORTABILITY_REPAIR_PATHS,
+  JUDGE_DEMO_GATE9_CI_PORTABILITY_REPAIR_VERSION,
   JUDGE_DEMO_GATE9_COLLATERAL_PREDECESSOR_VALUE,
   JUDGE_DEMO_GATE9_EVIDENCE_BINDING_HASH,
   JUDGE_DEMO_GATE9_EVIDENCE_MATERIAL_COMMIT,
@@ -1586,6 +1595,391 @@ describe("judge provider-free presentation lineage", () => {
     ).rejects.toThrow();
   });
 
+  it("binds one exact P10-to-Q packed-object portability repair", async () => {
+    const value = await invocationIntegrityEvidenceCheckoutFixture({ terminalFinalization: true });
+    const terminal = structuredClone(value.transition.terminalFinalization);
+    if (!terminal || value.protocolFinalizationCommit === null) {
+      throw new Error("test_gate9_protocol_finalization_missing");
+    }
+    const successorCommit = "7".repeat(40);
+    const successorTree = "6".repeat(40);
+    const ciChanges = JUDGE_DEMO_GATE9_CI_FINALIZATION_PATHS.map((path) => boundedTreeChange(path));
+    const repairChanges = JUDGE_DEMO_GATE9_CI_PORTABILITY_REPAIR_PATHS.map((path) =>
+      boundedTreeChange(path)
+    );
+    terminal.collateralPreparation.successorCommit = JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_COMMIT;
+    terminal.collateralPreparation.successorTree = JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_TREE;
+    terminal.ciFinalization = {
+      version: JUDGE_DEMO_GATE9_CI_FINALIZATION_VERSION,
+      predecessorBinding: {
+        activeCommit: JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_COMMIT,
+        activeTree: JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_TREE,
+        bindingHash: JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_BINDING_HASH,
+        evidenceTransitionProofHash: JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_TRANSITION_PROOF_HASH
+      },
+      predecessorCommit: JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_COMMIT,
+      predecessorTree: JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_TREE,
+      successorCommit: JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_COMMIT,
+      successorTree: JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_TREE,
+      changedPaths: [...JUDGE_DEMO_GATE9_CI_FINALIZATION_PATHS],
+      treeChanges: ciChanges,
+      gitTreeProjectionHash: await canonicalSha256(ciChanges),
+      dedupeInvariant: "unique-predecessor-blob-oids-unlinked-once",
+      providerCallsPerformed: 0,
+      modelCallsPerformed: 0,
+      scoredCallsPerformed: 0,
+      storeWritesPerformed: 0
+    };
+    terminal.ciPortabilityRepair = {
+      version: JUDGE_DEMO_GATE9_CI_PORTABILITY_REPAIR_VERSION,
+      predecessorBinding: {
+        activeCommit: JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_COMMIT,
+        activeTree: JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_TREE,
+        proofHash: JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_PROOF_HASH,
+        bindingHash: JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_BINDING_HASH,
+        evidenceTransitionProofHash:
+          JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_TRANSITION_PROOF_HASH
+      },
+      predecessorCommit: JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_COMMIT,
+      predecessorTree: JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_TREE,
+      successorCommit,
+      successorTree,
+      changedPaths: [...JUDGE_DEMO_GATE9_CI_PORTABILITY_REPAIR_PATHS],
+      treeChanges: repairChanges,
+      gitTreeProjectionHash: await canonicalSha256(repairChanges),
+      failureClass: JUDGE_DEMO_GATE9_CI_PORTABILITY_FAILURE_CLASS,
+      portabilityInvariant: JUDGE_DEMO_GATE9_CI_PORTABILITY_INVARIANT,
+      providerCallsPerformed: 0,
+      modelCallsPerformed: 0,
+      scoredCallsPerformed: 0,
+      storeWritesPerformed: 0
+    };
+    const unsigned = {
+      ...value.transition,
+      successorCommit,
+      terminalFinalization: terminal,
+      firstParentChainHash: await canonicalSha256([
+        value.predecessorCommit,
+        value.protocolCommit,
+        JUDGE_DEMO_GATE9_EVIDENCE_MATERIAL_COMMIT,
+        value.protocolFinalizationCommit,
+        JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_COMMIT,
+        JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_COMMIT,
+        successorCommit
+      ])
+    };
+    delete (unsigned as Partial<typeof value.transition>).proofHash;
+    const verified = await verifyJudgeDemoPresentationTransition({
+      ...unsigned,
+      proofHash: await canonicalSha256(unsigned)
+    });
+    expect(verified).toMatchObject({
+      successorCommit,
+      terminalFinalization: {
+        ciPortabilityRepair: {
+          predecessorCommit: JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_COMMIT,
+          successorCommit,
+          failureClass: JUDGE_DEMO_GATE9_CI_PORTABILITY_FAILURE_CLASS,
+          portabilityInvariant: JUDGE_DEMO_GATE9_CI_PORTABILITY_INVARIANT
+        }
+      }
+    });
+    const omittedP10ChainHash = await canonicalSha256([
+      value.predecessorCommit,
+      value.protocolCommit,
+      JUDGE_DEMO_GATE9_EVIDENCE_MATERIAL_COMMIT,
+      value.protocolFinalizationCommit,
+      JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_COMMIT,
+      successorCommit
+    ]);
+
+    const expectInvalid = async (mutate: (candidate: Record<string, unknown>) => void) => {
+      const candidate = structuredClone(verified) as unknown as Record<string, unknown>;
+      mutate(candidate);
+      delete candidate.proofHash;
+      await expect(
+        verifyJudgeDemoPresentationTransition({
+          ...candidate,
+          proofHash: await canonicalSha256(candidate)
+        })
+      ).rejects.toThrow();
+    };
+    await expectInvalid((candidate) => {
+      const finalization = candidate.terminalFinalization as Record<string, unknown>;
+      delete finalization.ciFinalization;
+    });
+    await expectInvalid((candidate) => {
+      const finalization = candidate.terminalFinalization as Record<string, unknown>;
+      const repair = finalization.ciPortabilityRepair as Record<string, unknown>;
+      repair.changedPaths = (repair.changedPaths as unknown[]).slice(1);
+    });
+    await expectInvalid((candidate) => {
+      const finalization = candidate.terminalFinalization as Record<string, unknown>;
+      const repair = finalization.ciPortabilityRepair as Record<string, unknown>;
+      const predecessor = repair.predecessorBinding as Record<string, unknown>;
+      predecessor.bindingHash = "0".repeat(64);
+    });
+    await expectInvalid((candidate) => {
+      const finalization = candidate.terminalFinalization as Record<string, unknown>;
+      const repair = finalization.ciPortabilityRepair as Record<string, unknown>;
+      const changes = repair.treeChanges as Array<Record<string, unknown>>;
+      changes[0]!.successorMode = "100755";
+    });
+    await expectInvalid((candidate) => {
+      const finalization = candidate.terminalFinalization as Record<string, unknown>;
+      const repair = finalization.ciPortabilityRepair as Record<string, unknown>;
+      repair.providerCallsPerformed = 1;
+    });
+    await expectInvalid((candidate) => {
+      candidate.firstParentChainHash = omittedP10ChainHash;
+    });
+  });
+
+  it("checks the exact P10-to-Q repair through the real checkout verifier", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "toolproof-gate9-ci-portability-"));
+    temporaryRoots.push(cwd);
+    git(cwd, ["clone", "-q", "--no-hardlinks", resolve("."), "."]);
+    git(cwd, ["checkout", "-q", JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_COMMIT]);
+    for (const path of JUDGE_DEMO_GATE9_CI_PORTABILITY_REPAIR_PATHS) {
+      await writeFile(join(cwd, path), await readFile(resolve(path)));
+    }
+    git(cwd, ["add", "--", ...JUDGE_DEMO_GATE9_CI_PORTABILITY_REPAIR_PATHS]);
+    git(cwd, ["commit", "-q", "-m", "repair packed object portability"]);
+    const successorCommit = git(cwd, ["rev-parse", "HEAD"]);
+    const successorTree = git(cwd, ["rev-parse", `${successorCommit}^{tree}`]);
+    const executionBuildCommit = "0b6f907a07c09d193e26f5e35dc5a5b3ad1b9786";
+    const protocolCommit = "4122a6608c33c1464e26a10b1ad52b11892128cc";
+    const protocolFinalizationCommit = "843863876a823c22557f6fcfe185125b76555587";
+    const firstParentChain = [
+      executionBuildCommit,
+      protocolCommit,
+      JUDGE_DEMO_GATE9_EVIDENCE_MATERIAL_COMMIT,
+      protocolFinalizationCommit,
+      JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_COMMIT,
+      JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_COMMIT,
+      successorCommit
+    ];
+    const protocolChanges = evidenceTreeChanges(cwd, executionBuildCommit, protocolCommit);
+    const evidenceChanges = evidenceTreeChanges(
+      cwd,
+      protocolCommit,
+      JUDGE_DEMO_GATE9_EVIDENCE_MATERIAL_COMMIT
+    );
+    const finalizationChanges = evidenceTreeChanges(
+      cwd,
+      JUDGE_DEMO_GATE9_EVIDENCE_MATERIAL_COMMIT,
+      protocolFinalizationCommit
+    );
+    const preparationChanges = evidenceTreeChanges(
+      cwd,
+      protocolFinalizationCommit,
+      JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_COMMIT
+    );
+    const ciChanges = evidenceTreeChanges(
+      cwd,
+      JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_COMMIT,
+      JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_COMMIT
+    );
+    const repairChanges = evidenceTreeChanges(
+      cwd,
+      JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_COMMIT,
+      successorCommit
+    );
+    const jsonBytes = gitFile(cwd, successorCommit, "evidence/thurstone-invocation-integrity.json");
+    const markdownBytes = gitFile(
+      cwd,
+      successorCommit,
+      "evidence/thurstone-invocation-integrity.md"
+    );
+    const measuredBytes = gitFile(
+      cwd,
+      successorCommit,
+      "lib/results/invocation-integrity-measured.ts"
+    );
+    if (jsonBytes === null || markdownBytes === null || measuredBytes === null) {
+      throw new Error("test_gate9_ci_portability_evidence_missing");
+    }
+    const evidenceDocument = JSON.parse(jsonBytes.toString("utf8")) as Record<string, unknown>;
+    const payload = {
+      version: JUDGE_DEMO_INVOCATION_INTEGRITY_TRANSITION_VERSION,
+      kind: "invocation-integrity-evidence" as const,
+      ordinal: 3,
+      predecessorCommit: executionBuildCommit,
+      successorCommit,
+      predecessorEnvelopeHash: "1".repeat(64),
+      successorEnvelopeHash: "2".repeat(64),
+      rootEvidenceCommit,
+      rootEnvelopeHash: "3".repeat(64),
+      rootReceiptDigest,
+      rootArtifactDigest,
+      rootStoredProjectionDigest,
+      rootCapturedAt,
+      immutableProjectionHash: "4".repeat(64),
+      firstParentChainHash: await canonicalSha256(firstParentChain),
+      gitTreeProjectionHash: await canonicalSha256(
+        evidenceTreeChanges(cwd, executionBuildCommit, successorCommit)
+      ),
+      criticalProjectionHash: "5".repeat(64),
+      dependencyProjectionHash: await dependencyHashAt(cwd, executionBuildCommit),
+      providerCallsPerformed: 0 as const,
+      storeWritesPerformed: 0 as const,
+      replayOnly: true as const,
+      protocolExtension: {
+        commit: protocolCommit,
+        tree: git(cwd, ["rev-parse", `${protocolCommit}^{tree}`]),
+        changedPaths: [...JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_PROTOCOL_PATHS],
+        treeChanges: protocolChanges,
+        gitTreeProjectionHash: await canonicalSha256(protocolChanges)
+      },
+      evidence: {
+        executionBuildCommit,
+        tree: JUDGE_DEMO_GATE9_EVIDENCE_MATERIAL_TREE,
+        changedPaths: evidenceChanges.map(({ path }) => path),
+        treeChanges: evidenceChanges,
+        requiredPathsHash: await canonicalSha256(
+          JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_REQUIRED_PATHS
+        ),
+        gitTreeProjectionHash: await canonicalSha256(evidenceChanges),
+        supplementalPackageDigest: String(evidenceDocument.packageDigest),
+        jsonExportSha256: sha256(jsonBytes),
+        markdownExportSha256: sha256(markdownBytes),
+        measuredSourceSha256: sha256(measuredBytes),
+        scoreEarned: 3 as const,
+        scorePossible: 3 as const,
+        modelCallCount: 0 as const,
+        includedInSemanticDenominator: false as const,
+        semanticEvidenceBuildCommit: JUDGE_DEMO_INVOCATION_INTEGRITY_SEALED_EVIDENCE_BUILD,
+        semanticPackageDigest: JUDGE_DEMO_INVOCATION_INTEGRITY_SEMANTIC_PACKAGE_DIGEST,
+        semanticBaselinePassed: 23 as const,
+        semanticRevisedPassed: 23 as const,
+        semanticPossible: 24 as const,
+        semanticNoMeasuredImprovement: true as const,
+        immutableProjectionHash: "6".repeat(64)
+      },
+      terminalFinalization: {
+        predecessorBinding: {
+          activeCommit: JUDGE_DEMO_GATE9_EVIDENCE_MATERIAL_COMMIT,
+          activeTree: JUDGE_DEMO_GATE9_EVIDENCE_MATERIAL_TREE,
+          bindingHash: JUDGE_DEMO_GATE9_EVIDENCE_BINDING_HASH,
+          evidenceTransitionProofHash: JUDGE_DEMO_GATE9_EVIDENCE_TRANSITION_PROOF_HASH
+        },
+        evidenceMaterialCommit: JUDGE_DEMO_GATE9_EVIDENCE_MATERIAL_COMMIT,
+        evidenceMaterialTree: JUDGE_DEMO_GATE9_EVIDENCE_MATERIAL_TREE,
+        protocolFinalization: {
+          version: JUDGE_DEMO_GATE9_PROTOCOL_FINALIZATION_VERSION,
+          predecessorCommit: JUDGE_DEMO_GATE9_EVIDENCE_MATERIAL_COMMIT,
+          successorCommit: protocolFinalizationCommit,
+          successorTree: git(cwd, ["rev-parse", `${protocolFinalizationCommit}^{tree}`]),
+          changedPaths: [...JUDGE_DEMO_GATE9_PROTOCOL_FINALIZATION_PATHS],
+          treeChanges: finalizationChanges,
+          gitTreeProjectionHash: await canonicalSha256(finalizationChanges),
+          gitPackTransport: JUDGE_DEMO_GATE9_GIT_PACK_TRANSPORT,
+          providerCallsPerformed: 0 as const,
+          modelCallsPerformed: 0 as const,
+          scoredCallsPerformed: 0 as const,
+          storeWritesPerformed: 0 as const
+        },
+        collateralPreparation: {
+          version: JUDGE_DEMO_GATE9_COLLATERAL_PREPARATION_VERSION,
+          predecessorCommit: protocolFinalizationCommit,
+          successorCommit: JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_COMMIT,
+          successorTree: JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_TREE,
+          changedPaths: [...JUDGE_DEMO_GATE9_COLLATERAL_PREPARATION_PATHS],
+          treeChanges: preparationChanges,
+          gitTreeProjectionHash: await canonicalSha256(preparationChanges),
+          linkFieldsStatus: "reserved-for-final-link-only-release" as const,
+          providerCallsPerformed: 0 as const,
+          modelCallsPerformed: 0 as const,
+          scoredCallsPerformed: 0 as const,
+          storeWritesPerformed: 0 as const
+        },
+        ciFinalization: {
+          version: JUDGE_DEMO_GATE9_CI_FINALIZATION_VERSION,
+          predecessorBinding: {
+            activeCommit: JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_COMMIT,
+            activeTree: JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_TREE,
+            bindingHash: JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_BINDING_HASH,
+            evidenceTransitionProofHash: JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_TRANSITION_PROOF_HASH
+          },
+          predecessorCommit: JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_COMMIT,
+          predecessorTree: JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_TREE,
+          successorCommit: JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_COMMIT,
+          successorTree: JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_TREE,
+          changedPaths: [...JUDGE_DEMO_GATE9_CI_FINALIZATION_PATHS],
+          treeChanges: ciChanges,
+          gitTreeProjectionHash: await canonicalSha256(ciChanges),
+          dedupeInvariant: "unique-predecessor-blob-oids-unlinked-once" as const,
+          providerCallsPerformed: 0 as const,
+          modelCallsPerformed: 0 as const,
+          scoredCallsPerformed: 0 as const,
+          storeWritesPerformed: 0 as const
+        },
+        ciPortabilityRepair: {
+          version: JUDGE_DEMO_GATE9_CI_PORTABILITY_REPAIR_VERSION,
+          predecessorBinding: {
+            activeCommit: JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_COMMIT,
+            activeTree: JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_TREE,
+            proofHash: JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_PROOF_HASH,
+            bindingHash: JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_BINDING_HASH,
+            evidenceTransitionProofHash:
+              JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_TRANSITION_PROOF_HASH
+          },
+          predecessorCommit: JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_COMMIT,
+          predecessorTree: JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_TREE,
+          successorCommit,
+          successorTree,
+          changedPaths: [...JUDGE_DEMO_GATE9_CI_PORTABILITY_REPAIR_PATHS],
+          treeChanges: repairChanges,
+          gitTreeProjectionHash: await canonicalSha256(repairChanges),
+          failureClass: JUDGE_DEMO_GATE9_CI_PORTABILITY_FAILURE_CLASS,
+          portabilityInvariant: JUDGE_DEMO_GATE9_CI_PORTABILITY_INVARIANT,
+          providerCallsPerformed: 0 as const,
+          modelCallsPerformed: 0 as const,
+          scoredCallsPerformed: 0 as const,
+          storeWritesPerformed: 0 as const
+        }
+      },
+      gate6PresentationProofHash: JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_PROOF_HASH,
+      gate6CriticalProjectionHash: "7".repeat(64),
+      modelCallsPerformed: 0 as const,
+      scoredCallsPerformed: 0 as const
+    };
+    const unsigned = { ...payload } as Record<string, unknown>;
+    const transition = await verifyJudgeDemoPresentationTransition({
+      ...unsigned,
+      proofHash: await canonicalSha256(unsigned)
+    });
+    if (transition.kind !== "invocation-integrity-evidence") {
+      throw new Error("test_gate9_ci_portability_transition_kind_invalid");
+    }
+    await expect(
+      verifyInvocationIntegrityEvidenceCheckout({ cwd, transition, firstParentChain })
+    ).resolves.toBeUndefined();
+
+    git(cwd, ["checkout", "-q", JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_COMMIT]);
+    for (const path of JUDGE_DEMO_GATE9_CI_PORTABILITY_REPAIR_PATHS) {
+      await writeFile(join(cwd, path), await readFile(resolve(path)));
+    }
+    await write(cwd, "README.md", "unexpected fourth repair path\n");
+    git(cwd, ["add", "--", ...JUDGE_DEMO_GATE9_CI_PORTABILITY_REPAIR_PATHS, "README.md"]);
+    git(cwd, ["commit", "-q", "-m", "invalid extra repair path"]);
+    const invalidCommit = git(cwd, ["rev-parse", "HEAD"]);
+    const invalid = structuredClone(transition);
+    invalid.successorCommit = invalidCommit;
+    invalid.terminalFinalization!.ciPortabilityRepair!.successorCommit = invalidCommit;
+    invalid.terminalFinalization!.ciPortabilityRepair!.successorTree = git(cwd, [
+      "rev-parse",
+      `${invalidCommit}^{tree}`
+    ]);
+    await expect(
+      verifyInvocationIntegrityEvidenceCheckout({
+        cwd,
+        transition: invalid,
+        firstParentChain: [...firstParentChain.slice(0, -1), invalidCommit]
+      })
+    ).rejects.toThrow(/judge_demo_invocation_evidence_projection_invalid/u);
+  });
+
   it("verifies the exact e2-style sealed-reader recovery and active checkout", async () => {
     const value = await fixture();
     git(value.cwd, ["reset", "--hard", "-q", value.recoveryCommit]);
@@ -1841,21 +2235,31 @@ describe("judge provider-free presentation lineage", () => {
       activeCommit: releaseCommit,
       transitions: [value.recovery, collateral]
     });
+    git(value.cwd, ["repack", "-a", "-d"]);
+    git(value.cwd, ["prune-packed"]);
     const predecessorBlobOids = new Set(
       (["README.md", "submission/devpost.md"] as const).map((path) =>
         git(value.cwd, ["rev-parse", `${value.activeCommit}:${path}`])
       )
     );
     for (const predecessorBlobOid of predecessorBlobOids) {
-      await unlink(
-        join(
-          value.cwd,
-          ".git",
-          "objects",
-          predecessorBlobOid.slice(0, 2),
-          predecessorBlobOid.slice(2)
-        )
-      );
+      try {
+        await unlink(
+          join(
+            value.cwd,
+            ".git",
+            "objects",
+            predecessorBlobOid.slice(0, 2),
+            predecessorBlobOid.slice(2)
+          )
+        );
+      } catch (error) {
+        // A full-history clone can serve this legacy fixture blob from a pack, with no loose
+        // object to remove. The ordinal-four case below separately proves genuinely missing
+        // predecessor blobs; this case remains responsible for ordered-chain/critical-byte truth.
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      }
+      expect(() => git(value.cwd, ["cat-file", "-e", predecessorBlobOid])).not.toThrow();
     }
     await expect(
       verifyJudgeDemoPresentationCheckout({ cwd: value.cwd, binding })
@@ -1942,6 +2346,7 @@ describe("judge provider-free presentation lineage", () => {
           predecessorBlobOid.slice(2)
         )
       );
+      expect(() => git(value.cwd, ["cat-file", "-e", predecessorBlobOid])).toThrow();
     }
     await expect(
       verifyJudgeDemoCollateralCheckout({ cwd: value.cwd, proof: collateral })

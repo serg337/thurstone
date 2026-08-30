@@ -15,6 +15,12 @@ export const JUDGE_DEMO_GATE9_COLLATERAL_PREPARATION_VERSION =
   "thurstone-judge-demo-gate9-collateral-preparation@1.0.0";
 export const JUDGE_DEMO_GATE9_CI_FINALIZATION_VERSION =
   "thurstone-judge-demo-gate9-ci-finalization@1.0.0";
+export const JUDGE_DEMO_GATE9_CI_PORTABILITY_REPAIR_VERSION =
+  "thurstone-judge-demo-gate9-ci-portability-repair@1.0.0";
+export const JUDGE_DEMO_GATE9_CI_PORTABILITY_FAILURE_CLASS =
+  "packed-git-object-loose-path-absent" as const;
+export const JUDGE_DEMO_GATE9_CI_PORTABILITY_INVARIANT =
+  "accept-enoent-only-for-packed-legacy-unlink-and-require-cat-file-absence-for-missing-blob-case" as const;
 export const JUDGE_DEMO_GATE9_GIT_PACK_TRANSPORT = "brotli-wrapped-git-pack@1.0.0" as const;
 // Retained as an import-compatible name for release tooling. The proof is now a
 // discriminated transition rather than an unrestricted one-hop collateral proof.
@@ -230,6 +236,16 @@ export const JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_BINDING_HASH =
   "71b80f9b5aab6d685e4c3d4c57e6d4d93e6a6ddd2156cd87797289d8f7197ddf" as const;
 export const JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_TRANSITION_PROOF_HASH =
   "50eb15e36caed74e3351581dce2d1a3a5d1c61d8fbaf19b70bbf7a70872fa92a" as const;
+export const JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_COMMIT =
+  "28bca65e87ec2aa6822e9cb89de92a63ae668b60" as const;
+export const JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_TREE =
+  "b30309333614e1e2f6784ac79ac8d8c9cc7d3bf1" as const;
+export const JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_PROOF_HASH =
+  "2b44e633d690c29bd07895508fc11eceb1869fe0ada312735774c73ef9210350" as const;
+export const JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_BINDING_HASH =
+  "ac959e194571a0ad7e9c33a8606da540db78e9966e6012958c7cae94700969a8" as const;
+export const JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_TRANSITION_PROOF_HASH =
+  "e0bca126d5e0333ddaa7237d9f22cfc6e5d1418a0e74f98abb48c8708e48c456" as const;
 
 /** Exact E -> F build-proof repair required before the final Gate 9 collateral preparation. */
 export const JUDGE_DEMO_GATE9_PROTOCOL_FINALIZATION_PATHS = Object.freeze(
@@ -260,6 +276,9 @@ export const JUDGE_DEMO_GATE9_CI_FINALIZATION_PATHS = Object.freeze(
     "lib/judge/collateral-proof.ts",
     "tests/integration/judge-presentation.test.ts"
   ].sort(judgeDemoInvocationIntegrityEvidencePathCompare)
+);
+export const JUDGE_DEMO_GATE9_CI_PORTABILITY_REPAIR_PATHS = Object.freeze(
+  [...JUDGE_DEMO_GATE9_CI_FINALIZATION_PATHS].sort(judgeDemoInvocationIntegrityEvidencePathCompare)
 );
 
 export const JUDGE_DEMO_INVOCATION_INTEGRITY_PRESERVED_SEMANTIC_ARTIFACTS = Object.freeze([
@@ -527,6 +546,9 @@ const gate9CollateralPreparationPath = z.enum(
 const gate9CiFinalizationPath = z.enum(
   JUDGE_DEMO_GATE9_CI_FINALIZATION_PATHS as unknown as [string, ...string[]]
 );
+const gate9CiPortabilityRepairPath = z.enum(
+  JUDGE_DEMO_GATE9_CI_PORTABILITY_REPAIR_PATHS as unknown as [string, ...string[]]
+);
 const collateralPath = z.enum(JUDGE_DEMO_COLLATERAL_PATHS);
 const collateralField = z.enum(
   Object.keys(JUDGE_DEMO_COLLATERAL_FIELD_PREFIXES) as [
@@ -585,6 +607,9 @@ const gate9CollateralPreparationTreeChangeSchema = z
   .strict();
 const gate9CiFinalizationTreeChangeSchema = z
   .object({ path: gate9CiFinalizationPath, ...transitionTreeChangeShape })
+  .strict();
+const gate9CiPortabilityRepairTreeChangeSchema = z
+  .object({ path: gate9CiPortabilityRepairPath, ...transitionTreeChangeShape })
   .strict();
 const invocationIntegrityAmendmentTreeChangeSchema = z
   .object({
@@ -1006,6 +1031,40 @@ const gate9TerminalFinalizationSchema = z
         storeWritesPerformed: z.literal(0)
       })
       .strict()
+      .optional(),
+    ciPortabilityRepair: z
+      .object({
+        version: z.literal(JUDGE_DEMO_GATE9_CI_PORTABILITY_REPAIR_VERSION),
+        predecessorBinding: z
+          .object({
+            activeCommit: z.literal(JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_COMMIT),
+            activeTree: z.literal(JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_TREE),
+            proofHash: z.literal(JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_PROOF_HASH),
+            bindingHash: z.literal(JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_BINDING_HASH),
+            evidenceTransitionProofHash: z.literal(
+              JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_TRANSITION_PROOF_HASH
+            )
+          })
+          .strict(),
+        predecessorCommit: z.literal(JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_COMMIT),
+        predecessorTree: z.literal(JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_TREE),
+        successorCommit: commit,
+        successorTree: gitOid,
+        changedPaths: z
+          .array(gate9CiPortabilityRepairPath)
+          .length(JUDGE_DEMO_GATE9_CI_PORTABILITY_REPAIR_PATHS.length),
+        treeChanges: z
+          .array(gate9CiPortabilityRepairTreeChangeSchema)
+          .length(JUDGE_DEMO_GATE9_CI_PORTABILITY_REPAIR_PATHS.length),
+        gitTreeProjectionHash: sha256,
+        failureClass: z.literal(JUDGE_DEMO_GATE9_CI_PORTABILITY_FAILURE_CLASS),
+        portabilityInvariant: z.literal(JUDGE_DEMO_GATE9_CI_PORTABILITY_INVARIANT),
+        providerCallsPerformed: z.literal(0),
+        modelCallsPerformed: z.literal(0),
+        scoredCallsPerformed: z.literal(0),
+        storeWritesPerformed: z.literal(0)
+      })
+      .strict()
       .optional()
   })
   .strict();
@@ -1338,6 +1397,8 @@ export async function verifyJudgeDemoPresentationTransition(
       terminal?.collateralPreparation.treeChanges.map(({ path }) => path) ?? [];
     const ciFinalization = terminal?.ciFinalization ?? null;
     const ciFinalizationPaths = ciFinalization?.treeChanges.map(({ path }) => path) ?? [];
+    const ciPortabilityRepair = terminal?.ciPortabilityRepair ?? null;
+    const ciPortabilityRepairPaths = ciPortabilityRepair?.treeChanges.map(({ path }) => path) ?? [];
     const expectedFirstParentChain =
       terminal === null
         ? [proof.predecessorCommit, proof.protocolExtension.commit, proof.successorCommit]
@@ -1347,13 +1408,44 @@ export async function verifyJudgeDemoPresentationTransition(
             terminal.evidenceMaterialCommit,
             terminal.protocolFinalization.successorCommit,
             terminal.collateralPreparation.successorCommit,
-            ...(ciFinalization === null ? [] : [ciFinalization.successorCommit])
+            ...(ciFinalization === null ? [] : [ciFinalization.successorCommit]),
+            ...(ciPortabilityRepair === null ? [] : [ciPortabilityRepair.successorCommit])
           ];
+    const ciPortabilityRepairValid =
+      ciPortabilityRepair === null ||
+      (terminal !== null &&
+        ciFinalization !== null &&
+        ciFinalization.successorCommit === ciPortabilityRepair.predecessorCommit &&
+        ciFinalization.successorTree === ciPortabilityRepair.predecessorTree &&
+        ciPortabilityRepair.successorCommit === proof.successorCommit &&
+        ciPortabilityRepair.successorCommit !== ciPortabilityRepair.predecessorCommit &&
+        canonicalJson(ciPortabilityRepair.changedPaths) ===
+          canonicalJson(JUDGE_DEMO_GATE9_CI_PORTABILITY_REPAIR_PATHS) &&
+        canonicalJson(ciPortabilityRepairPaths) ===
+          canonicalJson(JUDGE_DEMO_GATE9_CI_PORTABILITY_REPAIR_PATHS) &&
+        canonicalJson(ciPortabilityRepair.treeChanges) ===
+          canonicalJson(
+            [...ciPortabilityRepair.treeChanges].sort((left, right) =>
+              judgeDemoInvocationIntegrityEvidencePathCompare(left.path, right.path)
+            )
+          ) &&
+        ciPortabilityRepair.treeChanges.every(
+          (change) =>
+            change.status === "M" &&
+            change.predecessorMode === "100644" &&
+            change.successorMode === "100644" &&
+            change.predecessorBlobOid !== null &&
+            change.successorBlobOid !== null &&
+            change.predecessorBlobOid !== change.successorBlobOid
+        ) &&
+        (await canonicalSha256(ciPortabilityRepair.treeChanges)) ===
+          ciPortabilityRepair.gitTreeProjectionHash);
     const ciFinalizationValid =
       ciFinalization === null ||
       (terminal !== null &&
         terminal.collateralPreparation.successorCommit === ciFinalization.predecessorCommit &&
-        ciFinalization.successorCommit === proof.successorCommit &&
+        ciFinalization.successorCommit ===
+          (ciPortabilityRepair?.predecessorCommit ?? proof.successorCommit) &&
         ciFinalization.successorCommit !== ciFinalization.predecessorCommit &&
         canonicalJson(ciFinalization.changedPaths) ===
           canonicalJson(JUDGE_DEMO_GATE9_CI_FINALIZATION_PATHS) &&
@@ -1434,7 +1526,8 @@ export async function verifyJudgeDemoPresentationTransition(
         ) &&
         (await canonicalSha256(terminal.collateralPreparation.treeChanges)) ===
           terminal.collateralPreparation.gitTreeProjectionHash &&
-        ciFinalizationValid);
+        ciFinalizationValid &&
+        ciPortabilityRepairValid);
     if (
       proof.ordinal !== 3 ||
       proof.evidence.executionBuildCommit !== proof.predecessorCommit ||

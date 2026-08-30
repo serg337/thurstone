@@ -12,6 +12,7 @@ import {
   JUDGE_DEMO_COLLATERAL_FIELD_PREFIXES,
   JUDGE_DEMO_CRITICAL_PATHS,
   JUDGE_DEMO_GATE9_CI_FINALIZATION_PATHS,
+  JUDGE_DEMO_GATE9_CI_PORTABILITY_REPAIR_PATHS,
   JUDGE_DEMO_GATE9_COLLATERAL_PREPARATION_PATHS,
   JUDGE_DEMO_GATE9_PROTOCOL_FINALIZATION_PATHS,
   JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_COMMIT,
@@ -794,6 +795,7 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
   const protocolCommit = input.transition.protocolExtension.commit;
   const terminal = input.transition.terminalFinalization ?? null;
   const ciFinalization = terminal?.ciFinalization ?? null;
+  const ciPortabilityRepair = terminal?.ciPortabilityRepair ?? null;
   const evidenceMaterialCommit =
     terminal?.evidenceMaterialCommit ?? input.transition.successorCommit;
   const expectedChain =
@@ -805,7 +807,8 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
           evidenceMaterialCommit,
           terminal.protocolFinalization.successorCommit,
           terminal.collateralPreparation.successorCommit,
-          ...(ciFinalization === null ? [] : [ciFinalization.successorCommit])
+          ...(ciFinalization === null ? [] : [ciFinalization.successorCommit]),
+          ...(ciPortabilityRepair === null ? [] : [ciPortabilityRepair.successorCommit])
         ];
   if (
     canonicalJson(input.firstParentChain) !== canonicalJson(expectedChain) ||
@@ -819,7 +822,10 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
         commitTree(input.cwd, terminal.collateralPreparation.successorCommit) !==
           terminal.collateralPreparation.successorTree ||
         (ciFinalization !== null &&
-          commitTree(input.cwd, ciFinalization.successorCommit) !== ciFinalization.successorTree)))
+          commitTree(input.cwd, ciFinalization.successorCommit) !== ciFinalization.successorTree) ||
+        (ciPortabilityRepair !== null &&
+          commitTree(input.cwd, ciPortabilityRepair.successorCommit) !==
+            ciPortabilityRepair.successorTree)))
   ) {
     throw new Error("judge_demo_invocation_evidence_chain_invalid");
   }
@@ -865,6 +871,18 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
         ].sort((left, right) =>
           judgeDemoInvocationIntegrityEvidencePathCompare(left.path, right.path)
         );
+  const ciPortabilityRepairChanges =
+    ciPortabilityRepair === null
+      ? []
+      : [
+          ...gitTreeChanges(
+            input.cwd,
+            ciPortabilityRepair.predecessorCommit,
+            ciPortabilityRepair.successorCommit
+          )
+        ].sort((left, right) =>
+          judgeDemoInvocationIntegrityEvidencePathCompare(left.path, right.path)
+        );
   if (
     canonicalJson(protocolChanges.map(({ path }) => path)) !==
       canonicalJson(JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_PROTOCOL_PATHS) ||
@@ -900,7 +918,14 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
             canonicalJson(JUDGE_DEMO_GATE9_CI_FINALIZATION_PATHS) ||
             canonicalJson(ciFinalizationChanges) !== canonicalJson(ciFinalization.treeChanges) ||
             (await canonicalSha256(ciFinalizationChanges)) !==
-              ciFinalization.gitTreeProjectionHash))))
+              ciFinalization.gitTreeProjectionHash)) ||
+        (ciPortabilityRepair !== null &&
+          (canonicalJson(ciPortabilityRepairChanges.map(({ path }) => path)) !==
+            canonicalJson(JUDGE_DEMO_GATE9_CI_PORTABILITY_REPAIR_PATHS) ||
+            canonicalJson(ciPortabilityRepairChanges) !==
+              canonicalJson(ciPortabilityRepair.treeChanges) ||
+            (await canonicalSha256(ciPortabilityRepairChanges)) !==
+              ciPortabilityRepair.gitTreeProjectionHash))))
   ) {
     throw new Error("judge_demo_invocation_evidence_projection_invalid");
   }
@@ -944,18 +969,54 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
       throw new Error(`judge_demo_gate9_ci_finalization_mode_invalid:${change.path}`);
     }
   }
+  for (const change of ciPortabilityRepairChanges) {
+    if (
+      change.status !== "M" ||
+      change.predecessorMode !== "100644" ||
+      change.successorMode !== "100644" ||
+      change.predecessorBlobOid === null ||
+      change.successorBlobOid === null
+    ) {
+      throw new Error(`judge_demo_gate9_ci_portability_mode_invalid:${change.path}`);
+    }
+  }
   if (ciFinalization !== null) {
     const testSource = new TextDecoder("utf-8", { fatal: true }).decode(
       await activeCheckoutBlobBytes(
         input.cwd,
-        ciFinalization.successorCommit,
+        ciPortabilityRepair?.successorCommit ?? ciFinalization.successorCommit,
         "tests/integration/judge-presentation.test.ts"
       )
     );
     const setCount = testSource.match(/const predecessorBlobOids = new Set\(/gu)?.length ?? 0;
     const uniqueLoopCount =
       testSource.match(/for \(const predecessorBlobOid of predecessorBlobOids\)/gu)?.length ?? 0;
-    if (setCount !== 2 || uniqueLoopCount !== 2) {
+    const packedRepackCount =
+      testSource.match(/git\(value\.cwd, \["repack", "-a", "-d"\]\);/gu)?.length ?? 0;
+    const packedPruneCount =
+      testSource.match(/git\(value\.cwd, \["prune-packed"\]\);/gu)?.length ?? 0;
+    const enoentOnlyCount =
+      testSource.match(
+        /if \(\(error as NodeJS\.ErrnoException\)\.code !== "ENOENT"\) throw error;/gu
+      )?.length ?? 0;
+    const packedPresenceCount =
+      testSource.match(
+        /expect\(\(\) => git\(value\.cwd, \["cat-file", "-e", predecessorBlobOid\]\)\)\.not\.toThrow\(\);/gu
+      )?.length ?? 0;
+    const missingAbsenceCount =
+      testSource.match(
+        /expect\(\(\) => git\(value\.cwd, \["cat-file", "-e", predecessorBlobOid\]\)\)\.toThrow\(\);/gu
+      )?.length ?? 0;
+    if (
+      setCount !== 2 ||
+      uniqueLoopCount !== 2 ||
+      (ciPortabilityRepair !== null &&
+        (packedRepackCount !== 1 ||
+          packedPruneCount !== 1 ||
+          enoentOnlyCount !== 1 ||
+          packedPresenceCount !== 1 ||
+          missingAbsenceCount !== 1))
+    ) {
       throw new Error("judge_demo_gate9_ci_finalization_dedupe_invariant_invalid");
     }
   }
@@ -1113,7 +1174,9 @@ async function verifyTransitionGit(input: {
                     []),
                   ...(input.transition.terminalFinalization?.collateralPreparation.changedPaths ??
                     []),
-                  ...(input.transition.terminalFinalization?.ciFinalization?.changedPaths ?? [])
+                  ...(input.transition.terminalFinalization?.ciFinalization?.changedPaths ?? []),
+                  ...(input.transition.terminalFinalization?.ciPortabilityRepair?.changedPaths ??
+                    [])
                 ])
               ].sort(judgeDemoInvocationIntegrityEvidencePathCompare)
             : [...new Set(input.transition.collateralChanges.map(({ path }) => path))].sort();
@@ -1170,7 +1233,13 @@ async function verifyTransitionGit(input: {
             transition.terminalFinalization?.collateralPreparation.changedPaths.includes(path) ??
             false
           ) &&
-          !(transition.terminalFinalization?.ciFinalization?.changedPaths.includes(path) ?? false)
+          !(
+            transition.terminalFinalization?.ciFinalization?.changedPaths.includes(path) ?? false
+          ) &&
+          !(
+            transition.terminalFinalization?.ciPortabilityRepair?.changedPaths.includes(path) ??
+            false
+          )
       )) ||
     (transition.kind === "collateral-links" && changedCriticalPaths.length !== 0)
   ) {
