@@ -5,6 +5,7 @@ import { PRODUCT_NAME } from "@/lib/brand";
 const navigation = [
   { href: "/studio", label: "Studio" },
   { href: "/lab", label: "Lab" },
+  { href: "/invocation-integrity", label: "Integrity" },
   { href: "/results", label: "Results" }
 ];
 

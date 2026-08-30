@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { ProbeCalibrationResults } from "@/components/results/probe-calibration-results";
+import { InvocationIntegrityResults } from "@/components/results/invocation-integrity-results";
 import { SemanticDevelopmentResults } from "@/components/results/semantic-development-results";
 import { SemanticPairedResults } from "@/components/results/semantic-paired-results";
 import { StatusPill } from "@/components/status-pill";
@@ -11,6 +12,7 @@ import {
   PROBE_RESULTS_COOKIE,
   PROBE_SESSION_COOKIE
 } from "@/lib/probe/session";
+import { readInvocationIntegrityResults } from "@/lib/results/invocation-integrity-results.server";
 import { readSemanticResults } from "@/lib/results/semantic-results.server";
 import { SCORED_RESULTS_COOKIE, SCORED_SESSION_COOKIE } from "@/lib/scored/session.server";
 
@@ -30,6 +32,7 @@ export default async function ResultsPage() {
     disclosure: "No run yet" as const,
     supersededEvidence: null
   }));
+  const invocationIntegrityResults = await readInvocationIntegrityResults();
   const scoredAvailable = semanticResults.status !== "no-scored-run";
   return (
     <div className="page-shell route-page">
@@ -84,6 +87,8 @@ export default async function ResultsPage() {
           </div>
         </section>
       )}
+
+      <InvocationIntegrityResults results={invocationIntegrityResults} />
 
       {terminalEvidence || cookieStore.has(PROBE_RECOVERY_COOKIE) ? (
         <ProbeCalibrationResults recoveryAvailable />
