@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const OPERATION_ID_PATTERN = "^[A-Za-z0-9][A-Za-z0-9_-]{15,63}$";
+export const CART_ITEM_ID_PATTERN = "^[a-z0-9]+(?:-[a-z0-9]+)*$";
 
 export const emptyToolInputSchema = z.object({}).strict();
 
@@ -12,7 +13,7 @@ export const cartUpdateInputSchema = z
   .object({
     operationId: operationIdSchema,
     operation: z.literal("set_quantity"),
-    itemId: z.enum(["field-notebook", "stoneware-mug"]),
+    itemId: z.string().min(1).max(64).regex(new RegExp(CART_ITEM_ID_PATTERN, "u")),
     quantity: z.number().int().min(1).max(10)
   })
   .strict();
@@ -49,8 +50,10 @@ export const CART_UPDATE_JSON_SCHEMA = {
     },
     itemId: {
       type: "string",
-      enum: ["field-notebook", "stoneware-mug"],
-      description: "Fixture item whose quantity should change."
+      minLength: 1,
+      maxLength: 64,
+      pattern: CART_ITEM_ID_PATTERN,
+      description: "Syntactically valid item identifier whose current cart quantity should change."
     },
     quantity: {
       type: "integer",

@@ -12,12 +12,269 @@ import {
   verifyGate1NativeProofSequence,
   type Gate1ProofBundle
 } from "../../lib/evidence/gate1-proof-bundle";
+import {
+  INVOCATION_INTEGRITY_AMENDMENT_COMMIT,
+  INVOCATION_INTEGRITY_AMENDMENT_PATH,
+  INVOCATION_INTEGRITY_AMENDMENT_SHA256,
+  INVOCATION_INTEGRITY_BROWSER_EVIDENCE_BOUNDARY,
+  INVOCATION_INTEGRITY_CASES,
+  INVOCATION_INTEGRITY_FAILURE_RECEIPT_VERSION,
+  INVOCATION_INTEGRITY_FINAL_STATE_SHA256,
+  INVOCATION_INTEGRITY_FROZEN_CALLS,
+  INVOCATION_INTEGRITY_INITIAL_STATE_SHA256,
+  INVOCATION_INTEGRITY_RECEIPT_VERSION,
+  INVOCATION_INTEGRITY_STATE_KEYSETS,
+  verifyInvocationIntegrityFailureReceipt,
+  verifyInvocationIntegrityReceipt,
+  type InvocationIntegrityFailureInput,
+  type InvocationIntegrityFailureReceipt,
+  type InvocationIntegrityReceipt,
+  type InvocationIntegrityStateEvidence,
+  type InvocationIntegrityTranscript
+} from "../../lib/invocation-integrity/contract";
 
 const pageErrors = new WeakMap<Page, string[]>();
 const hydrationWarnings = new WeakMap<Page, string[]>();
+const INVOCATION_INTEGRITY_BROWSER_COMMIT = "e".repeat(40);
+const INVOCATION_INTEGRITY_RUN_LOCK_VERSION = "thurstone-invocation-integrity-run-lock@1";
+const INVOCATION_INTEGRITY_RUN_LOCK_KEY = `${INVOCATION_INTEGRITY_RUN_LOCK_VERSION}:${INVOCATION_INTEGRITY_BROWSER_COMMIT}`;
 
 function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
+}
+
+function emulatedStateEvidence(value: Record<string, unknown>): InvocationIntegrityStateEvidence {
+  const pendingCheckout = value.pendingCheckout as Record<string, unknown> | null;
+  return {
+    value: value as unknown as InvocationIntegrityStateEvidence["value"],
+    sha256: sha256(canonicalize(value)),
+    keysets: {
+      root: INVOCATION_INTEGRITY_STATE_KEYSETS.root,
+      line: INVOCATION_INTEGRITY_STATE_KEYSETS.line,
+      fulfillment: INVOCATION_INTEGRITY_STATE_KEYSETS.fulfillment,
+      pendingCheckout: pendingCheckout ? INVOCATION_INTEGRITY_STATE_KEYSETS.pendingCheckout : []
+    }
+  };
+}
+
+async function emulatedInvocationIntegrityReceipt(
+  transcript: InvocationIntegrityTranscript
+): Promise<InvocationIntegrityReceipt> {
+  const timestamp = "2026-08-29T15:00:00.000Z";
+  const firstMeasuredCall = transcript.calls[0];
+  const lastMeasuredCall = transcript.calls.at(-1);
+  if (!firstMeasuredCall || !lastMeasuredCall) {
+    throw new Error("emulated_invocation_integrity_transcript_empty");
+  }
+  const initialTrustedState = firstMeasuredCall.trace.stateBefore.value;
+  const finalTrustedState = lastMeasuredCall.trace.stateAfter.value;
+  const frozenState = (reference: "initial" | "final") =>
+    reference === "initial" ? initialTrustedState : finalTrustedState;
+  const frozenStateSha256 = (reference: "initial" | "final") =>
+    reference === "initial"
+      ? INVOCATION_INTEGRITY_INITIAL_STATE_SHA256
+      : INVOCATION_INTEGRITY_FINAL_STATE_SHA256;
+  const rows = await Promise.all(
+    INVOCATION_INTEGRITY_CASES.map(async (contractCase) => {
+      const calls = transcript.calls.filter(({ caseId }) => caseId === contractCase.caseId);
+      const first = calls[0];
+      const last = calls.at(-1);
+      if (!first || !last || calls.length !== contractCase.invocations.length) {
+        throw new Error("emulated_invocation_integrity_call_cardinality_mismatch");
+      }
+      const stateBefore = first.trace.stateBefore.value as Record<string, unknown>;
+      const stateAfter = last.trace.stateAfter.value as Record<string, unknown>;
+      const rowCore = {
+        caseId: contractCase.caseId,
+        title: contractCase.title,
+        toolName: contractCase.toolName,
+        exactInvocations: contractCase.invocations,
+        expectedOutcome: contractCase.expectedResults,
+        actualOutcome: calls.map(({ receipt }) => receipt.canonicalResult),
+        trustedStateBefore: emulatedStateEvidence(stateBefore),
+        trustedStateAfter: emulatedStateEvidence(stateAfter),
+        domainOperationLedgerDiff: {
+          before: contractCase.preconditions.operationLedgerCount,
+          after: contractCase.postconditions.operationLedgerCount,
+          delta:
+            contractCase.postconditions.operationLedgerCount -
+            contractCase.preconditions.operationLedgerCount
+        },
+        tombstoneDiff: {
+          before: contractCase.preconditions.tombstoneCount,
+          after: contractCase.postconditions.tombstoneCount,
+          delta:
+            contractCase.postconditions.tombstoneCount - contractCase.preconditions.tombstoneCount
+        },
+        auditTraceDiff: {
+          before: contractCase.preconditions.auditTraceCount,
+          after: contractCase.postconditions.auditTraceCount,
+          delta:
+            contractCase.postconditions.auditTraceCount - contractCase.preconditions.auditTraceCount
+        },
+        subscriberCommitCount: contractCase.postconditions.subscriberCommitCount,
+        assertions: [
+          "source_fixed_invocation",
+          "native_webmcp_trace_binding",
+          "exact_expected_outcome",
+          "trusted_state_keysets",
+          "trusted_state_hashes",
+          "domain_operation_ledger_diff",
+          "audit_trace_diff",
+          "subscriber_commit_count",
+          "no_unmodeled_state",
+          ...(contractCase.caseId === "II-03" ? ["one_commit_then_replay_no_op"] : [])
+        ].map((assertionId) => ({ assertionId, passed: true as const })),
+        browserObservationDigests: calls.map((call) => sha256(canonicalize(call))),
+        trustedObservationDigests: INVOCATION_INTEGRITY_FROZEN_CALLS.filter(
+          ({ caseId }) => caseId === contractCase.caseId
+        ).map((frozen) =>
+          sha256(
+            canonicalize({
+              caseId: frozen.caseId,
+              callIndex: frozen.callIndex,
+              toolName: frozen.toolName,
+              input: frozen.payload,
+              result: frozen.result,
+              trace: {
+                outcome: frozen.trace.status,
+                commitDisposition: frozen.trace.commitDisposition,
+                effectApplied: frozen.trace.effectApplied,
+                operationId: frozen.trace.operationId,
+                rawInput: frozen.payload,
+                canonicalInput: frozen.trace.canonicalInput,
+                canonicalCommand: frozen.trace.canonicalCommand,
+                stateBefore: frozenState(frozen.before.state),
+                stateAfter: frozenState(frozen.after.state)
+              },
+              before: {
+                state: frozenState(frozen.before.state),
+                stateSha256: frozenStateSha256(frozen.before.state),
+                operationLedgerCount: frozen.before.operationLedgerCount,
+                tombstoneCount: frozen.before.tombstoneCount,
+                auditTraceCount: frozen.before.auditTraceCount,
+                subscriberCommitCount: frozen.before.subscriberCommitCount
+              },
+              after: {
+                state: frozenState(frozen.after.state),
+                stateSha256: frozenStateSha256(frozen.after.state),
+                operationLedgerCount: frozen.after.operationLedgerCount,
+                tombstoneCount: frozen.after.tombstoneCount,
+                auditTraceCount: frozen.after.auditTraceCount,
+                subscriberCommitCount: frozen.after.subscriberCommitCount
+              }
+            })
+          )
+        ),
+        buildSha: transcript.runtime.appCommit,
+        timestamp: last.trace.observedAt,
+        passed: true as const
+      };
+      return { ...rowCore, rowDigest: sha256(canonicalize(rowCore)) };
+    })
+  );
+  const receiptCore = {
+    receiptVersion: INVOCATION_INTEGRITY_RECEIPT_VERSION,
+    status: "verified" as const,
+    amendment: {
+      path: INVOCATION_INTEGRITY_AMENDMENT_PATH,
+      commit: INVOCATION_INTEGRITY_AMENDMENT_COMMIT,
+      sha256: INVOCATION_INTEGRITY_AMENDMENT_SHA256
+    },
+    buildSha: transcript.runtime.appCommit,
+    initialManifestHash: transcript.runtime.initialManifestHash,
+    pendingManifestHash: transcript.runtime.pendingManifestHash,
+    trustedStateSource: "source-fixed-server-replay" as const,
+    browserEvidenceBoundary: INVOCATION_INTEGRITY_BROWSER_EVIDENCE_BOUNDARY,
+    measuredTranscript: transcript,
+    measuredTranscriptDigest: sha256(canonicalize(transcript)),
+    modelCallCount: 0 as const,
+    includedInSemanticDenominator: false as const,
+    rows,
+    score: { earned: 3 as const, possible: 3 as const, label: "3/3" as const },
+    finalStateSha256: INVOCATION_INTEGRITY_FINAL_STATE_SHA256,
+    completedAt: timestamp
+  };
+  return verifyInvocationIntegrityReceipt({
+    ...receiptCore,
+    receiptDigest: sha256(canonicalize(receiptCore))
+  });
+}
+
+async function installEmulatedInvocationIntegrityVerifier(page: Page): Promise<void> {
+  await page.route("**/api/invocation-integrity/verify", async (route) => {
+    const transcript = JSON.parse(
+      route.request().postData() ?? "null"
+    ) as InvocationIntegrityTranscript;
+    const receipt = await emulatedInvocationIntegrityReceipt(transcript);
+    await route.fulfill({
+      status: 201,
+      contentType: "application/json",
+      body: JSON.stringify(receipt)
+    });
+  });
+  await page.route("**/api/invocation-integrity/failure", async (route) => {
+    const input = JSON.parse(
+      route.request().postData() ?? "null"
+    ) as InvocationIntegrityFailureInput;
+    const earned =
+      input.completedCalls.length === 0 ? 0 : input.completedCalls.length === 1 ? 1 : 2;
+    const receiptCore = {
+      receiptVersion: INVOCATION_INTEGRITY_FAILURE_RECEIPT_VERSION,
+      status: "failed" as const,
+      buildSha: input.runtime.appCommit,
+      origin: input.runtime.origin,
+      browserEvidenceBoundary: INVOCATION_INTEGRITY_BROWSER_EVIDENCE_BOUNDARY,
+      runtime: input.runtime,
+      preflight: input.preflight,
+      preflightDigest: sha256(canonicalize(input.preflight)),
+      completedCalls: input.completedCalls,
+      completedCallsDigest: sha256(canonicalize(input.completedCalls)),
+      error: input.error,
+      terminalInspection: input.terminalInspection,
+      terminalInspectionDigest: sha256(canonicalize(input.terminalInspection)),
+      score: {
+        earned: earned as 0 | 1 | 2,
+        possible: 3 as const,
+        label: `${earned}/3` as "0/3" | "1/3" | "2/3"
+      },
+      claimPosition: "forbidden" as const,
+      claimAllowed: false as const,
+      modelCallCount: 0 as const,
+      includedInSemanticDenominator: false as const,
+      failedAt: input.failedAt
+    };
+    const receipt: InvocationIntegrityFailureReceipt =
+      await verifyInvocationIntegrityFailureReceipt({
+        ...receiptCore,
+        receiptDigest: sha256(canonicalize(receiptCore))
+      });
+    await route.fulfill({
+      status: 201,
+      contentType: "application/json",
+      body: JSON.stringify(receipt)
+    });
+  });
+}
+
+async function executeExternalNativeCall(
+  page: Page,
+  toolName: string,
+  input: Readonly<Record<string, unknown>>
+): Promise<void> {
+  await page.evaluate(
+    async ({ toolName, input }) => {
+      const context = document.modelContext as WebMCP.ModelContext & {
+        getTools(): Promise<WebMCP.RegisteredTool[]>;
+        executeTool(tool: WebMCP.RegisteredTool, input: object | string): Promise<string | null>;
+      };
+      const tools = await context.getTools();
+      const tool = tools.find(({ name }) => name === toolName);
+      if (!tool) throw new Error(`Missing external contamination tool: ${toolName}`);
+      await context.executeTool(tool, input);
+    },
+    { toolName, input }
+  );
 }
 
 function createJudgeProjection(
@@ -138,6 +395,7 @@ async function installEmulatedConsumer(page: Page, mode: "object" | "json-string
         readonly bodyText: string;
         readonly handlerSettled: boolean;
         readonly inputType: string;
+        readonly invocationIntegrityRunLockState: string | null;
       }> = [];
       const failToolName = sessionStorage.getItem("__toolProofTestFailAutomatedTool");
       sessionStorage.removeItem("__toolProofTestFailAutomatedTool");
@@ -145,6 +403,20 @@ async function installEmulatedConsumer(page: Page, mode: "object" | "json-string
         completeCanceledCartGetBeforeReject: false,
         failToolName,
         failureConsumed: false
+      };
+      const invocationIntegrityRunLockState = (): string | null => {
+        const key = Object.keys(localStorage).find((candidate) =>
+          candidate.startsWith("thurstone-invocation-integrity-run-lock@1:")
+        );
+        if (!key) return null;
+        try {
+          const marker = JSON.parse(localStorage.getItem(key) ?? "null") as {
+            readonly state?: unknown;
+          } | null;
+          return typeof marker?.state === "string" ? marker.state : "invalid";
+        } catch {
+          return "invalid";
+        }
       };
       let delayNextDigest = false;
       let releaseDigest: (() => void) | undefined;
@@ -297,7 +569,8 @@ async function installEmulatedConsumer(page: Page, mode: "object" | "json-string
               toolName: selected.name,
               bodyText: document.body.textContent ?? "",
               handlerSettled,
-              inputType
+              inputType,
+              invocationIntegrityRunLockState: invocationIntegrityRunLockState()
             });
             releaseDigest?.();
           }
@@ -307,7 +580,8 @@ async function installEmulatedConsumer(page: Page, mode: "object" | "json-string
               toolName: selected.name,
               bodyText: document.body.textContent ?? "",
               handlerSettled,
-              inputType
+              inputType,
+              invocationIntegrityRunLockState: invocationIntegrityRunLockState()
             });
           }
           if (completeCanceledCartGetBeforeReject && options.signal?.aborted) {
@@ -1463,4 +1737,797 @@ test("consumer-ready pending and reset states remain accessible without horizont
   expect(resetViolations).toEqual([]);
   await page.keyboard.press("Tab");
   await expect(page.locator(":focus-visible")).toBeVisible();
+});
+
+test("Gate 8.5 runs one fixed provider-free native sequence and downloads one complete JSON", async ({
+  page
+}) => {
+  const outbound: string[] = [];
+  const verifierBodies: Record<string, unknown>[] = [];
+  page.on("request", (request) => {
+    outbound.push(request.url());
+    if (request.url().endsWith("/api/invocation-integrity/verify")) {
+      verifierBodies.push(JSON.parse(request.postData() ?? "null") as Record<string, unknown>);
+    }
+  });
+
+  await installEmulatedInvocationIntegrityVerifier(page);
+  await page.goto("/invocation-integrity");
+  await expect(
+    page.getByRole("heading", {
+      name: "Fixed browser-native calls, checked by a source-fixed verifier."
+    })
+  ).toBeVisible();
+  await expect(page.getByText("Zero model calls. Zero server durable-store writes.")).toBeVisible();
+  await expect(
+    page.getByText(/The one-run guard uses an exclusive browser LockManager claim/iu)
+  ).toBeVisible();
+  await expect(page.getByText(/using another browser or profile can bypass it/iu)).toBeVisible();
+  await expect(page.getByRole("button", { name: /clear|reset.*run/iu })).toHaveCount(0);
+  await expect(page.getByText("getTools + executeTool ready", { exact: true })).toBeVisible();
+  await expect(page.getByText("Fixed sequence ready", { exact: true })).toBeVisible();
+  expect(await page.locator("input, textarea, select").count()).toBe(0);
+
+  const runButton = page.getByRole("button", { name: "Run fixed native sequence once" });
+  await runButton.click();
+  await expect(page.getByText("3/3 verified separately", { exact: true })).toBeVisible();
+  await expect(page.getByText(/^Verified separately ·/u)).toHaveCount(3);
+  await expect(page.getByRole("button", { name: "Fixed native run consumed" })).toBeDisabled();
+
+  const terminalRunLock = await page.evaluate((key) => {
+    const value = localStorage.getItem(key);
+    return value ? (JSON.parse(value) as Record<string, unknown>) : null;
+  }, INVOCATION_INTEGRITY_RUN_LOCK_KEY);
+  expect(terminalRunLock).toMatchObject({
+    version: INVOCATION_INTEGRITY_RUN_LOCK_VERSION,
+    appCommit: INVOCATION_INTEGRITY_BROWSER_COMMIT,
+    origin: new URL(page.url()).origin,
+    claimId: expect.stringMatching(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
+    ),
+    state: "terminal",
+    terminalPhase: "verified",
+    artifact: {
+      status: "verified",
+      buildSha: INVOCATION_INTEGRITY_BROWSER_COMMIT,
+      score: { earned: 3, possible: 3, label: "3/3" }
+    }
+  });
+
+  expect(verifierBodies).toHaveLength(1);
+  const transcript = verifierBodies[0] as unknown as {
+    runtime: {
+      argumentMode: string;
+      initialCatalog: string[];
+      pendingCatalog: string[];
+    };
+    preflight: {
+      initialDescriptors: Array<{ name: string; origin: string; inputSchema: unknown }>;
+      pendingDescriptors: Array<{ name: string; origin: string; inputSchema: unknown }>;
+      compatibility: { trace: { toolName: string } };
+      reset: { verifiedReceipt: { status: string }; trace: { toolName: string } };
+      caseTraceOffset: number;
+      postReset: {
+        inspection: { currentOperationCount: number; retainedTombstoneCount: number };
+        trajectory: { currentTraceCount: number; totalTraceCount: number };
+      };
+    };
+    calls: Array<{
+      caseId: string;
+      callIndex: number;
+      receipt: { toolName: string };
+      trace: { toolName: string; sequence: number };
+    }>;
+  };
+  expect(transcript.runtime).toMatchObject({
+    argumentMode: "object",
+    initialCatalog: ["cart_get", "cart_update", "checkout_request", "order_review"],
+    pendingCatalog: [
+      "cart_get",
+      "cart_update",
+      "checkout_cancel",
+      "checkout_request",
+      "order_review"
+    ]
+  });
+  expect(transcript.preflight.initialDescriptors.map(({ name }) => name)).toEqual([
+    "cart_get",
+    "cart_update",
+    "checkout_request",
+    "order_review"
+  ]);
+  expect(transcript.preflight.pendingDescriptors.map(({ name }) => name)).toEqual([
+    "cart_get",
+    "cart_update",
+    "checkout_cancel",
+    "checkout_request",
+    "order_review"
+  ]);
+  expect(
+    transcript.preflight.initialDescriptors.every(
+      ({ origin }) => origin === new URL(page.url()).origin
+    )
+  ).toBe(true);
+  expect(transcript.preflight.initialDescriptors[1]?.inputSchema).toMatchObject({
+    properties: { itemId: { pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$" } }
+  });
+  expect(transcript.preflight).toMatchObject({
+    compatibility: { trace: { toolName: "cart_get" } },
+    reset: { verifiedReceipt: { status: "verified" }, trace: { toolName: "fixture_reset" } },
+    caseTraceOffset: 2,
+    postReset: {
+      inspection: { currentOperationCount: 0, retainedTombstoneCount: 0 },
+      trajectory: { currentTraceCount: 0, totalTraceCount: 2 }
+    }
+  });
+  expect(transcript.calls.map(({ caseId, callIndex }) => [caseId, callIndex])).toEqual([
+    ["II-01", 1],
+    ["II-02", 1],
+    ["II-03", 1],
+    ["II-03", 2]
+  ]);
+  expect(transcript.calls.map(({ receipt }) => receipt.toolName)).toEqual([
+    "checkout_request",
+    "cart_update",
+    "checkout_request",
+    "checkout_request"
+  ]);
+  expect(transcript.calls.map(({ trace }) => trace.toolName)).toEqual([
+    "checkout_request",
+    "cart_update",
+    "checkout_request",
+    "checkout_request"
+  ]);
+  expect(transcript.calls.some(({ trace }) => trace.toolName === "cart_get")).toBe(false);
+  expect(transcript.calls.some(({ trace }) => trace.toolName === "fixture_reset")).toBe(false);
+  expect(transcript.calls.map(({ trace }) => trace.sequence)).toEqual([3, 4, 5, 6]);
+
+  const observations = await page.evaluate(
+    () =>
+      (
+        window as typeof window & {
+          __toolProofNativeObservations: Array<{
+            toolName: string;
+            inputType: string;
+            invocationIntegrityRunLockState: string | null;
+          }>;
+        }
+      ).__toolProofNativeObservations
+  );
+  expect(observations.map(({ toolName }) => toolName)).toEqual([
+    "cart_get",
+    "checkout_request",
+    "cart_update",
+    "checkout_request",
+    "checkout_request"
+  ]);
+  expect(observations.map(({ inputType }) => inputType)).toEqual([
+    "object",
+    "object",
+    "object",
+    "object",
+    "object"
+  ]);
+  expect(
+    observations.map(({ invocationIntegrityRunLockState }) => invocationIntegrityRunLockState)
+  ).toEqual([null, "in-progress", "in-progress", "in-progress", "in-progress"]);
+
+  expect(
+    outbound.filter((url) => /(?:openai|\/api\/(?:probe|scored|repair|judge-demo)\/)/iu.test(url))
+  ).toEqual([]);
+  expect(outbound.filter((url) => url.endsWith("/api/invocation-integrity/verify"))).toHaveLength(
+    1
+  );
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download complete JSON" }).click();
+  const download = await downloadPromise;
+  const artifact = JSON.parse(await downloadText(download)) as InvocationIntegrityReceipt;
+  expect(download.suggestedFilename()).toMatch(
+    /^thurstone-invocation-integrity-[a-f0-9]{12}\.json$/u
+  );
+  expect(artifact).toMatchObject({
+    status: "verified",
+    browserEvidenceBoundary: INVOCATION_INTEGRITY_BROWSER_EVIDENCE_BOUNDARY,
+    modelCallCount: 0,
+    includedInSemanticDenominator: false,
+    score: { earned: 3, possible: 3, label: "3/3" }
+  });
+  expect(artifact.measuredTranscript.calls).toHaveLength(4);
+  expect(artifact.measuredTranscript.preflight.initialDescriptors).toHaveLength(4);
+  expect(artifact.measuredTranscript.preflight.pendingDescriptors).toHaveLength(5);
+  expect(artifact.measuredTranscript.preflight).toMatchObject({
+    reset: { verifiedReceipt: { status: "verified" } },
+    caseTraceOffset: 2,
+    postReset: { trajectory: { totalTraceCount: 2 } }
+  });
+  await expect(verifyInvocationIntegrityReceipt(artifact)).resolves.toEqual(artifact);
+  await expect(page.getByRole("button", { name: "Complete JSON downloaded" })).toBeDisabled();
+
+  await page.reload();
+  await expect(page.getByText("3/3 verified separately", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Fixed native run consumed" })).toBeDisabled();
+  expect(verifierBodies).toHaveLength(1);
+  expect(
+    await page.evaluate(
+      () =>
+        (
+          window as typeof window & {
+            __toolProofNativeObservations: Array<{ toolName: string }>;
+          }
+        ).__toolProofNativeObservations
+    )
+  ).toEqual([]);
+
+  const recoveredDownloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download complete JSON" }).click();
+  const recoveredArtifact = JSON.parse(
+    await downloadText(await recoveredDownloadPromise)
+  ) as InvocationIntegrityReceipt;
+  expect(recoveredArtifact).toEqual(artifact);
+
+  const violations = (await new AxeBuilder({ page }).analyze()).violations.filter(
+    ({ impact }) => impact === "serious" || impact === "critical"
+  );
+  expect(violations).toEqual([]);
+  expect(await overflowingElements(page)).toEqual([]);
+});
+
+test("Gate 8.5 browser run lock fails closed across reload and scopes itself to one build", async ({
+  page
+}) => {
+  const staleCommit = "d".repeat(40);
+  const origin = new URL(page.url()).origin;
+  const staleClaimId = "00000000-0000-4000-8000-000000000001";
+  await page.evaluate(
+    ({ key, version, appCommit, origin, claimId }) => {
+      localStorage.setItem(
+        key,
+        JSON.stringify({
+          version,
+          appCommit,
+          origin,
+          claimId,
+          state: "terminal",
+          terminalPhase: "failed",
+          startedAt: "2026-08-29T14:00:00.000Z",
+          completedAt: "2026-08-29T14:01:00.000Z",
+          artifact: { status: "stale-build-record" }
+        })
+      );
+    },
+    {
+      key: `${INVOCATION_INTEGRITY_RUN_LOCK_VERSION}:${staleCommit}`,
+      version: INVOCATION_INTEGRITY_RUN_LOCK_VERSION,
+      appCommit: staleCommit,
+      origin,
+      claimId: staleClaimId
+    }
+  );
+
+  await page.goto("/invocation-integrity");
+  await expect(page.getByText("Fixed sequence ready", { exact: true })).toBeVisible();
+  expect(
+    await page.evaluate((key) => localStorage.getItem(key), INVOCATION_INTEGRITY_RUN_LOCK_KEY)
+  ).toBeNull();
+
+  const startedAt = "2026-08-29T15:00:00.000Z";
+  const claimId = "00000000-0000-4000-8000-000000000002";
+  await page.evaluate(
+    ({ key, version, appCommit, origin, claimId, startedAt }) => {
+      localStorage.setItem(
+        key,
+        JSON.stringify({ version, appCommit, origin, claimId, state: "in-progress", startedAt })
+      );
+    },
+    {
+      key: INVOCATION_INTEGRITY_RUN_LOCK_KEY,
+      version: INVOCATION_INTEGRITY_RUN_LOCK_VERSION,
+      appCommit: INVOCATION_INTEGRITY_BROWSER_COMMIT,
+      origin,
+      claimId,
+      startedAt
+    }
+  );
+  await page.reload();
+
+  await expect(page.getByText("Failed closed", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText(/started for this build but did not save terminal evidence/iu)
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Fixed native run consumed" })).toBeDisabled();
+  expect(
+    await page.evaluate(
+      () =>
+        (
+          window as typeof window & {
+            __toolProofNativeObservations: Array<{ toolName: string }>;
+          }
+        ).__toolProofNativeObservations
+    )
+  ).toEqual([]);
+
+  const terminalMarker = await page.evaluate((key) => {
+    const value = localStorage.getItem(key);
+    return value ? (JSON.parse(value) as Record<string, unknown>) : null;
+  }, INVOCATION_INTEGRITY_RUN_LOCK_KEY);
+  expect(terminalMarker).toMatchObject({
+    version: INVOCATION_INTEGRITY_RUN_LOCK_VERSION,
+    appCommit: INVOCATION_INTEGRITY_BROWSER_COMMIT,
+    origin,
+    claimId,
+    state: "terminal",
+    terminalPhase: "failed",
+    startedAt,
+    artifact: {
+      status: "failed-interrupted-browser-run",
+      buildSha: INVOCATION_INTEGRITY_BROWSER_COMMIT,
+      claimAllowed: false
+    }
+  });
+
+  const firstDownloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download complete JSON" }).click();
+  const firstArtifact = JSON.parse(await downloadText(await firstDownloadPromise)) as Record<
+    string,
+    unknown
+  >;
+  expect(firstArtifact).toMatchObject({
+    status: "failed-interrupted-browser-run",
+    buildSha: INVOCATION_INTEGRITY_BROWSER_COMMIT,
+    claimAllowed: false,
+    modelCallCount: 0,
+    includedInSemanticDenominator: false
+  });
+
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Fixed native run consumed" })).toBeDisabled();
+  const recoveredDownloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download complete JSON" }).click();
+  const recoveredArtifact = JSON.parse(
+    await downloadText(await recoveredDownloadPromise)
+  ) as Record<string, unknown>;
+  expect(recoveredArtifact).toEqual(firstArtifact);
+});
+
+test("Gate 8.5 admits only one concurrent same-profile tab", async ({ page, context }) => {
+  const secondPage = await context.newPage();
+  try {
+    await installEmulatedConsumer(secondPage, "object");
+    await secondPage.goto("/lab");
+    await expect(secondPage.getByText("consumer-ready", { exact: true })).toBeVisible();
+    await installEmulatedInvocationIntegrityVerifier(page);
+    await installEmulatedInvocationIntegrityVerifier(secondPage);
+
+    await Promise.all([
+      page.goto("/invocation-integrity"),
+      secondPage.goto("/invocation-integrity")
+    ]);
+    await expect(page.getByText("Fixed sequence ready", { exact: true })).toBeVisible();
+    await expect(secondPage.getByText("Fixed sequence ready", { exact: true })).toBeVisible();
+
+    await Promise.all([
+      page.getByRole("button", { name: "Run fixed native sequence once" }).click(),
+      secondPage.getByRole("button", { name: "Run fixed native sequence once" }).click()
+    ]);
+    await expect
+      .poll(async () => {
+        const verified = await Promise.all(
+          [page, secondPage].map((candidate) =>
+            candidate.getByText("3/3 verified separately", { exact: true }).isVisible()
+          )
+        );
+        const blocked = await Promise.all(
+          [page, secondPage].map((candidate) =>
+            candidate.getByText("Blocked · live run owns this build", { exact: true }).isVisible()
+          )
+        );
+        return {
+          verified: verified.filter(Boolean).length,
+          blocked: blocked.filter(Boolean).length
+        };
+      })
+      .toEqual({ verified: 1, blocked: 1 });
+
+    const nativeCallCounts = await Promise.all(
+      [page, secondPage].map((candidate) =>
+        candidate.evaluate(
+          () =>
+            (
+              window as typeof window & {
+                __toolProofNativeObservations: Array<{ toolName: string }>;
+              }
+            ).__toolProofNativeObservations.length
+        )
+      )
+    );
+    expect(nativeCallCounts.sort((left, right) => left - right)).toEqual([1, 5]);
+
+    const retained = await page.evaluate((key) => {
+      const value = localStorage.getItem(key);
+      return value ? (JSON.parse(value) as Record<string, unknown>) : null;
+    }, INVOCATION_INTEGRITY_RUN_LOCK_KEY);
+    expect(retained).toMatchObject({
+      version: INVOCATION_INTEGRITY_RUN_LOCK_VERSION,
+      appCommit: INVOCATION_INTEGRITY_BROWSER_COMMIT,
+      origin: new URL(page.url()).origin,
+      claimId: expect.stringMatching(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
+      ),
+      state: "terminal",
+      terminalPhase: "verified",
+      artifact: { status: "verified", score: { label: "3/3" } }
+    });
+  } finally {
+    await secondPage.close();
+  }
+});
+
+test("Gate 8.5 restoring tab cannot steal a live owner claim", async ({ page, context }) => {
+  const secondPage = await context.newPage();
+  let releaseVerifier: (() => void) | undefined;
+  let markVerifierReached: (() => void) | undefined;
+  const verifierReached = new Promise<void>((resolve) => {
+    markVerifierReached = resolve;
+  });
+  const verifierRelease = new Promise<void>((resolve) => {
+    releaseVerifier = resolve;
+  });
+  let firstVerifierRequests = 0;
+  let secondVerifierRequests = 0;
+  try {
+    await installEmulatedConsumer(secondPage, "object");
+    await secondPage.goto("/lab");
+    await expect(secondPage.getByText("consumer-ready", { exact: true })).toBeVisible();
+    await page.route("**/api/invocation-integrity/verify", async (route) => {
+      firstVerifierRequests += 1;
+      const transcript = JSON.parse(
+        route.request().postData() ?? "null"
+      ) as InvocationIntegrityTranscript;
+      const receipt = await emulatedInvocationIntegrityReceipt(transcript);
+      markVerifierReached?.();
+      await verifierRelease;
+      await route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify(receipt)
+      });
+    });
+    secondPage.on("request", (request) => {
+      if (request.url().endsWith("/api/invocation-integrity/verify")) {
+        secondVerifierRequests += 1;
+      }
+    });
+
+    await page.goto("/invocation-integrity");
+    await expect(page.getByText("Fixed sequence ready", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Run fixed native sequence once" }).click();
+    await verifierReached;
+
+    const inProgressRaw = await page.evaluate(
+      (key) => localStorage.getItem(key),
+      INVOCATION_INTEGRITY_RUN_LOCK_KEY
+    );
+    expect(inProgressRaw).not.toBeNull();
+    expect(JSON.parse(inProgressRaw ?? "null")).toMatchObject({
+      state: "in-progress",
+      appCommit: INVOCATION_INTEGRITY_BROWSER_COMMIT,
+      origin: new URL(page.url()).origin,
+      claimId: expect.stringMatching(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
+      )
+    });
+
+    await secondPage.goto("/invocation-integrity");
+    await expect(secondPage.getByText("Live run owns this build", { exact: true })).toBeVisible();
+    await expect(
+      secondPage.getByText("Blocked · live run owns this build", { exact: true })
+    ).toBeVisible();
+    await expect(secondPage.getByText(/This tab made no native or verifier calls/iu)).toBeVisible();
+    expect(
+      await secondPage.evaluate(
+        () =>
+          (
+            window as typeof window & {
+              __toolProofNativeObservations: Array<{ toolName: string }>;
+            }
+          ).__toolProofNativeObservations
+      )
+    ).toEqual([]);
+    expect(secondVerifierRequests).toBe(0);
+    expect(
+      await secondPage.evaluate(
+        (key) => localStorage.getItem(key),
+        INVOCATION_INTEGRITY_RUN_LOCK_KEY
+      )
+    ).toBe(inProgressRaw);
+
+    releaseVerifier?.();
+    await expect(page.getByText("3/3 verified separately", { exact: true })).toBeVisible();
+    expect(firstVerifierRequests).toBe(1);
+    const terminalRaw = await page.evaluate(
+      (key) => localStorage.getItem(key),
+      INVOCATION_INTEGRITY_RUN_LOCK_KEY
+    );
+    expect(terminalRaw).not.toBe(inProgressRaw);
+    const terminal = JSON.parse(terminalRaw ?? "null") as {
+      artifact: InvocationIntegrityReceipt;
+      state: string;
+      terminalPhase: string;
+    };
+    expect(terminal).toMatchObject({
+      state: "terminal",
+      terminalPhase: "verified",
+      artifact: { status: "verified", score: { label: "3/3" } }
+    });
+
+    await secondPage.reload();
+    await expect(secondPage.getByText("3/3 verified separately", { exact: true })).toBeVisible();
+    await expect(
+      secondPage.getByRole("button", { name: "Fixed native run consumed" })
+    ).toBeDisabled();
+    expect(secondVerifierRequests).toBe(0);
+    expect(
+      await secondPage.evaluate(
+        () =>
+          (
+            window as typeof window & {
+              __toolProofNativeObservations: Array<{ toolName: string }>;
+            }
+          ).__toolProofNativeObservations
+      )
+    ).toEqual([]);
+    const restoredRaw = await secondPage.evaluate(
+      (key) => localStorage.getItem(key),
+      INVOCATION_INTEGRITY_RUN_LOCK_KEY
+    );
+    expect(restoredRaw).toBe(terminalRaw);
+    expect(JSON.parse(restoredRaw ?? "null").artifact).toEqual(terminal.artifact);
+  } finally {
+    releaseVerifier?.();
+    await secondPage.close();
+  }
+});
+
+test("Gate 8.5 blocks without overwriting a malformed retained marker", async ({ page }) => {
+  const malformed = '{"state":"in-progress"';
+  await page.evaluate(({ key, malformed }) => localStorage.setItem(key, malformed), {
+    key: INVOCATION_INTEGRITY_RUN_LOCK_KEY,
+    malformed
+  });
+  await page.goto("/invocation-integrity");
+
+  await expect(page.getByText("Failed closed", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText(/one-run record for this build is invalid; execution remains blocked/iu)
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Fixed native run consumed" })).toBeDisabled();
+  expect(
+    await page.evaluate((key) => localStorage.getItem(key), INVOCATION_INTEGRITY_RUN_LOCK_KEY)
+  ).toBe(malformed);
+  expect(
+    await page.evaluate(
+      () =>
+        (
+          window as typeof window & {
+            __toolProofNativeObservations: Array<{ toolName: string }>;
+          }
+        ).__toolProofNativeObservations
+    )
+  ).toEqual([]);
+});
+
+test("Gate 8.5 fails closed when the browser LockManager is unavailable", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "locks", {
+      configurable: true,
+      value: undefined
+    });
+  });
+  await page.goto("/invocation-integrity");
+
+  await expect(page.getByText("Failed closed", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText(/browser LockManager or local one-run storage is unavailable/iu)
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Fixed native run consumed" })).toBeDisabled();
+  expect(
+    await page.evaluate((key) => localStorage.getItem(key), INVOCATION_INTEGRITY_RUN_LOCK_KEY)
+  ).toBeNull();
+  expect(
+    await page.evaluate(
+      () =>
+        (
+          window as typeof window & {
+            __toolProofNativeObservations: Array<{ toolName: string }>;
+          }
+        ).__toolProofNativeObservations
+    )
+  ).toEqual([]);
+});
+
+test("JSON-string Gate 8.5 preserves the fixed sequence and adapter argument mode", async ({
+  page
+}) => {
+  const verifierBodies: Array<{ runtime?: { argumentMode?: string } }> = [];
+  page.on("request", (request) => {
+    if (request.url().endsWith("/api/invocation-integrity/verify")) {
+      verifierBodies.push(
+        JSON.parse(request.postData() ?? "null") as {
+          runtime?: { argumentMode?: string };
+        }
+      );
+    }
+  });
+  await installEmulatedInvocationIntegrityVerifier(page);
+  await page.goto("/invocation-integrity");
+  await expect(page.getByText("Fixed sequence ready", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Run fixed native sequence once" }).click();
+  await expect(page.getByText("3/3 verified separately", { exact: true })).toBeVisible();
+  expect(verifierBodies).toHaveLength(1);
+  expect(verifierBodies[0]?.runtime?.argumentMode).toBe("json-string");
+  const observations = await page.evaluate(
+    () =>
+      (
+        window as typeof window & {
+          __toolProofNativeObservations: Array<{ toolName: string; inputType: string }>;
+        }
+      ).__toolProofNativeObservations
+  );
+  expect(observations.map(({ toolName }) => toolName)).toEqual([
+    "cart_get",
+    "checkout_request",
+    "cart_update",
+    "checkout_request",
+    "checkout_request"
+  ]);
+  expect(observations.map(({ inputType }) => inputType)).toEqual([
+    "object",
+    "string",
+    "string",
+    "string",
+    "string"
+  ]);
+});
+
+for (const contamination of [
+  { label: "read trace", toolName: "cart_get", input: {}, operationCount: 0, tombstoneCount: 0 },
+  {
+    label: "terminal no-op",
+    toolName: "cart_update",
+    input: {
+      operationId: "contamination_noop_0001",
+      operation: "set_quantity",
+      itemId: "field-notebook",
+      quantity: 1
+    },
+    operationCount: 1,
+    tombstoneCount: 1
+  }
+] as const) {
+  test(`Gate 8.5 rejects intervening ${contamination.label} before II dispatch`, async ({
+    page
+  }) => {
+    let verifierRequestCount = 0;
+    page.on("request", (request) => {
+      if (/\/api\/invocation-integrity\/(?:verify|failure)$/u.test(request.url())) {
+        verifierRequestCount += 1;
+      }
+    });
+    await page.goto("/invocation-integrity");
+    await expect(page.getByText("Fixed sequence ready", { exact: true })).toBeVisible();
+    await executeExternalNativeCall(page, contamination.toolName, contamination.input);
+    await page.getByRole("button", { name: "Run fixed native sequence once" }).click();
+    await expect(
+      page.getByText("invocation_integrity_run_admission_contaminated", { exact: true })
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Fixed native run consumed" })).toBeDisabled();
+    expect(verifierRequestCount).toBe(0);
+    const observations = await page.evaluate(
+      () =>
+        (
+          window as typeof window & {
+            __toolProofNativeObservations: Array<{ toolName: string }>;
+          }
+        ).__toolProofNativeObservations
+    );
+    expect(observations.map(({ toolName }) => toolName)).toEqual([
+      "cart_get",
+      contamination.toolName
+    ]);
+    const downloadPromise = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Download complete JSON" }).click();
+    const artifact = JSON.parse(await downloadText(await downloadPromise)) as {
+      status: string;
+      claimAllowed: boolean;
+      artifactDigest: string;
+      terminalInspection: {
+        currentOperationCount: number;
+        retainedTombstoneCount: number;
+        currentTraceCount: number;
+      };
+    };
+    expect(artifact).toMatchObject({
+      status: "failed-before-II-dispatch",
+      claimAllowed: false,
+      terminalInspection: {
+        currentOperationCount: contamination.operationCount,
+        retainedTombstoneCount: contamination.tombstoneCount,
+        currentTraceCount: 2
+      }
+    });
+    expect(artifact.artifactDigest).toMatch(/^[a-f0-9]{64}$/u);
+  });
+}
+
+test("Gate 8.5 captures a native error and permanently blocks rerun after dispatch", async ({
+  page
+}) => {
+  await page.evaluate(() =>
+    sessionStorage.setItem("__toolProofTestFailAutomatedTool", "checkout_request")
+  );
+  let successVerifierRequestCount = 0;
+  let failureVerifierRequestCount = 0;
+  page.on("request", (request) => {
+    if (request.url().endsWith("/api/invocation-integrity/verify")) {
+      successVerifierRequestCount += 1;
+    }
+    if (request.url().endsWith("/api/invocation-integrity/failure")) {
+      failureVerifierRequestCount += 1;
+    }
+  });
+  await installEmulatedInvocationIntegrityVerifier(page);
+  await page.goto("/invocation-integrity");
+  await expect(page.getByText("Fixed sequence ready", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Run fixed native sequence once" }).click();
+  await expect(
+    page.getByText("Failed closed · no rerun after dispatch", { exact: true })
+  ).toBeVisible();
+  await expect(page.getByText("0/3 · claim forbidden", { exact: true })).toBeVisible();
+  await expect(page.getByText("Native execution failed.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Fixed native run consumed" })).toBeDisabled();
+  expect(successVerifierRequestCount).toBe(0);
+  expect(failureVerifierRequestCount).toBe(1);
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download complete JSON" }).click();
+  const artifact = JSON.parse(
+    await downloadText(await downloadPromise)
+  ) as InvocationIntegrityFailureReceipt;
+  expect(artifact).toMatchObject({
+    status: "failed",
+    score: { earned: 0, possible: 3, label: "0/3" },
+    claimPosition: "forbidden",
+    claimAllowed: false,
+    completedCalls: [],
+    error: {
+      stage: "native",
+      code: "native_execution_failure",
+      nativeCallMade: true,
+      rawResultSha256: null
+    },
+    preflight: {
+      pendingDescriptors: null,
+      reset: { verifiedReceipt: { status: "verified" } },
+      caseTraceOffset: 2
+    },
+    terminalInspection: { currentTraceCount: 0, totalTraceCount: 2, lastTraceEventId: null }
+  });
+  await expect(verifyInvocationIntegrityFailureReceipt(artifact)).resolves.toEqual(artifact);
+  await expect(page.getByRole("button", { name: "Complete JSON downloaded" })).toBeDisabled();
+
+  await page.reload();
+  await expect(
+    page.getByText("Failed closed · no rerun after dispatch", { exact: true })
+  ).toBeVisible();
+  await expect(page.getByText("0/3 · claim forbidden", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Fixed native run consumed" })).toBeDisabled();
+  expect(successVerifierRequestCount).toBe(0);
+  expect(failureVerifierRequestCount).toBe(1);
+  const recoveredDownloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download complete JSON" }).click();
+  const recoveredArtifact = JSON.parse(
+    await downloadText(await recoveredDownloadPromise)
+  ) as InvocationIntegrityFailureReceipt;
+  expect(recoveredArtifact).toEqual(artifact);
 });

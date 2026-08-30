@@ -13,6 +13,14 @@ test("judge shell is honest, navigable, and permanently marks the simulation", a
   await expect(page.getByRole("heading", { name: "Seeded checkout sandbox" })).toBeVisible();
   await expect(page.getByText(/No operator-triggered executeOnce call yet/iu)).toBeVisible();
 
+  await page.getByRole("link", { name: "Integrity" }).click();
+  await expect(page).toHaveURL(/\/invocation-integrity$/);
+  await expect(
+    page.getByRole("heading", {
+      name: "Fixed browser-native calls, checked by a source-fixed verifier."
+    })
+  ).toBeVisible();
+
   await page.getByRole("link", { name: "Results" }).click();
   await expect(page).toHaveURL(/\/results$/);
   if (process.env.TOOLPROOF_BASE_URL) {

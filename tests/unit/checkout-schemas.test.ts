@@ -54,6 +54,17 @@ describe("checkout tool schemas", () => {
         }).success
       ).toBe(true);
     }
+
+    for (const itemId of ["a", "a".repeat(64), "phantom-item"]) {
+      expect(
+        cartUpdateInputSchema.safeParse({
+          operationId,
+          operation: "set_quantity",
+          itemId,
+          quantity: 2
+        }).success
+      ).toBe(true);
+    }
   });
 
   it.each([
@@ -64,6 +75,14 @@ describe("checkout tool schemas", () => {
     [
       "unknown item",
       { operationId, operation: "set_quantity", itemId: "FIELD-NOTEBOOK", quantity: 2 }
+    ],
+    [
+      "item with an empty segment",
+      { operationId, operation: "set_quantity", itemId: "field--notebook", quantity: 2 }
+    ],
+    [
+      "item above maximum length",
+      { operationId, operation: "set_quantity", itemId: "a".repeat(65), quantity: 2 }
     ],
     [
       "zero quantity",
@@ -124,6 +143,12 @@ describe("checkout tool schemas", () => {
       type: "integer",
       minimum: 1,
       maximum: 10
+    });
+    expect(CART_UPDATE_JSON_SCHEMA.properties.itemId).toMatchObject({
+      type: "string",
+      minLength: 1,
+      maxLength: 64,
+      pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$"
     });
     expect(CART_UPDATE_JSON_SCHEMA.additionalProperties).toBe(false);
     expect(CHECKOUT_OPERATION_JSON_SCHEMA.required).toEqual(["operationId"]);
