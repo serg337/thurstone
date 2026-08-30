@@ -49,11 +49,12 @@
     "test:coverage": "vitest run --coverage",
     "test:integration": "vitest run tests/integration",
     "typecheck": "next typegen && tsc --noEmit -p tsconfig.typecheck.json",
-    "vercel-build": "npm run gate6-presentation:verify && npm run verify:direct-observation-presentation && npm run judge-presentation:verify && npm run verify:third-party && npm run gate7:verify-adversarial && npm run verify:sample-evidence && npm run verify:direct-site-tools && npm run durable-store:check && npm run probe-controls:integration && npm run probe-continuation:integration && npm run scored-run-store:integration && npm run probe-controls:bootstrap && npm run provider:check && npm run build && npm run verify:probe-no-leakage && npm run gate3-freeze:bootstrap && npm run gate5:verify-one-variable && npm run gate5-revision:bootstrap",
+    "vercel-build": "npm run gate6-presentation:verify && npm run verify:semantic-preservation && npm run verify:direct-observation-presentation && npm run judge-presentation:verify && npm run verify:third-party && npm run gate7:verify-adversarial && npm run verify:sample-evidence && npm run verify:direct-site-tools && npm run durable-store:check && npm run probe-controls:integration && npm run probe-continuation:integration && npm run scored-run-store:integration && npm run probe-controls:bootstrap && npm run provider:check && npm run build && npm run verify:probe-no-leakage && npm run gate3-freeze:bootstrap && npm run gate5:verify-one-variable && npm run gate5-revision:bootstrap",
     "verify:evidence": "tsx --tsconfig tsconfig.operator.json scripts/verify-evidence.ts",
     "verify:direct-site-tools": "tsx --tsconfig tsconfig.operator.json scripts/verify-direct-site-tools-evidence.ts",
     "verify:direct-observation-presentation": "tsx --tsconfig tsconfig.operator.json scripts/verify-direct-observation-presentation.ts",
     "verify:sample-evidence": "tsx --tsconfig tsconfig.operator.json scripts/verify-sample-evidence.ts",
+    "verify:semantic-preservation": "tsx --tsconfig tsconfig.operator.json scripts/verify-semantic-record-preservation.ts",
     "verify:third-party": "node scripts/verify-third-party-inventory.mjs --check",
     "verify:probe-no-leakage": "node scripts/verify-probe-no-leakage.mjs",
     "verify:publication": "node scripts/verify-publication.mjs"

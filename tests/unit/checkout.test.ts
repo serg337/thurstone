@@ -175,6 +175,28 @@ describe("checkout fixture", () => {
     expect(transition.result).toMatchObject({ ok: true, code: "no_change", stateRevision: 0 });
   });
 
+  it("rejects a syntactically valid nonexistent item without mutating trusted state", () => {
+    const state = createCheckoutFixture();
+    const transition = cartUpdate(state, {
+      operationId: "ii02_update_00000001",
+      operation: "set_quantity",
+      itemId: "phantom-item",
+      quantity: 3
+    });
+
+    expect(transition.effectApplied).toBe(false);
+    expect(transition.state).toBe(state);
+    expect(transition.result).toEqual({
+      ok: false,
+      code: "invalid_item",
+      message: "The requested cart item is not available in this fixture.",
+      retryable: true,
+      operationId: "ii02_update_00000001",
+      replayed: false,
+      stateRevision: 0
+    });
+  });
+
   it("creates only a simulated pending approval and blocks cart mutation", () => {
     const initial = createCheckoutFixture();
     const requested = checkoutRequest(initial, { operationId: requestOperationId }, "a".repeat(64));

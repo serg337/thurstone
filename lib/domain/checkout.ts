@@ -74,7 +74,8 @@ export interface OrderReviewResult {
 export interface CartUpdateCommand {
   readonly operationId: string;
   readonly operation: "set_quantity";
-  readonly itemId: CartItemId;
+  /** Syntax is caller-provided; fixture membership remains server-authoritative. */
+  readonly itemId: string;
   readonly quantity: number;
 }
 
@@ -283,7 +284,7 @@ export function cartUpdate(
         code: "no_change",
         operationId: command.operationId,
         replayed: false,
-        itemId: command.itemId,
+        itemId: line.itemId,
         previousQuantity: line.quantity,
         quantity: line.quantity,
         stateRevision: state.revision
@@ -310,7 +311,7 @@ export function cartUpdate(
       code: "updated",
       operationId: command.operationId,
       replayed: false,
-      itemId: command.itemId,
+      itemId: line.itemId,
       previousQuantity: line.quantity,
       quantity: command.quantity,
       stateRevision: nextState.revision

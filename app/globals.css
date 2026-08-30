@@ -857,6 +857,114 @@ nav a:hover {
   overflow: hidden;
 }
 
+.invocation-integrity-results {
+  margin-top: 1.2rem;
+  overflow: hidden;
+}
+
+.invocation-integrity-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.7rem;
+  margin: 1rem 0;
+}
+
+.invocation-integrity-summary > div {
+  min-width: 0;
+  padding: 0.9rem;
+  background: var(--cyan-soft);
+  border: 1px solid rgba(101, 225, 212, 0.2);
+  border-radius: 11px;
+}
+
+.invocation-integrity-summary strong,
+.invocation-integrity-summary span {
+  display: block;
+}
+
+.invocation-integrity-summary strong {
+  color: var(--cyan);
+  font-size: 1.25rem;
+  overflow-wrap: anywhere;
+}
+
+.invocation-integrity-summary span {
+  margin-top: 0.2rem;
+  color: var(--ink-muted);
+  font-size: 0.68rem;
+}
+
+.invocation-integrity-matrix .matrix-row {
+  grid-template-columns: minmax(8rem, 0.7fr) minmax(12rem, 1.1fr) minmax(12rem, 1.1fr) minmax(
+      13rem,
+      1.2fr
+    );
+  align-items: start;
+}
+
+.invocation-integrity-matrix .matrix-header {
+  color: var(--ink-faint);
+  font-size: 0.68rem;
+  font-weight: 750;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.invocation-integrity-matrix .matrix-row span,
+.invocation-integrity-matrix .matrix-row strong,
+.invocation-integrity-matrix .matrix-row small {
+  display: block;
+}
+
+.invocation-integrity-matrix details {
+  margin-top: 0.55rem;
+}
+
+.invocation-integrity-matrix summary {
+  color: var(--cyan);
+  font-size: 0.68rem;
+  cursor: pointer;
+}
+
+.invocation-integrity-matrix pre {
+  max-height: 20rem;
+  margin: 0.55rem 0 0;
+  padding: 0.7rem;
+  overflow: auto;
+  color: var(--ink-muted);
+  font-size: 0.65rem;
+  line-height: 1.45;
+  background: #050912;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.invocation-integrity-detail-grid {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.invocation-integrity-detail-grid h4 {
+  margin: 0.7rem 0 0;
+  color: var(--ink);
+  font-size: 0.7rem;
+}
+
+.invocation-integrity-provenance,
+.invocation-integrity-blocked {
+  margin-top: 1rem;
+}
+
+.invocation-integrity-position {
+  margin: 1rem 0 0;
+  padding: 1rem 1.1rem;
+  color: #dffdf8;
+  background: var(--cyan-soft);
+  border: 1px solid rgba(101, 225, 212, 0.25);
+  border-radius: 12px;
+}
+
 .result-verdict {
   display: grid;
   gap: 0.35rem;
@@ -1962,6 +2070,7 @@ pre {
   }
 
   .matrix-row,
+  .invocation-integrity-matrix .matrix-row,
   .gate6-matrix .matrix-row.matrix-one-version {
     grid-template-columns: 1fr;
     gap: 0.25rem;
@@ -1981,6 +2090,7 @@ pre {
   }
 
   .metric-grid,
+  .invocation-integrity-summary,
   .result-filters,
   .trace-inspector-grid,
   .diff-grid,
