@@ -8,7 +8,10 @@ import type {
   EvidenceVersion,
   Gate6TraceRecord
 } from "@/lib/results/evidence-package";
-import { createPairedResultsMetaTool } from "@/lib/results/meta-tools";
+import {
+  createLazyPairedResultsMetaTool,
+  createPairedResultsMetaTool
+} from "@/lib/results/meta-tools";
 import type { SemanticResultsState } from "@/lib/results/semantic-results.server";
 import { webMcpRegistryManager, type RegistryStatus } from "@/lib/webmcp/registry-manager";
 
@@ -31,6 +34,55 @@ function saveExport(filename: string, content: string, type: string): void {
 
 function compact(value: unknown): string {
   return JSON.stringify(value, null, 2);
+}
+
+// thurstone-impact-execution:paired-results-bridge
+async function impactExecutionSha256(value: string): Promise<string> {
+  const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return [...new Uint8Array(bytes)].map((item) => item.toString(16).padStart(2, "0")).join("");
+}
+
+export function PairedResultsToolBridge({
+  expectedPackageDigest,
+  expectedJsonSha256
+}: {
+  readonly expectedPackageDigest: string;
+  readonly expectedJsonSha256: string;
+}) {
+  const tool = useMemo(
+    () =>
+      createLazyPairedResultsMetaTool(async (signal) => {
+        const response = await fetch("/api/evidence/reference", {
+          method: "GET",
+          cache: "no-store",
+          credentials: "same-origin",
+          headers: { Accept: "application/json" },
+          signal: signal ?? null
+        });
+        if (!response.ok) throw new Error("paired_results_evidence_unavailable");
+        const text = await response.text();
+        if (
+          response.headers.get("X-ToolProof-Evidence-SHA256") !== expectedJsonSha256 ||
+          (await impactExecutionSha256(text)) !== expectedJsonSha256
+        ) {
+          throw new Error("paired_results_evidence_digest_mismatch");
+        }
+        const evidence = JSON.parse(
+          text
+        ) as import("@/lib/results/evidence-package").Gate6EvidencePackage;
+        if (evidence.packageDigest !== expectedPackageDigest) {
+          throw new Error("paired_results_package_digest_mismatch");
+        }
+        return evidence;
+      }),
+    [expectedJsonSha256, expectedPackageDigest]
+  );
+  useEffect(() => {
+    const context = document.modelContext;
+    if (!context || typeof context.registerTool !== "function") return;
+    return webMcpRegistryManager.acquire(context, [tool], () => undefined);
+  }, [tool]);
+  return null;
 }
 
 export function SemanticPairedResults({ results }: { readonly results: Paired }) {

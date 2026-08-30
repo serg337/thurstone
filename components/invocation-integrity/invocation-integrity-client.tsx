@@ -1444,7 +1444,13 @@ export function InvocationIntegrityClient() {
               Zero model calls. Zero server durable-store writes.
             </h2>
           </div>
-          <StatusPill state={statusState(phase)}>{phaseLabel(phase)}</StatusPill>
+          <StatusPill state={statusState(phase)}>
+            {phase === "failed" &&
+            String(failure?.message ?? "") ===
+              "invocation_integrity_secure_provider_consumer_apis_unavailable"
+              ? "WebMCP unavailable in this browser"
+              : phaseLabel(phase)}
+          </StatusPill>
         </div>
         <p>
           The browser supplies only native receipts and traces from the source-fixed calls. The
@@ -1572,7 +1578,10 @@ export function InvocationIntegrityClient() {
             <span>
               {phase === "live"
                 ? "Blocked · live run owns this build"
-                : "Failed closed · no rerun after dispatch"}
+                : String(failure.message ?? "") ===
+                    "invocation_integrity_secure_provider_consumer_apis_unavailable"
+                  ? "WebMCP unavailable in this browser"
+                  : "Failed closed · no rerun after dispatch"}
             </span>
             <strong>
               {failureReceipt

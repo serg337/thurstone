@@ -94,3 +94,20 @@ test("pre-unlock Lab DOM, transport, console, and storage omit frozen truth", as
   const joined = observed.join("\n");
   for (const sentinel of manifest.sentinels) expect(joined).not.toContain(sentinel);
 });
+
+// thurstone-impact-execution:acceptance-start
+test("compact and expert Results preserve history without losing the featured boundary", async ({
+  page
+}) => {
+  await page.goto("/results");
+  await expect(page.getByText("23/24 → 23/24", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Considering is not deciding." })).toBeVisible();
+  await page.getByRole("link", { name: "Inspect complete expert evidence" }).click();
+  await expect(page).toHaveURL(/\/results\?view=full$/u);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/results$/u);
+  await expect(page.getByRole("heading", { name: "Considering is not deciding." })).toBeVisible();
+  await page.reload();
+  await expect(page.getByText("23/24 → 23/24", { exact: true })).toBeVisible();
+});
+// thurstone-impact-execution:acceptance-end

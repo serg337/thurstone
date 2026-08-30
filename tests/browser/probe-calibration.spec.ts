@@ -475,7 +475,7 @@ test("four-case fake-provider harness reloads fresh documents and reveals only t
     evidenceDigest: "d".repeat(64)
   });
   await expect(page).toHaveURL(/\/results$/u);
-  await expect(page.getByText("Final evidence ready", { exact: true })).toBeVisible();
+  await expect(page.getByText("4/4 passed · evidence sealed", { exact: true })).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Four fresh-context trials sealed" })
   ).toBeVisible();
@@ -770,7 +770,9 @@ test("a missing active-tab marker clears only after the migrated-base server adm
   await expect(page.getByText(/invalid_probe_recovery/u)).toBeVisible();
   await page.getByRole("button", { name: "Clear unstarted session" }).click();
   await expect(
-    page.getByRole("heading", { name: "One live tool catalog. No expected answers." })
+    page.getByRole("heading", {
+      name: "Run one sealed decision through the page's real tool catalog."
+    })
   ).toBeVisible();
   expect(cleanupCalls).toBe(1);
   expect(recoveryCalls).toBe(1);
@@ -820,7 +822,9 @@ test("an unverifiable stale cookie clears only after the migrated-base server ad
   });
   await page.getByRole("button", { name: "Clear unstarted session" }).click();
   await expect(
-    page.getByRole("heading", { name: "One live tool catalog. No expected answers." })
+    page.getByRole("heading", {
+      name: "Run one sealed decision through the page's real tool catalog."
+    })
   ).toBeVisible();
   expect(cleanupCalls).toBe(1);
   expect(
@@ -913,6 +917,36 @@ test("a post-grant cleanup rejection preserves the cookie and every marker", asy
   );
 });
 
+test("deep calibration status waits until its panel enters the viewport", async ({ page }) => {
+  let statusRequests = 0;
+  await page.route("**/api/probe/status", async (route) => {
+    statusRequests += 1;
+    await route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({
+        status: "controls-pending",
+        enabled: false,
+        activation: "disabled",
+        reason: "The disclosed deep calibration controls are not configured."
+      })
+    });
+  });
+
+  await page.goto("/lab");
+  await page.waitForTimeout(300);
+  expect(statusRequests).toBe(0);
+  const panel = page.locator("section.probe-launch-panel");
+  await expect(panel).not.toBeInViewport();
+  await panel.scrollIntoViewIfNeeded();
+  await expect.poll(() => statusRequests).toBe(1);
+  await expect(
+    page.getByText("The disclosed deep calibration controls are not configured.", { exact: true })
+  ).toBeVisible();
+  await page.waitForTimeout(200);
+  expect(statusRequests).toBe(1);
+});
+
 test("one final-calibration button writes only the v3 opaque marker before one reload", async ({
   page
 }) => {
@@ -959,7 +993,10 @@ test("one final-calibration button writes only the v3 opaque marker before one r
     sessionStorage.setItem("toolproof:probe-calibration-session@1", "retired-session-marker");
     sessionStorage.setItem("toolproof:probe-calibration-results@1", "retired-results-marker");
   });
-  await page.getByRole("button", { name: "Run final four-case calibration" }).click();
+  const launch = page.getByRole("button", { name: "Run final four-case calibration" });
+  await launch.scrollIntoViewIfNeeded();
+  await expect(page.getByText("The final four-case calibration is ready.")).toBeVisible();
+  await launch.click();
   let rawMarker: string | null = null;
   await expect
     .poll(async () => {
@@ -1013,9 +1050,10 @@ test("a terminal cumulative guard exposes no final-calibration rerun control", a
 
   await page.goto("/lab");
   const launch = page.getByRole("button", { name: "Run final four-case calibration" });
-  await expect(launch).toBeDisabled();
+  await launch.scrollIntoViewIfNeeded();
   await expect(
     page.getByText("The final four-case calibration is already terminal.")
   ).toBeVisible();
+  await expect(launch).toBeDisabled();
   expect(sessionStarts).toBe(0);
 });

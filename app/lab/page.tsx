@@ -85,15 +85,23 @@ export default async function LabPage() {
     <div className="page-shell route-page">
       <header className="route-hero">
         <div>
-          <p className="eyebrow">Lab · execution trust surface</p>
-          <h1>One live tool catalog. No expected answers.</h1>
+          <p className="eyebrow">Live WebMCP path</p>
+          <h1>Run one sealed decision through the page&apos;s real tool catalog.</h1>
           <p>
-            Five deterministic checkout tools share one replay-safe store. Four are exposed at the
-            initial fixture; cancellation appears only while simulated checkout is pending.
+            Open this route in the official ChatGPT in-app browser. In Chrome 149+, open{" "}
+            <code>chrome://flags/#enable-webmcp-testing</code>, choose Enabled, and relaunch Chrome.
           </p>
+          <p>
+            If Thurstone reports <code>consumer-mismatch</code>, close other same-origin Thurstone
+            tabs, then reload this tab.
+          </p>
+          <a className="button button-secondary" href="/results">
+            WebMCP unavailable? Inspect sealed Results
+          </a>
         </div>
-        <StatusPill state="ready">Gate 7 · live judge and Site Tools proof</StatusPill>
+        <StatusPill state="ready">Provider-free replay</StatusPill>
       </header>
+      <div id="impact-execution-judge-action" aria-label="Primary live WebMCP judge action" />
       <LabClient />
       <ProbeLaunchPanel />
     </div>

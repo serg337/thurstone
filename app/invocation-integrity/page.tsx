@@ -10,15 +10,30 @@ export default function InvocationIntegrityPage() {
     <div className="page-shell route-page">
       <header className="route-hero">
         <div>
-          <p className="eyebrow">Gate 8.5 · provider-free native verification</p>
-          <h1>Fixed browser-native calls, checked by a source-fixed verifier.</h1>
+          <p className="eyebrow">Three tested invocation invariants</p>
+          <h1>Hostile direct calls must preserve site-defined boundaries.</h1>
           <p>
-            This isolated route discovers the same-origin checkout catalog, invokes only the frozen
-            II-01 → II-02 → II-03 sequence through WebMCP, and compares the browser observations
-            with a fresh server-side replay.
+            Privileged fields reject, nonexistent items do nothing, and replay commits once. Trusted
+            state comes from a source-fixed server replay.
           </p>
+          <p>
+            Scope: three frozen synthetic checkout cases on the exact tested build. Thurstone is a
+            testing/audit system—not runtime enforcement, certification, guaranteed security, or
+            arbitrary-site verification.
+          </p>
+          <p>
+            Open this route in the official ChatGPT in-app browser. In Chrome 149+, open{" "}
+            <code>chrome://flags/#enable-webmcp-testing</code>, choose Enabled, and relaunch Chrome.
+          </p>
+          <p>
+            If Thurstone reports <code>consumer-mismatch</code>, close other same-origin Thurstone
+            tabs, then reload this tab.
+          </p>
+          <a className="button button-secondary" href="/results">
+            WebMCP unavailable? Inspect sealed Results
+          </a>
         </div>
-        <StatusPill state="ready">Outside the Meaning Matrix</StatusPill>
+        <StatusPill state="ready">Separate 3/3 · no model calls</StatusPill>
       </header>
 
       <InvocationIntegrityClient />

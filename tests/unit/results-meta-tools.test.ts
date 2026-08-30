@@ -87,3 +87,61 @@ describe("Results phase meta-tools", () => {
     await expect(execute({})).resolves.toEqual(paired);
   });
 });
+
+// thurstone-impact-execution:acceptance-start
+it("preserves the lazy paired-results descriptor, cancellation, and exact output", async () => {
+  const { createLazyPairedResultsMetaTool } = await import("@/lib/results/meta-tools");
+  const evidence = Object.freeze({ packageDigest: "e".repeat(64) }) as never;
+  const eager = createPairedResultsMetaTool(evidence);
+  const load = vi.fn(async () => evidence);
+  const lazy = createLazyPairedResultsMetaTool(load);
+  expect({
+    name: lazy.name,
+    title: lazy.title,
+    description: lazy.description,
+    inputSchema: lazy.inputSchema,
+    annotations: lazy.annotations
+  }).toEqual({
+    name: eager.name,
+    title: eager.title,
+    description: eager.description,
+    inputSchema: eager.inputSchema,
+    annotations: eager.annotations
+  });
+  const execute = lazy.execute as (
+    value: Record<string, unknown>,
+    context?: { signal?: AbortSignal }
+  ) => Promise<unknown>;
+  await expect(execute({ ignored: true })).resolves.toBe(evidence);
+  expect(load).toHaveBeenCalledTimes(1);
+
+  const canceled = new AbortController();
+  const cancellation = new Error("lazy results canceled");
+  canceled.abort(cancellation);
+  await expect(execute({}, { signal: canceled.signal })).rejects.toBe(cancellation);
+  expect(load).toHaveBeenCalledTimes(1);
+
+  const canceledAfterLoad = new AbortController();
+  const postLoadCancellation = new Error("lazy results canceled after load");
+  const postLoad = createLazyPairedResultsMetaTool(async () => {
+    canceledAfterLoad.abort(postLoadCancellation);
+    return evidence;
+  });
+  const postLoadExecute = postLoad.execute as (
+    value: Record<string, unknown>,
+    context?: { signal?: AbortSignal }
+  ) => Promise<unknown>;
+  await expect(postLoadExecute({}, { signal: canceledAfterLoad.signal })).rejects.toBe(
+    postLoadCancellation
+  );
+});
+
+it("permits the checked-in fallback only for an honestly absent scored-run configuration", async () => {
+  const { BASELINE_RUN_ID_ENV, readSemanticResults } =
+    await import("@/lib/results/semantic-results.server");
+  await expect(readSemanticResults({})).resolves.toMatchObject({ status: "no-scored-run" });
+  await expect(
+    readSemanticResults({ [BASELINE_RUN_ID_ENV]: "invalid-partial-configuration" })
+  ).rejects.toThrow("baseline_results_configuration_invalid");
+});
+// thurstone-impact-execution:acceptance-end

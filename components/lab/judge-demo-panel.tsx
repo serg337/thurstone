@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 
 import { canonicalJson, canonicalSha256 } from "@/lib/evidence/digest";
 import {
@@ -171,6 +172,11 @@ export function JudgeDemoPanel({
   const [modelEvidence, setModelEvidence] = useState<JudgeModelEvidence>();
   const [proof, setProof] = useState<JudgeBrowserProof>();
   const statusFocus = useRef<HTMLDivElement>(null);
+  const portalTarget = useSyncExternalStore(
+    () => () => undefined,
+    () => document.getElementById("impact-execution-judge-action"),
+    () => null
+  );
 
   const refresh = useCallback(async (fresh = false): Promise<JudgeDemoStatus | undefined> => {
     setLoading(true);
@@ -302,7 +308,7 @@ export function JudgeDemoPanel({
     ? "Checking allocation…"
     : `${status?.remainingModelCalls ?? 0} model call remaining`;
 
-  return (
+  const panel = (
     <section className="panel trace-panel" aria-labelledby="judge-demo-title" aria-busy={running}>
       <div className="panel-heading">
         <div>
@@ -312,17 +318,8 @@ export function JudgeDemoPanel({
         <span className="fixture-id">{allocationLabel}</span>
       </div>
 
-      <p>
-        The server accepts no prompt, model, schema, URL, or tool choice from this page. Its only
-        request is: <q>Which current cart lines have a quantity greater than one?</q>
-      </p>
-      <p className="trace-note">
-        This is a separate, non-scored demonstration. A fresh decision can consume the single
-        challenge-lifetime judge allocation. Afterward, the sealed decision remains available for
-        local native replay without another model call.
-      </p>
-
-      <div className="button-row">
+      {/* thurstone-impact-execution:judge-diagnostics */}
+      <div className="button-row judge-primary-action">
         <button className="button button-primary" disabled={!ready} onClick={() => void run()}>
           {running
             ? "Running bounded judge proof…"
@@ -334,39 +331,6 @@ export function JudgeDemoPanel({
                   ? "Replay sealed decision through native cart_get"
                   : "Run bounded model decision + native cart_get"}
         </button>
-        <button
-          className="button button-secondary"
-          disabled={loading || running}
-          onClick={() => void refresh(true).then((next) => setPhase(next?.reason ?? phase))}
-        >
-          Refresh judge status
-        </button>
-        {modelEvidence ? (
-          <button
-            className="button button-secondary"
-            onClick={() =>
-              downloadJson(
-                `toolproof-judge-model-${modelEvidence.providerProjection.appCommit.slice(0, 12)}-${timestampSlug(modelEvidence.observedAt)}.json`,
-                modelEvidence
-              )
-            }
-          >
-            Download model decision JSON
-          </button>
-        ) : null}
-        {proof ? (
-          <button
-            className="button button-secondary"
-            onClick={() =>
-              downloadJson(
-                `toolproof-judge-native-${proof.providerProjection.appCommit.slice(0, 12)}-${timestampSlug(proof.observedAt)}.json`,
-                proof
-              )
-            }
-          >
-            Download complete judge proof JSON
-          </button>
-        ) : null}
       </div>
 
       {!runtimeBinding ? (
@@ -393,41 +357,100 @@ export function JudgeDemoPanel({
 
       <div
         ref={statusFocus}
-        className="runtime-receipt"
-        role="status"
-        aria-live="polite"
+        className={error ? "judge-status-summary error-text" : "judge-status-summary"}
+        role={error ? "alert" : "status"}
+        aria-live={error ? "assertive" : "polite"}
         tabIndex={-1}
       >
-        <span>Judge lane</span>
         <strong>
           {running ? "running" : loading ? "checking" : (status?.status ?? "unavailable")}
         </strong>
-        <small>{phase}</small>
-        <small>{status?.reason ?? "Judge status is not available."}</small>
-        <small>
-          {status?.projection
-            ? `Sealed receipt ${status.projection.receiptDigest.slice(0, 16)}…`
-            : "No sealed judge decision is exposed."}
-        </small>
+        <span>{error ?? status?.reason ?? phase}</span>
       </div>
 
-      {modelEvidence ? (
-        <article className="receipt-line">
-          <h3>Sealed model-selection evidence</h3>
-          <pre tabIndex={0}>{JSON.stringify(modelEvidence, null, 2)}</pre>
-        </article>
-      ) : null}
-      {proof ? (
-        <article className="receipt-line">
-          <h3>Current browser judge proof</h3>
-          <pre tabIndex={0}>{JSON.stringify(proof, null, 2)}</pre>
-        </article>
-      ) : null}
-      {error ? (
-        <p className="error-text" role="alert">
-          {error}
-        </p>
-      ) : null}
+      <details className="judge-diagnostics">
+        <summary>Judge diagnostics</summary>
+        <div className="judge-diagnostics-content">
+          <p>
+            The server accepts no prompt, model, schema, URL, or tool choice from this page. Its
+            only request is: <q>Which current cart lines have a quantity greater than one?</q>
+          </p>
+          <p className="trace-note">
+            This is a separate, non-scored demonstration. A fresh decision can consume the single
+            challenge-lifetime judge allocation. Afterward, the sealed decision remains available
+            for local native replay without another model call.
+          </p>
+
+          <div className="button-row">
+            <button
+              className="button button-secondary"
+              disabled={loading || running}
+              onClick={() => void refresh(true).then((next) => setPhase(next?.reason ?? phase))}
+            >
+              Refresh judge status
+            </button>
+            {modelEvidence ? (
+              <button
+                className="button button-secondary"
+                onClick={() =>
+                  downloadJson(
+                    `toolproof-judge-model-${modelEvidence.providerProjection.appCommit.slice(0, 12)}-${timestampSlug(modelEvidence.observedAt)}.json`,
+                    modelEvidence
+                  )
+                }
+              >
+                Download model decision JSON
+              </button>
+            ) : null}
+            {proof ? (
+              <button
+                className="button button-secondary"
+                onClick={() =>
+                  downloadJson(
+                    `toolproof-judge-native-${proof.providerProjection.appCommit.slice(0, 12)}-${timestampSlug(proof.observedAt)}.json`,
+                    proof
+                  )
+                }
+              >
+                Download complete judge proof JSON
+              </button>
+            ) : null}
+          </div>
+
+          <div className="runtime-receipt" role="group">
+            <span>Judge lane</span>
+            <strong>
+              {running ? "running" : loading ? "checking" : (status?.status ?? "unavailable")}
+            </strong>
+            <small>{phase}</small>
+            <small>{status?.reason ?? "Judge status is not available."}</small>
+            <small>
+              {status?.projection
+                ? `Sealed receipt ${status.projection.receiptDigest.slice(0, 16)}…`
+                : "No sealed judge decision is exposed."}
+            </small>
+          </div>
+
+          {modelEvidence ? (
+            <article className="receipt-line">
+              <h3>Sealed model-selection evidence</h3>
+              <pre tabIndex={0}>{JSON.stringify(modelEvidence, null, 2)}</pre>
+            </article>
+          ) : null}
+          {proof ? (
+            <article className="receipt-line">
+              <h3>Current browser judge proof</h3>
+              <pre tabIndex={0}>{JSON.stringify(proof, null, 2)}</pre>
+            </article>
+          ) : null}
+          {error ? (
+            <p className="error-text" role="alert">
+              {error}
+            </p>
+          ) : null}
+        </div>
+      </details>
     </section>
   );
+  return portalTarget ? createPortal(panel, portalTarget) : panel;
 }

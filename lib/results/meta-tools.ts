@@ -130,6 +130,27 @@ export function createResultsMetaTools(input: {
   return Object.freeze([inspect, propose]);
 }
 
+// thurstone-impact-execution:lazy-tool-helper
+export type PairedResultsPackageLoader = (
+  signal: AbortSignal | undefined
+) => Promise<Gate6EvidencePackage>;
+
+export function createLazyPairedResultsMetaTool(
+  load: PairedResultsPackageLoader
+): WebMCP.ModelContextTool {
+  const descriptor = createPairedResultsMetaTool({} as Gate6EvidencePackage);
+  return {
+    ...descriptor,
+    execute: async (value: Record<string, unknown>, context: ExecutionContext = {}) => {
+      abort(context.signal);
+      const results = await load(context.signal);
+      abort(context.signal);
+      void value;
+      return results;
+    }
+  };
+}
+
 export function createPairedResultsMetaTool(
   results: ToolProofPairedResultsProjection | Gate6EvidencePackage
 ): WebMCP.ModelContextTool {

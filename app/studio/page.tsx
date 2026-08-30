@@ -326,5 +326,24 @@ export default async function StudioPage() {
           ])
         })
       : PREPARING_REVIEW_PACKAGE;
-  return <StudioClient target={LAST_VERIFIED_TARGET} reviewPackage={reviewPackage} />;
+  // thurstone-impact-execution:studio-presentation-only
+  return (
+    <div className="page-shell route-page">
+      <section className="panel impact-execution-entry" aria-labelledby="studio-contract-first">
+        <p className="eyebrow">
+          {frozen ? "Human-approved contract" : "Contract awaiting human review"}
+        </p>
+        <h1 id="studio-contract-first">
+          {frozen
+            ? "One intent boundary, reviewed before release."
+            : "One intent boundary, not yet approved."}
+        </h1>
+        <p>
+          Tentative checkout intent requires clarification and no mutation. Explicit intent permits
+          one pending human-approval request.
+        </p>
+      </section>
+      <StudioClient target={LAST_VERIFIED_TARGET} reviewPackage={reviewPackage} />
+    </div>
+  );
 }

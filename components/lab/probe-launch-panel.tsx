@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   PROBE_CLIENT_LAB_SESSION_KEY,
@@ -38,12 +38,31 @@ interface StartReceipt {
 }
 
 export function ProbeLaunchPanel() {
+  const panelRef = useRef<HTMLElement>(null);
+  const [statusRequested, setStatusRequested] = useState(false);
   const [status, setStatus] = useState<PublicProbeStatus>();
   const [statusError, setStatusError] = useState(false);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string>();
 
   useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel || statusRequested) return;
+    if (!("IntersectionObserver" in globalThis)) {
+      const frame = globalThis.requestAnimationFrame(() => setStatusRequested(true));
+      return () => globalThis.cancelAnimationFrame(frame);
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some(({ isIntersecting }) => isIntersecting)) return;
+      setStatusRequested(true);
+      observer.disconnect();
+    });
+    observer.observe(panel);
+    return () => observer.disconnect();
+  }, [statusRequested]);
+
+  useEffect(() => {
+    if (!statusRequested) return;
     const controller = new AbortController();
     void fetch("/api/probe/status", {
       method: "GET",
@@ -60,7 +79,7 @@ export function ProbeLaunchPanel() {
         if (!controller.signal.aborted) setStatusError(true);
       });
     return () => controller.abort();
-  }, []);
+  }, [statusRequested]);
 
   async function start(): Promise<void> {
     if (starting || status?.enabled !== true) return;
@@ -115,7 +134,11 @@ export function ProbeLaunchPanel() {
     status.activation === "calibration" &&
     status.calibrationStartable === true;
   return (
-    <section className="panel probe-launch-panel" aria-labelledby="probe-launch-title">
+    <section
+      ref={panelRef}
+      className="panel probe-launch-panel"
+      aria-labelledby="probe-launch-title"
+    >
       <div className="panel-heading">
         <div>
           <span className="eyebrow">Gate 2 · model selection</span>
@@ -140,9 +163,11 @@ export function ProbeLaunchPanel() {
         </button>
       </div>
       <small aria-live="polite">
-        {statusError
-          ? "Probe status is unavailable."
-          : (status?.reason ?? "Checking the server-held guard and activation…")}
+        {!statusRequested
+          ? "Guard status loads when this deep calibration control enters view."
+          : statusError
+            ? "Probe status is unavailable."
+            : (status?.reason ?? "Checking the server-held guard and activation…")}
       </small>
       {startError ? (
         <p className="error-text" role="alert">

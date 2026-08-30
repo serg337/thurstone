@@ -39,6 +39,17 @@ const INVOCATION_INTEGRITY_BROWSER_COMMIT = "e".repeat(40);
 const INVOCATION_INTEGRITY_RUN_LOCK_VERSION = "thurstone-invocation-integrity-run-lock@1";
 const INVOCATION_INTEGRITY_RUN_LOCK_KEY = `${INVOCATION_INTEGRITY_RUN_LOCK_VERSION}:${INVOCATION_INTEGRITY_BROWSER_COMMIT}`;
 
+async function openLabExpertDisclosure(page: Page): Promise<void> {
+  const disclosure = page.locator("details.lab-expert-diagnostics");
+  await expect(disclosure).toBeVisible();
+  if (!(await disclosure.evaluate((element) => (element as HTMLDetailsElement).open))) {
+    await disclosure
+      .getByText("Lab plumbing, reset receipts, and Gate 1 proof", { exact: true })
+      .click();
+  }
+  await expect(disclosure).toHaveAttribute("open", "");
+}
+
 function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
@@ -623,6 +634,7 @@ test.beforeEach(async ({ page }, testInfo) => {
   const mode = testInfo.title.includes("JSON-string") ? "json-string" : "object";
   await installEmulatedConsumer(page, mode);
   await page.goto("/lab");
+  await openLabExpertDisclosure(page);
   await expect(page.getByText("consumer-ready", { exact: true })).toBeVisible();
   await expect(page.getByText(`Argument mode: ${mode}`, { exact: true })).toBeVisible();
 });
@@ -643,7 +655,7 @@ test("normal UI shares deterministic state, pending policy, and verified reset",
   await mug.getByRole("button", { name: "Set" }).click();
   await expect(page.getByText("checkout-seed-v1 · r1", { exact: true })).toBeVisible();
 
-  await page.getByRole("link", { name: "Results" }).click();
+  await page.getByRole("link", { name: "Results", exact: true }).click();
   await expect(page).toHaveURL(/\/results$/u);
   await page.goBack();
   await expect(page).toHaveURL(/\/lab$/u);
@@ -654,11 +666,15 @@ test("normal UI shares deterministic state, pending policy, and verified reset",
 
   await page.getByRole("button", { name: "Request simulated checkout" }).click();
   await expect(page.getByText(/Simulated checkout pending human approval/iu)).toBeVisible();
-  await expect(page.locator(".runtime-receipt").first()).toContainText("checkout_cancel");
+  await expect(page.locator(".capability-panel .runtime-receipt").first()).toContainText(
+    "checkout_cancel"
+  );
 
   await page.getByRole("button", { name: "Cancel simulated checkout" }).click();
   await expect(page.getByText(/Simulated checkout pending human approval/iu)).toBeHidden();
-  await expect(page.locator(".runtime-receipt").first()).not.toContainText("checkout_cancel");
+  await expect(page.locator(".capability-panel .runtime-receipt").first()).not.toContainText(
+    "checkout_cancel"
+  );
 
   await page.getByRole("button", { name: "Hard reset fixture" }).click();
   const resetArticle = page.locator("article").filter({ hasText: "Reset verification receipt" });
@@ -666,12 +682,14 @@ test("normal UI shares deterministic state, pending policy, and verified reset",
   await expect(resetArticle).toContainText('"currentTrajectoryCount": 0');
   await expect(page.getByText("checkout-seed-v1 · r0", { exact: true })).toBeVisible();
 
-  await page.getByRole("link", { name: "Results" }).click();
+  await page.getByRole("link", { name: "Results", exact: true }).click();
   await expect(page).toHaveURL(/\/results$/u);
   await page.goBack();
   await expect(page).toHaveURL(/\/lab$/u);
   await expect(page.getByText("consumer-ready", { exact: true })).toBeVisible();
-  await expect(page.locator(".runtime-receipt").first()).toContainText("cart_get");
+  await expect(page.locator(".capability-panel .runtime-receipt").first()).toContainText(
+    "cart_get"
+  );
 
   await page.reload();
   await expect(page.getByText("checkout-seed-v1 · r0", { exact: true })).toBeVisible();
@@ -687,7 +705,7 @@ test("cross-surface navigation destroys Lab state and opens a clean document", a
   await expect(page.getByText("checkout-seed-v1 · r1", { exact: true })).toBeVisible();
   await expect(quantityEditor).toHaveValue("3");
 
-  await page.getByRole("link", { name: "Results" }).click();
+  await page.getByRole("link", { name: "Results", exact: true }).click();
   await expect(page).toHaveURL(/\/results$/u);
   await expect(quantityEditor).toHaveCount(0);
   await expect
@@ -764,7 +782,9 @@ test("emulated consumer exercises the exact native boundary and observes state b
 
   await page.getByRole("button", { name: "Native checkout_request" }).click();
   await expect(page.getByText(/Simulated checkout pending human approval/iu)).toBeVisible();
-  await expect(page.locator(".runtime-receipt").first()).toContainText("checkout_cancel");
+  await expect(page.locator(".capability-panel .runtime-receipt").first()).toContainText(
+    "checkout_cancel"
+  );
 
   await page.getByLabel("checkout_request operationId").fill("native_request_002");
   await page.getByRole("button", { name: "Native checkout_request" }).click();
@@ -883,8 +903,12 @@ test("fixed judge lane accepts no prompt and binds the sealed decision to native
     });
   });
 
-  await page.getByRole("button", { name: "Refresh judge status" }).click();
-  await expect(page.getByText("available", { exact: true })).toBeVisible();
+  await page.getByText("Judge diagnostics", { exact: true }).click();
+  const judgeRefresh = page.getByRole("button", { name: "Refresh judge status" });
+  await judgeRefresh.click();
+  await expect(
+    page.locator(".judge-status-summary").getByText("available", { exact: true })
+  ).toBeVisible();
   await page.getByRole("button", { name: "Run bounded model decision + native cart_get" }).click();
   const proof = page.locator("article").filter({ hasText: "Current browser judge proof" });
   await expect(proof).toContainText('"evidenceClass": "non-scored-judge-path"');
@@ -897,7 +921,9 @@ test("fixed judge lane accepts no prompt and binds the sealed decision to native
   await expect(modelEvidence).toContainText('"inferencePerformedByThisRequest": true');
   expect(postedBodies).toEqual([{ intent: "run-fixed-read-only-judge-demo" }]);
   expect(JSON.stringify(postedBodies)).not.toContain("items and quantities");
-  await expect(page.getByText("sealed", { exact: true })).toBeVisible();
+  await expect(
+    page.locator(".judge-status-summary").getByText("sealed", { exact: true })
+  ).toBeVisible();
   await page
     .getByRole("button", { name: "Replay sealed decision through native cart_get" })
     .click();
@@ -964,7 +990,9 @@ test("judge lane preserves a sealed no-call outcome without fabricating native p
       ).__toolProofNativeObservations.length
   );
 
-  await page.getByRole("button", { name: "Refresh judge status" }).click();
+  await page.getByText("Judge diagnostics", { exact: true }).click();
+  const judgeRefresh = page.getByRole("button", { name: "Refresh judge status" });
+  await judgeRefresh.click();
   await page.getByRole("button", { name: "Run bounded model decision + native cart_get" }).click();
   const modelEvidence = page
     .locator("article")
@@ -988,7 +1016,9 @@ test("judge lane preserves a sealed no-call outcome without fabricating native p
       ).__toolProofNativeObservations.length
   );
   expect(nativeCountAfter).toBe(nativeCountBefore);
-  await expect(page.getByText("sealed", { exact: true })).toBeVisible();
+  await expect(
+    page.locator(".judge-status-summary").getByText("sealed", { exact: true })
+  ).toBeVisible();
 });
 
 test("halted revision-zero Lab cannot consume the one judge allocation", async ({ page }) => {
@@ -1044,7 +1074,9 @@ test("halted revision-zero Lab cannot consume the one judge allocation", async (
     haltedReason: { code: "subscriber_failure" }
   });
   await expect(page.getByText(/Session halted after subscriber_failure/iu)).toBeVisible();
-  await page.getByRole("button", { name: "Refresh judge status" }).click();
+  await page.getByText("Judge diagnostics", { exact: true }).click();
+  const judgeRefresh = page.getByRole("button", { name: "Refresh judge status" });
+  await judgeRefresh.click();
   const runButton = page.getByRole("button", {
     name: "Run bounded model decision + native cart_get"
   });
@@ -1079,7 +1111,9 @@ test("JSON-string one download preserves the complete Gate 1 journal and trace h
   await page.getByLabel("checkout_request operationId").fill("bundle_request_0001");
   await page.getByRole("button", { name: "Native checkout_request" }).click();
   await expect(page.getByText(/Simulated checkout pending human approval/iu)).toBeVisible();
-  await expect(page.locator(".runtime-receipt").first()).toContainText("checkout_cancel");
+  await expect(page.locator(".capability-panel .runtime-receipt").first()).toContainText(
+    "checkout_cancel"
+  );
   await page.getByRole("button", { name: "Replay last native mutation" }).click();
   await expect(nativeReceipt).toContainText('"replayed": true');
   await page.getByLabel("checkout_request operationId").fill("bundle_request_0002");
@@ -1469,6 +1503,7 @@ test("JSON-string one button reloads clean, runs the exact proof, and requests o
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Run clean Gate 1 proof and download" }).click();
   const download = await downloadPromise;
+  await openLabExpertDisclosure(page);
   const text = await downloadText(download);
   const bundle = JSON.parse(text) as Gate1ProofBundle;
 
@@ -1579,6 +1614,7 @@ test("JSON-string one button reloads clean, runs the exact proof, and requests o
   expect(retryDownload.suggestedFilename()).toBe(download.suggestedFilename());
   expect(downloadCount).toBe(2);
   await page.reload();
+  await openLabExpertDisclosure(page);
   await expect(page.getByText("consumer-ready", { exact: true })).toBeVisible();
   await page.waitForTimeout(300);
   expect(downloadCount).toBe(2);
@@ -1609,6 +1645,7 @@ test("JSON-string automated proof stops on the first native failure without down
     downloadCount += 1;
   });
   await page.getByRole("button", { name: "Run clean Gate 1 proof and download" }).click();
+  await openLabExpertDisclosure(page);
   await expect(page.getByText(/Proof run stopped at order_review/u)).toBeVisible();
   await page.waitForTimeout(300);
   expect(downloadCount).toBe(0);
@@ -1647,6 +1684,7 @@ test("malformed automated proof markers are consumed without native execution", 
     sessionStorage.setItem("toolproof:gate1-auto-request@1", JSON.stringify({ version: "wrong" }))
   );
   await page.reload();
+  await openLabExpertDisclosure(page);
   await expect(page.getByText(/one-shot proof request was rejected/u)).toBeVisible();
   const result = await page.evaluate(() => {
     const entries = (
@@ -1755,7 +1793,7 @@ test("Gate 8.5 runs one fixed provider-free native sequence and downloads one co
   await page.goto("/invocation-integrity");
   await expect(
     page.getByRole("heading", {
-      name: "Fixed browser-native calls, checked by a source-fixed verifier."
+      name: "Hostile direct calls must preserve site-defined boundaries."
     })
   ).toBeVisible();
   await expect(page.getByText("Zero model calls. Zero server durable-store writes.")).toBeVisible();
@@ -2531,3 +2569,146 @@ test("Gate 8.5 captures a native error and permanently blocks rerun after dispat
   ) as InvocationIntegrityFailureReceipt;
   expect(recoveredArtifact).toEqual(artifact);
 });
+
+// thurstone-impact-execution:acceptance-start
+test("unsupported Lab gives exact setup and an immediate Results fallback without dispatch", async ({
+  page
+}) => {
+  const nonReadRequests: string[] = [];
+  page.on("request", (request) => {
+    if (!["GET", "HEAD", "OPTIONS"].includes(request.method())) {
+      nonReadRequests.push(`${request.method()} ${request.url()}`);
+    }
+  });
+  await page.goto("/lab");
+  await expect(
+    page.getByRole("heading", {
+      name: "Run one sealed decision through the page's real tool catalog."
+    })
+  ).toBeVisible();
+  await expect(
+    page.getByText("chrome://flags/#enable-webmcp-testing", { exact: true })
+  ).toBeVisible();
+  await expect(page.getByText(/choose Enabled, and relaunch Chrome/iu)).toBeVisible();
+  await expect(page.getByText(/consumer-mismatch/iu)).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "WebMCP unavailable? Inspect sealed Results" })
+  ).toHaveAttribute("href", "/results");
+  expect(nonReadRequests).toEqual([]);
+});
+
+test("Lab portals exactly one real judge action into first-screen DOM order", async ({ page }) => {
+  await page.goto("/lab");
+  const mount = page.locator("#impact-execution-judge-action");
+  await expect(
+    mount.getByRole("heading", { name: "One fixed decision, one verified native read" })
+  ).toHaveCount(1);
+  const action = mount.getByRole("button", {
+    name: /bounded judge proof|sealed model decision|native cart_get/iu
+  });
+  await expect(action).toHaveCount(1);
+  await expect(action).toBeVisible();
+  await expect(action).toBeDisabled();
+  const status = mount.locator(".judge-status-summary");
+  await expect(status).toBeVisible();
+  await expect(status).toContainText(
+    /disabled|judge_demo_disabled|unsupported|unavailable|supported Chrome\/WebMCP/iu
+  );
+  const diagnostics = mount.locator("details.judge-diagnostics");
+  const diagnosticsSummary = diagnostics.getByText("Judge diagnostics", { exact: true });
+  await expect(diagnosticsSummary).toBeVisible();
+  await expect(mount.getByRole("button", { name: "Refresh judge status" })).toBeHidden();
+  await expect(diagnostics.getByText(/The server accepts no prompt/iu)).toBeHidden();
+  await expect(diagnostics.locator(".runtime-receipt")).toBeHidden();
+  await diagnosticsSummary.focus();
+  await page.keyboard.press("Enter");
+  await expect(mount.getByRole("button", { name: "Refresh judge status" })).toBeVisible();
+  await expect(diagnostics.getByText(/The server accepts no prompt/iu)).toBeVisible();
+  await expect(diagnostics.locator(".runtime-receipt")).toBeVisible();
+  await expect(diagnostics.locator(".runtime-receipt")).toHaveAttribute("role", "group");
+  await expect(
+    page.getByRole("heading", { name: "One fixed decision, one verified native read" })
+  ).toHaveCount(1);
+  const viewport = page.viewportSize();
+  const box = await action.boundingBox();
+  const statusBox = await status.boundingBox();
+  expect(viewport).not.toBeNull();
+  expect(box).not.toBeNull();
+  expect(statusBox).not.toBeNull();
+  expect(box!.y + box!.height).toBeLessThanOrEqual(viewport!.height);
+  expect(statusBox!.y + statusBox!.height).toBeLessThanOrEqual(viewport!.height);
+});
+
+test("capability-absent Lab keeps the judge action and plain status in the first viewport", async ({
+  browser
+}) => {
+  const cleanPage = await browser.newPage();
+  try {
+    await cleanPage.goto("/lab");
+    const mount = cleanPage.locator("#impact-execution-judge-action");
+    const action = mount.getByRole("button", {
+      name: /bounded judge proof|sealed model decision|native cart_get/iu
+    });
+    const status = mount.locator(".judge-status-summary");
+    await expect(action).toBeVisible();
+    await expect(action).toBeDisabled();
+    await expect(status).toBeVisible();
+    const expertDisclosure = cleanPage.getByText("Lab plumbing, reset receipts, and Gate 1 proof", {
+      exact: true
+    });
+    await expect(expertDisclosure).toBeVisible();
+    await expect(
+      cleanPage.getByRole("heading", { name: "Direct native WebMCP controls" })
+    ).toBeHidden();
+    await expect(
+      cleanPage.getByRole("heading", { name: "Latest operation and reset receipt" })
+    ).toBeHidden();
+    await expect(cleanPage.getByRole("heading", { name: "Gate 1 proof bundle" })).toBeHidden();
+    await expertDisclosure.focus();
+    await cleanPage.keyboard.press("Enter");
+    await expect(
+      cleanPage.getByRole("heading", { name: "Direct native WebMCP controls" })
+    ).toBeVisible();
+    await expect(
+      cleanPage.getByRole("heading", { name: "Latest operation and reset receipt" })
+    ).toBeVisible();
+    await expect(cleanPage.getByRole("heading", { name: "Gate 1 proof bundle" })).toBeVisible();
+    const viewport = cleanPage.viewportSize();
+    const actionBox = await action.boundingBox();
+    const statusBox = await status.boundingBox();
+    expect(viewport).not.toBeNull();
+    expect(actionBox).not.toBeNull();
+    expect(statusBox).not.toBeNull();
+    expect(actionBox!.y + actionBox!.height).toBeLessThanOrEqual(viewport!.height);
+    expect(statusBox!.y + statusBox!.height).toBeLessThanOrEqual(viewport!.height);
+  } finally {
+    await cleanPage.close();
+  }
+});
+
+test("browser-restored expert disclosure hydrates without console drift", async ({ page }) => {
+  const hydrationMessages: string[] = [];
+  page.on("console", (message) => {
+    if (/hydration|hydrated|did not match/iu.test(message.text())) {
+      hydrationMessages.push(message.text());
+    }
+  });
+  await page.addInitScript(() => {
+    const observer = new MutationObserver(() => {
+      const disclosure = document.querySelector<HTMLDetailsElement>(
+        "details.lab-expert-diagnostics"
+      );
+      if (!disclosure) return;
+      disclosure.open = true;
+      observer.disconnect();
+    });
+    observer.observe(document, { childList: true, subtree: true });
+  });
+  await page.reload();
+  await expect(
+    page.getByText("Lab plumbing, reset receipts, and Gate 1 proof", { exact: true })
+  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Direct native WebMCP controls" })).toBeVisible();
+  expect(hydrationMessages).toEqual([]);
+});
+// thurstone-impact-execution:acceptance-end

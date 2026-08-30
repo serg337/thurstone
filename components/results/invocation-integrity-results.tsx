@@ -296,7 +296,9 @@ export function InvocationIntegrityResults({
         <div className="section-heading">
           <div>
             <span className="eyebrow">Separate supplemental artifact</span>
-            <h3 id="invocation-integrity-export-title">Exports and limitations</h3>
+            <h3 id="invocation-integrity-export-title">
+              Invocation Integrity exports and limitations
+            </h3>
           </div>
           <div className="button-row compact-buttons">
             {terminal ? (

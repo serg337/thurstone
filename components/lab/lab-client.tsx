@@ -2141,258 +2141,266 @@ export function LabClient() {
         executeVerifiedDecision={executeVerifiedJudgeDecision}
       />
 
-      <section className="panel trace-panel" aria-labelledby="native-title">
-        <div className="panel-heading">
-          <div>
-            <span className="eyebrow">Gate 1 plumbing only · not model selection</span>
-            <h2 id="native-title">Direct native WebMCP controls</h2>
-          </div>
-          <button
-            className="button button-compact button-secondary"
-            disabled={controlsDisabled}
-            onClick={refreshNativeIds}
-          >
-            New operation IDs
-          </button>
-        </div>
+      {/* thurstone-impact-execution:lab-expert-diagnostics */}
+      <details suppressHydrationWarning className="lab-expert-diagnostics">
+        <summary>Lab plumbing, reset receipts, and Gate 1 proof</summary>
+        <div className="lab-expert-diagnostics-content">
+          <section className="panel trace-panel" aria-labelledby="native-title">
+            <div className="panel-heading">
+              <div>
+                <span className="eyebrow">Gate 1 plumbing only · not model selection</span>
+                <h2 id="native-title">Direct native WebMCP controls</h2>
+              </div>
+              <button
+                className="button button-compact button-secondary"
+                disabled={controlsDisabled}
+                onClick={refreshNativeIds}
+              >
+                New operation IDs
+              </button>
+            </div>
 
-        <div className="native-fields">
-          <label>
-            <span>cart_update operationId</span>
-            <input
-              disabled={controlsDisabled}
-              value={nativeUpdateId}
-              onChange={(event) => setNativeUpdateId(event.currentTarget.value)}
-            />
-          </label>
-          <label>
-            <span>checkout_request operationId</span>
-            <input
-              disabled={controlsDisabled}
-              value={nativeRequestId}
-              onChange={(event) => setNativeRequestId(event.currentTarget.value)}
-            />
-          </label>
-          <label>
-            <span>checkout_cancel operationId</span>
-            <input
-              disabled={controlsDisabled}
-              value={nativeCancelId}
-              onChange={(event) => setNativeCancelId(event.currentTarget.value)}
-            />
-          </label>
-        </div>
+            <div className="native-fields">
+              <label>
+                <span>cart_update operationId</span>
+                <input
+                  disabled={controlsDisabled}
+                  value={nativeUpdateId}
+                  onChange={(event) => setNativeUpdateId(event.currentTarget.value)}
+                />
+              </label>
+              <label>
+                <span>checkout_request operationId</span>
+                <input
+                  disabled={controlsDisabled}
+                  value={nativeRequestId}
+                  onChange={(event) => setNativeRequestId(event.currentTarget.value)}
+                />
+              </label>
+              <label>
+                <span>checkout_cancel operationId</span>
+                <input
+                  disabled={controlsDisabled}
+                  value={nativeCancelId}
+                  onChange={(event) => setNativeCancelId(event.currentTarget.value)}
+                />
+              </label>
+            </div>
 
-        <div className="button-row native-actions">
-          <button
-            className="button button-secondary"
-            disabled={controlsDisabled || !nativeControlsReady}
-            onClick={() => void runNative("cart_get", {})}
-          >
-            Native cart_get
-          </button>
-          <button
-            className="button button-secondary"
-            disabled={controlsDisabled || !nativeControlsReady}
-            onClick={() => void runNativeCancellationProbe()}
-          >
-            Native cart_get cancellation probe
-          </button>
-          <button
-            className="button button-secondary"
-            disabled={controlsDisabled || !nativeControlsReady}
-            onClick={() => void runNative("order_review", {})}
-          >
-            Native order_review
-          </button>
-          <button
-            className="button button-secondary"
-            disabled={controlsDisabled || !nativeControlsReady || pending}
-            onClick={() =>
-              void runNative("cart_update", {
-                operationId: nativeUpdateId,
-                operation: "set_quantity",
-                itemId: "stoneware-mug",
-                quantity: 3
-              })
-            }
-          >
-            Native cart_update
-          </button>
-          <button
-            className="button button-secondary"
-            disabled={controlsDisabled || !nativeControlsReady}
-            onClick={() => void runNative("checkout_request", { operationId: nativeRequestId })}
-          >
-            Native checkout_request
-          </button>
-          <button
-            className="button button-secondary"
-            disabled={controlsDisabled || !nativeControlsReady || !pending}
-            onClick={() => void runNative("checkout_cancel", { operationId: nativeCancelId })}
-          >
-            Native checkout_cancel
-          </button>
-          <button
-            className="button button-secondary"
-            disabled={controlsDisabled || !nativeControlsReady || !replayAvailable}
-            onClick={() =>
-              lastNativeMutation
-                ? void runNative(lastNativeMutation.toolName, lastNativeMutation.input)
-                : undefined
-            }
-          >
-            Replay last native mutation
-          </button>
-        </div>
+            <div className="button-row native-actions">
+              <button
+                className="button button-secondary"
+                disabled={controlsDisabled || !nativeControlsReady}
+                onClick={() => void runNative("cart_get", {})}
+              >
+                Native cart_get
+              </button>
+              <button
+                className="button button-secondary"
+                disabled={controlsDisabled || !nativeControlsReady}
+                onClick={() => void runNativeCancellationProbe()}
+              >
+                Native cart_get cancellation probe
+              </button>
+              <button
+                className="button button-secondary"
+                disabled={controlsDisabled || !nativeControlsReady}
+                onClick={() => void runNative("order_review", {})}
+              >
+                Native order_review
+              </button>
+              <button
+                className="button button-secondary"
+                disabled={controlsDisabled || !nativeControlsReady || pending}
+                onClick={() =>
+                  void runNative("cart_update", {
+                    operationId: nativeUpdateId,
+                    operation: "set_quantity",
+                    itemId: "stoneware-mug",
+                    quantity: 3
+                  })
+                }
+              >
+                Native cart_update
+              </button>
+              <button
+                className="button button-secondary"
+                disabled={controlsDisabled || !nativeControlsReady}
+                onClick={() => void runNative("checkout_request", { operationId: nativeRequestId })}
+              >
+                Native checkout_request
+              </button>
+              <button
+                className="button button-secondary"
+                disabled={controlsDisabled || !nativeControlsReady || !pending}
+                onClick={() => void runNative("checkout_cancel", { operationId: nativeCancelId })}
+              >
+                Native checkout_cancel
+              </button>
+              <button
+                className="button button-secondary"
+                disabled={controlsDisabled || !nativeControlsReady || !replayAvailable}
+                onClick={() =>
+                  lastNativeMutation
+                    ? void runNative(lastNativeMutation.toolName, lastNativeMutation.input)
+                    : undefined
+                }
+              >
+                Replay last native mutation
+              </button>
+            </div>
 
-        <p className="trace-note">
-          Cancellation is recorded at both boundaries. Chrome may reject the consumer call after the
-          harmless cart_get handler has already completed; the journal preserves that completed
-          no-effect handler trace separately and never relabels it as handler cancellation.
-        </p>
+            <p className="trace-note">
+              Cancellation is recorded at both boundaries. Chrome may reject the consumer call after
+              the harmless cart_get handler has already completed; the journal preserves that
+              completed no-effect handler trace separately and never relabels it as handler
+              cancellation.
+            </p>
 
-        <div className="receipt-grid">
-          <article>
-            <h3>Native adapter receipt</h3>
-            {nativeReceipt ? (
-              <pre tabIndex={0}>{JSON.stringify(nativeReceipt, null, 2)}</pre>
-            ) : (
-              <p>
-                No operator-triggered executeOnce call yet. Automatic compatibility calibration is
-                shown in the readiness receipt and is not model-selection evidence.
+            <div className="receipt-grid">
+              <article>
+                <h3>Native adapter receipt</h3>
+                {nativeReceipt ? (
+                  <pre tabIndex={0}>{JSON.stringify(nativeReceipt, null, 2)}</pre>
+                ) : (
+                  <p>
+                    No operator-triggered executeOnce call yet. Automatic compatibility calibration
+                    is shown in the readiness receipt and is not model-selection evidence.
+                  </p>
+                )}
+                {nativeError ? (
+                  <pre className="error-text" role="alert" tabIndex={0}>
+                    {JSON.stringify(nativeError, null, 2)}
+                  </pre>
+                ) : null}
+              </article>
+              <article>
+                <h3>Latest native handler trace</h3>
+                {nativeTrace ? (
+                  <pre tabIndex={0}>{JSON.stringify(nativeTrace, null, 2)}</pre>
+                ) : (
+                  <p>No native handler trace yet.</p>
+                )}
+                {nativeError && nativeTrace ? (
+                  <p>The latest handler trace may predate the current adapter error.</p>
+                ) : null}
+              </article>
+            </div>
+          </section>
+
+          <section className="panel trace-panel" aria-labelledby="trace-title">
+            <div className="panel-heading">
+              <div>
+                <span className="eyebrow">Append-only domain evidence</span>
+                <h2 id="trace-title">Latest operation and reset receipt</h2>
+              </div>
+              <span className="fixture-id">{traces.totalTraceCount} events</span>
+            </div>
+
+            <div className="receipt-grid">
+              <article>
+                <h3>Latest canonical operation trace</h3>
+                {currentTrace ? (
+                  <pre tabIndex={0}>{JSON.stringify(currentTrace, null, 2)}</pre>
+                ) : (
+                  <p>No operation trace yet.</p>
+                )}
+              </article>
+              <article>
+                <h3>Reset verification receipt</h3>
+                {verifiedReset ? (
+                  <pre tabIndex={0}>{JSON.stringify(verifiedReset, null, 2)}</pre>
+                ) : resetting ? (
+                  <p>Reset committed; registry verification pending.</p>
+                ) : (
+                  <p>No hard reset receipt yet.</p>
+                )}
+              </article>
+            </div>
+
+            <p className="trace-note">
+              UI and native handlers share one serialized checkout store. Direct expected calls
+              above are plumbing evidence only and are never counted as semantic model-selection
+              evidence.
+            </p>
+          </section>
+
+          <section className="panel trace-panel" aria-labelledby="proof-export-title">
+            <div className="panel-heading">
+              <div>
+                <span className="eyebrow">One document · one attachment</span>
+                <h2 id="proof-export-title">Gate 1 proof bundle</h2>
+              </div>
+            </div>
+            <p>
+              One click reloads into a clean document, waits for every exact runtime boundary, runs
+              the fixed ten-call native sequence and one verified reset, records step timestamps and
+              durations, validates the strict Gate 1 completion predicate, and requests one JSON
+              download. It includes no cookies, browser history, account data, or automatic upload.
+            </p>
+            <div className="button-row">
+              <button
+                type="button"
+                className="button button-primary"
+                disabled={busy || resetting || proofExporting || automatedProofActive}
+                onClick={requestAutomatedProofRun}
+              >
+                {automatedProofStatus.phase === "error"
+                  ? "Restart clean Gate 1 proof run"
+                  : automatedProofActive
+                    ? "Running clean Gate 1 proof…"
+                    : "Run clean Gate 1 proof and download"}
+              </button>
+              <button
+                type="button"
+                className="button button-secondary"
+                disabled={controlsDisabled}
+                onClick={() => void exportGate1Proof()}
+              >
+                Download current diagnostic JSON
+              </button>
+              {verifiedProofAvailable ? (
+                <button
+                  type="button"
+                  className="button button-secondary"
+                  disabled={automatedProofActive}
+                  onClick={retryVerifiedProofDownload}
+                >
+                  Download verified proof again
+                </button>
+              ) : null}
+            </div>
+            <p
+              className={
+                automatedProofStatus.phase === "error"
+                  ? "proof-export-status error-text"
+                  : "proof-export-status"
+              }
+              role={automatedProofStatus.phase === "error" ? "alert" : "status"}
+              aria-live="polite"
+            >
+              {automatedProofStatus.message} Updated {automatedProofStatus.updatedAt}
+              {automatedProofStatus.startedAt ? ` · Started ${automatedProofStatus.startedAt}` : ""}
+            </p>
+            <p className="trace-note">
+              This is native-plumbing evidence only. Its hashes prove internal consistency, not
+              external attestation, model selection, semantic scoring, or Direct ChatGPT behavior.
+              The automatic download is requested locally; the verified in-memory bytes remain
+              available for retry if the browser blocks it.
+            </p>
+            {proofExportStatus ? (
+              <p className="proof-export-status" role="status" aria-live="polite">
+                {proofExportStatus}
               </p>
-            )}
-            {nativeError ? (
+            ) : null}
+            {proofExportError ? (
               <pre className="error-text" role="alert" tabIndex={0}>
-                {JSON.stringify(nativeError, null, 2)}
+                {JSON.stringify(proofExportError, null, 2)}
               </pre>
             ) : null}
-          </article>
-          <article>
-            <h3>Latest native handler trace</h3>
-            {nativeTrace ? (
-              <pre tabIndex={0}>{JSON.stringify(nativeTrace, null, 2)}</pre>
-            ) : (
-              <p>No native handler trace yet.</p>
-            )}
-            {nativeError && nativeTrace ? (
-              <p>The latest handler trace may predate the current adapter error.</p>
-            ) : null}
-          </article>
+          </section>
         </div>
-      </section>
-
-      <section className="panel trace-panel" aria-labelledby="trace-title">
-        <div className="panel-heading">
-          <div>
-            <span className="eyebrow">Append-only domain evidence</span>
-            <h2 id="trace-title">Latest operation and reset receipt</h2>
-          </div>
-          <span className="fixture-id">{traces.totalTraceCount} events</span>
-        </div>
-
-        <div className="receipt-grid">
-          <article>
-            <h3>Latest canonical operation trace</h3>
-            {currentTrace ? (
-              <pre tabIndex={0}>{JSON.stringify(currentTrace, null, 2)}</pre>
-            ) : (
-              <p>No operation trace yet.</p>
-            )}
-          </article>
-          <article>
-            <h3>Reset verification receipt</h3>
-            {verifiedReset ? (
-              <pre tabIndex={0}>{JSON.stringify(verifiedReset, null, 2)}</pre>
-            ) : resetting ? (
-              <p>Reset committed; registry verification pending.</p>
-            ) : (
-              <p>No hard reset receipt yet.</p>
-            )}
-          </article>
-        </div>
-
-        <p className="trace-note">
-          UI and native handlers share one serialized checkout store. Direct expected calls above
-          are plumbing evidence only and are never counted as semantic model-selection evidence.
-        </p>
-      </section>
-
-      <section className="panel trace-panel" aria-labelledby="proof-export-title">
-        <div className="panel-heading">
-          <div>
-            <span className="eyebrow">One document · one attachment</span>
-            <h2 id="proof-export-title">Gate 1 proof bundle</h2>
-          </div>
-        </div>
-        <p>
-          One click reloads into a clean document, waits for every exact runtime boundary, runs the
-          fixed ten-call native sequence and one verified reset, records step timestamps and
-          durations, validates the strict Gate 1 completion predicate, and requests one JSON
-          download. It includes no cookies, browser history, account data, or automatic upload.
-        </p>
-        <div className="button-row">
-          <button
-            type="button"
-            className="button button-primary"
-            disabled={busy || resetting || proofExporting || automatedProofActive}
-            onClick={requestAutomatedProofRun}
-          >
-            {automatedProofStatus.phase === "error"
-              ? "Restart clean Gate 1 proof run"
-              : automatedProofActive
-                ? "Running clean Gate 1 proof…"
-                : "Run clean Gate 1 proof and download"}
-          </button>
-          <button
-            type="button"
-            className="button button-secondary"
-            disabled={controlsDisabled}
-            onClick={() => void exportGate1Proof()}
-          >
-            Download current diagnostic JSON
-          </button>
-          {verifiedProofAvailable ? (
-            <button
-              type="button"
-              className="button button-secondary"
-              disabled={automatedProofActive}
-              onClick={retryVerifiedProofDownload}
-            >
-              Download verified proof again
-            </button>
-          ) : null}
-        </div>
-        <p
-          className={
-            automatedProofStatus.phase === "error"
-              ? "proof-export-status error-text"
-              : "proof-export-status"
-          }
-          role={automatedProofStatus.phase === "error" ? "alert" : "status"}
-          aria-live="polite"
-        >
-          {automatedProofStatus.message} Updated {automatedProofStatus.updatedAt}
-          {automatedProofStatus.startedAt ? ` · Started ${automatedProofStatus.startedAt}` : ""}
-        </p>
-        <p className="trace-note">
-          This is native-plumbing evidence only. Its hashes prove internal consistency, not external
-          attestation, model selection, semantic scoring, or Direct ChatGPT behavior. The automatic
-          download is requested locally; the verified in-memory bytes remain available for retry if
-          the browser blocks it.
-        </p>
-        {proofExportStatus ? (
-          <p className="proof-export-status" role="status" aria-live="polite">
-            {proofExportStatus}
-          </p>
-        ) : null}
-        {proofExportError ? (
-          <pre className="error-text" role="alert" tabIndex={0}>
-            {JSON.stringify(proofExportError, null, 2)}
-          </pre>
-        ) : null}
-      </section>
+      </details>
     </div>
   );
 }

@@ -90,7 +90,9 @@ test("Studio and Lab navigation replaces the top-level document", async ({ page 
     .poll(() => page.evaluate(() => Reflect.get(window, "__toolproofStudioDocumentMarker") ?? null))
     .toBeNull();
   await expect(
-    page.getByRole("heading", { name: "One live tool catalog. No expected answers." })
+    page.getByRole("heading", {
+      name: "Run one sealed decision through the page's real tool catalog."
+    })
   ).toBeVisible();
 });
 
@@ -110,3 +112,29 @@ test("Home does not prefetch Studio and hard-navigates into Lab", async ({ page 
     .poll(() => page.evaluate(() => Reflect.get(window, "__toolproofHomeDocumentMarker") ?? null))
     .toBeNull();
 });
+
+// thurstone-impact-execution:acceptance-start
+test("Studio leads with the human-approved contract before operational detail", async ({
+  page
+}) => {
+  await page.goto("/studio");
+  if (process.env.TOOLPROOF_BASE_URL) {
+    await expect(page.getByText("Human-approved contract", { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "One intent boundary, reviewed before release." })
+    ).toBeVisible();
+    await expect(page.getByText("Contract awaiting human review", { exact: true })).toHaveCount(0);
+  } else {
+    await expect(page.getByText("Contract awaiting human review", { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "One intent boundary, not yet approved." })
+    ).toBeVisible();
+    await expect(page.getByText("Human-approved contract", { exact: true })).toHaveCount(0);
+  }
+  await expect(
+    page.getByText(
+      "Tentative checkout intent requires clarification and no mutation. Explicit intent permits one pending human-approval request."
+    )
+  ).toBeVisible();
+});
+// thurstone-impact-execution:acceptance-end
