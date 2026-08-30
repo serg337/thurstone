@@ -4,7 +4,7 @@ import {
   JUDGE_DEMO_INVOCATION_INTEGRITY_IMPLEMENTATION_ALLOWED_PATHS,
   JUDGE_DEMO_INVOCATION_INTEGRITY_PROTOCOL_PATHS
 } from "@/lib/judge/collateral-proof";
-import { gzipSync } from "node:zlib";
+import { brotliCompressSync, gzipSync } from "node:zlib";
 import {
   GATE6_PRESENTATION_PROOF_VERSION,
   GATE6_PRESENTATION_CHANGED_PATH_LIMIT,
@@ -89,9 +89,13 @@ describe("Gate 6 terminal presentation proof", () => {
     expect(atPathLimit).toHaveLength(192);
     expect([...atPathLimit, "lib/results/rebrand-overflow.ts"]).toHaveLength(193);
     expect(canonicalJson((await proof()).changedPaths)).toBe('["app/results/page.tsx"]');
-    const encoded = gzipSync(Buffer.from(canonicalJson(await proof()))).toString("base64url");
-    await expect(decodeGate6PresentationProof(encoded)).resolves.toMatchObject({
-      presentationCommit: "b".repeat(40)
-    });
+    const canonicalProof = Buffer.from(canonicalJson(await proof()));
+    for (const encoded of [gzipSync(canonicalProof), brotliCompressSync(canonicalProof)].map(
+      (bytes) => bytes.toString("base64url")
+    )) {
+      await expect(decodeGate6PresentationProof(encoded)).resolves.toMatchObject({
+        presentationCommit: "b".repeat(40)
+      });
+    }
   });
 });

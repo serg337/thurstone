@@ -70,6 +70,20 @@ export const JUDGE_DEMO_INVOCATION_INTEGRITY_SEALED_EVIDENCE_BUILD =
   "768af2539ca20c29928a897644ad22ba897c580d";
 export const JUDGE_DEMO_INVOCATION_INTEGRITY_SEMANTIC_PACKAGE_DIGEST =
   "a449db4b1faacdbaab58777923d2ddbde75396b70fa4744b29d0eb8e97089a46";
+export const JUDGE_DEMO_INVOCATION_INTEGRITY_PRIOR_PROTOCOL_COMMITS = Object.freeze([
+  Object.freeze({
+    commit: "fd0f1c42da8b349415f7081267f9de537ea26c1b",
+    tree: "c3eee5c3b75a79a45e1f2091eaf1df606bd63e5c"
+  }),
+  Object.freeze({
+    commit: "573ed41616b139d8331ccf34d705541a887e6b67",
+    tree: "575e837eaac2a36bfa623ec6342c0855f2eece46"
+  }),
+  Object.freeze({
+    commit: "7d0c9ac588aa2c7aa39e73c2ddf924bce8eadd6f",
+    tree: "4fbaa59720cb4dbc43d4bd2d6360374f0cb01e57"
+  })
+]);
 
 /** Exact prospective A -> P proof-protocol boundary. */
 export const JUDGE_DEMO_INVOCATION_INTEGRITY_PROTOCOL_PATHS = Object.freeze(

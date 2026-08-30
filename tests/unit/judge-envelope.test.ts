@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { brotliCompressSync, gzipSync } from "node:zlib";
 
 import { canonicalJson } from "@/lib/evidence/digest";
 import { JUDGE_DEMO_RUN_INTENT, judgeDemoRunBodySchema } from "@/lib/judge/contract";
@@ -9,6 +10,7 @@ import {
   createJudgeDemoEnvelope,
   verifyJudgeDemoEnvelope
 } from "@/lib/judge/envelope";
+import { decodeJudgeDemoPresentationBinding } from "@/lib/judge/presentation-binding.server";
 import {
   JudgeDemoProviderError,
   decideJudgeDemoWithOpenAi
@@ -35,6 +37,16 @@ function response() {
 }
 
 describe("source-fixed judge demo envelope", () => {
+  it("decodes both legacy gzip and bounded Brotli presentation transport", async () => {
+    const value = { version: "transport-test", nested: { ok: true } };
+    const bytes = Buffer.from(canonicalJson(value));
+    for (const encoded of [gzipSync(bytes), brotliCompressSync(bytes)].map((compressed) =>
+      compressed.toString("base64url")
+    )) {
+      await expect(decodeJudgeDemoPresentationBinding(encoded)).resolves.toEqual(value);
+    }
+  });
+
   it("owns the exact read-only case and accepts no prompt or arguments from the request", async () => {
     expect(judgeDemoRunBodySchema.parse({ intent: JUDGE_DEMO_RUN_INTENT })).toEqual({
       intent: JUDGE_DEMO_RUN_INTENT

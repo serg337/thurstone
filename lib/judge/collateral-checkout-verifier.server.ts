@@ -23,9 +23,12 @@ import {
   JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_BINDING_ARTIFACT_SHA256,
   JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_BINDING_HASH,
   JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_ENVELOPE_HASH,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_REBRAND_PROOF_HASH,
   JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_TREE,
   JUDGE_DEMO_INVOCATION_INTEGRITY_PRESERVED_SEMANTIC_ARTIFACTS,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_PRIOR_PROTOCOL_COMMITS,
   JUDGE_DEMO_INVOCATION_INTEGRITY_PROTOCOL_PATHS,
+  JUDGE_DEMO_INVOCATION_INTEGRITY_SEALED_EVIDENCE_BUILD,
   JUDGE_DEMO_REBRAND_BRANDING_PATHS,
   JUDGE_DEMO_REBRAND_PREDECESSOR_BINDING_HASH,
   JUDGE_DEMO_REBRAND_PREDECESSOR_COMMIT,
@@ -139,6 +142,24 @@ function gitText(cwd: string, commit: string, path: string): string | null {
   return bytes === null ? null : new TextDecoder("utf-8", { fatal: true }).decode(bytes);
 }
 
+/** Bind an active regular checkout file to the blob OID named by a transported Git tree. */
+async function activeCheckoutBlobBytes(cwd: string, commit: string, path: string): Promise<Buffer> {
+  const [expected, actual] = await Promise.all([
+    Promise.resolve(treeEntry(cwd, commit, path)),
+    checkoutEntry(cwd, path)
+  ]);
+  if (
+    expected === null ||
+    actual === null ||
+    expected.mode !== "100644" ||
+    actual.mode !== "100644" ||
+    expected.blobOid !== blobOid(actual.bytes)
+  ) {
+    throw new Error(`judge_demo_presentation_active_checkout_mismatch:${path}`);
+  }
+  return actual.bytes;
+}
+
 function firstParentCommitChain(cwd: string, ancestor: string, descendant: string): string[] {
   const reversed = [descendant];
   let cursor = descendant;
@@ -236,6 +257,19 @@ function commitTree(cwd: string, commit: string): string {
     throw new Error("judge_demo_presentation_git_tree_unavailable");
   }
   return result.stdout.trim();
+}
+
+function commitHeaderTree(cwd: string, commit: string): string {
+  const result = spawnSync("git", ["cat-file", "-p", commit], {
+    cwd,
+    encoding: "utf8",
+    maxBuffer: 1_048_576
+  });
+  const tree = /^tree ([a-f0-9]{40})$/mu.exec(result.stdout)?.[1];
+  if (result.status !== 0 || !tree) {
+    throw new Error("judge_demo_presentation_commit_tree_header_unavailable");
+  }
+  return tree;
 }
 
 async function verifyRecoveryFinalization(input: {
@@ -478,12 +512,17 @@ async function verifyPresentationRebrand(input: {
 
   const brandingFiles = await Promise.all(
     input.transition.branding.files.map(async ({ path }) => {
-      const useReferencedBlob =
-        judgeDemoPathExcludedFromDeployment(path) ||
-        input.terminalActiveCommit !== input.transition.successorCommit;
-      const bytes = useReferencedBlob
-        ? gitBlobBytes(input.cwd, input.transition.successorCommit, path)
-        : (await checkoutEntry(input.cwd, path))?.bytes;
+      const referencedEntry = treeEntry(input.cwd, input.transition.successorCommit, path);
+      const terminalEntry = treeEntry(input.cwd, input.terminalActiveCommit, path);
+      const useActiveCheckout =
+        !judgeDemoPathExcludedFromDeployment(path) &&
+        referencedEntry !== null &&
+        terminalEntry !== null &&
+        referencedEntry.mode === terminalEntry.mode &&
+        referencedEntry.blobOid === terminalEntry.blobOid;
+      const bytes = useActiveCheckout
+        ? await activeCheckoutBlobBytes(input.cwd, input.terminalActiveCommit, path)
+        : gitBlobBytes(input.cwd, input.transition.successorCommit, path);
       if (!bytes) throw new Error(`judge_demo_rebrand_branding_file_missing:${path}`);
       return { path, sha256: sha256(bytes) };
     })
@@ -589,19 +628,17 @@ async function verifyInvocationIntegrity(input: {
     protocolCommit,
     input.transition.successorCommit
   );
-  let priorProtocolCommit = JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_COMMIT;
-  for (const currentProtocolCommit of protocolCommits) {
-    const stepChanges = gitTreeChanges(input.cwd, priorProtocolCommit, currentProtocolCommit);
-    if (
-      stepChanges.length === 0 ||
-      stepChanges.some(({ path }) => !JUDGE_DEMO_INVOCATION_INTEGRITY_PROTOCOL_PATHS.includes(path))
-    ) {
-      throw new Error("judge_demo_invocation_protocol_step_scope_invalid");
-    }
-    for (const change of stepChanges) {
-      assertSafeMaterialTreeMutation(change, "judge_demo_invocation_protocol_mode_invalid");
-    }
-    priorProtocolCommit = currentProtocolCommit;
+  const priorProtocolCommits = protocolCommits.slice(0, -1);
+  if (
+    canonicalJson(priorProtocolCommits) !==
+      canonicalJson(
+        JUDGE_DEMO_INVOCATION_INTEGRITY_PRIOR_PROTOCOL_COMMITS.map(({ commit }) => commit)
+      ) ||
+    JUDGE_DEMO_INVOCATION_INTEGRITY_PRIOR_PROTOCOL_COMMITS.some(
+      ({ commit, tree }) => commitHeaderTree(input.cwd, commit) !== tree
+    )
+  ) {
+    throw new Error("judge_demo_invocation_prior_protocol_identity_invalid");
   }
   if (
     amendmentChanges.length !== 1 ||
@@ -638,44 +675,76 @@ async function verifyInvocationIntegrity(input: {
     assertSafeMaterialTreeMutation(change, "judge_demo_invocation_implementation_mode_invalid");
   }
 
-  const amendmentBytes = gitBlobBytes(
+  const [amendmentBytes, contractBytes, schemaBytes, domainBytes] = await Promise.all([
+    activeCheckoutBlobBytes(
+      input.cwd,
+      input.transition.successorCommit,
+      JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_PATH
+    ),
+    activeCheckoutBlobBytes(
+      input.cwd,
+      input.transition.successorCommit,
+      "lib/invocation-integrity/contract.ts"
+    ),
+    activeCheckoutBlobBytes(
+      input.cwd,
+      input.transition.successorCommit,
+      "lib/domain/checkout-schemas.ts"
+    ),
+    activeCheckoutBlobBytes(input.cwd, input.transition.successorCommit, "lib/domain/checkout.ts")
+  ]);
+  const amendmentEntry = treeEntry(
     input.cwd,
     JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_COMMIT,
     JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_PATH
   );
-  const contractBytes = gitBlobBytes(
+  const activeAmendmentEntry = treeEntry(
     input.cwd,
     input.transition.successorCommit,
-    "lib/invocation-integrity/contract.ts"
+    JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_PATH
   );
-  const schemaSource = gitText(
-    input.cwd,
-    input.transition.successorCommit,
-    "lib/domain/checkout-schemas.ts"
-  );
-  const domainSource = gitText(
-    input.cwd,
-    input.transition.successorCommit,
-    "lib/domain/checkout.ts"
-  );
+  const schemaSource = new TextDecoder("utf-8", { fatal: true }).decode(schemaBytes);
+  const domainSource = new TextDecoder("utf-8", { fatal: true }).decode(domainBytes);
   if (
-    !amendmentBytes ||
+    amendmentEntry === null ||
+    activeAmendmentEntry === null ||
+    amendmentEntry.blobOid !== activeAmendmentEntry.blobOid ||
     sha256(amendmentBytes) !== JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_SHA256 ||
-    !contractBytes ||
     sha256(contractBytes) !== input.transition.invocationContract.contractSourceSha256 ||
-    !schemaSource?.includes('CART_ITEM_ID_PATTERN = "^[a-z0-9]+(?:-[a-z0-9]+)*$"') ||
+    !schemaSource.includes('CART_ITEM_ID_PATTERN = "^[a-z0-9]+(?:-[a-z0-9]+)*$"') ||
     !schemaSource.includes(".min(1).max(64)") ||
     !schemaSource.includes("pattern: CART_ITEM_ID_PATTERN") ||
-    !domainSource?.includes("itemId: line.itemId")
+    !domainSource.includes("itemId: line.itemId")
   ) {
     throw new Error("judge_demo_invocation_integrity_contract_delta_invalid");
   }
 
-  const preserved = JUDGE_DEMO_INVOCATION_INTEGRITY_PRESERVED_SEMANTIC_ARTIFACTS.map(({ path }) => {
-    const bytes = gitBlobBytes(input.cwd, input.transition.successorCommit, path);
-    if (!bytes) throw new Error(`judge_demo_invocation_semantic_artifact_missing:${path}`);
-    return { path, sha256: sha256(bytes) };
-  });
+  const preserved = await Promise.all(
+    JUDGE_DEMO_INVOCATION_INTEGRITY_PRESERVED_SEMANTIC_ARTIFACTS.map(
+      async ({ path, sha256: expectedSha256 }) => {
+        const sealedEntry = treeEntry(
+          input.cwd,
+          JUDGE_DEMO_INVOCATION_INTEGRITY_SEALED_EVIDENCE_BUILD,
+          path
+        );
+        const activeEntry = treeEntry(input.cwd, input.transition.successorCommit, path);
+        const bytes = await activeCheckoutBlobBytes(
+          input.cwd,
+          input.transition.successorCommit,
+          path
+        );
+        if (
+          sealedEntry === null ||
+          activeEntry === null ||
+          sealedEntry.blobOid !== activeEntry.blobOid ||
+          sha256(bytes) !== expectedSha256
+        ) {
+          throw new Error(`judge_demo_invocation_semantic_artifact_mismatch:${path}`);
+        }
+        return { path, sha256: expectedSha256 };
+      }
+    )
+  );
   if (
     canonicalJson(preserved) !== canonicalJson(input.transition.semanticEvidence.artifacts) ||
     (await canonicalSha256(preserved)) !== input.transition.semanticEvidence.artifactsProjectionHash
@@ -946,11 +1015,39 @@ async function assertCheckoutMatchesActive(input: {
     ])
   ].sort();
   const activeCriticalSha256 = new Map<string, string>();
+  const invocationTransition = input.binding.transitions.find(
+    ({ kind }) => kind === "invocation-integrity"
+  );
+  const rebrandTransition = input.binding.transitions.find(
+    ({ kind }) => kind === "presentation-rebrand"
+  );
   for (const path of paths) {
     const expected = treeEntry(input.cwd, input.binding.activeCommit, path);
     const isCritical = JUDGE_DEMO_CRITICAL_PATHS.includes(path);
     const excluded = judgeDemoPathExcludedFromDeployment(path);
     if (excluded && !isCritical) continue;
+    if (
+      excluded &&
+      isCritical &&
+      path === ".env.example" &&
+      invocationTransition?.kind === "invocation-integrity" &&
+      rebrandTransition?.kind === "presentation-rebrand"
+    ) {
+      const rebrandEntry = treeEntry(input.cwd, rebrandTransition.successorCommit, path);
+      const sealedFile = rebrandTransition.branding.files.find((file) => file.path === path);
+      if (
+        expected === null ||
+        rebrandEntry === null ||
+        expected.mode !== "100644" ||
+        rebrandEntry.mode !== expected.mode ||
+        rebrandEntry.blobOid !== expected.blobOid ||
+        !sealedFile
+      ) {
+        throw new Error(`judge_demo_presentation_active_checkout_mismatch:${path}`);
+      }
+      activeCriticalSha256.set(path, sealedFile.sha256);
+      continue;
+    }
     const actual = excluded
       ? (() => {
           const bytes = gitBlobBytes(input.cwd, input.binding.activeCommit, path);
@@ -1053,6 +1150,24 @@ export async function verifyJudgeDemoPresentationCheckout(input: {
   }
   const recoveryTerminalCheckoutDeferred = input.binding.transitions.length > 1;
   for (const transition of input.binding.transitions) {
+    if (invocationTransition && transition.kind === "sealed-reader-compatibility-recovery") {
+      if (transition.proofHash !== JUDGE_DEMO_REBRAND_PREDECESSOR_TRANSITION_PROOF_HASH) {
+        throw new Error("judge_demo_invocation_sealed_recovery_invalid");
+      }
+      verifiedTransitions.push({ transition, treeChanges: [], criticalEntries: [] });
+      continue;
+    }
+    if (invocationTransition && transition.kind === "presentation-rebrand") {
+      if (transition.proofHash !== JUDGE_DEMO_INVOCATION_INTEGRITY_PREDECESSOR_REBRAND_PROOF_HASH) {
+        throw new Error("judge_demo_invocation_sealed_rebrand_invalid");
+      }
+      const treeChanges = [
+        ...transition.protocolExtension.treeChanges,
+        ...transition.branding.treeChanges
+      ].sort((left, right) => left.path.localeCompare(right.path));
+      verifiedTransitions.push({ transition, treeChanges, criticalEntries: [] });
+      continue;
+    }
     const result = await verifyTransitionGit({
       transition,
       activeCommit: input.binding.activeCommit,

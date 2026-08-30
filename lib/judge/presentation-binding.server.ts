@@ -15,7 +15,7 @@ import {
   GATE6_PRESENTATION_PROOF_ENV,
   decodeGate6PresentationProof
 } from "@/lib/results/presentation-proof";
-import { gunzipSync } from "node:zlib";
+import { brotliDecompressSync, gunzipSync } from "node:zlib";
 import { z } from "zod";
 
 export const JUDGE_DEMO_PRESENTATION_BINDING_VERSION =
@@ -278,7 +278,11 @@ export async function decodeJudgeDemoPresentationBinding(encoded: string): Promi
   try {
     expanded = gunzipSync(compressed, { maxOutputLength: 262_144 });
   } catch {
-    throw new Error("judge_demo_presentation_binding_encoding_invalid");
+    try {
+      expanded = brotliDecompressSync(compressed, { maxOutputLength: 262_144 });
+    } catch {
+      throw new Error("judge_demo_presentation_binding_encoding_invalid");
+    }
   }
   const text = new TextDecoder("utf-8", { fatal: true }).decode(expanded);
   const value = JSON.parse(text) as unknown;

@@ -17,6 +17,8 @@ import {
 } from "../lib/judge/presentation-binding.server";
 
 const observationCommit = "88deff46d4e06bb109158f7ef8a68e704f9fcc08";
+const observationEvidenceSha256 =
+  "63ad854753f59440b11d00d327e6ce135cf5cb84c38d7b6906f2e6719e48bf41";
 const invocationIntegrityCriticalExceptions = new Set([
   "lib/domain/checkout-schemas.ts",
   "lib/domain/checkout.ts"
@@ -195,19 +197,37 @@ async function main(): Promise<void> {
       readonly dependencyProjectionHash?: unknown;
     };
   };
-  if (evidence.observationBuildCommit !== observationCommit) {
+  if (
+    createHash("sha256").update(evidenceBytes).digest("hex") !== observationEvidenceSha256 ||
+    evidence.observationBuildCommit !== observationCommit
+  ) {
     throw new Error("direct_observation_evidence_commit_mismatch");
   }
   const implementationBinding = evidence.implementationBinding;
   if (!implementationBinding) throw new Error("direct_observation_implementation_binding_missing");
+  const declaredCriticalFiles = implementationBinding.criticalFiles;
+  if (
+    !Array.isArray(declaredCriticalFiles) ||
+    declaredCriticalFiles.some(
+      (file) =>
+        typeof file !== "object" ||
+        file === null ||
+        typeof (file as { readonly path?: unknown }).path !== "string" ||
+        typeof (file as { readonly sha256?: unknown }).sha256 !== "string"
+    )
+  ) {
+    throw new Error("direct_observation_critical_projection_invalid");
+  }
+  const declaredObservationSha = new Map(
+    (declaredCriticalFiles as readonly { readonly path: string; readonly sha256: string }[]).map(
+      ({ path, sha256 }) => [path, sha256]
+    )
+  );
 
   const authorizedInvocationIntegrityChanges: string[] = [];
   const criticalProjections = await Promise.all(
     criticalPaths.map(async (path) => {
       const checkedOutBytes = await readFile(path);
-      const observationBytes = execFileSync("git", ["show", `${observationCommit}:${path}`], {
-        maxBuffer: 8_388_608
-      });
       const checkedOutBlobOid = gitBlobOid(checkedOutBytes);
       const observationBlobOid = gitText(["rev-parse", `${observationCommit}:${path}`]);
       const activeBlobOid = gitText(["rev-parse", `${activeCommit}:${path}`]);
@@ -221,10 +241,17 @@ async function main(): Promise<void> {
       if (disposition === "verified-invocation-integrity-transition") {
         authorizedInvocationIntegrityChanges.push(path);
       }
+      const observationSha256 =
+        observationBlobOid === activeBlobOid
+          ? createHash("sha256").update(checkedOutBytes).digest("hex")
+          : declaredObservationSha.get(path);
+      if (!observationSha256) {
+        throw new Error(`direct_observation_historical_digest_missing:${path}`);
+      }
       return {
         observation: {
           path,
-          sha256: createHash("sha256").update(observationBytes).digest("hex")
+          sha256: observationSha256
         },
         active: {
           path,
@@ -238,8 +265,7 @@ async function main(): Promise<void> {
   const criticalProjectionHash = await canonicalSha256(observationCriticalFiles);
   const activeCriticalProjectionHash = await canonicalSha256(activeCriticalFiles);
   if (
-    canonicalJson(implementationBinding.criticalFiles) !==
-      canonicalJson(observationCriticalFiles) ||
+    canonicalJson(declaredCriticalFiles) !== canonicalJson(observationCriticalFiles) ||
     implementationBinding.criticalProjectionHash !== criticalProjectionHash
   ) {
     throw new Error("direct_observation_critical_worktree_mismatch");
@@ -248,21 +274,22 @@ async function main(): Promise<void> {
   const currentPackageDocument = JSON.parse(
     await readFile("package.json", "utf8")
   ) as PackageDocument;
-  const observationPackageDocument = JSON.parse(
-    execFileSync("git", ["show", `${observationCommit}:package.json`], { encoding: "utf8" })
-  ) as PackageDocument;
+  const checkedOutPackageBytes = await readFile("package.json");
+  if (
+    gitBlobOid(checkedOutPackageBytes) !== gitText(["rev-parse", `${activeCommit}:package.json`])
+  ) {
+    throw new Error("direct_observation_active_package_blob_mismatch");
+  }
   const activePackageDocument = JSON.parse(
-    execFileSync("git", ["show", `${activeCommit}:package.json`], { encoding: "utf8" })
+    checkedOutPackageBytes.toString("utf8")
   ) as PackageDocument;
   const dependencyProjection = projectDependencies(currentPackageDocument);
-  const observationDependencyProjection = projectDependencies(observationPackageDocument);
   const activeDependencyProjection = projectDependencies(activePackageDocument);
   const dependencyProjectionHash = await canonicalSha256(dependencyProjection);
-  const observationDependencyProjectionHash = await canonicalSha256(
-    observationDependencyProjection
-  );
+  const observationDependencyProjectionHash = implementationBinding.dependencyProjectionHash;
   const activeDependencyProjectionHash = await canonicalSha256(activeDependencyProjection);
   if (
+    typeof observationDependencyProjectionHash !== "string" ||
     dependencyProjectionHash !== implementationBinding.dependencyProjectionHash ||
     observationDependencyProjectionHash !== implementationBinding.dependencyProjectionHash ||
     activeDependencyProjectionHash !== implementationBinding.dependencyProjectionHash

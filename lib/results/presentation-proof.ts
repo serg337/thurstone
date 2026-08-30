@@ -4,7 +4,7 @@ import {
   JUDGE_DEMO_INVOCATION_INTEGRITY_IMPLEMENTATION_ALLOWED_PATHS,
   JUDGE_DEMO_INVOCATION_INTEGRITY_PROTOCOL_PATHS
 } from "@/lib/judge/collateral-proof";
-import { gunzipSync } from "node:zlib";
+import { brotliDecompressSync, gunzipSync } from "node:zlib";
 import { z } from "zod";
 
 export const GATE6_PRESENTATION_PROOF_VERSION = "toolproof-gate6-presentation-proof@1.0.0";
@@ -181,7 +181,11 @@ export async function decodeGate6PresentationProof(
   try {
     expanded = gunzipSync(bytes, { maxOutputLength: 65_536 });
   } catch {
-    throw new Error("gate6_presentation_proof_encoding_invalid");
+    try {
+      expanded = brotliDecompressSync(bytes, { maxOutputLength: 65_536 });
+    } catch {
+      throw new Error("gate6_presentation_proof_encoding_invalid");
+    }
   }
   const text = new TextDecoder("utf-8", { fatal: true }).decode(expanded);
   const value = JSON.parse(text) as unknown;
