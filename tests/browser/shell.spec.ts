@@ -21,13 +21,21 @@ test("judge shell is honest, navigable, and permanently marks the simulation", a
   );
   await expect(primaryNavigation.getByRole("link", { name: "Demo", exact: true })).toHaveAttribute(
     "href",
-    "/lab"
+    "/demo"
   );
   await expect(
     primaryNavigation.getByRole("link", { name: "Results", exact: true })
   ).toHaveAttribute("href", "/results");
 
   await primaryNavigation.getByRole("link", { name: "Demo", exact: true }).click();
+  await expect(page).toHaveURL(/\/demo$/);
+  await expect(
+    page.getByRole("heading", {
+      name: "Test the boundary between what a user said and what a site allows."
+    })
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Open Sandbox", exact: true }).click();
+  await page.getByRole("link", { name: "Open full technical sandbox" }).click();
   await expect(page).toHaveURL(/\/lab$/);
   await expect(page.getByRole("heading", { name: "Seeded checkout sandbox" })).toBeVisible();
   const expertDisclosure = page.getByText("Lab plumbing, reset receipts, and Gate 1 proof", {

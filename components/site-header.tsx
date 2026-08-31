@@ -4,9 +4,7 @@ import { PRODUCT_NAME } from "@/lib/brand";
 
 const navigation = [
   { href: "/", label: "Intro" },
-  // The dedicated /demo route is introduced in F3. Until then this label opens the existing
-  // complete live demonstration surface rather than linking to an unfinished document.
-  { href: "/lab", label: "Demo" },
+  { href: "/demo", label: "Demo" },
   { href: "/results", label: "Results" }
 ];
 

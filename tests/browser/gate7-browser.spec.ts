@@ -7,14 +7,18 @@ test("back, forward, and refresh preserve honest top-level document boundaries",
 }) => {
   await page.goto("/");
   await page.getByRole("link", { name: "Demo", exact: true }).click();
-  await expect(page).toHaveURL(/\/lab$/u);
-  await expect(page.getByRole("heading", { name: "Seeded checkout sandbox" })).toBeVisible();
+  await expect(page).toHaveURL(/\/demo$/u);
+  await expect(
+    page.getByRole("heading", {
+      name: "Test the boundary between what a user said and what a site allows."
+    })
+  ).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL(/\/$/u);
   await page.goForward();
-  await expect(page).toHaveURL(/\/lab$/u);
+  await expect(page).toHaveURL(/\/demo$/u);
   await page.reload();
-  await expect(page.getByText("checkout-seed-v1 · r0", { exact: true })).toBeVisible();
+  await expect(page.getByText("Guided demo ready", { exact: true })).toBeVisible();
 });
 
 test("cold slow-network rendering honors reduced motion", async ({ page }) => {

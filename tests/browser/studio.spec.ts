@@ -79,26 +79,24 @@ test("Lab stays free of every Gate 3 prompt and evaluator-side label", async ({ 
   }
 });
 
-test("Studio and Lab navigation replaces the top-level document", async ({ page }) => {
+test("Studio and Demo navigation replaces the top-level document", async ({ page }) => {
   await page.goto("/studio");
   await page.evaluate(() => {
     Reflect.set(window, "__toolproofStudioDocumentMarker", "must-not-survive");
   });
   await page.getByRole("link", { name: "Demo", exact: true }).click();
-  await expect(page).toHaveURL(/\/lab$/u);
+  await expect(page).toHaveURL(/\/demo$/u);
   await expect
     .poll(() => page.evaluate(() => Reflect.get(window, "__toolproofStudioDocumentMarker") ?? null))
     .toBeNull();
   await expect(
     page.getByRole("heading", {
-      name: "Run one sealed decision through the page's real tool catalog."
+      name: "Test the boundary between what a user said and what a site allows."
     })
   ).toBeVisible();
 });
 
-test("Home does not prefetch Studio and the transitional Demo link hard-navigates into Lab", async ({
-  page
-}) => {
+test("Home does not prefetch Studio and hard-navigates into Demo", async ({ page }) => {
   const studioRequests: string[] = [];
   page.on("request", (request) => {
     if (/\/studio(?:\?|$)/u.test(request.url())) studioRequests.push(request.url());
@@ -109,7 +107,7 @@ test("Home does not prefetch Studio and the transitional Demo link hard-navigate
   });
   await expect.poll(() => studioRequests).toEqual([]);
   await page.getByRole("link", { name: "Demo", exact: true }).click();
-  await expect(page).toHaveURL(/\/lab$/u);
+  await expect(page).toHaveURL(/\/demo$/u);
   await expect
     .poll(() => page.evaluate(() => Reflect.get(window, "__toolproofHomeDocumentMarker") ?? null))
     .toBeNull();

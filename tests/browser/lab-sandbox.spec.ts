@@ -733,6 +733,9 @@ test("cross-surface navigation destroys Lab state and opens a clean document", a
     .toBeUndefined();
 
   await page.getByRole("link", { name: "Demo", exact: true }).click();
+  await expect(page).toHaveURL(/\/demo$/u);
+  await page.getByRole("link", { name: "Open Sandbox", exact: true }).click();
+  await page.getByRole("link", { name: "Open full technical sandbox" }).click();
   await expect(page).toHaveURL(/\/lab$/u);
   await expect(page.getByText("consumer-ready", { exact: true })).toBeVisible();
   await expect(mug.getByText("Current × 2", { exact: true })).toBeVisible();

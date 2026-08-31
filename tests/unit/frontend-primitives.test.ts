@@ -17,6 +17,7 @@ describe("Thurstone judge frontend primitives", () => {
     const links = within(navigation).getAllByRole("link");
     expect(links).toHaveLength(3);
     expect(links.map((link) => link.textContent)).toEqual(["Intro", "Demo", "Results"]);
+    expect(links.map((link) => link.getAttribute("href"))).toEqual(["/", "/demo", "/results"]);
     expect(within(navigation).queryByText("Studio")).not.toBeInTheDocument();
     expect(within(navigation).queryByText("Integrity")).not.toBeInTheDocument();
   });
