@@ -1,5 +1,4 @@
-import Image from "next/image";
-
+import { HeroSignalBackdrop } from "@/components/hero-signal-backdrop";
 import { StatusPill } from "@/components/status-pill";
 import { SignalFlow, type SignalFlowStage } from "@/components/ui/signal-flow";
 import { PRODUCT_BYLINE } from "@/lib/brand";
@@ -90,6 +89,7 @@ export default function HomePage() {
   return (
     <div className="page-shell intro-page">
       <section className="intro-hero" aria-labelledby="intro-title">
+        <HeroSignalBackdrop />
         <div className="intro-copy">
           <p className="eyebrow">Semantic judge for WebMCP</p>
           <h1 id="intro-title">
@@ -116,18 +116,6 @@ export default function HomePage() {
             No account · synthetic data · guided path works without WebMCP
           </p>
         </div>
-
-        <figure className="intro-art">
-          <Image
-            src="/thurstone-hero.webp"
-            width={960}
-            height={640}
-            priority
-            sizes="(max-width: 899px) calc(100vw - 40px), 44vw"
-            alt="Streams representing website requests converge on Thurstone’s verification checkpoint, which separates a verified cyan outcome from a prohibited amber outcome."
-          />
-          <figcaption>Requests converge. Declared invariants decide what passes.</figcaption>
-        </figure>
       </section>
 
       <section className="intro-section" aria-labelledby="problem-title">

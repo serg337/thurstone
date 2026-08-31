@@ -31,11 +31,14 @@ test("Intro presents the winning product story before technical detail", async (
   await expect(
     page.getByRole("link", { name: "See verified results", exact: true })
   ).toHaveAttribute("href", "/results");
-  await expect(
-    page.getByAltText(
-      "Streams representing website requests converge on Thurstone’s verification checkpoint, which separates a verified cyan outcome from a prohibited amber outcome."
-    )
-  ).toBeVisible();
+  const backdrop = page.locator(".hero-signal-backdrop");
+  await expect(backdrop).toHaveCount(1);
+  await expect(backdrop).toHaveAttribute("aria-hidden", "true");
+  await expect(backdrop.locator(".hero-input-nodes > *")).toHaveCount(5);
+  await expect(backdrop.locator(".hero-verification-gate")).toBeAttached();
+  await expect(backdrop.locator(".hero-pass-node")).toBeAttached();
+  await expect(backdrop.locator(".hero-block-node")).toBeAttached();
+  await expect(page.locator('.intro-hero img[src="/thurstone-hero.webp"]')).toHaveCount(0);
 });
 
 test("Intro explains selection, arguments, effects, and all five evidence stages", async ({

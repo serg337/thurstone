@@ -43,6 +43,16 @@ test("cold slow-network rendering honors reduced motion", async ({ page }) => {
     });
   expect(Number.parseFloat(motion.animationDuration)).toBeLessThanOrEqual(0.001);
   expect(Number.parseFloat(motion.transitionDuration)).toBeLessThanOrEqual(0.001);
+
+  for (const selector of [".hero-trace-1", ".hero-gate-core", ".hero-signal-ticks circle"]) {
+    const animationName = await page
+      .locator(selector)
+      .first()
+      .evaluate((element) => {
+        return getComputedStyle(element).animationName;
+      });
+    expect(animationName).toBe("none");
+  }
 });
 
 test("keyboard focus and live status announcements expose the deterministic path", async ({
