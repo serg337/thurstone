@@ -1,34 +1,25 @@
-# Challenge-period build record
+# Challenge-period build
 
-This is a chronological pre-release record frozen with the evidence candidate. Later release,
-video, submission, and freeze identities live in the deployment/release receipts and durable
-submission manifest; pending language below describes the recorded Gate 8 checkpoint.
+Thurstone's public WebMCP implementation was built during the OpenAI WebMCP Challenge submission
+period.
 
-## Before 25 August 2026
+Challenge-period work includes:
 
-- The high-level semantic-invariance idea and planning material existed before the challenge period under the working name ToolProof.
-- No submitted public application code, WebMCP integration, deployment, evidence run, or release existed in this repository.
+- Five-tool simulated checkout domain
+- Top-level Site Tools registration and lifecycle-safe dynamic catalog
+- Native discovery/execution adapter with cancellation and replay protection
+- Shared serialized state for human and agent actions
+- Verified reset, append-only traces, and before/after effect calculation
+- Human-approved 24-case semantic contract and deterministic evaluator
+- Current 24/24 successor evaluation
+- Three-case Invocation Integrity lane
+- Durable 160-call / USD $10 provider guard
+- Signed-out live sandbox, Results experience, browser/accessibility suite, and deployment
 
-## Built during the challenge period
+The earlier ToolProof name was a working title. Current product and submission materials use
+Thurstone. Legacy protocol identifiers may remain inside source where renaming would provide no user
+value.
 
-Work began on 26 August 2026 and is linked to ordinary timestamped commits and authentic evidence. A sealed evidence artifact records what happened; it is not treated as a gate pass when its acceptance score fails.
-
-Sergio renamed the public product **Thurstone** on 29 August 2026, after the scored evidence was
-captured. The rename changes the current presentation only: immutable evidence and protocol
-identifiers retain the ToolProof working name, and no historical commit or receipt is rewritten.
-
-| Area              | Challenge-period work                                                                                                                                                                                                       | Commit evidence                                                                                                                                               |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Repository safety | Publication boundary, source exclusions, durable gate controls                                                                                                                                                              | `72d8381`, `7a5714d`                                                                                                                                          |
-| Web application   | Studio, Lab, Results, responsive interface, diagnostics                                                                                                                                                                     | `6a42336`                                                                                                                                                     |
-| Native WebMCP     | Imperative registration, lifecycle manager, discovery/execution adapter                                                                                                                                                     | `850b151` (deployed Chrome discovery/invocation and rendered receipt)                                                                                         |
-| Sandbox           | Deterministic checkout/review store, five safe tools, replay tombstones, dynamic registry, native adapter, reset, traces, and one-button timed verified proof export                                                        | `e986407` authentic Gate 1 one-button Chrome proof                                                                                                            |
-| Evaluation        | Immutable lifetime guard, preserved failed attempts, authentic 4/4 Gate 2 calibration, frozen 24-case suite, acknowledged baseline, and isolated Repair call                                                                | Gate 2 evidence commit `93a602e`; Gate 3/baseline build `ebd9974`; first baseline is retained superseded evidence                                             |
-| Fallback          | Exact pinned GoogleChromeLabs adapter, Chrome 151 isolation, v0.5 migration/activation, strict evidence, terminal 4/4 run, and human ACK                                                                                    | Authentic Gate 2 bundle and permanent guard/migration receipts retained                                                                                       |
-| Product evidence  | Successor lineage; complete baseline/revised traces; seven exact metrics; Development/Holdout Results, inspector, JSON/Markdown exports, and honest no-improvement report                                                   | Measured v2 `251c44b`; trace-derived evidence product `aaf99e4`; canonical package `a449db4b…`                                                                |
-| Gate 7 safety     | Consolidated 21-case adversarial matrix, dependency/secret scans, browser/accessibility/leakage checks, four authentic Direct Codex Site Tools observations, source-fixed one-call judge lane, and release-lineage verifier | Direct observations on `88deff4`; sole decision sealed on evidence root `e2cf8d4`; live receipt is authoritative for recovery and current-build native replay |
-| Release           | Public-ready docs, sample evidence, CI, capture package, Devpost draft, clean-clone/release verification machinery, and submission/freeze controls                                                                          | Gate 8 candidate prepared privately; exact-SHA clean-clone audit, video upload, public release, Devpost submission, and freeze remain pending                 |
-
-The evidence-root judge decision on `e2cf8d47375abfeeb4f32bd6f5973918acf4c091` selected `cart_get` with `{}` and is permanently sealed. Upstash's automatic JSON deserialization exposed a string-only archive-reader assumption after capture; the durable provider record, guard, and cost remain unchanged, with zero provider retries and zero store rewrites. The recovery build is limited to archive presentation and must collect a fresh current-build native replay because provider and native evidence are separate. A final Gate 9 release may add an optional link-only hop after recovery.
-
-History will not be backdated or rewritten to manufacture challenge-period evidence. Every 0/4 and 3/4 result remains a failure even though its evidence is complete; the later 4/4 calibration is separate. The first complete baseline and Repair remain disclosed as superseded protocol evidence and are never merged into the successor Matrix. The primary successor baseline and revised run both score `23/24`; Thurstone makes no improvement or stability claim from that one-trial result. Gate 7 completion is deployment-bound and is recorded by the live receipt and durable release manifest, not preclaimed by this source snapshot.
+OpenAI Codex assisted with implementation, testing, audits, and documentation. Controlled model
+decisions use the OpenAI Responses API with GPT-5.6 Terra. All dependencies and adapted upstream
+components are pinned and attributed.

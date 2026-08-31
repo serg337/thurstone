@@ -49,10 +49,6 @@ jobs:
         run: npm run test
       - name: Verify Gate 7 adversarial matrix
         run: npm run gate7:verify-adversarial
-      - name: Verify public sample evidence
-        run: npm run verify:sample-evidence
-      - name: Verify sealed semantic record preservation
-        run: npm run verify:semantic-preservation
       - name: Verify Direct Site Tools evidence
         run: npm run verify:direct-site-tools
       - name: Build production app

@@ -36,15 +36,11 @@ test("judge shell is honest, navigable, and permanently marks the simulation", a
   await expect(page).toHaveURL(/\/results$/);
   await expect(
     page.getByRole("heading", {
-      name: "Did the clearer checkout description improve the agent's measured behavior?"
+      name: "Every approved behavior passed."
     })
   ).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText("23/24 → 23/24", { exact: true })).toBeVisible();
-  await expect(
-    page.getByText(
-      "The description looked better, but it did not fix the measured behavior. Thurstone caught that before anyone claimed success."
-    )
-  ).toBeVisible();
+  await expect(page.getByLabel("Current evaluation summary")).toContainText("24");
+  await expect(page.getByText(/23\s*\/\s*24/u)).toHaveCount(0);
   expect(pageErrors).toEqual([]);
 });
 

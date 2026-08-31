@@ -96,18 +96,21 @@ test("pre-unlock Lab DOM, transport, console, and storage omit frozen truth", as
 });
 
 // thurstone-impact-execution:acceptance-start
-test("compact and expert Results preserve history without losing the featured boundary", async ({
+test("current Results survive navigation and reload without exposing superseded evidence", async ({
   page
 }) => {
   await page.goto("/results");
-  await expect(page.getByText("23/24 → 23/24", { exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Considering is not deciding." })).toBeVisible();
-  await page.getByRole("link", { name: "Inspect complete expert evidence" }).click();
-  await expect(page).toHaveURL(/\/results\?view=full$/u);
+  await expect(
+    page.getByRole("heading", { name: "Every approved behavior passed." })
+  ).toBeVisible();
+  await expect(page.getByText(/23\s*\/\s*24/u)).toHaveCount(0);
+  await page.goto("/");
   await page.goBack();
   await expect(page).toHaveURL(/\/results$/u);
-  await expect(page.getByRole("heading", { name: "Considering is not deciding." })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Every approved behavior passed." })
+  ).toBeVisible();
   await page.reload();
-  await expect(page.getByText("23/24 → 23/24", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Current evaluation summary")).toContainText("24");
 });
 // thurstone-impact-execution:acceptance-end

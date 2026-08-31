@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 const mandatoryIgnoreEntries = [
   "/docs/csr.md",
@@ -210,7 +210,7 @@ if (missingDeploymentEntries.length > 0) {
 const tracked = git(["ls-files", "-z"]).split("\0").filter(Boolean);
 const candidateFiles = git(["ls-files", "-co", "--exclude-standard", "-z"])
   .split("\0")
-  .filter(Boolean);
+  .filter((path) => path && existsSync(path));
 const trackedViolations = tracked.filter((path) =>
   excludedPaths.some((excluded) => path === excluded || path.startsWith(`${excluded}/`))
 );
