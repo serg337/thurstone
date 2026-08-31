@@ -770,9 +770,8 @@ async function verifyRecoveryFinalization(input: {
         JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_SUCCESSOR_TEST_BLOB_OID &&
       sha256(checkedOutTest.bytes) === JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_SUCCESSOR_TEST_SHA256;
     const originAliasProtocolSource = [
-      "JUDGE_DEMO_ORIGIN_ALIAS_FINALIZATION_VERSION",
-      "JUDGE_DEMO_ORIGIN_ALIAS_PROTOCOL_PATHS_HASH",
-      "JUDGE_DEMO_ORIGIN_ALIAS_IMPLEMENTATION_PATHS_HASH",
+      "JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_COMMIT",
+      "originAliasCommits",
       "test_origin_alias_impact_finalization_missing"
     ].every((marker) => occurrenceCount(testSource, marker) >= 1);
     if (
@@ -1711,18 +1710,48 @@ function applyImpactExecutionCiTimeoutReplacements(source: string): string {
   return result;
 }
 
+function compactOriginAliasBoundary(input: {
+  readonly cwd: string;
+  readonly finalization: ImpactExecutionFinalization;
+  readonly terminalCommit?: string;
+}) {
+  const commits = input.finalization.originAliasCommits ?? null;
+  if (commits === null) return null;
+  const protocolCommit = commits[0]!;
+  if (!input.terminalCommit) {
+    throw new Error("judge_demo_origin_alias_terminal_commit_missing");
+  }
+  const protocolTree = commitTree(input.cwd, protocolCommit);
+  return Object.freeze({
+    protocol: Object.freeze({
+      predecessorCommit: JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_COMMIT,
+      predecessorTree: JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_TREE,
+      successorCommit: protocolCommit,
+      successorTree: protocolTree,
+      commits: Object.freeze([...commits])
+    }),
+    implementation: Object.freeze({
+      predecessorCommit: protocolCommit,
+      predecessorTree: protocolTree,
+      successorCommit: input.terminalCommit,
+      successorTree: commitTree(input.cwd, input.terminalCommit)
+    }),
+    checkoutRepair: null
+  });
+}
+
 export async function verifyImpactExecutionFinalizationCheckout(input: {
   readonly cwd: string;
   readonly finalization: ImpactExecutionFinalization;
+  readonly terminalCommit?: string;
 }): Promise<{
   readonly protocolChanges: readonly GitTreeChange[];
   readonly presentationChanges: readonly GitTreeChange[];
   readonly ciTimeoutRepairChanges: readonly GitTreeChange[];
 }> {
   const ciTimeoutRepair = input.finalization.ciTimeoutRepair ?? null;
-  const originAliasFinalization = input.finalization.originAliasFinalization ?? null;
+  const originAliasFinalization = compactOriginAliasBoundary(input);
   const terminalCheckoutCommit =
-    originAliasFinalization?.checkoutRepair?.successorCommit ??
     originAliasFinalization?.implementation.successorCommit ??
     ciTimeoutRepair?.successorCommit ??
     input.finalization.presentation.successorCommit;
@@ -1988,8 +2017,14 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
   const ciPortabilityRepair = terminal?.ciPortabilityRepair ?? null;
   const impactExecutionFinalization = terminal?.impactExecutionFinalization ?? null;
   const impactExecutionCiTimeoutRepair = impactExecutionFinalization?.ciTimeoutRepair ?? null;
-  const originAliasFinalization = impactExecutionFinalization?.originAliasFinalization ?? null;
-  const originAliasCheckoutRepair = originAliasFinalization?.checkoutRepair ?? null;
+  const originAliasFinalization =
+    impactExecutionFinalization === null
+      ? null
+      : compactOriginAliasBoundary({
+          cwd: input.cwd,
+          finalization: impactExecutionFinalization,
+          terminalCommit: input.transition.successorCommit
+        });
   const evidenceMaterialCommit =
     terminal?.evidenceMaterialCommit ?? input.transition.successorCommit;
   const expectedChain =
@@ -2015,10 +2050,7 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
                   ? []
                   : [
                       ...originAliasFinalization.protocol.commits,
-                      originAliasFinalization.implementation.successorCommit,
-                      ...(originAliasCheckoutRepair === null
-                        ? []
-                        : [...originAliasCheckoutRepair.commits])
+                      originAliasFinalization.implementation.successorCommit
                     ])
               ])
         ];
@@ -2050,10 +2082,7 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
               (commitTree(input.cwd, originAliasFinalization.protocol.successorCommit) !==
                 originAliasFinalization.protocol.successorTree ||
                 commitTree(input.cwd, originAliasFinalization.implementation.successorCommit) !==
-                  originAliasFinalization.implementation.successorTree ||
-                (originAliasCheckoutRepair !== null &&
-                  commitTree(input.cwd, originAliasCheckoutRepair.successorCommit) !==
-                    originAliasCheckoutRepair.successorTree)))))))
+                  originAliasFinalization.implementation.successorTree))))))
   ) {
     throw new Error("judge_demo_invocation_evidence_chain_invalid");
   }
@@ -2116,7 +2145,8 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
       ? null
       : await verifyImpactExecutionFinalizationCheckout({
           cwd: input.cwd,
-          finalization: impactExecutionFinalization
+          finalization: impactExecutionFinalization,
+          terminalCommit: input.transition.successorCommit
         });
   const impactExecutionProtocolChanges = impactExecutionCheckout?.protocolChanges ?? [];
   const impactExecutionPresentationChanges = impactExecutionCheckout?.presentationChanges ?? [];
@@ -2142,18 +2172,6 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
             input.cwd,
             originAliasFinalization.implementation.predecessorCommit,
             originAliasFinalization.implementation.successorCommit
-          )
-        ].sort((left, right) =>
-          judgeDemoInvocationIntegrityEvidencePathCompare(left.path, right.path)
-        );
-  const originAliasCheckoutRepairChanges =
-    originAliasCheckoutRepair === null
-      ? []
-      : [
-          ...gitTreeChanges(
-            input.cwd,
-            originAliasCheckoutRepair.predecessorCommit,
-            originAliasCheckoutRepair.successorCommit
           )
         ].sort((left, right) =>
           judgeDemoInvocationIntegrityEvidencePathCompare(left.path, right.path)
@@ -2231,8 +2249,8 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
                     firstParentCommitChain(
                       input.cwd,
                       originAliasFinalization.protocol.predecessorCommit,
-                      originAliasFinalization.protocol.successorCommit
-                    ).slice(1)
+                      originAliasFinalization.implementation.successorCommit
+                    ).slice(1, -1)
                   ) ||
                 canonicalJson(originAliasProtocolChanges.map(({ path }) => path)) !==
                   canonicalJson(JUDGE_DEMO_ORIGIN_ALIAS_PROTOCOL_PATHS) ||
@@ -2241,30 +2259,7 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
                 (await canonicalSha256(JUDGE_DEMO_ORIGIN_ALIAS_PROTOCOL_PATHS)) !==
                   JUDGE_DEMO_ORIGIN_ALIAS_PROTOCOL_PATHS_HASH ||
                 (await canonicalSha256(JUDGE_DEMO_ORIGIN_ALIAS_IMPLEMENTATION_PATHS)) !==
-                  JUDGE_DEMO_ORIGIN_ALIAS_IMPLEMENTATION_PATHS_HASH ||
-                (await canonicalSha256(originAliasProtocolChanges)) !==
-                  originAliasFinalization.protocol.gitTreeProjectionHash ||
-                (await canonicalSha256(originAliasImplementationChanges)) !==
-                  originAliasFinalization.implementation.gitTreeProjectionHash ||
-                (originAliasCheckoutRepair !== null &&
-                  (originAliasCheckoutRepair.predecessorCommit !==
-                    originAliasFinalization.implementation.successorCommit ||
-                    originAliasCheckoutRepair.predecessorTree !==
-                      originAliasFinalization.implementation.successorTree ||
-                    canonicalJson(originAliasCheckoutRepair.commits) !==
-                      canonicalJson(
-                        firstParentCommitChain(
-                          input.cwd,
-                          originAliasCheckoutRepair.predecessorCommit,
-                          originAliasCheckoutRepair.successorCommit
-                        ).slice(1)
-                      ) ||
-                    canonicalJson(originAliasCheckoutRepairChanges.map(({ path }) => path)) !==
-                      canonicalJson(JUDGE_DEMO_ORIGIN_ALIAS_CHECKOUT_REPAIR_PATHS) ||
-                    (await canonicalSha256(JUDGE_DEMO_ORIGIN_ALIAS_CHECKOUT_REPAIR_PATHS)) !==
-                      JUDGE_DEMO_ORIGIN_ALIAS_CHECKOUT_REPAIR_PATHS_HASH ||
-                    (await canonicalSha256(originAliasCheckoutRepairChanges)) !==
-                      originAliasCheckoutRepair.gitTreeProjectionHash))))))))
+                  JUDGE_DEMO_ORIGIN_ALIAS_IMPLEMENTATION_PATHS_HASH))))))
   ) {
     throw new Error("judge_demo_invocation_evidence_projection_invalid");
   }
@@ -2355,11 +2350,7 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
       throw new Error(`judge_demo_impact_execution_ci_timeout_mode_invalid:${change.path}`);
     }
   }
-  for (const change of [
-    ...originAliasProtocolChanges,
-    ...originAliasImplementationChanges,
-    ...originAliasCheckoutRepairChanges
-  ]) {
+  for (const change of [...originAliasProtocolChanges, ...originAliasImplementationChanges]) {
     if (
       change.status !== "M" ||
       change.predecessorMode !== "100644" ||
@@ -2372,7 +2363,6 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
     }
   }
   const terminalImpactCommit =
-    originAliasCheckoutRepair?.successorCommit ??
     originAliasFinalization?.implementation.successorCommit ??
     impactExecutionCiTimeoutRepair?.successorCommit ??
     impactExecutionFinalization?.presentation.successorCommit ??
@@ -2447,7 +2437,9 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
         protocolEntry === null ||
         implementationEntry === null ||
         protocolEntry.mode !== "100644" ||
-        canonicalJson(protocolEntry) !== canonicalJson(implementationEntry)
+        implementationEntry.mode !== "100644" ||
+        (!JUDGE_DEMO_ORIGIN_ALIAS_IMPLEMENTATION_PATHS.includes(path) &&
+          canonicalJson(protocolEntry) !== canonicalJson(implementationEntry))
       ) {
         throw new Error(`judge_demo_origin_alias_protocol_drift:${path}`);
       }
@@ -2459,18 +2451,12 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
         path
       );
     }
-    if (originAliasCheckoutRepair !== null) {
-      for (const path of JUDGE_DEMO_ORIGIN_ALIAS_CHECKOUT_REPAIR_PATHS) {
-        await activeCheckoutBlobBytes(input.cwd, originAliasCheckoutRepair.successorCommit, path);
-      }
-    }
   }
   if (ciFinalization !== null) {
     const testSource = new TextDecoder("utf-8", { fatal: true }).decode(
       await activeCheckoutBlobBytes(
         input.cwd,
-        originAliasCheckoutRepair?.successorCommit ??
-          originAliasFinalization?.implementation.successorCommit ??
+        originAliasFinalization?.implementation.successorCommit ??
           impactExecutionCiTimeoutRepair?.successorCommit ??
           impactExecutionFinalization?.presentation.successorCommit ??
           ciPortabilityRepair?.successorCommit ??
@@ -2678,15 +2664,11 @@ async function verifyTransitionGit(input: {
                           ? []
                           : JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_REPAIR_PATHS),
                         ...(input.transition.terminalFinalization?.impactExecutionFinalization
-                          ?.originAliasFinalization === undefined
+                          ?.originAliasCommits === undefined
                           ? []
                           : [
                               ...JUDGE_DEMO_ORIGIN_ALIAS_PROTOCOL_PATHS,
-                              ...JUDGE_DEMO_ORIGIN_ALIAS_IMPLEMENTATION_PATHS,
-                              ...(input.transition.terminalFinalization.impactExecutionFinalization
-                                .originAliasFinalization.checkoutRepair === undefined
-                                ? []
-                                : JUDGE_DEMO_ORIGIN_ALIAS_CHECKOUT_REPAIR_PATHS)
+                              ...JUDGE_DEMO_ORIGIN_ALIAS_IMPLEMENTATION_PATHS
                             ])
                       ])
                 ])
@@ -2759,13 +2741,10 @@ async function verifyTransitionGit(input: {
               (transition.terminalFinalization.impactExecutionFinalization.ciTimeoutRepair !==
                 undefined &&
                 JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_REPAIR_PATHS.includes(path)) ||
-              (transition.terminalFinalization.impactExecutionFinalization
-                .originAliasFinalization !== undefined &&
+              (transition.terminalFinalization.impactExecutionFinalization.originAliasCommits !==
+                undefined &&
                 (JUDGE_DEMO_ORIGIN_ALIAS_PROTOCOL_PATHS.includes(path) ||
-                  JUDGE_DEMO_ORIGIN_ALIAS_IMPLEMENTATION_PATHS.includes(path) ||
-                  (transition.terminalFinalization.impactExecutionFinalization
-                    .originAliasFinalization.checkoutRepair !== undefined &&
-                    JUDGE_DEMO_ORIGIN_ALIAS_CHECKOUT_REPAIR_PATHS.includes(path)))))
+                  JUDGE_DEMO_ORIGIN_ALIAS_IMPLEMENTATION_PATHS.includes(path))))
           )
       )) ||
     (transition.kind === "collateral-links" && changedCriticalPaths.length !== 0)
