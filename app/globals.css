@@ -3462,6 +3462,10 @@ textarea::placeholder {
   margin-top: clamp(1.1rem, 2.5vw, 1.8rem);
 }
 
+#main-content {
+  min-height: calc(140vh - 190px);
+}
+
 .results-reference > * + * {
   margin-top: 1rem;
 }
