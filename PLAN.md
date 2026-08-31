@@ -1,21 +1,37 @@
-# Thurstone release plan
+# Thurstone BYOA challenge-product plan
 
-## Current state
+## Preserved release baseline
 
-- Live WebMCP checkout sandbox: complete
-- Current semantic contract evaluation: 24/24
-- Invocation Integrity evaluation: 3/3
-- Primary production origin: https://thurstone.invarra.ai
-- Unit, browser, accessibility, security, dependency, and secret-history checks: passing
-- Judge frontend F1 visual foundation: complete and verified locally
-- Judge frontend F2 human-first Intro: complete and verified locally
-- Judge frontend F3 sixty-second Guided Demo: complete and verified locally
-- Judge frontend F4 reference Contract Workshop: complete and verified locally
-- Judge frontend F5 session-first Results and expert depth: complete and verified locally
-- Judge frontend F6 release qualification: complete; exact production and native Chrome verified
+- Production predecessor: `b6d5de1928fbb17cc0f9f44aee606c2aae7bea3d`
+- Verified semantic reference: `24/24`
+- Invocation Integrity: separate `3/3`
+- Primary production origin: <https://thurstone.invarra.ai>
+- Paid/model calls for this successor: `0`
 
-## Remaining milestones
+## Sequential milestones
 
-1. Complete the reserved public-repository, video, Devpost, and freeze actions after confirmation.
+1. **M0 — Scope and truth freeze: PASS**
+   - Freeze the call-expected BYOA boundary, two-tool catalog, evidence identities, and claims.
+2. **M1 — Contract v2 and deterministic diagnosis**
+   - Add strict additive contract/result/assertion/diagnostic/regression schemas, canonical digests,
+     taxonomy, precedence, and v1 compatibility tests.
+3. **M2 — Unified owner wizard**
+   - Replace the primary Demo modes with one six-step owner workflow and frozen agent projection.
+4. **M3 — Isolated BYOA run**
+   - Hard-navigate to `/demo/run`, register one frozen two-tool catalog, admit one native call, and
+     verify trusted state and ledger evidence.
+5. **M4 — Verdict, diagnosis, and regression loop**
+   - Produce honest pass/issue/incomplete/unavailable results, deterministic next steps, and bounded
+     browser-local save/export/edit/rerun behavior.
+6. **M5 — Homepage, Results, and Workflow**
+   - Ship the semantic-release sales journey, My Tests-first Results, and honest current/future
+     Workflow page.
+7. **M6 — Qualification and native production proof**
+   - Pass complete code, browser, accessibility, security, privacy, licensing, publication,
+     clean-clone, CI, exact-SHA deployment, ChatGPT BYOA, and Chrome verification gates.
+8. **M7 — Video and submission package**
+   - Finalize the sub-three-minute capture package and Devpost materials, then stop at the reserved
+     public-release, legal, video-publication, submission, and freeze boundary.
 
-No payment or external transaction exists in the challenge application.
+No milestone advances until its acceptance proof is green. No provider/model call is part of the
+primary BYOA path.
