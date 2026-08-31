@@ -48,6 +48,7 @@ test("keyboard focus and live status announcements expose the deterministic path
   await expect(page).toHaveURL(/#main-content$/u);
   await page.goto("/lab");
   const review = page.getByRole("button", { name: "Review order in UI" });
+  await expect(review).toBeEnabled();
   await review.focus();
   await page.keyboard.press("Enter");
   const announced = page.locator(".receipt-line[aria-live='polite']").first();
