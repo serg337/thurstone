@@ -380,12 +380,20 @@ export const JUDGE_DEMO_ORIGIN_ALIAS_IMPLEMENTATION_PATHS = Object.freeze(
     "app/api/probe/session/route.ts",
     "app/layout.tsx",
     "lib/brand.ts",
+    "lib/judge/collateral-checkout-verifier.server.ts",
+    "lib/judge/collateral-proof.ts",
     "lib/probe/http.ts",
-    "tests/browser/shell.spec.ts"
+    "package.json",
+    "scripts/verify-gate6-presentation.ts",
+    "scripts/verify-judge-presentation.ts",
+    "scripts/verify-direct-observation-presentation.ts",
+    "tests/browser/shell.spec.ts",
+    "tests/integration/judge-presentation.test.ts",
+    "tests/unit/direct-observation-presentation.test.ts"
   ].sort(judgeDemoInvocationIntegrityEvidencePathCompare)
 );
 export const JUDGE_DEMO_ORIGIN_ALIAS_IMPLEMENTATION_PATHS_HASH =
-  "e493e98679f33bb25dfe5211e6e3bae21306e96924d152e4de4414532123b045" as const;
+  "2eadbc4c8061d9824dd6b2028775759953cc20365d4c37c516aeec99867fbd98" as const;
 export const JUDGE_DEMO_ORIGIN_ALIAS_CHECKOUT_REPAIR_PATHS = Object.freeze(
   [
     "lib/judge/collateral-checkout-verifier.server.ts",
@@ -2667,81 +2675,7 @@ const gate9TerminalFinalizationSchema = z
           })
           .strict()
           .optional(),
-        originAliasFinalization: z
-          .object({
-            version: z.literal(JUDGE_DEMO_ORIGIN_ALIAS_FINALIZATION_VERSION),
-            predecessorBinding: z
-              .object({
-                activeCommit: z.literal(JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_COMMIT),
-                activeTree: z.literal(JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_TREE),
-                gate6ProofHash: z.literal(JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_GATE6_PROOF_HASH),
-                bindingHash: z.literal(JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_BINDING_HASH),
-                evidenceTransitionProofHash: z.literal(
-                  JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_TRANSITION_PROOF_HASH
-                ),
-                activeEnvelopeHash: z.literal(JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_ENVELOPE_HASH),
-                dependencyProjectionHash: z.literal(
-                  JUDGE_DEMO_ORIGIN_ALIAS_DEPENDENCY_PROJECTION_HASH
-                )
-              })
-              .strict(),
-            protocol: z
-              .object({
-                predecessorCommit: z.literal(JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_COMMIT),
-                predecessorTree: z.literal(JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_TREE),
-                successorCommit: commit,
-                successorTree: gitOid,
-                commits: z.array(commit).length(1),
-                changedPathCount: z.literal(JUDGE_DEMO_ORIGIN_ALIAS_PROTOCOL_PATHS.length),
-                changedPathsHash: z.literal(JUDGE_DEMO_ORIGIN_ALIAS_PROTOCOL_PATHS_HASH),
-                gitTreeProjectionHash: sha256
-              })
-              .strict(),
-            implementation: z
-              .object({
-                predecessorCommit: commit,
-                predecessorTree: gitOid,
-                successorCommit: commit,
-                successorTree: gitOid,
-                changedPathCount: z.literal(JUDGE_DEMO_ORIGIN_ALIAS_IMPLEMENTATION_PATHS.length),
-                changedPathsHash: z.literal(JUDGE_DEMO_ORIGIN_ALIAS_IMPLEMENTATION_PATHS_HASH),
-                gitTreeProjectionHash: sha256
-              })
-              .strict(),
-            checkoutRepair: z
-              .object({
-                version: z.literal(JUDGE_DEMO_ORIGIN_ALIAS_CHECKOUT_REPAIR_VERSION),
-                predecessorCommit: commit,
-                predecessorTree: gitOid,
-                successorCommit: commit,
-                successorTree: gitOid,
-                commits: z.array(commit).length(4),
-                changedPathCount: z.literal(JUDGE_DEMO_ORIGIN_ALIAS_CHECKOUT_REPAIR_PATHS.length),
-                changedPathsHash: z.literal(JUDGE_DEMO_ORIGIN_ALIAS_CHECKOUT_REPAIR_PATHS_HASH),
-                gitTreeProjectionHash: sha256,
-                providerCallsPerformed: z.literal(0),
-                modelCallsPerformed: z.literal(0),
-                scoredCallsPerformed: z.literal(0),
-                calibrationCallsPerformed: z.literal(0),
-                directObservationCallsPerformed: z.literal(0),
-                storeWritesPerformed: z.literal(0)
-              })
-              .strict()
-              .optional(),
-            historicalEvidenceOrigin: z.literal("https://toolproof-rust.vercel.app"),
-            canonicalProductOrigin: z.literal("https://thurstone.invarra.ai"),
-            historicalEvidenceRewritten: z.literal(false),
-            toolContractChanged: z.literal(false),
-            semanticCasesChanged: z.literal(false),
-            providerCallsPerformed: z.literal(0),
-            modelCallsPerformed: z.literal(0),
-            scoredCallsPerformed: z.literal(0),
-            calibrationCallsPerformed: z.literal(0),
-            directObservationCallsPerformed: z.literal(0),
-            storeWritesPerformed: z.literal(0)
-          })
-          .strict()
-          .optional()
+        originAliasCommits: z.array(commit).length(2).optional()
       })
       .strict()
       .optional()
@@ -3080,8 +3014,7 @@ export async function verifyJudgeDemoPresentationTransition(
     const ciPortabilityRepairPaths = ciPortabilityRepair?.treeChanges.map(({ path }) => path) ?? [];
     const impactExecutionFinalization = terminal?.impactExecutionFinalization ?? null;
     const impactExecutionCiTimeoutRepair = impactExecutionFinalization?.ciTimeoutRepair ?? null;
-    const originAliasFinalization = impactExecutionFinalization?.originAliasFinalization ?? null;
-    const originAliasCheckoutRepair = originAliasFinalization?.checkoutRepair ?? null;
+    const originAliasCommits = impactExecutionFinalization?.originAliasCommits ?? null;
     const impactExecutionCiTimeoutRepairPaths =
       impactExecutionCiTimeoutRepair?.treeChanges.map(({ path }) => path) ?? [];
     const expectedFirstParentChain =
@@ -3103,76 +3036,25 @@ export async function verifyJudgeDemoPresentationTransition(
                   ...(impactExecutionCiTimeoutRepair === null
                     ? []
                     : [impactExecutionCiTimeoutRepair.successorCommit]),
-                  ...(originAliasFinalization === null
+                  ...(originAliasCommits === null
                     ? []
-                    : [
-                        ...originAliasFinalization.protocol.commits,
-                        originAliasFinalization.implementation.successorCommit,
-                        ...(originAliasCheckoutRepair === null
-                          ? []
-                          : [...originAliasCheckoutRepair.commits])
-                      ])
+                    : [...originAliasCommits, proof.successorCommit])
                 ])
           ];
     const originAliasFinalizationValid =
-      originAliasFinalization === null ||
+      originAliasCommits === null ||
       (impactExecutionFinalization !== null &&
         impactExecutionCiTimeoutRepair !== null &&
         impactExecutionCiTimeoutRepair.successorCommit ===
-          originAliasFinalization.protocol.predecessorCommit &&
-        impactExecutionCiTimeoutRepair.successorTree ===
-          originAliasFinalization.protocol.predecessorTree &&
-        originAliasFinalization.protocol.predecessorCommit ===
           JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_COMMIT &&
-        originAliasFinalization.protocol.predecessorTree ===
-          JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_TREE &&
-        originAliasFinalization.protocol.commits.at(-1) ===
-          originAliasFinalization.protocol.successorCommit &&
-        originAliasFinalization.protocol.commits[0] !==
-          originAliasFinalization.protocol.predecessorCommit &&
-        new Set(originAliasFinalization.protocol.commits).size ===
-          originAliasFinalization.protocol.commits.length &&
-        originAliasFinalization.protocol.successorCommit ===
-          originAliasFinalization.implementation.predecessorCommit &&
-        originAliasFinalization.protocol.successorTree ===
-          originAliasFinalization.implementation.predecessorTree &&
-        originAliasFinalization.protocol.successorCommit !==
-          originAliasFinalization.protocol.predecessorCommit &&
-        originAliasFinalization.implementation.successorCommit ===
-          (originAliasCheckoutRepair?.predecessorCommit ?? proof.successorCommit) &&
-        originAliasFinalization.implementation.successorCommit !==
-          originAliasFinalization.implementation.predecessorCommit &&
-        originAliasFinalization.protocol.changedPathCount ===
-          JUDGE_DEMO_ORIGIN_ALIAS_PROTOCOL_PATHS.length &&
-        originAliasFinalization.protocol.changedPathsHash ===
-          JUDGE_DEMO_ORIGIN_ALIAS_PROTOCOL_PATHS_HASH &&
-        originAliasFinalization.implementation.changedPathCount ===
-          JUDGE_DEMO_ORIGIN_ALIAS_IMPLEMENTATION_PATHS.length &&
-        originAliasFinalization.implementation.changedPathsHash ===
-          JUDGE_DEMO_ORIGIN_ALIAS_IMPLEMENTATION_PATHS_HASH &&
+        impactExecutionCiTimeoutRepair.successorTree === JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_TREE &&
+        originAliasCommits[0] !== JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_COMMIT &&
+        originAliasCommits.at(-1) !== proof.successorCommit &&
+        new Set(originAliasCommits).size === originAliasCommits.length &&
         (await canonicalSha256(JUDGE_DEMO_ORIGIN_ALIAS_PROTOCOL_PATHS)) ===
           JUDGE_DEMO_ORIGIN_ALIAS_PROTOCOL_PATHS_HASH &&
         (await canonicalSha256(JUDGE_DEMO_ORIGIN_ALIAS_IMPLEMENTATION_PATHS)) ===
-          JUDGE_DEMO_ORIGIN_ALIAS_IMPLEMENTATION_PATHS_HASH &&
-        (originAliasCheckoutRepair === null ||
-          (originAliasCheckoutRepair.predecessorCommit ===
-            originAliasFinalization.implementation.successorCommit &&
-            originAliasCheckoutRepair.predecessorTree ===
-              originAliasFinalization.implementation.successorTree &&
-            originAliasCheckoutRepair.successorCommit === proof.successorCommit &&
-            originAliasCheckoutRepair.successorCommit !==
-              originAliasCheckoutRepair.predecessorCommit &&
-            originAliasCheckoutRepair.commits.at(-1) ===
-              originAliasCheckoutRepair.successorCommit &&
-            originAliasCheckoutRepair.commits[0] !== originAliasCheckoutRepair.predecessorCommit &&
-            new Set(originAliasCheckoutRepair.commits).size ===
-              originAliasCheckoutRepair.commits.length &&
-            originAliasCheckoutRepair.changedPathCount ===
-              JUDGE_DEMO_ORIGIN_ALIAS_CHECKOUT_REPAIR_PATHS.length &&
-            originAliasCheckoutRepair.changedPathsHash ===
-              JUDGE_DEMO_ORIGIN_ALIAS_CHECKOUT_REPAIR_PATHS_HASH &&
-            (await canonicalSha256(JUDGE_DEMO_ORIGIN_ALIAS_CHECKOUT_REPAIR_PATHS)) ===
-              JUDGE_DEMO_ORIGIN_ALIAS_CHECKOUT_REPAIR_PATHS_HASH)));
+          JUDGE_DEMO_ORIGIN_ALIAS_IMPLEMENTATION_PATHS_HASH);
     const impactExecutionCiTimeoutRepairValid =
       impactExecutionCiTimeoutRepair === null ||
       (impactExecutionFinalization !== null &&
@@ -3181,7 +3063,9 @@ export async function verifyJudgeDemoPresentationTransition(
         impactExecutionFinalization.presentation.successorTree ===
           JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_PREDECESSOR_TREE &&
         impactExecutionCiTimeoutRepair.successorCommit ===
-          (originAliasFinalization?.protocol.predecessorCommit ?? proof.successorCommit) &&
+          (originAliasCommits === null
+            ? proof.successorCommit
+            : JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_COMMIT) &&
         impactExecutionCiTimeoutRepair.successorCommit !==
           JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_PREDECESSOR_COMMIT &&
         canonicalJson(impactExecutionCiTimeoutRepairPaths) ===

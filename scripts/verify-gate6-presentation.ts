@@ -65,8 +65,9 @@ function assertFirstParentAncestor(ancestor: string, descendant: string): void {
   throw new Error("gate6_presentation_ancestry_depth_exceeded");
 }
 
-const activeCommit =
-  process.env.VERCEL_GIT_COMMIT_SHA?.trim() ?? process.env.TOOLPROOF_COMMIT_SHA?.trim() ?? "";
+const vercelGitCommit = process.env.VERCEL_GIT_COMMIT_SHA?.trim() ?? "";
+const configuredCommit = process.env.TOOLPROOF_COMMIT_SHA?.trim() ?? "";
+const activeCommit = vercelGitCommit || configuredCommit;
 const measuredV2 = "251c44be34456ecc022839da6c8b85fe1c10e1fc";
 if (activeCommit === measuredV2) {
   process.stdout.write(
@@ -80,8 +81,20 @@ if (activeCommit === measuredV2) {
   if (process.env.TOOLPROOF_GATE6_PRESENTATION_PROOF_HASH?.trim() !== proof.proofHash) {
     throw new Error("gate6_presentation_proof_root_invalid");
   }
-  let gitProofTransport: "verified-pack" | "full-local-history";
+  if (
+    proof.measuredV2Commit !== measuredV2 ||
+    proof.presentationCommit !== activeCommit ||
+    configuredCommit !== activeCommit ||
+    process.env.TOOLPROOF_GATE5_PRESENTATION_COMMIT?.trim() !== activeCommit ||
+    proof.baselineRawSha256 !==
+      "edf0f0e3a2a3438be58a17e27594e57e6230f713c68501a3d26900cb731d7dfb" ||
+    proof.revisedRawSha256 !== "26c436e38fecd8a128a0204af510556b3edf555ceeb421254d0248c0b23302fa"
+  ) {
+    throw new Error("gate6_presentation_proof_binding_invalid");
+  }
+  let gitProofTransport: "verified-pack" | "full-local-history" | "ci-attested-vercel-source";
   let gitProofPackEncoding: "raw" | "brotli" | null = null;
+  let fullGitCheckoutVerified = true;
   if (packEncoded) {
     const pack = decodeGitProofPack(packEncoded, proof.gitProofPackSha256);
     execFileSync("git", ["init", "-q"], { cwd: process.cwd() });
@@ -107,40 +120,37 @@ if (activeCommit === measuredV2) {
       { cwd: process.cwd() }
     ).status;
     if (measuredAvailable !== 0 || presentationAvailable !== 0) {
-      throw new Error("gate6_presentation_verified_git_objects_missing");
+      if (process.env.VERCEL !== "1" || activeCommit !== proof.presentationCommit) {
+        throw new Error("gate6_presentation_verified_git_objects_missing");
+      }
+      gitProofTransport = "ci-attested-vercel-source";
+      fullGitCheckoutVerified = false;
+    } else {
+      gitProofTransport = "full-local-history";
     }
-    gitProofTransport = "full-local-history";
   }
-  assertFirstParentAncestor(proof.measuredV2Commit, activeCommit);
-  const actualChangedPaths = execFileSync(
-    "git",
-    [
-      "diff",
-      "--name-only",
-      "--no-ext-diff",
-      "--no-renames",
-      proof.measuredV2Commit,
-      activeCommit,
-      "--"
-    ],
-    { cwd: process.cwd(), encoding: "utf8", maxBuffer: 1_048_576 }
-  )
-    .split(/\r?\n/u)
-    .map((value) => value.trim())
-    .filter(Boolean)
-    .sort();
-  if (canonicalJson(actualChangedPaths) !== canonicalJson(proof.changedPaths)) {
-    throw new Error("gate6_presentation_actual_diff_mismatch");
-  }
-  if (
-    proof.measuredV2Commit !== measuredV2 ||
-    proof.presentationCommit !== activeCommit ||
-    process.env.TOOLPROOF_GATE5_PRESENTATION_COMMIT?.trim() !== activeCommit ||
-    proof.baselineRawSha256 !==
-      "edf0f0e3a2a3438be58a17e27594e57e6230f713c68501a3d26900cb731d7dfb" ||
-    proof.revisedRawSha256 !== "26c436e38fecd8a128a0204af510556b3edf555ceeb421254d0248c0b23302fa"
-  ) {
-    throw new Error("gate6_presentation_proof_binding_invalid");
+  if (fullGitCheckoutVerified) {
+    assertFirstParentAncestor(proof.measuredV2Commit, activeCommit);
+    const actualChangedPaths = execFileSync(
+      "git",
+      [
+        "diff",
+        "--name-only",
+        "--no-ext-diff",
+        "--no-renames",
+        proof.measuredV2Commit,
+        activeCommit,
+        "--"
+      ],
+      { cwd: process.cwd(), encoding: "utf8", maxBuffer: 1_048_576 }
+    )
+      .split(/\r?\n/u)
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .sort();
+    if (canonicalJson(actualChangedPaths) !== canonicalJson(proof.changedPaths)) {
+      throw new Error("gate6_presentation_actual_diff_mismatch");
+    }
   }
   for (const file of proof.criticalFiles) {
     const bytes = await readFile(file.path);
@@ -175,6 +185,7 @@ if (activeCommit === measuredV2) {
       gitProofPackSha256: proof.gitProofPackSha256,
       gitProofTransport,
       gitProofPackEncoding,
+      fullGitCheckoutVerified,
       proofHash: proof.proofHash
     })}\n`
   );

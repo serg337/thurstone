@@ -123,20 +123,8 @@ import {
   JUDGE_DEMO_IMPACT_EXECUTION_U_PATCH_BROTLI_SHA256,
   JUDGE_DEMO_IMPACT_EXECUTION_U_PATCH_RAW_BYTES,
   JUDGE_DEMO_IMPACT_EXECUTION_U_PATCH_SHA256,
-  JUDGE_DEMO_ORIGIN_ALIAS_FINALIZATION_VERSION,
-  JUDGE_DEMO_ORIGIN_ALIAS_CHECKOUT_REPAIR_PATHS,
-  JUDGE_DEMO_ORIGIN_ALIAS_CHECKOUT_REPAIR_PATHS_HASH,
-  JUDGE_DEMO_ORIGIN_ALIAS_CHECKOUT_REPAIR_VERSION,
-  JUDGE_DEMO_ORIGIN_ALIAS_IMPLEMENTATION_PATHS,
-  JUDGE_DEMO_ORIGIN_ALIAS_IMPLEMENTATION_PATHS_HASH,
-  JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_BINDING_HASH,
   JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_COMMIT,
-  JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_ENVELOPE_HASH,
-  JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_GATE6_PROOF_HASH,
-  JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_TRANSITION_PROOF_HASH,
   JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_TREE,
-  JUDGE_DEMO_ORIGIN_ALIAS_PROTOCOL_PATHS,
-  JUDGE_DEMO_ORIGIN_ALIAS_PROTOCOL_PATHS_HASH,
   JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_COMMIT,
   JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_PATH,
   JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_SHA256,
@@ -1969,9 +1957,8 @@ describe("judge provider-free presentation lineage", () => {
     ).rejects.toThrow();
 
     const originProtocolCommit = "7".repeat(40);
-    const originProtocolTree = "8".repeat(40);
     const originSuccessorCommit = "9".repeat(40);
-    const originSuccessorTree = "a".repeat(40);
+    const originFinalCommit = "a".repeat(40);
     const originCandidate = structuredClone(impactVerified);
     if (
       originCandidate.kind !== "invocation-integrity-evidence" ||
@@ -1980,7 +1967,7 @@ describe("judge provider-free presentation lineage", () => {
       throw new Error("test_origin_alias_impact_finalization_missing");
     }
     const originImpact = originCandidate.terminalFinalization.impactExecutionFinalization;
-    originCandidate.successorCommit = originSuccessorCommit;
+    originCandidate.successorCommit = originFinalCommit;
     originImpact.presentation.successorCommit =
       JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_PREDECESSOR_COMMIT;
     originImpact.presentation.successorTree =
@@ -2009,48 +1996,7 @@ describe("judge provider-free presentation lineage", () => {
       directObservationCallsPerformed: 0,
       storeWritesPerformed: 0
     };
-    originImpact.originAliasFinalization = {
-      version: JUDGE_DEMO_ORIGIN_ALIAS_FINALIZATION_VERSION,
-      predecessorBinding: {
-        activeCommit: JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_COMMIT,
-        activeTree: JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_TREE,
-        gate6ProofHash: JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_GATE6_PROOF_HASH,
-        bindingHash: JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_BINDING_HASH,
-        evidenceTransitionProofHash: JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_TRANSITION_PROOF_HASH,
-        activeEnvelopeHash: JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_ENVELOPE_HASH,
-        dependencyProjectionHash: JUDGE_DEMO_IMPACT_EXECUTION_DEPENDENCY_PROJECTION_HASH
-      },
-      protocol: {
-        predecessorCommit: JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_COMMIT,
-        predecessorTree: JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_TREE,
-        successorCommit: originProtocolCommit,
-        successorTree: originProtocolTree,
-        commits: [originProtocolCommit],
-        changedPathCount: JUDGE_DEMO_ORIGIN_ALIAS_PROTOCOL_PATHS.length,
-        changedPathsHash: JUDGE_DEMO_ORIGIN_ALIAS_PROTOCOL_PATHS_HASH,
-        gitTreeProjectionHash: "b".repeat(64)
-      },
-      implementation: {
-        predecessorCommit: originProtocolCommit,
-        predecessorTree: originProtocolTree,
-        successorCommit: originSuccessorCommit,
-        successorTree: originSuccessorTree,
-        changedPathCount: JUDGE_DEMO_ORIGIN_ALIAS_IMPLEMENTATION_PATHS.length,
-        changedPathsHash: JUDGE_DEMO_ORIGIN_ALIAS_IMPLEMENTATION_PATHS_HASH,
-        gitTreeProjectionHash: "c".repeat(64)
-      },
-      historicalEvidenceOrigin: "https://toolproof-rust.vercel.app",
-      canonicalProductOrigin: "https://thurstone.invarra.ai",
-      historicalEvidenceRewritten: false,
-      toolContractChanged: false,
-      semanticCasesChanged: false,
-      providerCallsPerformed: 0,
-      modelCallsPerformed: 0,
-      scoredCallsPerformed: 0,
-      calibrationCallsPerformed: 0,
-      directObservationCallsPerformed: 0,
-      storeWritesPerformed: 0
-    };
+    originImpact.originAliasCommits = [originProtocolCommit, originSuccessorCommit];
     originCandidate.firstParentChainHash = await canonicalSha256([
       value.predecessorCommit,
       value.protocolCommit,
@@ -2063,7 +2009,8 @@ describe("judge provider-free presentation lineage", () => {
       JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_PREDECESSOR_COMMIT,
       JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_COMMIT,
       originProtocolCommit,
-      originSuccessorCommit
+      originSuccessorCommit,
+      originFinalCommit
     ]);
     const originPayload = { ...originCandidate } as Record<string, unknown>;
     delete originPayload.proofHash;
@@ -2072,91 +2019,10 @@ describe("judge provider-free presentation lineage", () => {
       proofHash: await canonicalSha256(originPayload)
     });
     expect(originVerified).toMatchObject({
-      successorCommit: originSuccessorCommit,
+      successorCommit: originFinalCommit,
       terminalFinalization: {
         impactExecutionFinalization: {
-          originAliasFinalization: {
-            canonicalProductOrigin: "https://thurstone.invarra.ai",
-            historicalEvidenceOrigin: "https://toolproof-rust.vercel.app",
-            protocol: { predecessorCommit: JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_COMMIT },
-            implementation: { successorCommit: originSuccessorCommit }
-          }
-        }
-      }
-    });
-    const originRepairFirstCommit = "c".repeat(40);
-    const originRepairSecondCommit = "b".repeat(40);
-    const originRepairThirdCommit = "f".repeat(40);
-    const originRepairCommit = "d".repeat(40);
-    const originRepairTree = "e".repeat(40);
-    const originRepairCandidate = structuredClone(originVerified);
-    if (originRepairCandidate.kind !== "invocation-integrity-evidence") {
-      throw new Error("test_origin_alias_checkout_repair_kind_invalid");
-    }
-    const originRepairImpact =
-      originRepairCandidate.terminalFinalization?.impactExecutionFinalization;
-    if (!originRepairImpact?.originAliasFinalization) {
-      throw new Error("test_origin_alias_checkout_repair_parent_missing");
-    }
-    const originRepairFinalization = originRepairImpact.originAliasFinalization;
-    originRepairCandidate.successorCommit = originRepairCommit;
-    originRepairFinalization.checkoutRepair = {
-      version: JUDGE_DEMO_ORIGIN_ALIAS_CHECKOUT_REPAIR_VERSION,
-      predecessorCommit: originSuccessorCommit,
-      predecessorTree: originSuccessorTree,
-      successorCommit: originRepairCommit,
-      successorTree: originRepairTree,
-      commits: [
-        originRepairFirstCommit,
-        originRepairSecondCommit,
-        originRepairThirdCommit,
-        originRepairCommit
-      ],
-      changedPathCount: JUDGE_DEMO_ORIGIN_ALIAS_CHECKOUT_REPAIR_PATHS.length,
-      changedPathsHash: JUDGE_DEMO_ORIGIN_ALIAS_CHECKOUT_REPAIR_PATHS_HASH,
-      gitTreeProjectionHash: "d".repeat(64),
-      providerCallsPerformed: 0,
-      modelCallsPerformed: 0,
-      scoredCallsPerformed: 0,
-      calibrationCallsPerformed: 0,
-      directObservationCallsPerformed: 0,
-      storeWritesPerformed: 0
-    };
-    originRepairCandidate.firstParentChainHash = await canonicalSha256([
-      value.predecessorCommit,
-      value.protocolCommit,
-      JUDGE_DEMO_GATE9_EVIDENCE_MATERIAL_COMMIT,
-      value.protocolFinalizationCommit,
-      JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_COMMIT,
-      JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_COMMIT,
-      JUDGE_DEMO_IMPACT_EXECUTION_PREDECESSOR_COMMIT,
-      impactProtocolCommit,
-      JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_PREDECESSOR_COMMIT,
-      JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_COMMIT,
-      originProtocolCommit,
-      originSuccessorCommit,
-      originRepairFirstCommit,
-      originRepairSecondCommit,
-      originRepairThirdCommit,
-      originRepairCommit
-    ]);
-    const originRepairPayload = { ...originRepairCandidate } as Record<string, unknown>;
-    delete originRepairPayload.proofHash;
-    const originRepairVerified = await verifyJudgeDemoPresentationTransition({
-      ...originRepairPayload,
-      proofHash: await canonicalSha256(originRepairPayload)
-    });
-    expect(originRepairVerified).toMatchObject({
-      successorCommit: originRepairCommit,
-      terminalFinalization: {
-        impactExecutionFinalization: {
-          originAliasFinalization: {
-            checkoutRepair: {
-              predecessorCommit: originSuccessorCommit,
-              successorCommit: originRepairCommit,
-              providerCallsPerformed: 0
-            }
-          }
+          originAliasCommits: [originProtocolCommit, originSuccessorCommit]
         }
       }
     });
@@ -2172,11 +2038,10 @@ describe("judge provider-free presentation lineage", () => {
       string,
       unknown
     >;
-    const invalidOriginFinalization = invalidOriginImpact.originAliasFinalization as Record<
-      string,
-      unknown
-    >;
-    invalidOriginFinalization.canonicalProductOrigin = "https://lookalike.example";
+    invalidOriginImpact.originAliasCommits = [
+      JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_COMMIT,
+      originSuccessorCommit
+    ];
     delete invalidOriginAlias.proofHash;
     await expect(
       verifyJudgeDemoPresentationTransition({
@@ -3684,38 +3549,38 @@ describe("judge provider-free presentation lineage", () => {
       expect(rejected.status).not.toBe(0);
     }
 
-    for (const judgePack of [undefined, "AA"] as const) {
-      const production = spawnSync(
-        resolve("node_modules/.bin/tsx"),
-        [
-          "--tsconfig",
-          resolve("tsconfig.operator.json"),
-          resolve("scripts/verify-judge-presentation.ts")
-        ],
-        {
-          cwd: value.cwd,
-          env: {
-            ...process.env,
-            VERCEL: "1",
-            TOOLPROOF_JUDGE_LANE_MODE: "enabled",
-            TOOLPROOF_JUDGE_PRESENTATION_MODE: "successor",
-            TOOLPROOF_JUDGE_ACTIVE_COMMIT: value.recoveryCommit,
-            TOOLPROOF_COMMIT_SHA: value.recoveryCommit,
-            VERCEL_GIT_COMMIT_SHA: value.recoveryCommit,
-            [JUDGE_DEMO_PRESENTATION_BINDING_ENV]: gzipSync(
-              Buffer.from(canonicalJson(binding))
-            ).toString("base64url"),
-            [JUDGE_DEMO_PRESENTATION_BINDING_HASH_ENV]: binding.bindingHash,
-            [JUDGE_DEMO_SHARED_GIT_PACK_ENV]: "",
-            [JUDGE_DEMO_GIT_PACK_ENV]: judgePack ?? ""
-          },
-          encoding: "utf8",
-          maxBuffer: 8_388_608
-        }
-      );
-      expect(production.status).not.toBe(0);
-      expect(production.stderr).toContain("judge_demo_presentation_shared_git_pack_required");
-    }
+    const productionWithDedicatedPack = spawnSync(
+      resolve("node_modules/.bin/tsx"),
+      [
+        "--tsconfig",
+        resolve("tsconfig.operator.json"),
+        resolve("scripts/verify-judge-presentation.ts")
+      ],
+      {
+        cwd: value.cwd,
+        env: {
+          ...process.env,
+          VERCEL: "1",
+          TOOLPROOF_JUDGE_LANE_MODE: "enabled",
+          TOOLPROOF_JUDGE_PRESENTATION_MODE: "successor",
+          TOOLPROOF_JUDGE_ACTIVE_COMMIT: value.recoveryCommit,
+          TOOLPROOF_COMMIT_SHA: value.recoveryCommit,
+          VERCEL_GIT_COMMIT_SHA: value.recoveryCommit,
+          [JUDGE_DEMO_PRESENTATION_BINDING_ENV]: gzipSync(
+            Buffer.from(canonicalJson(binding))
+          ).toString("base64url"),
+          [JUDGE_DEMO_PRESENTATION_BINDING_HASH_ENV]: binding.bindingHash,
+          [JUDGE_DEMO_SHARED_GIT_PACK_ENV]: "",
+          [JUDGE_DEMO_GIT_PACK_ENV]: "AA"
+        },
+        encoding: "utf8",
+        maxBuffer: 8_388_608
+      }
+    );
+    expect(productionWithDedicatedPack.status).not.toBe(0);
+    expect(productionWithDedicatedPack.stderr).toContain(
+      "judge_demo_presentation_dedicated_git_pack_forbidden"
+    );
 
     const finalized = await recoveryFinalizationFixture();
     const finalizedBinding = await bindingFor({
@@ -3783,6 +3648,57 @@ describe("judge provider-free presentation lineage", () => {
         ?.truthStatusFinalization
     ).toEqual(truthFinalized.truthStatus);
   }, 20_000);
+
+  it("accepts compact Vercel attestation without weakening non-Vercel checkout", async () => {
+    const value = await fixture();
+    const binding = await bindingFor({
+      rootCommit: value.rootCommit,
+      activeCommit: value.recoveryCommit,
+      transitions: [value.recovery]
+    });
+    const compactBuild = await mkdtemp(join(tmpdir(), "thurstone-vercel-compact-proof-"));
+    const run = (vercel: string) =>
+      spawnSync(
+        resolve("node_modules/.bin/tsx"),
+        [
+          "--tsconfig",
+          resolve("tsconfig.operator.json"),
+          resolve("scripts/verify-judge-presentation.ts")
+        ],
+        {
+          cwd: compactBuild,
+          env: {
+            ...process.env,
+            VERCEL: vercel,
+            VERCEL_GIT_COMMIT_SHA: "",
+            TOOLPROOF_JUDGE_LANE_MODE: "enabled",
+            TOOLPROOF_JUDGE_PRESENTATION_MODE: "successor",
+            TOOLPROOF_JUDGE_ACTIVE_COMMIT: value.recoveryCommit,
+            TOOLPROOF_COMMIT_SHA: value.recoveryCommit,
+            [JUDGE_DEMO_PRESENTATION_BINDING_ENV]: gzipSync(
+              Buffer.from(canonicalJson(binding))
+            ).toString("base64url"),
+            [JUDGE_DEMO_PRESENTATION_BINDING_HASH_ENV]: binding.bindingHash
+          },
+          encoding: "utf8",
+          maxBuffer: 8_388_608
+        }
+      );
+    try {
+      const compactScript = run("1");
+      expect(compactScript.status, compactScript.stderr).toBe(0);
+      expect(compactScript.stdout).toContain('"gitProofTransport":"ci-attested-vercel-source"');
+      expect(compactScript.stdout).toContain('"fullGitCheckoutVerified":false');
+
+      const outsideVercel = run("");
+      expect(outsideVercel.status).not.toBe(0);
+      expect(outsideVercel.stderr).toContain(
+        "judge_demo_presentation_verified_git_objects_missing"
+      );
+    } finally {
+      await rm(compactBuild, { recursive: true, force: true });
+    }
+  }, 10_000);
 
   it("verifies ordered recovery then collateral links without changing critical bytes", async () => {
     const value = await truthStatusFinalizationFixture();

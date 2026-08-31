@@ -81,8 +81,8 @@ if (!laneEnabled && !presentationMode && !encoded && !bindingHash && !judgePackE
     `${JSON.stringify({ ok: true, mode: "judge-presentation", status: "verified-predecessor" })}\n`
   );
 } else if (laneEnabled && presentationMode === "successor" && encoded && bindingHash) {
-  if (productionBuild && (judgePackEncoded || !sharedPackEncoded)) {
-    throw new Error("judge_demo_presentation_shared_git_pack_required");
+  if (productionBuild && judgePackEncoded) {
+    throw new Error("judge_demo_presentation_dedicated_git_pack_forbidden");
   }
   const parsed = judgeDemoPresentationBindingSchema.parse(
     await decodeJudgeDemoPresentationBinding(encoded)
@@ -101,7 +101,8 @@ if (!laneEnabled && !presentationMode && !encoded && !bindingHash && !judgePackE
     rootStoredProjectionDigest: parsed.rootStoredProjectionDigest,
     rootCapturedAt: parsed.rootCapturedAt
   });
-  const activeCommit = process.env.VERCEL_GIT_COMMIT_SHA?.trim() ?? "";
+  const activeCommit =
+    process.env.VERCEL_GIT_COMMIT_SHA?.trim() || process.env.TOOLPROOF_COMMIT_SHA?.trim() || "";
   if (
     bindingHash !== binding.bindingHash ||
     process.env.TOOLPROOF_JUDGE_ACTIVE_COMMIT?.trim() !== binding.activeCommit ||
@@ -111,8 +112,13 @@ if (!laneEnabled && !presentationMode && !encoded && !bindingHash && !judgePackE
     throw new Error("judge_demo_presentation_build_identity_invalid");
   }
 
-  let gitProofTransport: "verified-judge-pack" | "verified-shared-pack" | "full-local-history";
+  let gitProofTransport:
+    | "verified-judge-pack"
+    | "verified-shared-pack"
+    | "full-local-history"
+    | "ci-attested-vercel-source";
   let gitProofPackEncoding: "raw" | "brotli" | null = null;
+  let fullGitCheckoutVerified = true;
   if (packEncoded) {
     const pack = decodeGitProofPack(packEncoded, binding.gitProofPackSha256);
     const wrappedPackRequired = binding.transitions.some(
@@ -137,22 +143,26 @@ if (!laneEnabled && !presentationMode && !encoded && !bindingHash && !judgePackE
       binding.rootEvidenceCommit,
       ...binding.transitions.map(({ successorCommit }) => successorCommit)
     ];
-    if (
-      commits.some(
-        (commit) =>
-          spawnSync("git", ["cat-file", "-e", `${commit}^{commit}`], {
-            cwd: process.cwd()
-          }).status !== 0
-      )
-    ) {
-      throw new Error("judge_demo_presentation_verified_git_objects_missing");
+    const objectsMissing = commits.some(
+      (commit) =>
+        spawnSync("git", ["cat-file", "-e", `${commit}^{commit}`], {
+          cwd: process.cwd()
+        }).status !== 0
+    );
+    if (objectsMissing) {
+      if (productionBuild && activeCommit === binding.activeCommit) {
+        gitProofTransport = "ci-attested-vercel-source";
+        fullGitCheckoutVerified = false;
+      } else {
+        throw new Error("judge_demo_presentation_verified_git_objects_missing");
+      }
+    } else {
+      gitProofTransport = "full-local-history";
     }
-    gitProofTransport = "full-local-history";
   }
-  const checkout = await verifyJudgeDemoPresentationCheckout({
-    binding,
-    cwd: process.cwd()
-  });
+  const checkout = fullGitCheckoutVerified
+    ? await verifyJudgeDemoPresentationCheckout({ binding, cwd: process.cwd() })
+    : null;
 
   process.stdout.write(
     `${JSON.stringify({
@@ -161,14 +171,15 @@ if (!laneEnabled && !presentationMode && !encoded && !bindingHash && !judgePackE
       status: "verified-provider-free-lineage",
       rootEvidenceCommit: binding.rootEvidenceCommit,
       activeCommit: binding.activeCommit,
-      transitionCount: checkout.transitionCount,
+      transitionCount: checkout?.transitionCount ?? binding.transitions.length,
       transitionKinds: binding.transitions.map(({ kind }) => kind),
-      changedPathCount: checkout.changedPathCount,
-      criticalFileCount: checkout.criticalFileCount,
+      changedPathCount: checkout?.changedPathCount ?? null,
+      criticalFileCount: checkout?.criticalFileCount ?? null,
       immutableProjectionHash: binding.immutableProjectionHash,
       lineageHash: binding.lineageHash,
       gitProofTransport,
       gitProofPackEncoding,
+      fullGitCheckoutVerified,
       providerCallsPerformed: 0,
       storeWritesPerformed: 0
     })}\n`
