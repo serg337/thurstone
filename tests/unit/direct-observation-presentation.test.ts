@@ -65,11 +65,7 @@ function impactExecutionFinalization(withRepair = false, withAlias = false) {
       : {}),
     ...(withAlias
       ? {
-          originAliasFinalization: {
-            implementation: {
-              successorCommit: "2".repeat(40)
-            }
-          }
+          originAliasCommits: ["2".repeat(40), "3".repeat(40)]
         }
       : {})
   } as unknown as NonNullable<
