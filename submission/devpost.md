@@ -52,7 +52,9 @@ checkout. The current agent asked whether the user wanted to proceed, made no ch
 left state unchanged.
 
 Thurstone also tests three direct invocation invariants—privileged-field injection, a nonexistent
-item, and replay/idempotency—in a separate deterministic lane.
+item, and replay/idempotency—in a separate deterministic lane. All three passed. Its `3/3` score is
+never combined with the `24/24` semantic result because the two matrices answer different
+questions.
 
 ## How it was built
 
@@ -99,14 +101,18 @@ Live URL: https://thurstone.invarra.ai
 
 Testing instructions:
 
-1. Open `/lab` in ChatGPT's in-app browser or Chrome 149+ with
-   `chrome://flags/#enable-webmcp-testing` enabled.
-2. Wait for the catalog to report `consumer-ready`.
-3. Ask ChatGPT to inspect the cart, change a quantity, review the order, or request simulated
-   checkout.
-4. Inspect the selected tool and before/after state in Thurstone.
-5. Use **Hard reset fixture** to return to the seeded checkout.
-6. Open `/results` for the current 24-case result.
+1. Start at `/` and choose **Test Thurstone**.
+2. Complete the sixty-second Guided Demo. It works without WebMCP and clearly labels its verified
+   reference replay.
+3. Open **Contract Workshop**, describe a synthetic checkout request, declare the expected tool or
+   clarification, allowed effects, and replay policy, then choose **Validate contract**.
+4. In Chrome 149+ with `chrome://flags/#enable-webmcp-testing` enabled, run the same contract through
+   **Run native invocation**. Inspect expected versus observed behavior, trusted before/after state,
+   ledger changes, and the pass/fail receipt.
+5. Choose **Open Results** to see your current tab first, the verified `24/24` semantic evaluation
+   second, and the separate `3/3` Invocation Integrity Matrix third.
+6. Open `/lab` only for the full expert WebMCP catalog, direct controls, reset, and detailed native
+   receipts.
 
 Public repository URL: pending final public release
 
