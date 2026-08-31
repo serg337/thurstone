@@ -6,7 +6,7 @@ test("back, forward, and refresh preserve honest top-level document boundaries",
   page
 }) => {
   await page.goto("/");
-  await page.getByRole("link", { name: "Lab", exact: true }).click();
+  await page.getByRole("link", { name: "Demo", exact: true }).click();
   await expect(page).toHaveURL(/\/lab$/u);
   await expect(page.getByRole("heading", { name: "Seeded checkout sandbox" })).toBeVisible();
   await page.goBack();

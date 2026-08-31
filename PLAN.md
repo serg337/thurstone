@@ -7,13 +7,15 @@
 - Invocation Integrity evaluation: 3/3
 - Primary production origin: https://thurstone.invarra.ai
 - Unit, browser, accessibility, security, dependency, and secret-history checks: passing
+- Judge frontend F1 visual foundation: complete and verified locally
 
 ## Remaining milestones
 
-1. Complete the judge-facing guided demo and plain-language navigation.
-2. Capture final screenshots and record the under-three-minute video.
-3. Run final clean-clone, security, licensing, and official-rule checks.
-4. Make the repository public and verify MIT detection in GitHub About.
-5. Complete Devpost, save the receipt, and freeze the judged artifact.
+1. F2 — Implement and prove the human-first Intro.
+2. F3 — Implement and prove the sixty-second Guided Demo.
+3. F4 — Implement and prove the reference Contract Workshop.
+4. F5 — Implement current-session Results and separate expert depth.
+5. F6 — Complete qualification, exact deployment, Chrome verification, and final collateral prep.
+6. Complete the reserved public-repository, video, Devpost, and freeze actions after confirmation.
 
 No payment or external transaction exists in the challenge application.

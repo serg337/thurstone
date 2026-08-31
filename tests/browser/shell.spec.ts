@@ -10,9 +10,22 @@ test("judge shell is honest, navigable, and permanently marks the simulation", a
     "https://thurstone.invarra.ai"
   );
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Unit tests for meaning");
-  await expect(page.getByText("Simulated checkout — no purchase occurs.")).toBeVisible();
+  await expect(page.getByText("Synthetic checkout. No purchase occurs.")).toBeVisible();
+  const primaryNavigation = page.getByRole("navigation", { name: "Primary navigation" });
+  await expect(primaryNavigation.getByRole("link")).toHaveCount(3);
+  await expect(primaryNavigation.getByRole("link", { name: "Intro", exact: true })).toHaveAttribute(
+    "href",
+    "/"
+  );
+  await expect(primaryNavigation.getByRole("link", { name: "Demo", exact: true })).toHaveAttribute(
+    "href",
+    "/lab"
+  );
+  await expect(
+    primaryNavigation.getByRole("link", { name: "Results", exact: true })
+  ).toHaveAttribute("href", "/results");
 
-  await page.getByRole("link", { name: "Open checkout lab" }).click();
+  await primaryNavigation.getByRole("link", { name: "Demo", exact: true }).click();
   await expect(page).toHaveURL(/\/lab$/);
   await expect(page.getByRole("heading", { name: "Seeded checkout sandbox" })).toBeVisible();
   const expertDisclosure = page.getByText("Lab plumbing, reset receipts, and Gate 1 proof", {
@@ -23,14 +36,6 @@ test("judge shell is honest, navigable, and permanently marks the simulation", a
   await expertDisclosure.focus();
   await page.keyboard.press("Enter");
   await expect(page.getByText(/No operator-triggered executeOnce call yet/iu)).toBeVisible();
-
-  await page.getByRole("link", { name: "Integrity" }).click();
-  await expect(page).toHaveURL(/\/invocation-integrity$/);
-  await expect(
-    page.getByRole("heading", {
-      name: "Hostile direct calls must preserve site-defined boundaries."
-    })
-  ).toBeVisible();
 
   await page.getByRole("link", { name: "Results", exact: true }).click();
   await expect(page).toHaveURL(/\/results$/);

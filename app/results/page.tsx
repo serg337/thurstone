@@ -31,7 +31,7 @@ export default function ResultsPage() {
             contract.
           </p>
           <div className="button-row">
-            <a className="button" href="/lab">
+            <a className="button button-primary" href="/lab">
               Try the live sandbox
             </a>
             <a className="button button-secondary" href="/studio">

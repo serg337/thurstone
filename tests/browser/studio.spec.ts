@@ -84,7 +84,7 @@ test("Studio and Lab navigation replaces the top-level document", async ({ page 
   await page.evaluate(() => {
     Reflect.set(window, "__toolproofStudioDocumentMarker", "must-not-survive");
   });
-  await page.getByRole("link", { name: "Lab", exact: true }).click();
+  await page.getByRole("link", { name: "Demo", exact: true }).click();
   await expect(page).toHaveURL(/\/lab$/u);
   await expect
     .poll(() => page.evaluate(() => Reflect.get(window, "__toolproofStudioDocumentMarker") ?? null))
