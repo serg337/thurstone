@@ -12,10 +12,10 @@
 
 1. **M0 — Scope and truth freeze: PASS**
    - Freeze the call-expected BYOA boundary, two-tool catalog, evidence identities, and claims.
-2. **M1 — Contract v2 and deterministic diagnosis**
+2. **M1 — Contract v2 and deterministic diagnosis: PASS**
    - Add strict additive contract/result/assertion/diagnostic/regression schemas, canonical digests,
      taxonomy, precedence, and v1 compatibility tests.
-3. **M2 — Unified owner wizard**
+3. **M2 — Unified owner wizard: PASS**
    - Replace the primary Demo modes with one six-step owner workflow and frozen agent projection.
 4. **M3 — Isolated BYOA run**
    - Hard-navigate to `/demo/run`, register one frozen two-tool catalog, admit one native call, and

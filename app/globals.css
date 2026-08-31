@@ -3650,6 +3650,561 @@ textarea::placeholder {
   margin-top: 0;
 }
 
+/* BYOA owner workflow */
+
+.demo-safety-note {
+  display: inline-flex;
+  margin-top: 1rem;
+  color: var(--ts-silver);
+  font-size: 0.78rem;
+}
+
+.owner-demo {
+  display: grid;
+  gap: 1rem;
+}
+
+.owner-progress {
+  padding: 0.75rem;
+  background: rgba(3, 14, 20, 0.82);
+  border: 1px solid var(--ts-line);
+  border-radius: var(--radius);
+}
+
+.owner-progress > p {
+  margin: 0 0 0.65rem;
+  color: var(--ts-cyan-bright);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+
+.owner-progress ol {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.owner-progress li {
+  display: grid;
+  grid-template-columns: 1.65rem minmax(0, 1fr);
+  gap: 0.45rem;
+  align-items: center;
+  min-height: 48px;
+  padding: 0.45rem;
+  color: var(--ts-text-faint);
+  border: 1px solid transparent;
+  border-radius: var(--radius-small);
+}
+
+.owner-progress li > span {
+  display: grid;
+  width: 1.65rem;
+  height: 1.65rem;
+  color: currentColor;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  place-items: center;
+}
+
+.owner-progress li strong {
+  font-size: 0.72rem;
+  line-height: 1.25;
+}
+
+.owner-progress li[data-state="current"] {
+  color: var(--ts-ice);
+  background: var(--ts-cyan-soft);
+  border-color: rgba(54, 236, 255, 0.28);
+}
+
+.owner-progress li[data-state="complete"] {
+  color: var(--ts-cyan-bright);
+}
+
+.owner-demo-layout,
+.agent-runner-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 8fr) minmax(300px, 4fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.owner-demo-stage {
+  min-height: 620px;
+  padding: clamp(1rem, 3vw, 1.75rem);
+  background:
+    radial-gradient(circle at 92% 4%, rgba(0, 217, 255, 0.08), transparent 24rem),
+    linear-gradient(145deg, rgba(10, 28, 39, 0.96), rgba(3, 12, 18, 0.98));
+  border: 1px solid var(--ts-line);
+  border-radius: var(--radius);
+  box-shadow: var(--ts-shadow);
+}
+
+.owner-step > h2 {
+  max-width: 800px;
+  margin: 0;
+  font-size: clamp(1.9rem, 3.8vw, 3.25rem);
+  line-height: 1.05;
+}
+
+.owner-step > p:not(.eyebrow) {
+  max-width: 760px;
+  margin: 1rem 0 0;
+  color: var(--ts-text-muted);
+  font-size: 1rem;
+  line-height: 1.65;
+}
+
+.owner-boundary-example,
+.owner-tool-grid,
+.owner-contract-rules {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.owner-boundary-example article,
+.owner-contract-rules article {
+  padding: 1rem;
+  background: rgba(7, 30, 42, 0.64);
+  border: 1px solid var(--ts-line);
+  border-radius: var(--radius-small);
+}
+
+.owner-boundary-example span,
+.owner-contract-rules span {
+  display: block;
+  color: var(--ts-text-faint);
+  font-size: 0.72rem;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.owner-boundary-example strong,
+.owner-contract-rules strong {
+  display: block;
+  margin-top: 0.55rem;
+  color: var(--ts-ice);
+  line-height: 1.45;
+}
+
+.owner-boundary-example p {
+  margin: 0.55rem 0 0;
+  color: var(--ts-text-muted);
+}
+
+.owner-fixture {
+  position: sticky;
+  top: 88px;
+  padding: 1rem;
+  background: rgba(5, 20, 29, 0.94);
+  border: 1px solid var(--ts-line);
+  border-radius: var(--radius);
+}
+
+.owner-fixture h2 {
+  margin: 0;
+  font-size: 1.45rem;
+}
+
+.owner-fixture > div > p:not(.eyebrow) {
+  margin: 0.6rem 0 0;
+  color: var(--ts-text-muted);
+  line-height: 1.55;
+}
+
+.owner-fixture dl {
+  margin: 1rem 0 0;
+}
+
+.owner-fixture dl > div {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  padding: 0.55rem 0;
+  border-top: 1px solid var(--ts-line);
+}
+
+.owner-fixture dt {
+  color: var(--ts-text-muted);
+}
+
+.owner-fixture dd {
+  margin: 0;
+  color: var(--ts-ice);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+}
+
+.owner-fixture-boundary {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  color: var(--ts-silver);
+  background: var(--ts-cyan-soft);
+  border-left: 2px solid var(--ts-cyan);
+}
+
+.owner-fixture-boundary span {
+  color: var(--ts-text-muted);
+  line-height: 1.45;
+}
+
+.owner-tool-editor {
+  min-width: 0;
+  padding: 1rem;
+  background: rgba(3, 14, 20, 0.68);
+  border: 1px solid var(--ts-line);
+  border-radius: var(--radius-small);
+}
+
+.owner-tool-editor > header {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.owner-tool-editor header > div {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.owner-tool-kind {
+  color: var(--ts-cyan-bright);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.owner-tool-editor code {
+  color: var(--ts-ice);
+}
+
+.text-button {
+  min-height: 44px;
+  padding: 0.35rem 0.5rem;
+  color: var(--ts-cyan-bright);
+  font-weight: 700;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.owner-tool-editor label,
+.owner-contract-fields > label {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 0.8rem;
+  color: var(--ts-silver);
+  font-size: 0.88rem;
+  font-weight: 720;
+}
+
+.owner-tool-editor label > span,
+.owner-contract-fields > label > span {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+.owner-tool-editor small,
+.owner-contract-fields small {
+  color: var(--ts-text-faint);
+  font-weight: 500;
+}
+
+.owner-tool-editor input,
+.owner-tool-editor textarea,
+.owner-contract-fields input,
+.owner-contract-fields textarea {
+  width: 100%;
+  padding: 0.68rem 0.72rem;
+}
+
+.owner-tool-editor textarea,
+.owner-contract-fields textarea {
+  resize: vertical;
+}
+
+.owner-tool-editor details,
+.owner-contract-fields details {
+  margin-top: 0.85rem;
+  color: var(--ts-cyan);
+}
+
+.owner-tool-editor details p,
+.owner-contract-fields details p {
+  color: var(--ts-text-muted);
+  line-height: 1.55;
+}
+
+.owner-contract-fields {
+  display: grid;
+  gap: 0.8rem;
+  margin-top: 1.25rem;
+}
+
+.owner-contract-fields fieldset {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.9rem;
+  border: 1px solid var(--ts-line);
+  border-radius: var(--radius-small);
+}
+
+.owner-contract-fields legend {
+  padding: 0 0.4rem;
+  color: var(--ts-cyan-bright);
+  font-weight: 760;
+}
+
+.owner-choice {
+  display: flex;
+  gap: 0.65rem;
+  align-items: flex-start;
+  min-height: 56px;
+  padding: 0.7rem;
+  background: rgba(201, 223, 235, 0.035);
+  border: 1px solid var(--ts-line);
+  border-radius: var(--radius-small);
+  cursor: pointer;
+}
+
+.owner-choice input {
+  width: auto;
+  margin-top: 0.22rem;
+  accent-color: var(--ts-cyan);
+}
+
+.owner-choice span,
+.owner-choice strong,
+.owner-choice small {
+  display: block;
+}
+
+.owner-choice small {
+  margin-top: 0.25rem;
+  color: var(--ts-text-muted);
+}
+
+.owner-review-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+.owner-review-grid > section {
+  min-width: 0;
+  padding: 1rem;
+  background: rgba(3, 14, 20, 0.68);
+  border: 1px solid var(--ts-line);
+  border-radius: var(--radius-small);
+}
+
+.owner-review-grid h3 {
+  margin: 0;
+  color: var(--ts-ice);
+}
+
+.owner-review-grid dl {
+  margin: 0.75rem 0 0;
+}
+
+.owner-review-grid dl > div {
+  padding: 0.55rem 0;
+  border-top: 1px solid var(--ts-line);
+}
+
+.owner-review-grid dt {
+  color: var(--ts-text-faint);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+}
+
+.owner-review-grid dd {
+  margin: 0.25rem 0 0;
+  color: var(--ts-silver);
+  overflow-wrap: anywhere;
+}
+
+.owner-review-grid blockquote {
+  margin: 0.8rem 0;
+  padding: 0.75rem;
+  color: var(--ts-ice);
+  background: var(--ts-cyan-soft);
+  border-left: 2px solid var(--ts-cyan);
+}
+
+.owner-review-grid ul {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.owner-review-grid li {
+  padding: 0.7rem;
+  border: 1px solid var(--ts-line);
+  border-radius: 6px;
+}
+
+.owner-review-grid li code {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--ts-cyan-bright);
+}
+
+.owner-review-grid li p {
+  margin: 0.45rem 0 0;
+  color: var(--ts-text-muted);
+  line-height: 1.5;
+}
+
+.owner-review-technical {
+  grid-column: 1 / -1;
+  color: var(--ts-cyan);
+}
+
+.owner-review-technical > code {
+  display: block;
+  margin-top: 0.6rem;
+  color: var(--ts-text-faint);
+  overflow-wrap: anywhere;
+}
+
+.owner-review-technical pre {
+  max-height: 260px;
+  padding: 0.75rem;
+  overflow: auto;
+  color: var(--ts-silver);
+  background: var(--ts-bg-deep);
+  border: 1px solid var(--ts-line);
+}
+
+.owner-preflight {
+  display: grid;
+  gap: 0.4rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  color: var(--ts-silver);
+  list-style: none;
+}
+
+.owner-preflight li {
+  padding: 0.55rem;
+  background: rgba(0, 217, 255, 0.045);
+  border: 1px solid rgba(54, 236, 255, 0.16);
+  border-radius: 6px;
+}
+
+.owner-demo-actions {
+  display: flex;
+  gap: 0.65rem;
+  justify-content: flex-end;
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--ts-line);
+}
+
+.demo-run-page {
+  min-height: calc(100vh - 180px);
+  padding: 3rem 0 7rem;
+}
+
+.agent-runner-heading {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.agent-runner-heading > div {
+  max-width: 820px;
+}
+
+.agent-runner-heading h1,
+.agent-runner-empty h1,
+.agent-runner-loading h1 {
+  margin: 0;
+  font-size: clamp(2.3rem, 5vw, 4.6rem);
+  line-height: 0.98;
+}
+
+.agent-runner-heading p:not(.eyebrow),
+.agent-runner-empty > p {
+  color: var(--ts-text-muted);
+  line-height: 1.65;
+}
+
+.agent-runner-content {
+  display: grid;
+  gap: 1rem;
+}
+
+.agent-request-card,
+.agent-catalog-preview,
+.agent-runner-status,
+.agent-runner-empty,
+.agent-runner-loading {
+  padding: clamp(1rem, 3vw, 1.5rem);
+  background: rgba(5, 20, 29, 0.94);
+  border: 1px solid var(--ts-line);
+  border-radius: var(--radius);
+}
+
+.agent-request-card > span {
+  color: var(--ts-text-faint);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+.agent-request-card h2,
+.agent-catalog-preview h2 {
+  margin: 0.55rem 0 0;
+  color: var(--ts-ice);
+  font-size: clamp(1.45rem, 3vw, 2.3rem);
+}
+
+.agent-catalog-preview > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-top: 1rem;
+}
+
+.agent-catalog-preview article {
+  min-width: 0;
+  padding: 0.8rem;
+  border: 1px solid var(--ts-line);
+  border-radius: var(--radius-small);
+}
+
+.agent-catalog-preview code {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--ts-cyan-bright);
+}
+
+.agent-catalog-preview article p,
+.agent-runner-status {
+  color: var(--ts-text-muted);
+  line-height: 1.55;
+}
+
 @keyframes pulse {
   0%,
   100% {
@@ -4303,6 +4858,27 @@ textarea::placeholder {
     position: static;
   }
 
+  .owner-progress ol {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .owner-demo-layout,
+  .agent-runner-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .owner-fixture {
+    position: static;
+  }
+
+  .owner-review-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .owner-review-technical {
+    grid-column: auto;
+  }
+
   .meaning-card {
     max-width: 640px;
   }
@@ -4529,6 +5105,42 @@ textarea::placeholder {
   .demo-mode-nav a {
     padding-inline: 0.35rem;
     font-size: 0.78rem;
+  }
+
+  .owner-progress {
+    overflow-x: auto;
+  }
+
+  .owner-progress ol {
+    grid-template-columns: repeat(6, minmax(140px, 1fr));
+    min-width: 860px;
+  }
+
+  .owner-demo-stage {
+    min-height: 0;
+    padding: 1rem;
+  }
+
+  .owner-boundary-example,
+  .owner-tool-grid,
+  .owner-contract-rules,
+  .agent-catalog-preview > div {
+    grid-template-columns: 1fr;
+  }
+
+  .owner-tool-editor > header,
+  .agent-runner-heading {
+    display: grid;
+  }
+
+  .owner-demo-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .owner-demo-actions .button,
+  .agent-runner-heading .button {
+    width: 100%;
   }
 
   .guided-stage {
