@@ -12,13 +12,33 @@ import "./globals.css";
 export const metadata: Metadata = {
   metadataBase: new URL(PRODUCT_ORIGIN),
   title: {
-    default: `${PRODUCT_NAME} — unit tests for WebMCP meaning`,
+    default: `${PRODUCT_NAME} — semantic testing for WebMCP`,
     template: `%s · ${PRODUCT_NAME}`
   },
-  description: `${PRODUCT_NAME} tests whether WebMCP tool behavior follows human-approved meaning rather than superficial wording.`,
+  description: `${PRODUCT_NAME} verifies whether AI agents choose the intended WebMCP tools, use safe arguments, and produce the site-defined effects.`,
   alternates: { canonical: "/" },
   applicationName: PRODUCT_NAME,
-  authors: [{ name: "Sergio Valencia" }]
+  authors: [{ name: "Sergio Valencia" }],
+  openGraph: {
+    type: "website",
+    title: `${PRODUCT_NAME} — semantic testing for WebMCP`,
+    description: `${PRODUCT_NAME} verifies whether AI agents choose the intended WebMCP tools, use safe arguments, and produce the site-defined effects.`,
+    url: PRODUCT_ORIGIN,
+    images: [
+      {
+        url: "/thurstone-og.png",
+        width: 1200,
+        height: 630,
+        alt: `${PRODUCT_NAME} semantic judge for WebMCP`
+      }
+    ]
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: `${PRODUCT_NAME} — semantic testing for WebMCP`,
+    description: `${PRODUCT_NAME} verifies whether AI agents choose the intended WebMCP tools, use safe arguments, and produce the site-defined effects.`,
+    images: ["/thurstone-og.png"]
+  }
 };
 
 export const viewport: Viewport = {

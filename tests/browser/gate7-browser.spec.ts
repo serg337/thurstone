@@ -24,16 +24,19 @@ test("cold slow-network rendering honors reduced motion", async ({ page }) => {
     await route.continue();
   });
   await page.goto(`/?cold=${Date.now()}`, { waitUntil: "domcontentloaded", timeout: 30_000 });
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("Unit tests for meaning", {
-    timeout: 20_000
-  });
-  const motion = await page.getByRole("link", { name: "Open checkout lab" }).evaluate((element) => {
-    const style = getComputedStyle(element);
-    return {
-      animationDuration: style.animationDuration,
-      transitionDuration: style.transitionDuration
-    };
-  });
+  await expect(page.getByRole("heading", { level: 1 })).toContainText(
+    "AI agents can operate websites.",
+    { timeout: 20_000 }
+  );
+  const motion = await page
+    .getByRole("link", { name: "Test Thurstone", exact: true })
+    .evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        animationDuration: style.animationDuration,
+        transitionDuration: style.transitionDuration
+      };
+    });
   expect(Number.parseFloat(motion.animationDuration)).toBeLessThanOrEqual(0.001);
   expect(Number.parseFloat(motion.transitionDuration)).toBeLessThanOrEqual(0.001);
 });

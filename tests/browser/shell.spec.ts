@@ -9,7 +9,9 @@ test("judge shell is honest, navigable, and permanently marks the simulation", a
     "href",
     "https://thurstone.invarra.ai"
   );
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("Unit tests for meaning");
+  await expect(page.getByRole("heading", { level: 1 })).toContainText(
+    "AI agents can operate websites."
+  );
   await expect(page.getByText("Synthetic checkout. No purchase occurs.")).toBeVisible();
   const primaryNavigation = page.getByRole("navigation", { name: "Primary navigation" });
   await expect(primaryNavigation.getByRole("link")).toHaveCount(3);
@@ -117,47 +119,49 @@ test("Probe controls disclose policy while inference routes fail closed", async 
 });
 
 // thurstone-impact-execution:acceptance-start
-test("home names the release audience and the missing semantic test", async ({ page }) => {
+test("home states the WebMCP trust problem in human language", async ({ page }) => {
   await page.goto("/");
   await expect(
-    page.getByText("For product, QA, safety, and release teams shipping agent-callable sites.")
+    page.getByText(
+      "Thurstone verifies that agents do what the website owner intended—and nothing the owner prohibited."
+    )
   ).toBeVisible();
   await expect(
     page.getByText(
-      "Handler tests prove a tool can run. They do not prove that a natural-language request selected the human-approved action or produced the represented page effect."
+      "Traditional handler tests prove that code can run. Thurstone tests the semantic layer: whether natural-language intent becomes the approved WebMCP action and effect."
     )
   ).toBeVisible();
 });
 
-test("home shows the complete human-agent release loop", async ({ page }) => {
+test("home shows the complete five-stage verification flow", async ({ page }) => {
   await page.goto("/");
-  const loop = page.getByRole("list", { name: "Thurstone release loop" });
-  await expect(loop).toContainText("Human declares meaning");
-  await expect(loop).toContainText("Agent acts through WebMCP");
-  await expect(loop).toContainText("Thurstone verifies the effect");
-  await expect(loop).toContainText("Reviewer decides");
+  const loop = page.getByRole("list", { name: "Thurstone verification flow" });
+  await expect(loop).toContainText("Human contract");
+  await expect(loop).toContainText("Agent decision");
+  await expect(loop).toContainText("Native WebMCP");
+  await expect(loop).toContainText("Trusted state");
+  await expect(loop).toContainText("Pass/fail receipt");
 });
 
-test("home labels the any-browser and supported-WebMCP paths before navigation", async ({
-  page
-}) => {
+test("home exposes the primary test and verified-results paths", async ({ page }) => {
   await page.goto("/");
+  await expect(page.getByRole("link", { name: "Test Thurstone", exact: true })).toHaveAttribute(
+    "href",
+    "/demo"
+  );
   await expect(
-    page.getByRole("link", { name: "Inspect sealed Results — works in any browser" })
+    page.getByRole("link", { name: "See verified results", exact: true })
   ).toHaveAttribute("href", "/results");
   await expect(
-    page.getByRole("link", { name: "Open checkout lab — WebMCP browser required" })
-  ).toHaveAttribute("href", "/lab");
-  await expect(
-    page.getByText(
-      "Results works anywhere. Lab ready = tools offered → found → executable. Requires the ChatGPT in-app browser or Chrome 149+ with WebMCP."
-    )
+    page.getByText(/No account · synthetic data · guided path works without WebMCP/iu)
   ).toBeVisible();
 });
 
-test("home translates the three WebMCP readiness stages", async ({ page }) => {
+test("home distinguishes the native boundary from trusted-state verification", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByText(/Lab ready = tools offered → found → executable/iu)).toBeVisible();
+  const flow = page.getByRole("list", { name: "Thurstone verification flow" });
+  await expect(flow).toContainText("Native WebMCP");
+  await expect(flow).toContainText("Trusted state");
 });
 
 test("home keeps both judge paths inside the first viewport", async ({ page }) => {
@@ -165,8 +169,8 @@ test("home keeps both judge paths inside the first viewport", async ({ page }) =
   const viewport = page.viewportSize();
   expect(viewport).not.toBeNull();
   for (const link of [
-    page.getByRole("link", { name: "Inspect sealed Results — works in any browser" }),
-    page.getByRole("link", { name: "Open checkout lab — WebMCP browser required" })
+    page.getByRole("link", { name: "Test Thurstone", exact: true }),
+    page.getByRole("link", { name: "See verified results", exact: true })
   ]) {
     const box = await link.boundingBox();
     expect(box).not.toBeNull();

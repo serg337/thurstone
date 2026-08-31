@@ -96,7 +96,9 @@ test("Studio and Lab navigation replaces the top-level document", async ({ page 
   ).toBeVisible();
 });
 
-test("Home does not prefetch Studio and hard-navigates into Lab", async ({ page }) => {
+test("Home does not prefetch Studio and the transitional Demo link hard-navigates into Lab", async ({
+  page
+}) => {
   const studioRequests: string[] = [];
   page.on("request", (request) => {
     if (/\/studio(?:\?|$)/u.test(request.url())) studioRequests.push(request.url());
@@ -106,7 +108,7 @@ test("Home does not prefetch Studio and hard-navigates into Lab", async ({ page 
     Reflect.set(window, "__toolproofHomeDocumentMarker", "must-not-survive");
   });
   await expect.poll(() => studioRequests).toEqual([]);
-  await page.getByRole("link", { name: "Open checkout lab" }).click();
+  await page.getByRole("link", { name: "Demo", exact: true }).click();
   await expect(page).toHaveURL(/\/lab$/u);
   await expect
     .poll(() => page.evaluate(() => Reflect.get(window, "__toolproofHomeDocumentMarker") ?? null))

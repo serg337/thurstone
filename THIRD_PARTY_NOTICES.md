@@ -122,4 +122,14 @@ nor redistributes those binary files.
 
 ## Assets
 
-The application uses project-authored CSS, text, and interface shapes with system fonts. Its tracked public images are project-authored: one screenshot preserves the measured build's ToolProof working-name presentation, one carries the current Thurstone presentation over the same authentic Results content, and `public/thurstone-devpost-thumbnail.jpg` is deterministically derived from the verified Thurstone screenshot with only a project-owned SVG text overlay. The thumbnail is 1200×800, 148,339 bytes, SHA-256 `9145872a26f156dadd9f2384b97c54eda7ef13a686c4e478eab384ef75121b15`, and contains no ICC, EXIF, XMP, third-party logo, stock image, or font file. The unrelated pre-existing Devpost draft thumbnail must be replaced with this exact asset. The project contains no third-party image, icon, music, video, sound, or dataset. The narrowly adapted runner source is disclosed above.
+The application uses project-authored CSS, text, inline interface icons, and system fonts. Sergio
+Valencia supplied and owns the original Thurstone artwork used by the submission. The tracked
+1536×1024 master is `public/thurstone-thumbnail.png`, SHA-256
+`ae8d260287b8b5ddd29899af0b678461c5df6c8e2909084790c7269257ace1c6`. The responsive
+960×640 WebP hero derivative is `public/thurstone-hero.webp`, SHA-256
+`4bf9320fea5a9b9ebe56b9dde1f6975b9c531a960c59a8dcc127adb6c6b88a10`. The padded 1200×630
+social derivative is `public/thurstone-og.png`, SHA-256
+`7248961c16b51a1a558e973c3a2b05060fd67b87a760489ba34b4db4a45a4089`. Both derivatives
+were generated deterministically with ImageMagick from the unchanged project-owned master. No
+third-party logo, stock image, remote font, music, video, sound, or dataset is used. The narrowly
+adapted runner source is disclosed above.
