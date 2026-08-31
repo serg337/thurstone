@@ -13,12 +13,10 @@ test("judge shell is honest, navigable, and permanently marks the simulation", a
     "AI agents can operate websites."
   );
   await expect(page.getByText("Synthetic checkout. No purchase occurs.")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Thurstone home" })).toHaveAttribute("href", "/");
+  await expect(page.locator('link[rel="icon"]').first()).toHaveAttribute("href", /icon.*\.png/u);
   const primaryNavigation = page.getByRole("navigation", { name: "Primary navigation" });
   await expect(primaryNavigation.getByRole("link")).toHaveCount(3);
-  await expect(primaryNavigation.getByRole("link", { name: "Intro", exact: true })).toHaveAttribute(
-    "href",
-    "/"
-  );
   await expect(primaryNavigation.getByRole("link", { name: "Demo", exact: true })).toHaveAttribute(
     "href",
     "/demo"
@@ -26,9 +24,18 @@ test("judge shell is honest, navigable, and permanently marks the simulation", a
   await expect(
     primaryNavigation.getByRole("link", { name: "Results", exact: true })
   ).toHaveAttribute("href", "/results");
+  await expect(
+    primaryNavigation.getByRole("link", { name: "Research", exact: true })
+  ).toHaveAttribute("href", "/research");
+  await expect(primaryNavigation.locator('a[aria-current="page"]')).toHaveCount(0);
 
   await primaryNavigation.getByRole("link", { name: "Demo", exact: true }).click();
   await expect(page).toHaveURL(/\/demo$/);
+  await expect(
+    page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", {
+      name: "Demo"
+    })
+  ).toHaveAttribute("aria-current", "page");
   await expect(
     page.getByRole("heading", {
       name: "Test the boundary between what a user said and what a site allows."
@@ -55,6 +62,11 @@ test("judge shell is honest, navigable, and permanently marks the simulation", a
     })
   ).toBeVisible({ timeout: 15_000 });
   await expect(page.getByLabel("Current evaluation summary")).toContainText("24");
+  await expect(
+    page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", {
+      name: "Results"
+    })
+  ).toHaveAttribute("aria-current", "page");
   await expect(page.getByText(/23\s*\/\s*24/u)).toHaveCount(0);
   expect(pageErrors).toEqual([]);
 });

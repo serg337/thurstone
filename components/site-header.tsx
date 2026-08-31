@@ -1,21 +1,14 @@
 /* eslint-disable @next/next/no-html-link-for-pages -- Trust-surface links intentionally force a new top-level document. */
 
-import { PRODUCT_NAME } from "@/lib/brand";
+import Image from "next/image";
 
-const navigation = [
-  { href: "/", label: "Intro" },
-  { href: "/demo", label: "Demo" },
-  { href: "/results", label: "Results" }
-];
+import { PrimaryNavigation } from "@/components/primary-navigation";
+import { PRODUCT_NAME } from "@/lib/brand";
 
 function BrandMark() {
   return (
     <span className="brand-mark" aria-hidden="true">
-      <svg viewBox="0 0 40 40" role="presentation">
-        <path d="M12 17v-4.5a8 8 0 0 1 16 0V17" />
-        <path d="M9 17.5h22v17H9z" />
-        <path d="m14.5 25.5 3.7 3.7 7.8-8" />
-      </svg>
+      <Image src="/thurstone-mark.png" alt="" width={256} height={256} priority sizes="52px" />
     </span>
   );
 }
@@ -37,13 +30,7 @@ export function SiteHeader({ isolated = false }: { readonly isolated?: boolean }
         {isolated ? (
           <span className="fixture-id">Isolated calibration</span>
         ) : (
-          <nav aria-label="Primary navigation">
-            {navigation.map(({ href, label }) => (
-              <a href={href} key={href}>
-                {label}
-              </a>
-            ))}
-          </nav>
+          <PrimaryNavigation />
         )}
       </div>
     </header>

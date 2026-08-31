@@ -1,6 +1,6 @@
 "use client";
 
-import { useReducer, useState } from "react";
+import { useReducer, useState, useSyncExternalStore } from "react";
 
 import { GuidedStateInspector } from "@/components/demo/guided-state-inspector";
 import { VerdictCard } from "@/components/ui/verdict-card";
@@ -16,6 +16,7 @@ import { createGuidedReplayResult } from "@/lib/demo/result";
 import { writeDemoResult } from "@/lib/demo/session-storage";
 
 const APP_COMMIT = process.env.NEXT_PUBLIC_TOOLPROOF_COMMIT_SHA?.trim() || "unversioned";
+const subscribeHydration = () => () => undefined;
 
 function SourceLabel({ children }: { readonly children: React.ReactNode }) {
   return <span className="guided-source-label">{children}</span>;
@@ -206,6 +207,11 @@ export function GuidedDemo() {
   const [state, dispatch] = useReducer(guidedDemoReducer, initialGuidedDemoState);
   const [savingResult, setSavingResult] = useState(false);
   const [storageError, setStorageError] = useState<string>();
+  const hydrated = useSyncExternalStore(
+    subscribeHydration,
+    () => true,
+    () => false
+  );
   const phaseIndex = guidedPhases.indexOf(state.phase);
   const now = () => new Date().toISOString();
 
@@ -250,7 +256,7 @@ export function GuidedDemo() {
         <button
           className="button button-secondary"
           type="button"
-          disabled={phaseIndex === 0 || state.liveMutationCommitted}
+          disabled={!hydrated || phaseIndex === 0 || state.liveMutationCommitted}
           onClick={() => dispatch({ type: "back", at: now() })}
         >
           Back
@@ -258,6 +264,7 @@ export function GuidedDemo() {
         <button
           className="button button-secondary"
           type="button"
+          disabled={!hydrated}
           onClick={() => dispatch({ type: "restart", at: now() })}
         >
           Restart verified fixture
@@ -266,7 +273,7 @@ export function GuidedDemo() {
           <button
             className="button button-primary"
             type="button"
-            disabled={savingResult}
+            disabled={!hydrated || savingResult}
             onClick={() => void advance()}
           >
             {savingResult ? "Saving this tab’s result…" : nextLabel(state.phase)}

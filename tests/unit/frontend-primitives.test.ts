@@ -1,5 +1,5 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { SimulationNotice } from "@/components/simulation-notice";
 import { SiteHeader } from "@/components/site-header";
@@ -7,17 +7,34 @@ import { RuntimeStatus } from "@/components/ui/runtime-status";
 import { SignalFlow } from "@/components/ui/signal-flow";
 import { VerdictCard } from "@/components/ui/verdict-card";
 
+vi.mock("next/navigation", () => ({ usePathname: () => "/results" }));
+
 afterEach(cleanup);
 
 describe("Thurstone judge frontend primitives", () => {
   it("presents the three-item judge navigation without exposing expert routes", () => {
-    render(SiteHeader({}));
+    const { container } = render(SiteHeader({}));
 
     const navigation = screen.getByRole("navigation", { name: "Primary navigation" });
     const links = within(navigation).getAllByRole("link");
     expect(links).toHaveLength(3);
-    expect(links.map((link) => link.textContent)).toEqual(["Intro", "Demo", "Results"]);
-    expect(links.map((link) => link.getAttribute("href"))).toEqual(["/", "/demo", "/results"]);
+    expect(links.map((link) => link.textContent)).toEqual(["Demo", "Results", "Research"]);
+    expect(links.map((link) => link.getAttribute("href"))).toEqual([
+      "/demo",
+      "/results",
+      "/research"
+    ]);
+    expect(within(navigation).getByRole("link", { name: "Results" })).toHaveAttribute(
+      "aria-current",
+      "page"
+    );
+    expect(within(navigation).getByRole("link", { name: "Demo" })).not.toHaveAttribute(
+      "aria-current"
+    );
+    expect(container.querySelector(".brand-mark img")).toHaveAttribute(
+      "src",
+      expect.stringContaining("thurstone-mark.png")
+    );
     expect(within(navigation).queryByText("Studio")).not.toBeInTheDocument();
     expect(within(navigation).queryByText("Integrity")).not.toBeInTheDocument();
   });
