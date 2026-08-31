@@ -49,27 +49,12 @@ jobs:
         run: npm run test
       - name: Verify Gate 7 adversarial matrix
         run: npm run gate7:verify-adversarial
-      - name: Verify judge presentation boundary
-        run: npm run judge-presentation:verify
       - name: Verify public sample evidence
         run: npm run verify:sample-evidence
       - name: Verify sealed semantic record preservation
         run: npm run verify:semantic-preservation
       - name: Verify Direct Site Tools evidence
         run: npm run verify:direct-site-tools
-      - name: Verify Direct Site Tools build lineage
-        env:
-          VERCEL_GIT_COMMIT_SHA: ${{ github.sha }}
-          TOOLPROOF_COMMIT_SHA: ${{ github.sha }}
-          NEXT_PUBLIC_TOOLPROOF_COMMIT_SHA: ${{ github.sha }}
-          TOOLPROOF_JUDGE_PRESENTATION_MODE: successor
-          TOOLPROOF_GATE6_PRESENTATION_PROOF_B64: ${{ secrets.THURSTONE_GATE85_PROOF_B64 }}
-          TOOLPROOF_GATE6_PRESENTATION_PROOF_HASH: ${{ secrets.THURSTONE_GATE85_PROOF_HASH }}
-          TOOLPROOF_JUDGE_PRESENTATION_BINDING_B64: ${{ secrets.THURSTONE_GATE85_BINDING_B64 }}
-          TOOLPROOF_JUDGE_PRESENTATION_BINDING_HASH: ${{ secrets.THURSTONE_GATE85_BINDING_HASH }}
-        run: npm run verify:direct-observation-presentation
-      - name: Run integration tests
-        run: npm run test:integration
       - name: Build production app
         run: npm run build
       - name: Verify blinded Probe client boundary

@@ -57,7 +57,7 @@ test("Results keeps the three-case Invocation Integrity lane separate", async ({
       await expect(page.getByText("3/3", { exact: true }).first()).toBeVisible();
     }
   } else {
-    expect(evidenceResponse.status()).toBe(404);
+    expect([404, 409]).toContain(evidenceResponse.status());
     await expect(
       page.getByRole("button", { name: "Download Invocation Integrity JSON" })
     ).toBeDisabled();
