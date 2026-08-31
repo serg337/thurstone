@@ -4205,6 +4205,128 @@ textarea::placeholder {
   line-height: 1.55;
 }
 
+.agent-request-card .button {
+  margin-top: 1rem;
+}
+
+.agent-setup-disclosure {
+  color: var(--ts-cyan);
+}
+
+.agent-setup-disclosure p {
+  color: var(--ts-text-muted);
+  line-height: 1.55;
+}
+
+.byoa-terminal-result {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: clamp(1.2rem, 4vw, 2.4rem);
+  background:
+    radial-gradient(circle at 90% 0%, rgba(0, 217, 255, 0.1), transparent 24rem),
+    rgba(5, 20, 29, 0.96);
+  border: 1px solid var(--ts-line-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--ts-shadow);
+}
+
+.byoa-terminal-result > h1 {
+  max-width: 820px;
+  margin: 0;
+  font-size: clamp(2.25rem, 5vw, 4.5rem);
+  line-height: 0.98;
+}
+
+.byoa-terminal-result > p:not(.eyebrow) {
+  color: var(--ts-text-muted);
+  font-size: 1.05rem;
+}
+
+.byoa-terminal-result code {
+  color: var(--ts-cyan-bright);
+}
+
+.byoa-terminal-assertions {
+  display: grid;
+  gap: 0.5rem;
+  margin: 1.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.byoa-terminal-assertions li {
+  display: flex;
+  gap: 0.65rem;
+  padding: 0.7rem;
+  background: rgba(0, 217, 255, 0.045);
+  border: 1px solid rgba(54, 236, 255, 0.16);
+  border-radius: 8px;
+}
+
+.byoa-terminal-assertions li[data-passed="false"] {
+  color: var(--ts-amber-bright);
+  background: var(--ts-amber-soft);
+  border-color: rgba(255, 151, 0, 0.28);
+}
+
+.byoa-terminal-assertions strong,
+.byoa-terminal-assertions small {
+  display: block;
+}
+
+.byoa-terminal-assertions small {
+  margin-top: 0.2rem;
+  color: var(--ts-text-muted);
+}
+
+.byoa-terminal-state {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin-top: 1rem;
+}
+
+.byoa-terminal-state article {
+  padding: 0.8rem;
+  background: rgba(201, 223, 235, 0.035);
+  border: 1px solid var(--ts-line);
+  border-radius: 8px;
+}
+
+.byoa-terminal-state span,
+.byoa-terminal-state strong,
+.byoa-terminal-state small {
+  display: block;
+}
+
+.byoa-terminal-state span,
+.byoa-terminal-state small {
+  color: var(--ts-text-faint);
+}
+
+.byoa-terminal-state strong {
+  margin: 0.25rem 0;
+  color: var(--ts-ice);
+}
+
+.byoa-terminal-result > details {
+  margin-top: 1rem;
+  color: var(--ts-cyan);
+}
+
+.byoa-terminal-result pre {
+  max-height: 360px;
+  padding: 0.8rem;
+  overflow: auto;
+  color: var(--ts-silver);
+  background: var(--ts-bg-deep);
+  border: 1px solid var(--ts-line);
+}
+
+.byoa-terminal-result .button-row {
+  margin-top: 1rem;
+}
+
 @keyframes pulse {
   0%,
   100% {

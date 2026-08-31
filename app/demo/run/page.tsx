@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { AgentRunner } from "@/components/demo/agent-runner";
+import { ByoaRunner } from "@/components/demo/byoa-runner";
 
 export const metadata: Metadata = {
   title: "Live test · Demo",
@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 export default function DemoRunPage() {
   return (
     <div className="page-shell demo-run-page">
-      <AgentRunner />
+      <ByoaRunner />
     </div>
   );
 }

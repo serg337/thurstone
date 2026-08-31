@@ -40,6 +40,7 @@ export interface CheckoutTraceLedgerOptions {
   readonly getRegistryHash: () => string;
   readonly getArgumentMode: () => "unverified" | "object" | "json-string";
   readonly appCommit: string;
+  readonly toolsetVersion?: string;
   readonly origin?: string;
   readonly userAgent?: string;
 }
@@ -121,7 +122,7 @@ export class CheckoutTraceLedger implements CheckoutSessionTraceSink {
       registryHash: this.options.getRegistryHash(),
       handlerVersion: HANDLER_VERSIONS[event.toolName],
       domainVersion: CHECKOUT_DOMAIN_VERSION,
-      toolsetVersion: CHECKOUT_TOOLSET_VERSION,
+      toolsetVersion: this.options.toolsetVersion ?? CHECKOUT_TOOLSET_VERSION,
       appCommit: this.options.appCommit,
       runtime: runtimeIdentity(event.source, this.options),
       status: event.outcome,
