@@ -3458,6 +3458,296 @@ textarea::placeholder {
   }
 }
 
+.results-page > * + * {
+  margin-top: clamp(1.1rem, 2.5vw, 1.8rem);
+}
+
+.results-reference > * + * {
+  margin-top: 1rem;
+}
+
+.results-level-heading {
+  display: flex;
+  gap: 1.5rem;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: clamp(1rem, 3vw, 1.8rem) 0 0.25rem;
+}
+
+.results-level-heading > div {
+  max-width: 780px;
+}
+
+.results-level-heading h2 {
+  max-width: 760px;
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 3.5rem);
+  letter-spacing: -0.045em;
+}
+
+.results-level-heading p:not(.eyebrow) {
+  max-width: 720px;
+  color: var(--ink-muted);
+}
+
+.session-result-section {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(54, 236, 255, 0.24);
+}
+
+.session-result-section::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  content: "";
+  background: linear-gradient(var(--ts-blue-bright), var(--ts-cyan-bright));
+}
+
+.session-empty {
+  min-height: 230px;
+}
+
+.session-empty .button {
+  margin-top: 1.2rem;
+}
+
+.session-source-label,
+.session-provenance {
+  color: var(--ink-faint);
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.7rem;
+}
+
+.session-request {
+  margin: 1rem 0;
+  padding: 1rem 1.15rem;
+  color: var(--ink);
+  font-size: 1.05rem;
+  line-height: 1.55;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--ts-silver);
+  border-radius: 10px;
+}
+
+.session-decision-grid,
+.session-state-grid {
+  display: grid;
+  gap: 0.7rem;
+  margin-top: 0.8rem;
+}
+
+.session-decision-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.session-state-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.session-decision-grid article,
+.session-state-grid article {
+  min-width: 0;
+  padding: 0.9rem;
+  background: var(--cyan-soft);
+  border: 1px solid rgba(54, 236, 255, 0.16);
+  border-radius: 11px;
+}
+
+.session-decision-grid span,
+.session-state-grid span,
+.session-state-grid small,
+.session-decision-grid strong,
+.session-state-grid strong {
+  display: block;
+}
+
+.session-decision-grid span,
+.session-state-grid span {
+  margin-bottom: 0.35rem;
+  color: var(--ink-faint);
+  font-size: 0.66rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.session-decision-grid strong,
+.session-state-grid strong {
+  color: var(--ink);
+}
+
+.session-state-grid small {
+  margin-top: 0.22rem;
+  color: var(--ink-muted);
+}
+
+.session-assertions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+  padding: 0;
+  margin: 1rem 0;
+  list-style: none;
+}
+
+.session-assertions li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.6rem;
+  align-items: start;
+  padding: 0.75rem;
+  background: rgba(0, 217, 255, 0.035);
+  border: 1px solid rgba(54, 236, 255, 0.14);
+  border-radius: 10px;
+}
+
+.session-assertions li[data-passed="false"] {
+  background: var(--amber-soft);
+  border-color: rgba(255, 151, 0, 0.25);
+}
+
+.session-assertions li > span {
+  color: var(--cyan);
+  font-weight: 800;
+}
+
+.session-assertions li[data-passed="false"] > span {
+  color: var(--amber);
+}
+
+.session-assertions strong,
+.session-assertions small {
+  display: block;
+}
+
+.session-assertions small {
+  margin-top: 0.15rem;
+  color: var(--ink-muted);
+}
+
+.expert-disclosure {
+  margin-top: 1rem;
+}
+
+.expert-disclosure > summary {
+  width: fit-content;
+  color: var(--cyan);
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.expert-disclosure > pre,
+.expert-disclosure > .evidence-table-wrap,
+.expert-disclosure > .expert-receipt-grid {
+  margin-top: 0.85rem;
+}
+
+.session-provenance {
+  display: block;
+  margin-top: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.integrity-compact-table td:first-child strong,
+.integrity-compact-table td:first-child small {
+  display: block;
+}
+
+.integrity-compact-table td:first-child small {
+  margin-top: 0.2rem;
+  color: var(--ink-faint);
+}
+
+.results-integrity {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.evidence-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+
+.evidence-table {
+  width: 100%;
+  min-width: 720px;
+  color: var(--ink-muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.evidence-table th,
+.evidence-table td {
+  padding: 0.7rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--line);
+}
+
+.evidence-table th {
+  color: var(--ink);
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.evidence-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.integrity-compact-table {
+  min-width: 940px;
+}
+
+.expert-receipt-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.expert-receipt-grid > div {
+  min-width: 0;
+  padding: 0.75rem;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+
+.expert-receipt-grid dt {
+  color: var(--ink-faint);
+  font-size: 0.68rem;
+}
+
+.expert-receipt-grid dd {
+  margin: 0.35rem 0 0;
+  color: var(--ink-muted);
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.68rem;
+  overflow-wrap: anywhere;
+}
+
+.results-conclusion blockquote {
+  max-width: 900px;
+  margin: 1rem 0;
+  padding: 1rem 1.2rem;
+  color: var(--ink);
+  font-size: 1.05rem;
+  line-height: 1.55;
+  background: rgba(0, 217, 255, 0.04);
+  border: 1px solid rgba(54, 236, 255, 0.17);
+  border-left: 3px solid var(--cyan);
+  border-radius: 10px;
+}
+
 @media (max-width: 900px) {
   .hero,
   .judge-path {
@@ -3782,8 +4072,99 @@ textarea::placeholder {
 
   .workshop-two-fields,
   .workshop-checks,
-  .workshop-result-state {
+  .workshop-result-state,
+  .session-decision-grid,
+  .session-state-grid,
+  .session-assertions,
+  .expert-receipt-grid {
     grid-template-columns: 1fr;
+  }
+
+  .results-level-heading {
+    display: block;
+  }
+
+  .results-level-heading .status-pill {
+    margin-top: 1rem;
+  }
+
+  .results-level-heading h2 {
+    font-size: 2rem;
+  }
+
+  .session-result-section .panel-heading {
+    display: block;
+  }
+
+  .session-result-section .status-pill {
+    margin-top: 0.8rem;
+  }
+
+  .results-integrity .panel-heading {
+    display: block;
+  }
+
+  .results-integrity .status-pill {
+    margin-top: 0.8rem;
+  }
+
+  .session-result-section .button-row,
+  .results-conclusion .button-row {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .integrity-compact-table {
+    min-width: 0;
+  }
+
+  .integrity-compact-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .integrity-compact-table,
+  .integrity-compact-table tbody,
+  .integrity-compact-table tr,
+  .integrity-compact-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .integrity-compact-table tbody {
+    display: grid;
+    gap: 0.7rem;
+  }
+
+  .integrity-compact-table tr {
+    padding: 0.5rem;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+  }
+
+  .integrity-compact-table td {
+    display: grid;
+    grid-template-columns: 6.2rem minmax(0, 1fr);
+    gap: 0.55rem;
+    padding: 0.55rem;
+    overflow-wrap: anywhere;
+  }
+
+  .integrity-compact-table td::before {
+    color: var(--ink-faint);
+    content: attr(data-label);
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
   }
 
   .operation-id-field {

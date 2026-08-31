@@ -109,14 +109,14 @@ test("current Results survive navigation and reload without exposing superseded 
 }) => {
   await page.goto("/results");
   await expect(
-    page.getByRole("heading", { name: "Every approved behavior passed." })
+    page.getByRole("heading", { name: "Every approved reference behavior passed." })
   ).toBeVisible();
   await expect(page.getByText(/23\s*\/\s*24/u)).toHaveCount(0);
   await page.goto("/");
   await page.goBack();
   await expect(page).toHaveURL(/\/results$/u);
   await expect(
-    page.getByRole("heading", { name: "Every approved behavior passed." })
+    page.getByRole("heading", { name: "Every approved reference behavior passed." })
   ).toBeVisible();
   await page.reload();
   await expect(page.getByLabel("Current evaluation summary")).toContainText("24");

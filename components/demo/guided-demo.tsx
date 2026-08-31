@@ -1,6 +1,6 @@
 "use client";
 
-import { useReducer } from "react";
+import { useReducer, useState } from "react";
 
 import { GuidedStateInspector } from "@/components/demo/guided-state-inspector";
 import { VerdictCard } from "@/components/ui/verdict-card";
@@ -12,6 +12,10 @@ import {
   initialGuidedDemoState,
   type GuidedPhase
 } from "@/lib/demo/guided";
+import { createGuidedReplayResult } from "@/lib/demo/result";
+import { writeDemoResult } from "@/lib/demo/session-storage";
+
+const APP_COMMIT = process.env.NEXT_PUBLIC_TOOLPROOF_COMMIT_SHA?.trim() || "unversioned";
 
 function SourceLabel({ children }: { readonly children: React.ReactNode }) {
   return <span className="guided-source-label">{children}</span>;
@@ -184,6 +188,9 @@ function GuidedPhaseContent({ phase }: { readonly phase: GuidedPhase }) {
         produced one simulated pending-checkout transition and no payment or external effect.
       </p>
       <div className="guided-verdict-actions">
+        <a className="button button-primary" href="/results?session=current">
+          View my result
+        </a>
         <a className="button button-primary" href="#contract-workshop">
           Write your own contract
         </a>
@@ -197,8 +204,32 @@ function GuidedPhaseContent({ phase }: { readonly phase: GuidedPhase }) {
 
 export function GuidedDemo() {
   const [state, dispatch] = useReducer(guidedDemoReducer, initialGuidedDemoState);
+  const [savingResult, setSavingResult] = useState(false);
+  const [storageError, setStorageError] = useState<string>();
   const phaseIndex = guidedPhases.indexOf(state.phase);
   const now = () => new Date().toISOString();
+
+  async function advance(): Promise<void> {
+    const at = now();
+    if (state.phase === "explicit_state_verification") {
+      setSavingResult(true);
+      setStorageError(undefined);
+      try {
+        const result = await createGuidedReplayResult({
+          sessionId: `demo_${crypto.randomUUID()}`,
+          testId: `workshop_${crypto.randomUUID()}`,
+          buildCommit: APP_COMMIT,
+          completedAt: at
+        });
+        writeDemoResult(window.sessionStorage, result);
+      } catch {
+        setStorageError("This tab could not store the replay result. The verdict remains visible.");
+      } finally {
+        setSavingResult(false);
+      }
+    }
+    dispatch({ type: "next", at });
+  }
 
   return (
     <section
@@ -235,12 +266,18 @@ export function GuidedDemo() {
           <button
             className="button button-primary"
             type="button"
-            onClick={() => dispatch({ type: "next", at: now() })}
+            disabled={savingResult}
+            onClick={() => void advance()}
           >
-            {nextLabel(state.phase)}
+            {savingResult ? "Saving this tab’s result…" : nextLabel(state.phase)}
           </button>
         ) : null}
       </div>
+      {storageError ? (
+        <p className="workshop-error" role="alert">
+          {storageError}
+        </p>
+      ) : null}
       <p className="guided-timing">
         Reference replay · no provider call · no purchase · fixture {guidedReference.fixtureId}
       </p>

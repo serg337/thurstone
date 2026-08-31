@@ -4,6 +4,7 @@ import { checkoutRequest, createCheckoutFixture } from "@/lib/domain/checkout";
 import { createWorkshopContract } from "@/lib/demo/contract";
 import {
   createContractValidationResult,
+  createGuidedReplayResult,
   createNativeWorkshopResult,
   parseDemoResult
 } from "@/lib/demo/result";
@@ -54,6 +55,23 @@ describe("Workshop result", () => {
     expect(result.ledgerDiff.eventCount).toBe(0);
   });
 
+  it("creates a distinct verified Guided replay result for this tab", async () => {
+    const result = await createGuidedReplayResult({
+      sessionId: "demo_44444444-4444-4444-8444-444444444444",
+      testId: "workshop_55555555-5555-4555-8555-555555555555",
+      buildCommit: "c".repeat(40),
+      completedAt: "2026-08-31T00:00:02.000Z"
+    });
+    expect(result).toMatchObject({
+      source: "verified_replay",
+      verdict: "pass",
+      actual: { kind: "call", toolName: "checkout_request" },
+      ledgerDiff: { eventCount: 1, stateTransitionCount: 1, replayObserved: false }
+    });
+    expect(result.assertions).toHaveLength(6);
+    expect(result.assertions.every(({ passed }) => passed)).toBe(true);
+  });
+
   it("passes exactly-one native checkout evidence and fails a missing replay", () => {
     const before = createCheckoutFixture();
     const transition = checkoutRequest(
@@ -96,6 +114,7 @@ describe("Workshop result", () => {
     expect(readDemoResult(window.sessionStorage)).toBeNull();
 
     expect(() => parseDemoResult({ ...result, unexpected: true })).toThrow();
+    expect(() => parseDemoResult({ ...result, version: "thurstone-demo-result@2" })).toThrow();
     window.sessionStorage.setItem(DEMO_RESULT_STORAGE_KEY, "x".repeat(DEMO_RESULT_MAX_BYTES + 1));
     expect(() => readDemoResult(window.sessionStorage)).toThrow(/exceeds/iu);
   });

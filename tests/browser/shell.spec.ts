@@ -51,7 +51,7 @@ test("judge shell is honest, navigable, and permanently marks the simulation", a
   await expect(page).toHaveURL(/\/results$/);
   await expect(
     page.getByRole("heading", {
-      name: "Every approved behavior passed."
+      name: "Every approved reference behavior passed."
     })
   ).toBeVisible({ timeout: 15_000 });
   await expect(page.getByLabel("Current evaluation summary")).toContainText("24");

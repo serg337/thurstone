@@ -37,6 +37,9 @@ test("Guided Demo completes the six-step reference walkthrough without a model c
   );
   await expect(page.getByText("Live native execution", { exact: true })).toHaveCount(0);
   await expect(page.getByText(/Reference replay · no provider call/iu)).toBeVisible();
+  await expect
+    .poll(() => page.evaluate(() => sessionStorage.getItem("thurstone:demo-result@1")))
+    .toContain('"source":"verified_replay"');
   expect(inferenceRequests).toEqual([]);
 });
 

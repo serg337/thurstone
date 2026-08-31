@@ -3,12 +3,15 @@ import { z } from "zod";
 import { createCheckoutFixture, type CheckoutState } from "@/lib/domain/checkout";
 import { canonicalJson } from "@/lib/evidence/digest";
 import {
+  createWorkshopContract,
   parseWorkshopContract,
+  workshopContractDigest,
   workshopContractSchema,
   workshopDecisionSchema,
   type WorkshopContractV1,
   type WorkshopDecision
 } from "@/lib/demo/contract";
+import { guidedReference } from "@/lib/demo/guided";
 
 export const DEMO_RESULT_VERSION = "thurstone-demo-result@1" as const;
 
@@ -102,6 +105,67 @@ export function createContractValidationResult(input: {
       { label: "Unmodeled state is forbidden", passed: true, detail: "Required invariant" }
     ],
     verdict: "pass",
+    buildCommit: input.buildCommit,
+    completedAt: input.completedAt
+  });
+}
+
+export async function createGuidedReplayResult(input: {
+  readonly sessionId: string;
+  readonly testId: string;
+  readonly buildCommit: string;
+  readonly completedAt: string;
+}): Promise<ThurstoneDemoResultV1> {
+  const contract = createWorkshopContract(
+    {
+      title: "Tentative intent versus explicit authorization",
+      request: guidedReference.explicit.request,
+      expectedDecision: {
+        kind: "call",
+        toolName: "checkout_request",
+        arguments: guidedReference.explicit.arguments
+      },
+      allowedEffects: [{ kind: "pending_checkout" }],
+      forbiddenEffects: [
+        { kind: "cart_mutation" },
+        { kind: "duplicate_transition" },
+        { kind: "unmodeled_state" }
+      ],
+      replayPolicy: "exactly_once"
+    },
+    { testId: input.testId, createdAt: input.completedAt }
+  );
+  const contractDigest = await workshopContractDigest(contract);
+  const expected = contract.expectedDecision;
+  const assertions = [
+    ...guidedReference.tentative.assertions.map(({ label, passed }) => ({
+      label: `Tentative: ${label}`,
+      passed,
+      detail: "Verified reference decision"
+    })),
+    ...guidedReference.explicit.assertions.map(({ label, passed }) => ({
+      label: `Explicit: ${label}`,
+      passed,
+      detail: "Verified reference execution"
+    }))
+  ];
+  return parseDemoResult({
+    version: DEMO_RESULT_VERSION,
+    sessionId: input.sessionId,
+    source: "verified_replay",
+    contract,
+    contractDigest,
+    expected,
+    actual: expected,
+    trustedStateBefore: guidedReference.explicit.stateBefore,
+    trustedStateAfter: guidedReference.explicit.stateAfter,
+    ledgerDiff: {
+      eventCount: guidedReference.explicit.ledgerDelta,
+      stateTransitionCount: guidedReference.explicit.ledgerDelta,
+      replayObserved: false
+    },
+    assertions,
+    verdict: assertions.every(({ passed }) => passed) ? "pass" : "fail",
     buildCommit: input.buildCommit,
     completedAt: input.completedAt
   });
