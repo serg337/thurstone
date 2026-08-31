@@ -922,6 +922,21 @@ nav a:hover {
   gap: 1rem;
 }
 
+.page-shell > .studio-workbench {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  margin-inline: 0;
+}
+
+.studio-workbench > *,
+.studio-workbench h1,
+.studio-workbench .eyebrow {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
 .studio-workbench > .route-hero {
   margin-bottom: 1.5rem;
 }
