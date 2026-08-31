@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 
 import { DemoClient } from "@/components/demo/demo-client";
-import { StatusPill } from "@/components/status-pill";
 
 export const metadata: Metadata = {
   title: "Demo",
@@ -14,19 +13,11 @@ export default function DemoPage() {
     <div className="page-shell demo-page">
       <header className="demo-hero" aria-labelledby="demo-title">
         <div>
-          <p className="eyebrow">Guided proof · reference checkout environment</p>
-          <h1 id="demo-title">
-            Test the boundary between what a user said and what a site allows.
-          </h1>
+          <p className="eyebrow">Interactive reference checkout</p>
+          <h1 id="demo-title">See whether intent becomes the permitted WebMCP action.</h1>
           <p>
-            Start with a verified sixty-second walkthrough. Then write a bounded contract or use the
-            live checkout catalog directly.
+            Start with a 60-second boundary. Then define your own contract or use the live sandbox.
           </p>
-        </div>
-        <div className="demo-readiness" aria-label="Demo availability">
-          <StatusPill state="ready">Guided demo ready</StatusPill>
-          <StatusPill state="neutral">Native runtime checks in Sandbox</StatusPill>
-          <StatusPill state="neutral">Live agent test unavailable</StatusPill>
         </div>
       </header>
       <DemoClient />

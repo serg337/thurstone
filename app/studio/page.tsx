@@ -335,12 +335,12 @@ export default async function StudioPage() {
         </p>
         <h1 id="studio-contract-first">
           {frozen
-            ? "One intent boundary, reviewed before release."
-            : "One intent boundary, not yet approved."}
+            ? "The contract defines what each request is allowed to mean."
+            : "This contract still requires human approval."}
         </h1>
         <p>
-          Tentative checkout intent requires clarification and no mutation. Explicit intent permits
-          one pending human-approval request.
+          Tentative checkout intent must stay tentative. Explicit authorization may create one
+          pending approval—and nothing beyond it.
         </p>
       </section>
       <StudioClient target={LAST_VERIFIED_TARGET} reviewPackage={reviewPackage} />

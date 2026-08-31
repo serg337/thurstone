@@ -1,56 +1,52 @@
 import { HeroSignalBackdrop } from "@/components/hero-signal-backdrop";
 import { StatusPill } from "@/components/status-pill";
 import { SignalFlow, type SignalFlowStage } from "@/components/ui/signal-flow";
-import { PRODUCT_BYLINE } from "@/lib/brand";
 
 const problemCards = Object.freeze([
   Object.freeze({
     number: "01",
     title: "Selection",
-    text: "Did the request choose the intended tool—or correctly ask for clarification?"
+    text: "Did the agent choose the intended tool—or ask when the request was unclear?"
   }),
   Object.freeze({
     number: "02",
     title: "Arguments",
-    text: "Were the requested values preserved while privileged and undeclared fields stayed out?"
+    text: "Did the call include the requested values—and exclude forbidden ones?"
   }),
   Object.freeze({
     number: "03",
     title: "Effects",
-    text: "Did trusted state change exactly once, in the way the website represented?"
+    text: "Did trusted state change exactly once, in the permitted way?"
   })
 ]);
 
 const flowStages: readonly SignalFlowStage[] = Object.freeze([
   Object.freeze({
     title: "Human contract",
-    summary: "The website owner declares the intended action and allowed effects.",
+    summary: "Declare the intended action, allowed effects, and forbidden effects.",
     detail:
-      "The contract fixes the request meaning, expected action or clarification, arguments, state effects, replay policy, and prohibited outcomes before the test runs."
+      "The contract is fixed before the test, including arguments, replay policy, and prohibited outcomes."
   }),
   Object.freeze({
     title: "Agent decision",
     summary: "A fresh agent context decides what the request requires.",
     detail:
-      "The decision is captured separately from the contract so expected answers do not become instructions to the agent under test."
+      "Expected answers stay outside the agent context so the contract cannot instruct the decision."
   }),
   Object.freeze({
     title: "Native WebMCP",
-    summary: "Any selected action crosses the page’s real Site Tools boundary.",
-    detail:
-      "Thurstone records the live catalog, canonical arguments, native result, cancellation state, and exact application build."
+    summary: "Run any selected tool through the page’s live catalog.",
+    detail: "Thurstone records the tool, arguments, result, and exact application build."
   }),
   Object.freeze({
     title: "Trusted state",
-    summary: "Before and after state are checked independently of the tool response.",
-    detail:
-      "A returned success flag is not enough. Thurstone compares the domain state and append-only operation record with the contract’s allowed and forbidden effects."
+    summary: "Check before-and-after state independently of the tool response.",
+    detail: "A tool’s success message is never the verdict; observed state and ledger effects are."
   }),
   Object.freeze({
     title: "Pass/fail receipt",
-    summary: "Every assertion resolves to an understandable release result.",
-    detail:
-      "The verdict links the request, contract, decision, call, effects, build, and limitations without combining unrelated test matrices."
+    summary: "Compare the observed decision and effects with the contract.",
+    detail: "Each assertion resolves to a clear pass or issue with its evidence source."
   })
 ]);
 
@@ -65,7 +61,7 @@ const examples = Object.freeze([
   Object.freeze({
     request: "“I’m considering checkout.”",
     behavior: "Ask for confirmation",
-    tool: "no target call",
+    tool: "no tool call",
     invariant: "No checkout request is created.",
     state: "pass"
   }),
@@ -97,12 +93,8 @@ export default function HomePage() {
             <span>Thurstone verifies what they actually do.</span>
           </h1>
           <p className="intro-lede">
-            Thurstone verifies that agents do what the website owner intended—and nothing the owner
-            prohibited.
-          </p>
-          <p className="intro-problem">
-            Test whether an agent chose the intended tool, supplied safe arguments, and produced the
-            effect your site represents.
+            Turn a website owner’s expectations into a testable contract. Thurstone runs it through
+            live WebMCP and checks the permitted effect—and that prohibited effects did not occur.
           </p>
           <div className="button-row intro-actions" aria-label="Start with Thurstone">
             <a className="button button-primary" href="/demo">
@@ -123,8 +115,8 @@ export default function HomePage() {
           <p className="eyebrow">The missing test</p>
           <h2 id="problem-title">Publishing a tool is not the same as proving its meaning.</h2>
           <p>
-            Traditional handler tests prove that code can run. Thurstone tests the semantic layer:
-            whether natural-language intent becomes the approved WebMCP action and effect.
+            Handler tests prove a tool can run. Thurstone verifies whether natural-language intent
+            becomes the approved WebMCP action and effect.
           </p>
         </div>
         <div className="problem-grid">
@@ -141,19 +133,15 @@ export default function HomePage() {
       <section className="intro-section" aria-labelledby="flow-title">
         <div className="intro-section-heading">
           <p className="eyebrow">From intention to evidence</p>
-          <h2 id="flow-title">One declared contract. Five inspectable stages.</h2>
-          <p>
-            The expected behavior stays separate from the agent and is compared with what the live
-            page actually did.
-          </p>
+          <h2 id="flow-title">From human intent to verified effect.</h2>
+          <p>The contract stays separate from the agent, then meets the evidence at the verdict.</p>
         </div>
         <SignalFlow stages={flowStages} />
       </section>
 
       <section className="intro-section" aria-labelledby="examples-title">
         <div className="intro-section-heading">
-          <p className="eyebrow">Concrete boundaries</p>
-          <h2 id="examples-title">Meaning changes the action. Invariants constrain the effect.</h2>
+          <h2 id="examples-title">The same catalog can require different behavior.</h2>
         </div>
         <div className="example-grid">
           {examples.map((example) => (
@@ -171,11 +159,11 @@ export default function HomePage() {
         <div className="intro-section-heading">
           <p className="eyebrow">Current verified evidence</p>
           <h2 id="proof-title">Verified against the live WebMCP boundary.</h2>
-          <p>Two separate test matrices answer two different questions.</p>
+          <p>Semantic behavior and invocation integrity answer different questions.</p>
         </div>
         <div className="proof-grid">
           <article className="proof-card proof-semantic">
-            <StatusPill state="ready">Verified reference run</StatusPill>
+            <StatusPill state="ready">Verified semantic run</StatusPill>
             <p className="proof-score">24/24</p>
             <h3>Semantic behavior</h3>
             <p>24 approved behaviors passed · 20 native calls · 4 correct clarifications</p>
@@ -197,27 +185,17 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="intro-limitations" aria-labelledby="limits-title">
-        <div>
-          <p className="eyebrow">Evidence, not certification</p>
-          <h2 id="limits-title">A strong result about one declared contract and tested build.</h2>
-        </div>
+      <aside className="intro-scope" aria-label="Thurstone scope">
+        <strong>Scope matters.</strong>
         <p>
-          Thurstone is a testing and audit system—not runtime enforcement, guaranteed security, or
-          proof about arbitrary websites. The reference environment uses synthetic checkout data and
-          cannot purchase anything.
+          Thurstone verifies a declared contract and tested build. It is not runtime enforcement,
+          certification, guaranteed security, or proof about arbitrary websites.
         </p>
-      </section>
+      </aside>
 
       <section className="intro-final-cta" aria-labelledby="final-cta-title">
-        <p className="eyebrow">See where intent becomes behavior</p>
-        <h2 id="final-cta-title">
-          Thurstone is the missing testing layer for agent-callable websites.
-        </h2>
-        <p>
-          Start with the guided boundary, write your own reference contract, or open the full WebMCP
-          sandbox.
-        </p>
+        <h2 id="final-cta-title">Test a WebMCP boundary yourself.</h2>
+        <p>Follow the guided example, define your own contract, or use the live sandbox.</p>
         <div className="button-row">
           <a className="button button-primary" href="/demo#guided-demo">
             Start guided demo
@@ -229,7 +207,6 @@ export default function HomePage() {
             View Results
           </a>
         </div>
-        <p className="intro-byline">{PRODUCT_BYLINE}</p>
       </section>
     </div>
   );

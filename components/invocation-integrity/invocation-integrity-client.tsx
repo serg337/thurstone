@@ -1439,9 +1439,9 @@ export function InvocationIntegrityClient() {
       <section className="panel" aria-labelledby="invocation-integrity-boundary">
         <div className="panel-heading">
           <div>
-            <span className="eyebrow">Declared boundary</span>
+            <span className="eyebrow">Fixed test boundary</span>
             <h2 id="invocation-integrity-boundary">
-              Zero model calls. Zero server durable-store writes.
+              Fixed inputs. Independent trusted-state verification.
             </h2>
           </div>
           <StatusPill state={statusState(phase)}>
@@ -1453,28 +1453,28 @@ export function InvocationIntegrityClient() {
           </StatusPill>
         </div>
         <p>
-          The browser supplies only native receipts and traces from the source-fixed calls. The
-          verifier accepts no caller-selected tool, payload, schema, expected value, target URL, or
-          trusted state and replays the frozen sequence in a fresh server-only store.
+          Thurstone fixes the tools, payloads, expected outcomes, and trusted-state source before
+          the run. The browser contributes only native receipts and traces.
         </p>
-        <p>
-          The one-run guard uses an exclusive browser LockManager claim keyed to this exact build in
-          same-origin localStorage for this browser profile. Clearing site storage or using another
-          browser or profile can bypass it; no in-app reset is provided, and the guard is not a
-          security boundary.
-        </p>
-        <ul>
-          {LIMITATIONS.map((limitation) => (
-            <li key={limitation}>{limitation}</li>
-          ))}
-        </ul>
+        <details className="expert-disclosure">
+          <summary>Test limits and one-run behavior</summary>
+          <p>
+            The browser guard prevents an accidental repeat for this build and profile. It is not a
+            security boundary and can be bypassed by clearing site storage or using another profile.
+          </p>
+          <ul>
+            {LIMITATIONS.map((limitation) => (
+              <li key={limitation}>{limitation}</li>
+            ))}
+          </ul>
+        </details>
       </section>
 
       <section className="panel" aria-labelledby="invocation-integrity-runtime">
         <div className="panel-heading">
           <div>
-            <span className="eyebrow">Secure same-origin preflight</span>
-            <h2 id="invocation-integrity-runtime">Provider registration and consumer execution</h2>
+            <span className="eyebrow">Current browser</span>
+            <h2 id="invocation-integrity-runtime">Live WebMCP status</h2>
           </div>
           <span className="fixture-id">{APP_COMMIT.slice(0, 12)}</span>
         </div>
@@ -1511,8 +1511,8 @@ export function InvocationIntegrityClient() {
       <section className="panel" aria-labelledby="invocation-integrity-cases">
         <div className="panel-heading">
           <div>
-            <span className="eyebrow">Frozen sequence · no arbitrary inputs</span>
-            <h2 id="invocation-integrity-cases">II-01 → II-02 → II-03</h2>
+            <span className="eyebrow">Three fixed cases</span>
+            <h2 id="invocation-integrity-cases">One bounded integrity run.</h2>
           </div>
           <span className="fixture-id">{completedCallCount} / 4 native calls</span>
         </div>

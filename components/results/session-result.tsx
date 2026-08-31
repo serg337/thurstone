@@ -89,10 +89,10 @@ export function SessionResult() {
         </div>
         <div>
           <p className="eyebrow">Your test · this browser session</p>
-          <h2>No test result in this tab yet.</h2>
+          <h2>Run a test to see its result here.</h2>
           <p>
-            Run the sixty-second walkthrough or write a contract. Thurstone will place only that
-            synthetic result here, in this tab.
+            Complete the guided demo or define a contract. Only this tab’s synthetic result appears
+            here.
           </p>
           <a className="button button-primary" href="/demo">
             Test Thurstone

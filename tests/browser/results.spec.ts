@@ -97,7 +97,7 @@ test("Results presents the current verified run without superseded comparison ev
   await expect(summary).toContainText("Requests correctly clarified");
 
   const boundary = page
-    .getByRole("heading", { name: "Uncertainty did not become an unintended checkout." })
+    .getByRole("heading", { name: "Tentative intent stayed tentative." })
     .locator("..");
   await expect(boundary).toContainText(
     "I’m still considering whether to move this cart to checkout."
@@ -154,7 +154,7 @@ test("Results orders this tab's session before separate 24/24 and 3/3 evidence",
     );
   expect(levels).toEqual(["session", "reference", "integrity"]);
   await expect(page.getByText("24/24 semantic behaviors", { exact: true })).toBeVisible();
-  await expect(page.getByText("3/3 separate integrity cases", { exact: true })).toBeVisible();
+  await expect(page.getByText("3/3 integrity cases", { exact: true })).toBeVisible();
   await expect(page.getByText(/27\s*\/\s*27/u)).toHaveCount(0);
 
   const integrity = page.getByRole("table", { name: "Invocation Integrity Matrix" });
@@ -174,7 +174,7 @@ test("clearing a session removes only the validated tab result", async ({ page }
   await page.goto("/results?session=current");
   await page.getByRole("button", { name: "Clear my session result" }).click();
   await expect(
-    page.getByRole("heading", { name: "No test result in this tab yet." })
+    page.getByRole("heading", { name: "Run a test to see its result here." })
   ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Every approved reference behavior passed." })
@@ -204,5 +204,5 @@ test("invalid session data fails closed without hiding verified reference result
   await expect(
     page.getByRole("heading", { name: "Every approved reference behavior passed." })
   ).toBeVisible();
-  await expect(page.getByText("3/3 separate integrity cases", { exact: true })).toBeVisible();
+  await expect(page.getByText("3/3 integrity cases", { exact: true })).toBeVisible();
 });

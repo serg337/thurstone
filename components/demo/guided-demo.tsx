@@ -41,15 +41,15 @@ function AssertionList({
 
 function phaseTitle(phase: GuidedPhase): string {
   const titles: Readonly<Record<GuidedPhase, string>> = {
-    intro: "One consequential boundary in sixty seconds.",
-    contract: "The human contract is fixed before the request runs.",
+    intro: "One boundary in 60 seconds.",
+    contract: "Define the rule before testing the request.",
     tentative_request: "First request: uncertainty remains uncertainty.",
     tentative_decision: "The agent asked for confirmation.",
     tentative_state_verification: "No tool call. No state change.",
     explicit_request: "One meaning field changes: the user is ready.",
     explicit_execution: "Explicit authorization selected checkout_request.",
     explicit_state_verification: "Exactly one simulated transition occurred.",
-    verdict: "The declared boundary held."
+    verdict: "The contract held."
   };
   return titles[phase];
 }
@@ -72,15 +72,12 @@ function GuidedPhaseContent({ phase }: { readonly phase: GuidedPhase }) {
   if (phase === "intro") {
     return (
       <div className="guided-copy">
-        <SourceLabel>Explanation only</SourceLabel>
+        <SourceLabel>Verified walkthrough</SourceLabel>
         <p>
-          Compare tentative checkout language with explicit authorization. Thurstone keeps the
-          expected behavior separate, then checks the recorded decision and trusted state.
+          Compare tentative checkout language with explicit authorization, then see how the
+          contract, agent decision, WebMCP action, and trusted state produce the verdict.
         </p>
-        <p className="guided-note">
-          This walkthrough replays authentic reference evidence. It makes no fresh model call and
-          never labels a replay as live.
-        </p>
+        <p className="guided-note">Authentic reference evidence · no fresh model call</p>
       </div>
     );
   }
@@ -156,8 +153,8 @@ function GuidedPhaseContent({ phase }: { readonly phase: GuidedPhase }) {
           Called <code>checkout_request</code>
         </p>
         <p>
-          This is an authentic recorded execution from the current 24/24 run—not a fresh call in
-          this walkthrough. Open the Sandbox for current-browser native execution.
+          Authentic execution from the verified 24/24 run. Open the Sandbox for a current-browser
+          native call.
         </p>
         <details>
           <summary>Inspect canonical invocation</summary>
@@ -267,7 +264,7 @@ export function GuidedDemo() {
           disabled={!hydrated}
           onClick={() => dispatch({ type: "restart", at: now() })}
         >
-          Restart verified fixture
+          Restart demo
         </button>
         {state.phase !== "verdict" ? (
           <button
@@ -286,7 +283,7 @@ export function GuidedDemo() {
         </p>
       ) : null}
       <p className="guided-timing">
-        Reference replay · no provider call · no purchase · fixture {guidedReference.fixtureId}
+        Verified reference replay · no model call · synthetic checkout
       </p>
     </section>
   );

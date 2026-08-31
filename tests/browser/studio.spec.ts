@@ -91,7 +91,7 @@ test("Studio and Demo navigation replaces the top-level document", async ({ page
     .toBeNull();
   await expect(
     page.getByRole("heading", {
-      name: "Test the boundary between what a user said and what a site allows."
+      name: "See whether intent becomes the permitted WebMCP action."
     })
   ).toBeVisible();
 });
@@ -121,19 +121,21 @@ test("Studio leads with the human-approved contract before operational detail", 
   if (process.env.TOOLPROOF_BASE_URL) {
     await expect(page.getByText("Human-approved contract", { exact: true })).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "One intent boundary, reviewed before release." })
+      page.getByRole("heading", {
+        name: "The contract defines what each request is allowed to mean."
+      })
     ).toBeVisible();
     await expect(page.getByText("Contract awaiting human review", { exact: true })).toHaveCount(0);
   } else {
     await expect(page.getByText("Contract awaiting human review", { exact: true })).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "One intent boundary, not yet approved." })
+      page.getByRole("heading", { name: "This contract still requires human approval." })
     ).toBeVisible();
     await expect(page.getByText("Human-approved contract", { exact: true })).toHaveCount(0);
   }
   await expect(
     page.getByText(
-      "Tentative checkout intent requires clarification and no mutation. Explicit intent permits one pending human-approval request."
+      "Tentative checkout intent must stay tentative. Explicit authorization may create one pending approval—and nothing beyond it."
     )
   ).toBeVisible();
 });

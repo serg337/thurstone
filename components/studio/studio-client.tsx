@@ -374,14 +374,14 @@ export function StudioClient({ target, reviewPackage }: StudioClientProps) {
 
   return (
     <div className="page-shell route-page studio-workbench">
-      <header className="route-hero">
+      <header className="studio-expert-heading">
         <div>
-          <p className="eyebrow">Studio · authoring trust surface</p>
-          <h1>Freeze meaning before measuring behavior.</h1>
+          <p className="eyebrow">Expert contract detail</p>
+          <h2>Frozen cases, catalog, and release receipts.</h2>
           <p>
             {authoringLocked
-              ? "The original Authoring Builder is permanently terminated. This document is read-only for Sergio’s exact review."
-              : "The Authoring Builder may inspect and draft. Sergio remains the semantic authority for every identity, boundary, argument, effect, fixture, and revision."}
+              ? "This view is read-only. It preserves the exact human-approved contract and protocol evidence."
+              : "Drafting can prepare the package, but only human review can approve its meanings and boundaries."}
           </p>
         </div>
         <StatusPill state={packageFrozen ? "ready" : packageReady ? "pending" : "blocked"}>

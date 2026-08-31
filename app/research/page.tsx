@@ -18,7 +18,6 @@ const papers = [
       "When the target is latent—such as intent or understanding—one correct response is not enough. Stability across meaning-preserving representations is evidence that a system is tracking the underlying phenomenon rather than the surface form.",
     thurstone:
       "LIP explains why Thurstone tests controlled families of requests instead of treating one polished prompt as sufficient release evidence.",
-    equations: ["r = g(Φ, c, ε)", "Observe B(r); evaluate the latent target"],
     researchHref: "https://invarra.ai/research#the-latent-invariance-principle-full-paper",
     pdfHref: "https://invarra.ai/papers/latent_invariance_principle.pdf",
     publicationHref: "https://zenodo.org/records/21203401"
@@ -31,7 +30,6 @@ const papers = [
       "CSR separates the canonical semantic unit, the language or presentation used to realize it, and the observed system outcome. Meaning is the experimental unit; realizations are controlled repeated measurements.",
     thurstone:
       "CSR gives Thurstone its core structure: declare one meaning, exercise valid realizations, and compare each observed WebMCP decision and effect with the same contract.",
-    equations: ["p = π(s, c)", "p₁ ≡sem p₂ for valid realizations"],
     researchHref: "https://invarra.ai/research#canonical-semantic-realization-full-paper",
     pdfHref: "https://invarra.ai/papers/canonical_semantic_realization.pdf",
     publicationHref: "https://zenodo.org/records/21203393"
@@ -46,9 +44,8 @@ export default function ResearchPage() {
           <p className="eyebrow">Research foundation</p>
           <h1 id="research-title">The measurement research behind Thurstone.</h1>
           <p>
-            Thurstone is built on a simple discipline: define what meaning must remain stable,
-            control how that meaning is represented, then measure what the live system actually
-            does.
+            Thurstone treats meaning as something to measure: hold intent constant, vary wording
+            deliberately, and verify the live system’s decision and effect.
           </p>
           <div className="button-row">
             <a
@@ -70,7 +67,7 @@ export default function ResearchPage() {
       <section className="research-method" aria-labelledby="research-method-title">
         <div className="research-section-heading">
           <p className="eyebrow">From principle to product</p>
-          <h2 id="research-method-title">Two papers. One inspectable testing discipline.</h2>
+          <h2 id="research-method-title">Why one correct prompt is not enough.</h2>
           <p>
             LIP explains why stable behavior across valid variation matters. CSR defines how to
             separate meaning, realization, and outcome. Thurstone applies both ideas to a live
@@ -99,10 +96,10 @@ export default function ResearchPage() {
       <section className="research-papers" aria-labelledby="research-papers-title">
         <div className="research-section-heading">
           <p className="eyebrow">Published foundation</p>
-          <h2 id="research-papers-title">Read the papers at their canonical source.</h2>
+          <h2 id="research-papers-title">The two ideas behind Thurstone.</h2>
           <p>
-            Thurstone provides the product connection below. Invarra remains the authoritative home
-            for the complete papers, publication records, license, and PDF downloads.
+            Read the product connection here. Invarra hosts the full papers, PDFs, licenses, and
+            publication records.
           </p>
         </div>
 
@@ -125,11 +122,6 @@ export default function ResearchPage() {
                 <h4>Why it matters to Thurstone</h4>
                 <p>{paper.thurstone}</p>
               </section>
-              <div className="research-equations" aria-label={`${paper.title} notation`}>
-                {paper.equations.map((equation) => (
-                  <code key={equation}>{equation}</code>
-                ))}
-              </div>
             </div>
             <footer className="research-paper-actions">
               <a href={paper.researchHref} target="_blank" rel="noreferrer">
@@ -148,12 +140,11 @@ export default function ResearchPage() {
 
       <aside className="panel phalanx-bridge" aria-labelledby="phalanx-bridge-title">
         <div>
-          <p className="eyebrow">Sibling product · a different boundary</p>
-          <h2 id="phalanx-bridge-title">From measurement to enforcement.</h2>
+          <p className="eyebrow">Sibling product</p>
+          <h2 id="phalanx-bridge-title">Thurstone tests. Phalanx governs.</h2>
           <p>
-            Thurstone tests whether agent behavior matches a declared WebMCP contract. Phalanx
-            governs which written instructions may control protected LLM outputs and actions at
-            runtime. Different products, one evidence discipline.
+            Thurstone measures whether behavior matched a declared contract. Phalanx controls which
+            instructions may influence protected AI actions at runtime.
           </p>
         </div>
         <a
@@ -165,19 +156,6 @@ export default function ResearchPage() {
           Explore Phalanx
         </a>
       </aside>
-
-      <section className="research-boundary" aria-labelledby="research-boundary-title">
-        <p className="eyebrow">Public research boundary</p>
-        <h2 id="research-boundary-title">
-          Principles are public. Operational test machinery is not.
-        </h2>
-        <p>
-          The papers explain the measurement argument. They do not publish private corpus methods,
-          admission procedures, transformation libraries, scoring logic, thresholds, or
-          client-specific protocols. Thurstone&apos;s public demo remains a bounded synthetic
-          reference environment.
-        </p>
-      </section>
     </div>
   );
 }

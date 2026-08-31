@@ -85,23 +85,27 @@ export default async function LabPage() {
     <div className="page-shell route-page">
       <header className="route-hero">
         <div>
-          <p className="eyebrow">Live WebMCP path</p>
-          <h1>Run one sealed decision through the page&apos;s real tool catalog.</h1>
+          <p className="eyebrow">Live reference environment</p>
+          <h1>Explore the live WebMCP sandbox.</h1>
           <p>
-            Open this route in the official ChatGPT in-app browser. In Chrome 149+, open{" "}
-            <code>chrome://flags/#enable-webmcp-testing</code>, choose Enabled, and relaunch Chrome.
+            Use the reference cart, invoke page tools, test replay and reset, and compare tool
+            responses with trusted state.
           </p>
-          <p>
-            If Thurstone reports <code>consumer-mismatch</code>, close other same-origin Thurstone
-            tabs, then reload this tab.
-          </p>
+          <details className="expert-disclosure route-setup">
+            <summary>Native browser setup</summary>
+            <p>
+              Use the official ChatGPT in-app browser. In Chrome 149+, enable{" "}
+              <code>chrome://flags/#enable-webmcp-testing</code> and relaunch. If discovery reports
+              a mismatch, close other Thurstone tabs and reload this one.
+            </p>
+          </details>
           <a className="button button-secondary" href="/results">
-            WebMCP unavailable? Inspect sealed Results
+            View verified results
           </a>
         </div>
-        <StatusPill state="ready">Provider-free replay</StatusPill>
+        <StatusPill state="ready">Provider-free sandbox</StatusPill>
       </header>
-      <div id="impact-execution-judge-action" aria-label="Primary live WebMCP judge action" />
+      <div id="impact-execution-judge-action" />
       <LabClient />
       <ProbeLaunchPanel />
     </div>

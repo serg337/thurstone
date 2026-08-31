@@ -14,9 +14,9 @@ test("Guided Demo completes the six-step reference walkthrough without a model c
   await page.goto("/demo");
 
   await expect(page).toHaveTitle("Demo · Thurstone");
-  await expect(page.getByText("Guided demo ready", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "One boundary in 60 seconds." })).toBeVisible();
   await expect(page.getByLabel("Step 1 of 6")).toBeVisible();
-  await expect(page.getByText("Explanation only", { exact: true })).toBeVisible();
+  await expect(page.getByText("Verified walkthrough", { exact: true })).toBeVisible();
 
   for (const action of [
     "Read the contract",
@@ -36,7 +36,7 @@ test("Guided Demo completes the six-step reference walkthrough without a model c
     "Uncertainty stayed uncertain"
   );
   await expect(page.getByText("Live native execution", { exact: true })).toHaveCount(0);
-  await expect(page.getByText(/Reference replay · no provider call/iu)).toBeVisible();
+  await expect(page.getByText(/Verified reference replay · no model call/iu)).toBeVisible();
   await expect
     .poll(() => page.evaluate(() => sessionStorage.getItem("thurstone:demo-result@1")))
     .toContain('"source":"verified_replay"');
@@ -74,13 +74,13 @@ test("Guided Demo Back and restart never duplicate a reference transition", asyn
   await page.goto("/demo");
   await page.getByRole("button", { name: "Read the contract" }).click();
   await page.getByRole("button", { name: "Back", exact: true }).click();
-  await expect(page.getByText("Explanation only", { exact: true })).toBeVisible();
+  await expect(page.getByText("Verified walkthrough", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Read the contract" }).click();
   await page.getByRole("button", { name: "Test tentative intent" }).click();
-  await page.getByRole("button", { name: "Restart verified fixture" }).click();
+  await page.getByRole("button", { name: "Restart demo" }).click();
   await expect(page.getByLabel("Step 1 of 6")).toBeVisible();
-  await expect(page.getByText(/fixture checkout-seed-v1/iu)).toBeVisible();
+  await expect(page.getByText(/Verified reference replay · no model call/iu)).toBeVisible();
 });
 
 test("Demo mode navigation preserves the URL hash and opens the complete Sandbox", async ({
@@ -88,26 +88,25 @@ test("Demo mode navigation preserves the URL hash and opens the complete Sandbox
 }) => {
   await page.goto("/demo#contract-workshop");
   await expect(
-    page.getByRole("heading", { name: "Write the behavior your site intends to permit." })
+    page.getByRole("heading", { name: "Define what should happen—and what must not." })
   ).toBeVisible();
 
   await page.getByRole("link", { name: "Open Sandbox", exact: true }).click();
   await expect(page).toHaveURL(/\/demo#open-sandbox$/u);
-  await expect(
-    page.getByRole("link", { name: "Open full technical sandbox", exact: true })
-  ).toHaveAttribute("href", "/lab");
+  await expect(page.getByRole("link", { name: "Open sandbox", exact: true })).toHaveAttribute(
+    "href",
+    "/lab"
+  );
 
   await page.reload();
-  await expect(
-    page.getByRole("heading", { name: "Open the complete native WebMCP sandbox." })
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Use the live checkout sandbox." })).toBeVisible();
 });
 
 test("Demo remains useful without WebMCP and has no superseded score or horizontal overflow", async ({
   page
 }) => {
   await page.goto("/demo");
-  await expect(page.getByText("Guided demo ready", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "One boundary in 60 seconds." })).toBeVisible();
   await expect(page.getByText(/23\s*\/\s*24/u)).toHaveCount(0);
   const width = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
@@ -120,11 +119,13 @@ test("Contract Workshop validates provider-free and keeps native execution hones
   page
 }) => {
   await page.goto("/demo#contract-workshop");
-  await expect(page.getByText("Native run unavailable", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Validate contract", exact: true }).click();
+  await expect(page.getByText("Native execution unavailable", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Check contract", exact: true }).click();
   await expect(page.getByRole("article", { name: /^Pass:/u })).toContainText("Contract validation");
-  await expect(page.getByRole("button", { name: "Run native invocation" })).toBeDisabled();
-  await expect(page.locator(".live-agent-disabled")).toContainText("Live agent test unavailable");
+  await expect(page.getByRole("button", { name: "Run through WebMCP" })).toBeDisabled();
+  await expect(page.locator(".workshop-scope")).toContainText(
+    "Native execution tests the declared call and state effect"
+  );
   const stored = await page.evaluate(() => sessionStorage.getItem("thurstone:demo-result@1"));
   expect(stored).toContain('"source":"contract_validation"');
 });
@@ -132,9 +133,9 @@ test("Contract Workshop validates provider-free and keeps native execution hones
 test("JSON-string Contract Workshop runs a real read-only native invocation", async ({ page }) => {
   await installEmulatedConsumer(page, "json-string");
   await page.goto("/demo#contract-workshop");
-  await expect(page.getByText("Native WebMCP ready", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Validate contract", exact: true }).click();
-  const native = page.getByRole("button", { name: "Run native invocation" });
+  await expect(page.getByText("WebMCP ready", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Check contract", exact: true }).click();
+  const native = page.getByRole("button", { name: "Run through WebMCP" });
   await expect(native).toBeEnabled();
   await native.click();
   const result = page.getByRole("article", { name: /^Pass:/u });
@@ -148,12 +149,12 @@ test("JSON-string Contract Workshop proves one cart transition plus replay no-op
 }) => {
   await installEmulatedConsumer(page, "json-string");
   await page.goto("/demo#contract-workshop");
-  await expect(page.getByText("Native WebMCP ready", { exact: true })).toBeVisible();
+  await expect(page.getByText("WebMCP ready", { exact: true })).toBeVisible();
   await page.getByLabel("Expected tool").selectOption("cart_update");
   await page.getByLabel("User request").fill("Set the stoneware mug quantity to four.");
   await page.getByRole("spinbutton", { name: "Quantity", exact: true }).fill("4");
-  await page.getByRole("button", { name: "Validate contract", exact: true }).click();
-  await page.getByRole("button", { name: "Run native invocation" }).click();
+  await page.getByRole("button", { name: "Check contract", exact: true }).click();
+  await page.getByRole("button", { name: "Run through WebMCP" }).click();
   const state = page.getByLabel("Workshop trusted state result");
   await expect(state).toContainText("Revision 1");
   await expect(state).toContainText("2 event(s)");
@@ -167,9 +168,9 @@ test("Contract Workshop rejects incoherent effect and replay declarations", asyn
   await page.goto("/demo#contract-workshop");
   await page.getByLabel("Expected tool").selectOption("cart_update");
   await page.getByLabel("Replay policy").selectOption("read_only");
-  await page.getByRole("button", { name: "Validate contract", exact: true }).click();
+  await page.getByRole("button", { name: "Check contract", exact: true }).click();
   await expect(page.locator(".workshop-error")).toContainText(/exactly_once replay/iu);
-  await expect(page.getByText("Ready for an honestly labeled test.")).toHaveCount(0);
+  await expect(page.getByText("Contract ready.")).toHaveCount(0);
 });
 
 test("Contract Workshop exports only the current synthetic tab result and clears it on reset", async ({
@@ -177,9 +178,9 @@ test("Contract Workshop exports only the current synthetic tab result and clears
 }) => {
   await page.goto("/demo#contract-workshop");
   await page.getByLabel("Test name").fill("Judge-authored review contract");
-  await page.getByRole("button", { name: "Validate contract", exact: true }).click();
+  await page.getByRole("button", { name: "Check contract", exact: true }).click();
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Download my result JSON" }).click();
+  await page.getByRole("button", { name: "Download result JSON" }).click();
   const download = await downloadPromise;
   const stream = await download.createReadStream();
   let text = "";
@@ -192,8 +193,8 @@ test("Contract Workshop exports only the current synthetic tab result and clears
   });
   expect(text).not.toMatch(/api[_-]?key|cookie|browser history|authorization/iu);
 
-  await page.getByRole("button", { name: "Reset workshop fixture" }).click();
-  await expect(page.getByText("Your validated contract will appear here.")).toBeVisible();
+  await page.getByRole("button", { name: "Reset" }).click();
+  await expect(page.getByText("Your contract will appear here.")).toBeVisible();
   await expect
     .poll(() => page.evaluate(() => sessionStorage.getItem("thurstone:demo-result@1")))
     .toBeNull();

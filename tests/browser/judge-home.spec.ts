@@ -21,7 +21,7 @@ test("Intro presents the winning product story before technical detail", async (
   ).toBeVisible();
   await expect(
     page.getByText(
-      "Thurstone verifies that agents do what the website owner intended—and nothing the owner prohibited."
+      /Turn a website owner’s expectations into a testable contract\. Thurstone runs it through live WebMCP/iu
     )
   ).toBeVisible();
   await expect(page.getByRole("link", { name: "Test Thurstone", exact: true })).toHaveAttribute(
@@ -68,7 +68,7 @@ test("Intro explains selection, arguments, effects, and all five evidence stages
   }
   await flow.getByText("What this means", { exact: true }).first().click();
   await expect(
-    flow.getByText(/The contract fixes the request meaning, expected action or clarification/iu)
+    flow.getByText(/The contract is fixed before the test, including arguments/iu)
   ).toBeVisible();
 });
 
@@ -86,14 +86,10 @@ test("Intro keeps semantic and Invocation Integrity proof separate", async ({ pa
 test("Intro retains explicit limitations and no arbitrary-site promise", async ({ page }) => {
   await page.goto("/");
 
-  await expect(
-    page.getByRole("heading", {
-      name: "A strong result about one declared contract and tested build."
-    })
-  ).toBeVisible();
+  await expect(page.getByText("Scope matters.", { exact: true })).toBeVisible();
   await expect(
     page.getByText(
-      /not runtime enforcement, guaranteed security, or proof about arbitrary websites/iu
+      /not runtime enforcement, certification, guaranteed security, or proof about arbitrary websites/iu
     )
   ).toBeVisible();
   await expect(page.getByRole("textbox", { name: /website url/iu })).toHaveCount(0);
@@ -104,14 +100,14 @@ test("Intro answers all six cold-review comprehension questions", async ({ page 
   await page.goto("/");
 
   const answers = [
-    page.getByText(/Test whether an agent chose the intended tool, supplied safe arguments/iu),
+    page.getByText(/Turn a website owner’s expectations into a testable contract/iu),
     page.getByRole("heading", {
       name: "Publishing a tool is not the same as proving its meaning."
     }),
-    page.getByText("The website owner declares the intended action and allowed effects.", {
+    page.getByText("Declare the intended action, allowed effects, and forbidden effects.", {
       exact: true
     }),
-    page.getByText("Before and after state are checked independently of the tool response.", {
+    page.getByText("Check before-and-after state independently of the tool response.", {
       exact: true
     }),
     page.getByText("Separate test matrices", { exact: true }),

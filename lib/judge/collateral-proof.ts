@@ -581,6 +581,88 @@ export const JUDGE_DEMO_IMPACT_EXECUTION_FINAL_U_FILE_IDENTITIES = Object.freeze
     sha256: "c58bf1165c655e273e2a5a7898b6cbf338f49e1629d6b3a37d5105948833c87b" as const
   })
 ]);
+export const JUDGE_DEMO_JUDGE_FRONTEND_COPY_SUCCESSOR_FILE_IDENTITIES = Object.freeze([
+  Object.freeze({
+    path: "app/globals.css" as const,
+    length: 90_318,
+    sha256: "3b0e049a087614e94362e6db46713df5816e3ef1e6169fc0e19bb34959a17f71" as const
+  }),
+  Object.freeze({
+    path: "app/invocation-integrity/page.tsx" as const,
+    length: 1_684,
+    sha256: "4571eaab12c7941659e092a7b9fcb0f2ba2947296ddd663736c0fa3c454db50d" as const
+  }),
+  Object.freeze({
+    path: "app/lab/page.tsx" as const,
+    length: 4_079,
+    sha256: "ea89c51b1bd8029d71248ba84b384e18c533a8ac3feb01bb92f345d0c20d3b1f" as const
+  }),
+  Object.freeze({
+    path: "app/page.tsx" as const,
+    length: 8_339,
+    sha256: "869f35ea4a75af73414ad94e7e8020c6d4fbad272c450d89fbaf3dd0128c18a4" as const
+  }),
+  Object.freeze({
+    path: "app/results/page.tsx" as const,
+    length: 7_486,
+    sha256: "d8da7a518560edd1548577d739f3948c2f48d95592dcf927fef8ff711e11dc63" as const
+  }),
+  Object.freeze({
+    path: "app/studio/page.tsx" as const,
+    length: 13_649,
+    sha256: "80e5cdf6688d8c31e6b63e8ff7ab6b7fd9235e42adca84cca24faa3adac0e005" as const
+  }),
+  Object.freeze({
+    path: "components/invocation-integrity/invocation-integrity-client.tsx" as const,
+    length: 59_760,
+    sha256: "f011b3131f0fee4adb0131bea9ad283ae2dac4795037ab72e85b1319ec9aec0c" as const
+  }),
+  Object.freeze({
+    path: "components/lab/judge-demo-panel.tsx" as const,
+    length: 18_012,
+    sha256: "37309442f3c4b01d2dcb6eb398bc12eb7feeb3a5c6a722032418f966c59d20b9" as const
+  }),
+  Object.freeze({
+    path: "components/lab/lab-client.tsx" as const,
+    length: 90_169,
+    sha256: "be246a0cb545df94066f6617b730b986471eeb1d5cc467f8ec0e714e96959933" as const
+  }),
+  Object.freeze({
+    path: "tests/browser/gate7-browser.spec.ts" as const,
+    length: 4_926,
+    sha256: "803564f2d8befb44169c7f91048cc6ccbd5404aaa49acfcdf80607b6ad931b1f" as const
+  }),
+  Object.freeze({
+    path: "tests/browser/invocation-integrity-results.spec.ts" as const,
+    length: 1_505,
+    sha256: "c6e89e789643210a0d59946fa8c77c414a44398f20d1c457a7c8dc9c21c35f52" as const
+  }),
+  Object.freeze({
+    path: "tests/browser/lab-sandbox.spec.ts" as const,
+    length: 105_604,
+    sha256: "a892d2c282df5b9a5bb2969b055a18afd73e39658a8309bafd1db60affedc697" as const
+  }),
+  Object.freeze({
+    path: "tests/browser/probe-calibration.spec.ts" as const,
+    length: 37_463,
+    sha256: "9f9f365b501ed1f1954c9da272ef6ba79599c434d401eb11ddfe766915085c2b" as const
+  }),
+  Object.freeze({
+    path: "tests/browser/results.spec.ts" as const,
+    length: 8_325,
+    sha256: "760466c1a7272cbfe0020706089bbae911dbd7f433518220233f26a19e977ef9" as const
+  }),
+  Object.freeze({
+    path: "tests/browser/shell.spec.ts" as const,
+    length: 8_142,
+    sha256: "1b1a434bb3b06e4c2ac835e99f770937c17f240d93aa8d0eb3245b79fe4ccd80" as const
+  }),
+  Object.freeze({
+    path: "tests/browser/studio.spec.ts" as const,
+    length: 6_344,
+    sha256: "a6a0f06d1d7433a543d3a5f30e403f0dfb7263e2bf67cca03105af28d60a506a" as const
+  })
+]);
 export const JUDGE_DEMO_IMPACT_EXECUTION_Q_MIXED_FILE_IDENTITIES = Object.freeze([
   Object.freeze({
     path: "components/lab/judge-demo-panel.tsx" as const,

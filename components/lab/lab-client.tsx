@@ -267,6 +267,13 @@ function capabilityLabel(value: boolean, ready: string, unavailable: string): st
   return value ? ready : unavailable;
 }
 
+function readinessLabel(status: RegistryReadinessReceipt["status"]): string {
+  if (status === "consumer-ready") return "Ready";
+  if (status === "consumer-mismatch") return "Setup needed";
+  if (status === "consumer-discovered") return "Tools found";
+  return "Tools offered";
+}
+
 function sameNames(actual: readonly string[], expected: readonly string[]): boolean {
   return (
     actual.length === expected.length && actual.every((name, index) => name === expected[index])
@@ -1904,8 +1911,8 @@ export function LabClient() {
       <section className="panel cart-panel" aria-labelledby="cart-title">
         <div className="panel-heading">
           <div>
-            <span className="eyebrow">Declared fixture</span>
-            <h2 id="cart-title">Seeded checkout sandbox</h2>
+            <span className="eyebrow">Reference checkout</span>
+            <h2 id="cart-title">Synthetic cart</h2>
           </div>
           <span className="fixture-id">
             {session.state.fixtureId} · r{session.state.revision}
@@ -1984,14 +1991,14 @@ export function LabClient() {
             disabled={controlsDisabled}
             onClick={() => void runUi(() => environment.store.cartGet({}, { source: "ui" }))}
           >
-            Read cart in UI
+            Read cart
           </button>
           <button
             className="button button-secondary"
             disabled={controlsDisabled}
             onClick={() => void runUi(() => environment.store.orderReview({}, { source: "ui" }))}
           >
-            Review order in UI
+            Review order
           </button>
           {pending ? (
             <button
@@ -2006,7 +2013,7 @@ export function LabClient() {
                 )
               }
             >
-              Cancel simulated checkout
+              Cancel checkout
             </button>
           ) : (
             <button
@@ -2021,7 +2028,7 @@ export function LabClient() {
                 )
               }
             >
-              Request simulated checkout
+              Request checkout
             </button>
           )}
           <button
@@ -2029,16 +2036,16 @@ export function LabClient() {
             disabled={controlsDisabled}
             onClick={() => void hardReset()}
           >
-            Hard reset fixture
+            Reset checkout
           </button>
         </div>
 
         <div className="receipt-line" aria-live="polite">
-          <span>UI receipt</span>
+          <span>Latest result</span>
           {uiReceipt ? (
             <pre tabIndex={0}>{JSON.stringify(uiReceipt, null, 2)}</pre>
           ) : (
-            <small>No UI operation yet.</small>
+            <small>No action yet.</small>
           )}
           {uiError ? (
             <pre className="error-text" role="alert" tabIndex={0}>
@@ -2051,50 +2058,32 @@ export function LabClient() {
       <section className="panel capability-panel" aria-labelledby="capability-title">
         <div className="panel-heading">
           <div>
-            <span className="eyebrow">Runtime truth</span>
-            <h2 id="capability-title">WebMCP capability matrix</h2>
+            <span className="eyebrow">Current browser</span>
+            <h2 id="capability-title">Live WebMCP status</h2>
           </div>
         </div>
 
         <dl className="capability-list">
           <div>
-            <dt>Secure context</dt>
-            <dd>{capabilityLabel(capabilities.secureContext, "Ready", "Required")}</dd>
+            <dt>Secure browser context</dt>
+            <dd>{capabilityLabel(capabilities.secureContext, "Ready", "Setup needed")}</dd>
           </div>
           <div>
-            <dt>Site Tools provider · registerTool()</dt>
-            <dd>
-              {capabilityLabel(capabilities.providerRegistration, "Available", "Unavailable")}
-            </dd>
+            <dt>Tools offered by the page</dt>
+            <dd>{capabilityLabel(capabilities.providerRegistration, "Ready", "Setup needed")}</dd>
           </div>
           <div>
-            <dt>In-page discovery · getTools()</dt>
-            <dd>{capabilityLabel(capabilities.inPageDiscovery, "Available", "Unavailable")}</dd>
+            <dt>Tools found by the browser</dt>
+            <dd>{capabilityLabel(capabilities.inPageDiscovery, "Ready", "Setup needed")}</dd>
           </div>
           <div>
-            <dt>In-page execution · executeTool()</dt>
-            <dd>{capabilityLabel(capabilities.inPageExecution, "Available", "Unavailable")}</dd>
-          </div>
-          <div>
-            <dt>Direct ChatGPT path</dt>
-            <dd>
-              {capabilities.providerRegistration
-                ? "Provider API available; registry proof below"
-                : "Unavailable"}
-            </dd>
-          </div>
-          <div>
-            <dt>Chrome model-selection path</dt>
-            <dd>
-              {capabilities.inPageDiscovery && capabilities.inPageExecution
-                ? "Consumer APIs available; readiness below"
-                : "Unavailable in this document"}
-            </dd>
+            <dt>Tools executable through WebMCP</dt>
+            <dd>{capabilityLabel(capabilities.inPageExecution, "Ready", "Setup needed")}</dd>
           </div>
         </dl>
 
         <div className="runtime-receipt" aria-live="polite">
-          <span>Registry</span>
+          <span>Live catalog</span>
           <strong>{registryStatus.phase}</strong>
           <small>
             {registryStatus.toolNames.join(", ") || "No verified native tools detected."}
@@ -2106,9 +2095,13 @@ export function LabClient() {
         </div>
 
         {readiness ? (
-          <div className="runtime-receipt" aria-live="polite">
-            <span>Readiness receipt</span>
-            <strong>{readiness.status}</strong>
+          <div
+            className="runtime-receipt"
+            data-readiness-status={readiness.status}
+            aria-live="polite"
+          >
+            <span>Native execution</span>
+            <strong>{readinessLabel(readiness.status)}</strong>
             <small>Manifest {readiness.manifestHash.slice(0, 16)}…</small>
             <small>Discovery: {readiness.consumerDiscovery}</small>
             <small>Execution: {readiness.consumerExecution}</small>
@@ -2143,7 +2136,7 @@ export function LabClient() {
 
       {/* thurstone-impact-execution:lab-expert-diagnostics */}
       <details suppressHydrationWarning className="lab-expert-diagnostics">
-        <summary>Lab plumbing, reset receipts, and Gate 1 proof</summary>
+        <summary>Technical receipts and native controls</summary>
         <div className="lab-expert-diagnostics-content">
           <section className="panel trace-panel" aria-labelledby="native-title">
             <div className="panel-heading">

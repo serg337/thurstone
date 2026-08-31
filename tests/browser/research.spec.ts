@@ -45,8 +45,10 @@ test("Research connects the two papers to Thurstone without duplicating the cano
     "https://zenodo.org/records/21203393"
   );
 
-  const phalanx = page.getByRole("complementary", { name: "From measurement to enforcement." });
-  await expect(phalanx).toContainText("Different products, one evidence discipline.");
+  const phalanx = page.getByRole("complementary", { name: "Thurstone tests. Phalanx governs." });
+  await expect(phalanx).toContainText(
+    "controls which instructions may influence protected AI actions"
+  );
   await expect(phalanx.getByRole("link", { name: "Explore Phalanx" })).toHaveAttribute(
     "href",
     "https://invarra.ai/phalanx"

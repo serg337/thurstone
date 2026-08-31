@@ -81,6 +81,26 @@ function safeError(error: unknown): string {
     : "Judge demonstration failed safely.";
 }
 
+function judgeStatusLabel(status: JudgeDemoStatus | undefined, loading: boolean, running: boolean) {
+  if (running) return "Running";
+  if (loading) return "Checking";
+  if (status?.status === "available") return "Available";
+  if (status?.status === "recoverable" || status?.status === "sealed") return "Decision recorded";
+  return "Unavailable";
+}
+
+function judgeStatusMessage(status: JudgeDemoStatus | undefined, loading: boolean): string {
+  if (loading) return "Checking whether the optional live-agent test is available.";
+  if (status?.status === "available") return "Ready for one bounded synthetic request.";
+  if (status?.status === "recoverable" || status?.status === "sealed") {
+    return "A recorded decision is available for native WebMCP verification.";
+  }
+  if (status?.status === "running" || status?.status === "uncertain") {
+    return "The prior bounded request is being resolved safely without a retry.";
+  }
+  return "This optional lane is closed. The guided demo and native sandbox remain available.";
+}
+
 async function readError(response: Response): Promise<string> {
   try {
     const value = (await response.json()) as { readonly error?: unknown };
@@ -307,15 +327,26 @@ export function JudgeDemoPanel({
   const allocationLabel = loading
     ? "Checking allocation…"
     : `${status?.remainingModelCalls ?? 0} model call remaining`;
+  if (
+    loading ||
+    status === undefined ||
+    status.status === "disabled" ||
+    status.status === "closed" ||
+    status.status === "unavailable"
+  ) {
+    return null;
+  }
 
   const panel = (
     <section className="panel trace-panel" aria-labelledby="judge-demo-title" aria-busy={running}>
       <div className="panel-heading">
         <div>
-          <span className="eyebrow">Gate 7 · no-key model-backed judge lane</span>
-          <h2 id="judge-demo-title">One fixed decision, one verified native read</h2>
+          <span className="eyebrow">Optional live-agent test</span>
+          <h2 id="judge-demo-title">One agent decision, verified through live WebMCP.</h2>
         </div>
-        <span className="fixture-id">{allocationLabel}</span>
+        <span className="fixture-id">
+          {available ? allocationLabel : "No model call available"}
+        </span>
       </div>
 
       {/* thurstone-impact-execution:judge-diagnostics */}
@@ -324,23 +355,24 @@ export function JudgeDemoPanel({
           {running
             ? "Running bounded judge proof…"
             : terminalNoCall
-              ? "Sealed model decision has no native replay"
+              ? "Recorded decision requires no native call"
               : recoverable
-                ? "Recover sealed decision and verify native cart_get"
+                ? "Verify recorded decision through WebMCP"
                 : replayable
-                  ? "Replay sealed decision through native cart_get"
-                  : "Run bounded model decision + native cart_get"}
+                  ? "Verify recorded decision through WebMCP"
+                  : available
+                    ? "Run one live agent test"
+                    : "Live agent test unavailable"}
         </button>
       </div>
 
       {!runtimeBinding ? (
         <p className="pending-notice" role="status">
-          Open this page in a supported Chrome/WebMCP consumer and wait for consumer-ready native
-          discovery.
+          Native WebMCP must be ready before this optional test can run.
         </p>
       ) : !cleanFixture ? (
         <p className="pending-notice" role="status">
-          Hard reset the halt-free fixture before running the source-fixed judge demonstration.
+          Reset the checkout before running this optional test.
         </p>
       ) : !admissionReady ? (
         <p className="pending-notice" role="status">
@@ -362,10 +394,10 @@ export function JudgeDemoPanel({
         aria-live={error ? "assertive" : "polite"}
         tabIndex={-1}
       >
-        <strong>
-          {running ? "running" : loading ? "checking" : (status?.status ?? "unavailable")}
-        </strong>
-        <span>{error ?? status?.reason ?? phase}</span>
+        <strong>{judgeStatusLabel(status, loading, running)}</strong>
+        <span>
+          {error ? "The optional test stopped safely." : judgeStatusMessage(status, loading)}
+        </span>
       </div>
 
       <details className="judge-diagnostics">

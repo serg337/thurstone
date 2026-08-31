@@ -2719,27 +2719,23 @@ describe("judge provider-free presentation lineage", () => {
       "official ChatGPT in-app browser",
       "Chrome 149+",
       "chrome://flags/#enable-webmcp-testing",
-      "choose Enabled, and relaunch Chrome.",
-      "consumer-mismatch",
-      "close other same-origin Thurstone",
-      "tabs, then reload this tab.",
-      'href="/results"',
-      "WebMCP unavailable? Inspect sealed Results"
+      'enable{" "}',
+      "If discovery reports",
+      "a mismatch, close other Thurstone tabs and reload this one."
     ] as const;
     for (const token of webMcpSetupTokens) {
       expect(labPageSource, `lab:${token}`).toContain(token);
     }
-    expect(labPageSource).toContain("page&apos;s real tool catalog");
+    expect(labPageSource).toContain("Explore the live WebMCP sandbox.");
+    expect(labPageSource).toContain("View verified results");
     for (const tampered of [
       ...webMcpSetupTokens.map((token) => labPageSource.replace(token, "")),
-      labPageSource.replace("page&apos;s real tool catalog", "page's real tool catalog"),
-      labPageSource.replace(
-        '      <div id="impact-execution-judge-action" aria-label="Primary live WebMCP judge action" />\n',
-        ""
-      ),
+      labPageSource.replace("Explore the live WebMCP sandbox.", "Explore the sandbox."),
+      labPageSource.replace("View verified results", "View results"),
+      labPageSource.replace('      <div id="impact-execution-judge-action" />\n', ""),
       labPageSource.replace(
         "      <LabClient />",
-        '      <LabClient />\n      <div id="impact-execution-judge-action" aria-label="Primary live WebMCP judge action" />'
+        '      <LabClient />\n      <div id="impact-execution-judge-action" />'
       ),
       `${labPageSource}\nimport { LabClient as OtherLabClient } from "@/components/lab/lab-client";\n`,
       `${labPageSource}\nconst OtherLabClient = LabClient;\n`,
@@ -2840,17 +2836,21 @@ describe("judge provider-free presentation lineage", () => {
     for (const token of webMcpSetupTokens) {
       expect(integrityPageSource, `integrity:${token}`).toContain(token);
     }
+    expect(integrityPageSource).toContain("View verified integrity results");
     const integrityScopeTokens = [
-      "three frozen synthetic checkout cases on the exact tested build",
-      "testing/audit system—not runtime enforcement, certification, guaranteed security, or",
-      "arbitrary-site verification"
+      "These three synthetic cases audit the tested build",
+      "not runtime enforcement",
+      "universal security guarantee"
     ] as const;
     for (const token of integrityScopeTokens) {
       expect(integrityPageSource, `integrity-scope:${token}`).toContain(token);
     }
-    for (const tampered of [...webMcpSetupTokens, ...integrityScopeTokens].map((token) =>
-      integrityPageSource.replace(token, "")
-    )) {
+    for (const tampered of [
+      ...[...webMcpSetupTokens, ...integrityScopeTokens].map((token) =>
+        integrityPageSource.replace(token, "")
+      ),
+      integrityPageSource.replace("View verified integrity results", "View results")
+    ]) {
       await expect(
         verifyImpactExecutionOperationalSourceProjection({
           path: "app/invocation-integrity/page.tsx",

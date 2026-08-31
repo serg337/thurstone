@@ -10,7 +10,7 @@ export function ContractPreview({
   return (
     <section className="contract-preview" aria-labelledby="contract-preview-title">
       <p className="eyebrow">Compiled contract</p>
-      <h3 id="contract-preview-title">Ready for an honestly labeled test.</h3>
+      <h3 id="contract-preview-title">Contract ready.</h3>
       <dl>
         <div>
           <dt>Request</dt>
@@ -36,7 +36,7 @@ export function ContractPreview({
         </div>
       </dl>
       <details>
-        <summary>Inspect canonical contract and digest</summary>
+        <summary>View canonical contract and digest</summary>
         <code>{digest}</code>
         <pre>{JSON.stringify(contract, null, 2)}</pre>
       </details>

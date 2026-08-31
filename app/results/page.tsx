@@ -29,15 +29,13 @@ export default function ResultsPage() {
     <div className="page-shell route-page results-page">
       <header className="route-hero" aria-labelledby="results-title">
         <div>
-          <p className="eyebrow">What happened, what was allowed, what changed</p>
-          <h1 id="results-title">Results that begin with your test.</h1>
+          <p className="eyebrow">Contract vs. observed behavior</p>
+          <h1 id="results-title">See what the contract required—and what actually happened.</h1>
           <p>
-            Thurstone shows this tab&apos;s synthetic result first, then the verified reference
-            evaluation and a separate hostile-invocation matrix. Expected behavior never replaces
-            observed evidence.
+            Your current tab appears first. Then see the verified 24-case semantic run and the
+            separate three-case integrity test.
           </p>
         </div>
-        <StatusPill state="ready">Verified reference available</StatusPill>
       </header>
 
       <SessionResult />
@@ -52,8 +50,8 @@ export default function ResultsPage() {
             <p className="eyebrow">Verified reference evaluation</p>
             <h2 id="current-results-title">Every approved reference behavior passed.</h2>
             <p>
-              Thurstone sent 24 checkout requests through the live WebMCP catalog, then compared
-              tool choice, arguments, and resulting page state with the human-approved contract.
+              Across 24 approved cases, Thurstone compared the agent’s decision, arguments, and
+              trusted state with the human-approved contract.
             </p>
           </div>
           <StatusPill state="ready">24/24 semantic behaviors</StatusPill>
@@ -62,10 +60,7 @@ export default function ResultsPage() {
         <section className="panel" aria-labelledby="result-score-title">
           <div className="panel-heading">
             <div>
-              <p className="eyebrow">What Thurstone checked</p>
-              <h3 id="result-score-title">
-                Intent, tool choice, arguments, and real page effects.
-              </h3>
+              <h3 id="result-score-title">Intent, arguments, and real page effects.</h3>
             </div>
           </div>
           <div className="invocation-integrity-summary" aria-label="Current evaluation summary">
@@ -90,10 +85,8 @@ export default function ResultsPage() {
 
         {uncertainCheckout ? (
           <section className="panel" aria-labelledby="clarification-result-title">
-            <p className="eyebrow">A consequential boundary</p>
-            <h3 id="clarification-result-title">
-              Uncertainty did not become an unintended checkout.
-            </h3>
+            <p className="eyebrow">The consequential boundary</p>
+            <h3 id="clarification-result-title">Tentative intent stayed tentative.</h3>
             <div className="trace-inspector-grid impact-boundary-grid">
               <article>
                 <span className="eyebrow">The request</span>
@@ -160,8 +153,7 @@ export default function ResultsPage() {
       <InvocationIntegritySummary />
 
       <section className="panel results-conclusion" aria-labelledby="result-scope-title">
-        <p className="eyebrow">What this proves</p>
-        <h2 id="result-scope-title">Strong release evidence, not a universal guarantee.</h2>
+        <h2 id="result-scope-title">What this result proves—and what it does not.</h2>
         <blockquote>
           Thurstone verified this declared contract and tested build. That is strong evidence about
           this release—not a universal guarantee about every model, website, or future deployment.

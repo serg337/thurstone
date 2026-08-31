@@ -49,12 +49,10 @@ describe("Thurstone judge frontend primitives", () => {
 
   it("uses a neutral synthetic-commerce disclosure", () => {
     render(SimulationNotice());
-    const notice = screen.getByLabelText("Simulation and model data notice");
+    const notice = screen.getByLabelText("Simulation notice");
     expect(notice).toHaveTextContent("Synthetic checkout. No purchase occurs.");
     expect(notice).toHaveTextContent("No payment, shipment, or external transaction is possible.");
-    expect(notice).toHaveTextContent(
-      "When a model-backed lane is enabled, synthetic prompts may be sent to the disclosed provider."
-    );
+    expect(notice).toHaveTextContent("No payment, shipment, or external transaction is possible.");
   });
 
   it("exposes runtime and verdict meaning as text rather than color alone", () => {

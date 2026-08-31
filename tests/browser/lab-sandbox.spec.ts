@@ -43,9 +43,7 @@ async function openLabExpertDisclosure(page: Page): Promise<void> {
   const disclosure = page.locator("details.lab-expert-diagnostics");
   await expect(disclosure).toBeVisible();
   if (!(await disclosure.evaluate((element) => (element as HTMLDetailsElement).open))) {
-    await disclosure
-      .getByText("Lab plumbing, reset receipts, and Gate 1 proof", { exact: true })
-      .click();
+    await disclosure.getByText("Technical receipts and native controls", { exact: true }).click();
   }
   await expect(disclosure).toHaveAttribute("open", "");
 }
@@ -635,7 +633,7 @@ test.beforeEach(async ({ page }, testInfo) => {
   await installEmulatedConsumer(page, mode);
   await page.goto("/lab");
   await openLabExpertDisclosure(page);
-  await expect(page.getByText("consumer-ready", { exact: true })).toBeVisible();
+  await expect(page.locator('[data-readiness-status="consumer-ready"]')).toBeVisible();
   await expect(page.getByText(`Argument mode: ${mode}`, { exact: true })).toBeVisible();
 });
 
@@ -647,7 +645,7 @@ test.afterEach(async ({ page }) => {
 test("normal UI shares deterministic state, pending policy, and verified reset", async ({
   page
 }) => {
-  await page.getByRole("button", { name: "Review order in UI" }).click();
+  await page.getByRole("button", { name: "Review order" }).click();
   await expect(page.locator(".receipt-line pre")).toContainText('"totalCents": 7300');
 
   const mug = page.getByRole("listitem").filter({ hasText: "Stoneware mug" });
@@ -659,24 +657,24 @@ test("normal UI shares deterministic state, pending policy, and verified reset",
   await expect(page).toHaveURL(/\/results$/u);
   await page.goBack();
   await expect(page).toHaveURL(/\/lab$/u);
-  await expect(page.getByText("consumer-ready", { exact: true })).toBeVisible();
+  await expect(page.locator('[data-readiness-status="consumer-ready"]')).toBeVisible();
   await expect(page.getByText("checkout-seed-v1 · r0", { exact: true })).toBeVisible();
   await expect(mug.getByText("Current × 2", { exact: true })).toBeVisible();
   await expect(mug.getByLabel("Stoneware mug quantity")).toHaveValue("2");
 
-  await page.getByRole("button", { name: "Request simulated checkout" }).click();
+  await page.getByRole("button", { name: "Request checkout" }).click();
   await expect(page.getByText(/Simulated checkout pending human approval/iu)).toBeVisible();
   await expect(page.locator(".capability-panel .runtime-receipt").first()).toContainText(
     "checkout_cancel"
   );
 
-  await page.getByRole("button", { name: "Cancel simulated checkout" }).click();
+  await page.getByRole("button", { name: "Cancel checkout" }).click();
   await expect(page.getByText(/Simulated checkout pending human approval/iu)).toBeHidden();
   await expect(page.locator(".capability-panel .runtime-receipt").first()).not.toContainText(
     "checkout_cancel"
   );
 
-  await page.getByRole("button", { name: "Hard reset fixture" }).click();
+  await page.getByRole("button", { name: "Reset checkout" }).click();
   const resetArticle = page.locator("article").filter({ hasText: "Reset verification receipt" });
   await expect(resetArticle).toContainText('"status": "verified"');
   await expect(resetArticle).toContainText('"currentTrajectoryCount": 0');
@@ -686,14 +684,14 @@ test("normal UI shares deterministic state, pending policy, and verified reset",
   await expect(page).toHaveURL(/\/results$/u);
   await page.goBack();
   await expect(page).toHaveURL(/\/lab$/u);
-  await expect(page.getByText("consumer-ready", { exact: true })).toBeVisible();
+  await expect(page.locator('[data-readiness-status="consumer-ready"]')).toBeVisible();
   await expect(page.locator(".capability-panel .runtime-receipt").first()).toContainText(
     "cart_get"
   );
 
   await page.reload();
   await expect(page.getByText("checkout-seed-v1 · r0", { exact: true })).toBeVisible();
-  await expect(page.getByText("consumer-ready", { exact: true })).toBeVisible();
+  await expect(page.locator('[data-readiness-status="consumer-ready"]')).toBeVisible();
 });
 
 test("cross-surface navigation destroys Lab state and opens a clean document", async ({ page }) => {
@@ -735,9 +733,9 @@ test("cross-surface navigation destroys Lab state and opens a clean document", a
   await page.getByRole("link", { name: "Demo", exact: true }).click();
   await expect(page).toHaveURL(/\/demo$/u);
   await page.getByRole("link", { name: "Open Sandbox", exact: true }).click();
-  await page.getByRole("link", { name: "Open full technical sandbox" }).click();
+  await page.getByRole("link", { name: "Open sandbox", exact: true }).click();
   await expect(page).toHaveURL(/\/lab$/u);
-  await expect(page.getByText("consumer-ready", { exact: true })).toBeVisible();
+  await expect(page.locator('[data-readiness-status="consumer-ready"]')).toBeVisible();
   await expect(mug.getByText("Current × 2", { exact: true })).toBeVisible();
   await expect(quantityEditor).toHaveValue("2");
 });
@@ -803,7 +801,7 @@ test("emulated consumer exercises the exact native boundary and observes state b
   await expect(page.getByText(/Simulated checkout pending human approval/iu)).toBeVisible();
   await expect(page.getByText("checkout-seed-v1 · r4", { exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "Hard reset fixture" }).click();
+  await page.getByRole("button", { name: "Reset checkout" }).click();
   await expect(page.getByText("checkout-seed-v1 · r0", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Native checkout_request" }).click();
   await expect(page.getByText("checkout-seed-v1 · r1", { exact: true })).toBeVisible();
@@ -906,13 +904,15 @@ test("fixed judge lane accepts no prompt and binds the sealed decision to native
     });
   });
 
+  await page.reload();
+
   await page.getByText("Judge diagnostics", { exact: true }).click();
   const judgeRefresh = page.getByRole("button", { name: "Refresh judge status" });
   await judgeRefresh.click();
   await expect(
-    page.locator(".judge-status-summary").getByText("available", { exact: true })
+    page.locator(".judge-status-summary").getByText("Available", { exact: true })
   ).toBeVisible();
-  await page.getByRole("button", { name: "Run bounded model decision + native cart_get" }).click();
+  await page.getByRole("button", { name: "Run one live agent test" }).click();
   const proof = page.locator("article").filter({ hasText: "Current browser judge proof" });
   await expect(proof).toContainText('"evidenceClass": "non-scored-judge-path"');
   await expect(proof).toContainText('"toolName": "cart_get"');
@@ -925,11 +925,9 @@ test("fixed judge lane accepts no prompt and binds the sealed decision to native
   expect(postedBodies).toEqual([{ intent: "run-fixed-read-only-judge-demo" }]);
   expect(JSON.stringify(postedBodies)).not.toContain("items and quantities");
   await expect(
-    page.locator(".judge-status-summary").getByText("sealed", { exact: true })
+    page.locator(".judge-status-summary").getByText("Decision recorded", { exact: true })
   ).toBeVisible();
-  await page
-    .getByRole("button", { name: "Replay sealed decision through native cart_get" })
-    .click();
+  await page.getByRole("button", { name: "Verify recorded decision through WebMCP" }).click();
   await expect(modelEvidence).toContainText('"inferencePerformedByThisRequest": false');
   expect(postedBodies).toEqual([
     { intent: "run-fixed-read-only-judge-demo" },
@@ -984,6 +982,8 @@ test("judge lane preserves a sealed no-call outcome without fabricating native p
       })
     });
   });
+  await page.reload();
+  await expect(page.locator('[data-readiness-status="consumer-ready"]')).toBeVisible();
   const nativeCountBefore = await page.evaluate(
     () =>
       (
@@ -996,7 +996,7 @@ test("judge lane preserves a sealed no-call outcome without fabricating native p
   await page.getByText("Judge diagnostics", { exact: true }).click();
   const judgeRefresh = page.getByRole("button", { name: "Refresh judge status" });
   await judgeRefresh.click();
-  await page.getByRole("button", { name: "Run bounded model decision + native cart_get" }).click();
+  await page.getByRole("button", { name: "Run one live agent test" }).click();
   const modelEvidence = page
     .locator("article")
     .filter({ hasText: "Sealed model-selection evidence" });
@@ -1008,7 +1008,7 @@ test("judge lane preserves a sealed no-call outcome without fabricating native p
   await expect(page.locator(".error-text[role='alert']")).toHaveCount(0);
   await expect(page.getByText(/will not fabricate or repeatedly retry/iu)).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Sealed model decision has no native replay" })
+    page.getByRole("button", { name: "Recorded decision requires no native call" })
   ).toBeDisabled();
   const nativeCountAfter = await page.evaluate(
     () =>
@@ -1020,7 +1020,7 @@ test("judge lane preserves a sealed no-call outcome without fabricating native p
   );
   expect(nativeCountAfter).toBe(nativeCountBefore);
   await expect(
-    page.locator(".judge-status-summary").getByText("sealed", { exact: true })
+    page.locator(".judge-status-summary").getByText("Decision recorded", { exact: true })
   ).toBeVisible();
 });
 
@@ -1044,6 +1044,7 @@ test("halted revision-zero Lab cannot consume the one judge allocation", async (
       })
     });
   });
+  await page.reload();
   const snapshot = await page.evaluate(async () => {
     const store = (
       window as typeof window & {
@@ -1081,7 +1082,7 @@ test("halted revision-zero Lab cannot consume the one judge allocation", async (
   const judgeRefresh = page.getByRole("button", { name: "Refresh judge status" });
   await judgeRefresh.click();
   const runButton = page.getByRole("button", {
-    name: "Run bounded model decision + native cart_get"
+    name: "Run one live agent test"
   });
   await expect(runButton).toBeDisabled();
   await runButton.click({ force: true });
@@ -1107,7 +1108,7 @@ test("JSON-string one download preserves the complete Gate 1 journal and trace h
   await page.getByRole("button", { name: "Replay last native mutation" }).click();
   await expect(nativeReceipt).toContainText('"replayed": true');
 
-  await page.getByRole("button", { name: "Hard reset fixture" }).click();
+  await page.getByRole("button", { name: "Reset checkout" }).click();
   const resetArticle = page.locator("article").filter({ hasText: "Reset verification receipt" });
   await expect(resetArticle).toContainText('"status": "verified"');
 
@@ -1618,7 +1619,7 @@ test("JSON-string one button reloads clean, runs the exact proof, and requests o
   expect(downloadCount).toBe(2);
   await page.reload();
   await openLabExpertDisclosure(page);
-  await expect(page.getByText("consumer-ready", { exact: true })).toBeVisible();
+  await expect(page.locator('[data-readiness-status="consumer-ready"]')).toBeVisible();
   await page.waitForTimeout(300);
   expect(downloadCount).toBe(2);
   expect(
@@ -1728,7 +1729,7 @@ test("full reload starts a new proof document instead of mixing prior evidence",
   expect(before.eventCount).toBeGreaterThan(0);
 
   await page.reload();
-  await expect(page.getByText("consumer-ready", { exact: true })).toBeVisible();
+  await expect(page.locator('[data-readiness-status="consumer-ready"]')).toBeVisible();
   const after = await page.evaluate(() => {
     const environment = (
       window as typeof window & {
@@ -1770,7 +1771,7 @@ test("consumer-ready pending and reset states remain accessible without horizont
     )
     .toBe(true);
 
-  await page.getByRole("button", { name: "Hard reset fixture" }).click();
+  await page.getByRole("button", { name: "Reset checkout" }).click();
   await expect(page.getByText("checkout-seed-v1 · r0", { exact: true })).toBeVisible();
   const resetViolations = (await new AxeBuilder({ page }).analyze()).violations.filter(
     ({ impact }) => impact === "serious" || impact === "critical"
@@ -1796,14 +1797,15 @@ test("Gate 8.5 runs one fixed provider-free native sequence and downloads one co
   await page.goto("/invocation-integrity");
   await expect(
     page.getByRole("heading", {
-      name: "Hostile direct calls must preserve site-defined boundaries."
+      name: "Test whether hostile WebMCP calls preserve site rules."
     })
   ).toBeVisible();
-  await expect(page.getByText("Zero model calls. Zero server durable-store writes.")).toBeVisible();
   await expect(
-    page.getByText(/The one-run guard uses an exclusive browser LockManager claim/iu)
+    page.getByText("Fixed inputs. Independent trusted-state verification.")
   ).toBeVisible();
-  await expect(page.getByText(/using another browser or profile can bypass it/iu)).toBeVisible();
+  await page.getByText("Test limits and one-run behavior", { exact: true }).click();
+  await expect(page.getByText(/browser guard prevents an accidental repeat/iu)).toBeVisible();
+  await expect(page.getByText(/clearing site storage or using another profile/iu)).toBeVisible();
   await expect(page.getByRole("button", { name: /clear|reset.*run/iu })).toHaveCount(0);
   await expect(page.getByText("getTools + executeTool ready", { exact: true })).toBeVisible();
   await expect(page.getByText("Fixed sequence ready", { exact: true })).toBeVisible();
@@ -2136,7 +2138,7 @@ test("Gate 8.5 admits only one concurrent same-profile tab", async ({ page, cont
   try {
     await installEmulatedConsumer(secondPage, "object");
     await secondPage.goto("/lab");
-    await expect(secondPage.getByText("consumer-ready", { exact: true })).toBeVisible();
+    await expect(secondPage.locator('[data-readiness-status="consumer-ready"]')).toBeVisible();
     await installEmulatedInvocationIntegrityVerifier(page);
     await installEmulatedInvocationIntegrityVerifier(secondPage);
 
@@ -2219,7 +2221,7 @@ test("Gate 8.5 restoring tab cannot steal a live owner claim", async ({ page, co
   try {
     await installEmulatedConsumer(secondPage, "object");
     await secondPage.goto("/lab");
-    await expect(secondPage.getByText("consumer-ready", { exact: true })).toBeVisible();
+    await expect(secondPage.locator('[data-readiness-status="consumer-ready"]')).toBeVisible();
     await page.route("**/api/invocation-integrity/verify", async (route) => {
       firstVerifierRequests += 1;
       const transcript = JSON.parse(
@@ -2586,77 +2588,43 @@ test("unsupported Lab gives exact setup and an immediate Results fallback withou
   await page.goto("/lab");
   await expect(
     page.getByRole("heading", {
-      name: "Run one sealed decision through the page's real tool catalog."
+      name: "Explore the live WebMCP sandbox."
     })
   ).toBeVisible();
+  const setup = page.getByText("Native browser setup", { exact: true });
+  await expect(setup).toBeVisible();
+  await setup.click();
   await expect(
     page.getByText("chrome://flags/#enable-webmcp-testing", { exact: true })
   ).toBeVisible();
-  await expect(page.getByText(/choose Enabled, and relaunch Chrome/iu)).toBeVisible();
-  await expect(page.getByText(/consumer-mismatch/iu)).toBeVisible();
   await expect(
-    page.getByRole("link", { name: "WebMCP unavailable? Inspect sealed Results" })
-  ).toHaveAttribute("href", "/results");
+    page.getByText(/enable chrome:\/\/flags\/#enable-webmcp-testing and relaunch/iu)
+  ).toBeVisible();
+  await expect(page.getByText(/discovery reports a mismatch/iu)).toBeVisible();
+  await expect(page.getByRole("link", { name: "View verified results" })).toHaveAttribute(
+    "href",
+    "/results"
+  );
   expect(nonReadRequests).toEqual([]);
 });
 
-test("Lab portals exactly one real judge action into first-screen DOM order", async ({ page }) => {
+test("Lab hides the unavailable optional agent lane from the judge path", async ({ page }) => {
   await page.goto("/lab");
   const mount = page.locator("#impact-execution-judge-action");
-  await expect(
-    mount.getByRole("heading", { name: "One fixed decision, one verified native read" })
-  ).toHaveCount(1);
-  const action = mount.getByRole("button", {
-    name: /bounded judge proof|sealed model decision|native cart_get/iu
-  });
-  await expect(action).toHaveCount(1);
-  await expect(action).toBeVisible();
-  await expect(action).toBeDisabled();
-  const status = mount.locator(".judge-status-summary");
-  await expect(status).toBeVisible();
-  await expect(status).toContainText(
-    /disabled|judge_demo_disabled|unsupported|unavailable|supported Chrome\/WebMCP/iu
-  );
-  const diagnostics = mount.locator("details.judge-diagnostics");
-  const diagnosticsSummary = diagnostics.getByText("Judge diagnostics", { exact: true });
-  await expect(diagnosticsSummary).toBeVisible();
-  await expect(mount.getByRole("button", { name: "Refresh judge status" })).toBeHidden();
-  await expect(diagnostics.getByText(/The server accepts no prompt/iu)).toBeHidden();
-  await expect(diagnostics.locator(".runtime-receipt")).toBeHidden();
-  await diagnosticsSummary.focus();
-  await page.keyboard.press("Enter");
-  await expect(mount.getByRole("button", { name: "Refresh judge status" })).toBeVisible();
-  await expect(diagnostics.getByText(/The server accepts no prompt/iu)).toBeVisible();
-  await expect(diagnostics.locator(".runtime-receipt")).toBeVisible();
-  await expect(diagnostics.locator(".runtime-receipt")).toHaveAttribute("role", "group");
-  await expect(
-    page.getByRole("heading", { name: "One fixed decision, one verified native read" })
-  ).toHaveCount(1);
-  const viewport = page.viewportSize();
-  const box = await action.boundingBox();
-  const statusBox = await status.boundingBox();
-  expect(viewport).not.toBeNull();
-  expect(box).not.toBeNull();
-  expect(statusBox).not.toBeNull();
-  expect(box!.y + box!.height).toBeLessThanOrEqual(viewport!.height);
-  expect(statusBox!.y + statusBox!.height).toBeLessThanOrEqual(viewport!.height);
+  await expect(mount).toBeEmpty();
+  await expect(page.getByRole("heading", { name: "Synthetic cart" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Live WebMCP status" })).toBeVisible();
 });
 
-test("capability-absent Lab keeps the judge action and plain status in the first viewport", async ({
-  browser
-}) => {
+test("capability-absent Lab keeps the sandbox and setup path clear", async ({ browser }) => {
   const cleanPage = await browser.newPage();
   try {
     await cleanPage.goto("/lab");
     const mount = cleanPage.locator("#impact-execution-judge-action");
-    const action = mount.getByRole("button", {
-      name: /bounded judge proof|sealed model decision|native cart_get/iu
-    });
-    const status = mount.locator(".judge-status-summary");
-    await expect(action).toBeVisible();
-    await expect(action).toBeDisabled();
-    await expect(status).toBeVisible();
-    const expertDisclosure = cleanPage.getByText("Lab plumbing, reset receipts, and Gate 1 proof", {
+    await expect(mount).toBeEmpty();
+    await expect(cleanPage.getByRole("heading", { name: "Synthetic cart" })).toBeVisible();
+    await expect(cleanPage.getByRole("heading", { name: "Live WebMCP status" })).toBeVisible();
+    const expertDisclosure = cleanPage.getByText("Technical receipts and native controls", {
       exact: true
     });
     await expect(expertDisclosure).toBeVisible();
@@ -2676,14 +2644,6 @@ test("capability-absent Lab keeps the judge action and plain status in the first
       cleanPage.getByRole("heading", { name: "Latest operation and reset receipt" })
     ).toBeVisible();
     await expect(cleanPage.getByRole("heading", { name: "Gate 1 proof bundle" })).toBeVisible();
-    const viewport = cleanPage.viewportSize();
-    const actionBox = await action.boundingBox();
-    const statusBox = await status.boundingBox();
-    expect(viewport).not.toBeNull();
-    expect(actionBox).not.toBeNull();
-    expect(statusBox).not.toBeNull();
-    expect(actionBox!.y + actionBox!.height).toBeLessThanOrEqual(viewport!.height);
-    expect(statusBox!.y + statusBox!.height).toBeLessThanOrEqual(viewport!.height);
   } finally {
     await cleanPage.close();
   }
@@ -2709,7 +2669,7 @@ test("browser-restored expert disclosure hydrates without console drift", async 
   });
   await page.reload();
   await expect(
-    page.getByText("Lab plumbing, reset receipts, and Gate 1 proof", { exact: true })
+    page.getByText("Technical receipts and native controls", { exact: true })
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: "Direct native WebMCP controls" })).toBeVisible();
   expect(hydrationMessages).toEqual([]);

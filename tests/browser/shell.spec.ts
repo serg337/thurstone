@@ -38,14 +38,14 @@ test("judge shell is honest, navigable, and permanently marks the simulation", a
   ).toHaveAttribute("aria-current", "page");
   await expect(
     page.getByRole("heading", {
-      name: "Test the boundary between what a user said and what a site allows."
+      name: "See whether intent becomes the permitted WebMCP action."
     })
   ).toBeVisible();
   await page.getByRole("link", { name: "Open Sandbox", exact: true }).click();
-  await page.getByRole("link", { name: "Open full technical sandbox" }).click();
+  await page.getByRole("link", { name: "Open sandbox", exact: true }).click();
   await expect(page).toHaveURL(/\/lab$/);
-  await expect(page.getByRole("heading", { name: "Seeded checkout sandbox" })).toBeVisible();
-  const expertDisclosure = page.getByText("Lab plumbing, reset receipts, and Gate 1 proof", {
+  await expect(page.getByRole("heading", { name: "Synthetic cart" })).toBeVisible();
+  const expertDisclosure = page.getByText("Technical receipts and native controls", {
     exact: true
   });
   await expect(expertDisclosure).toBeVisible();
@@ -143,12 +143,12 @@ test("home states the WebMCP trust problem in human language", async ({ page }) 
   await page.goto("/");
   await expect(
     page.getByText(
-      "Thurstone verifies that agents do what the website owner intended—and nothing the owner prohibited."
+      /Turn a website owner’s expectations into a testable contract\. Thurstone runs it through live WebMCP/iu
     )
   ).toBeVisible();
   await expect(
     page.getByText(
-      "Traditional handler tests prove that code can run. Thurstone tests the semantic layer: whether natural-language intent becomes the approved WebMCP action and effect."
+      "Handler tests prove a tool can run. Thurstone verifies whether natural-language intent becomes the approved WebMCP action and effect."
     )
   ).toBeVisible();
 });

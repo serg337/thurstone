@@ -771,7 +771,7 @@ test("a missing active-tab marker clears only after the migrated-base server adm
   await page.getByRole("button", { name: "Clear unstarted session" }).click();
   await expect(
     page.getByRole("heading", {
-      name: "Run one sealed decision through the page's real tool catalog."
+      name: "Explore the live WebMCP sandbox."
     })
   ).toBeVisible();
   expect(cleanupCalls).toBe(1);
@@ -823,7 +823,7 @@ test("an unverifiable stale cookie clears only after the migrated-base server ad
   await page.getByRole("button", { name: "Clear unstarted session" }).click();
   await expect(
     page.getByRole("heading", {
-      name: "Run one sealed decision through the page's real tool catalog."
+      name: "Explore the live WebMCP sandbox."
     })
   ).toBeVisible();
   expect(cleanupCalls).toBe(1);

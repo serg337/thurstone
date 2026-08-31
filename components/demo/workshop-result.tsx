@@ -13,17 +13,13 @@ export function WorkshopResult({ result }: { readonly result: ThurstoneDemoResul
     <section className="workshop-result" aria-labelledby="workshop-result-title">
       <VerdictCard
         verdict={result.verdict}
-        title={
-          result.verdict === "pass"
-            ? "The declared test passed."
-            : "The test found a contract mismatch."
-        }
+        title={result.verdict === "pass" ? "Contract passed." : "Contract mismatch found."}
       >
         <p id="workshop-result-title">
           <strong>{sourceLabels[result.source]}.</strong>{" "}
           {result.source === "contract_validation"
-            ? "The contract is coherent; no agent decision or native call was claimed."
-            : "The observed native call and trusted state were evaluated against this contract."}
+            ? "The contract is coherent; no agent decision or native call occurred."
+            : "The native call and trusted state were checked against the contract."}
         </p>
         <ul className="workshop-result-assertions" aria-label="Workshop result assertions">
           {result.assertions.map((assertion) => (
@@ -57,7 +53,7 @@ export function WorkshopResult({ result }: { readonly result: ThurstoneDemoResul
         </article>
       </div>
       <details>
-        <summary>Inspect complete synthetic session result</summary>
+        <summary>View complete synthetic result</summary>
         <pre>{JSON.stringify(result, null, 2)}</pre>
       </details>
     </section>

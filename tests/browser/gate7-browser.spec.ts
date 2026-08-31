@@ -10,7 +10,7 @@ test("back, forward, and refresh preserve honest top-level document boundaries",
   await expect(page).toHaveURL(/\/demo$/u);
   await expect(
     page.getByRole("heading", {
-      name: "Test the boundary between what a user said and what a site allows."
+      name: "See whether intent becomes the permitted WebMCP action."
     })
   ).toBeVisible();
   await page.goBack();
@@ -18,7 +18,7 @@ test("back, forward, and refresh preserve honest top-level document boundaries",
   await page.goForward();
   await expect(page).toHaveURL(/\/demo$/u);
   await page.reload();
-  await expect(page.getByText("Guided demo ready", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "One boundary in 60 seconds." })).toBeVisible();
 });
 
 test("cold slow-network rendering honors reduced motion", async ({ page }) => {
@@ -64,7 +64,7 @@ test("keyboard focus and live status announcements expose the deterministic path
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/#main-content$/u);
   await page.goto("/lab");
-  const review = page.getByRole("button", { name: "Review order in UI" });
+  const review = page.getByRole("button", { name: "Review order" });
   await expect(review).toBeEnabled();
   await review.focus();
   await page.keyboard.press("Enter");

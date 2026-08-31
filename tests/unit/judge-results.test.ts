@@ -22,14 +22,14 @@ describe("judge Results accounting", () => {
 
   it("renders a compact three-row integrity matrix without a combined or superseded score", () => {
     render(InvocationIntegritySummary());
-    expect(screen.getByText("3/3 separate integrity cases", { exact: true })).toBeVisible();
+    expect(screen.getByText("3/3 integrity cases", { exact: true })).toBeVisible();
     const matrix = screen.getByRole("table", { name: "Invocation Integrity Matrix" });
     expect(within(matrix).getAllByRole("row")).toHaveLength(4);
     expect(screen.queryByText(/27\s*\/\s*27/u)).not.toBeInTheDocument();
     expect(screen.queryByText(/23\s*\/\s*24/u)).not.toBeInTheDocument();
-    expect(screen.getByText("Inspect technical receipt and expert exports")).toBeVisible();
+    expect(screen.getByText("View technical receipt and exports")).toBeVisible();
     expect(
-      screen.getByText("Inspect technical receipt and expert exports").closest("details")
+      screen.getByText("View technical receipt and exports").closest("details")
     ).not.toHaveAttribute("open");
   });
 });

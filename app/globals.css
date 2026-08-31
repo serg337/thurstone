@@ -235,7 +235,7 @@ nav a {
   min-height: 38px;
   padding: 0.4rem 1rem;
   color: var(--ts-text-muted);
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   text-align: center;
   background: rgba(6, 24, 33, 0.78);
   border-bottom: 1px solid rgba(0, 217, 255, 0.16);
@@ -683,14 +683,15 @@ nav a {
 
 .route-hero h1,
 .error-page h1 {
-  font-size: clamp(2.6rem, 6vw, 5.1rem);
+  font-size: clamp(2.6rem, 5vw, 4.5rem);
 }
 
 .route-hero p:not(.eyebrow) {
   max-width: 720px;
   margin: 1.2rem 0 0;
   color: var(--ink-muted);
-  font-size: 1rem;
+  font-size: 1.05rem;
+  line-height: 1.65;
 }
 
 .route-hero .metric-label {
@@ -2260,7 +2261,7 @@ pre {
   margin: 0 auto;
   padding: 2rem 0 3rem;
   color: var(--ink-faint);
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   border-top: 1px solid var(--line);
 }
 
@@ -2409,20 +2410,20 @@ textarea::placeholder {
 .signal-flow strong {
   display: block;
   color: var(--ts-ice);
-  font-size: 0.88rem;
+  font-size: 0.95rem;
 }
 
 .signal-flow p {
   margin: 0.48rem 0 0;
   color: var(--ts-text-muted);
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   line-height: 1.5;
 }
 
 .signal-flow details {
   margin-top: 0.65rem;
   color: var(--ts-text-faint);
-  font-size: 0.72rem;
+  font-size: 0.82rem;
 }
 
 .signal-flow summary {
@@ -2731,7 +2732,7 @@ textarea::placeholder {
 }
 
 .intro-section {
-  padding: 5.5rem 0;
+  padding: 4.75rem 0;
   border-top: 1px solid var(--ts-line);
 }
 
@@ -2741,10 +2742,9 @@ textarea::placeholder {
 }
 
 .intro-section-heading h2,
-.intro-limitations h2,
 .intro-final-cta h2 {
   margin: 0;
-  font-size: clamp(2rem, 4vw, 3.5rem);
+  font-size: clamp(2rem, 3.7vw, 3rem);
   line-height: 1.08;
 }
 
@@ -2752,7 +2752,7 @@ textarea::placeholder {
   max-width: 700px;
   margin: 1rem 0 0;
   color: var(--ts-text-muted);
-  font-size: 1rem;
+  font-size: 1.05rem;
   line-height: 1.65;
 }
 
@@ -2763,7 +2763,7 @@ textarea::placeholder {
 }
 
 .problem-grid article {
-  min-height: 230px;
+  min-height: 190px;
   padding: 1.35rem;
   background: linear-gradient(145deg, rgba(10, 28, 39, 0.92), rgba(3, 12, 18, 0.96));
   border: 1px solid var(--ts-line);
@@ -2777,7 +2777,7 @@ textarea::placeholder {
 }
 
 .problem-grid h3 {
-  margin: 3.2rem 0 0;
+  margin: 1.8rem 0 0;
   color: var(--ts-ice);
   font-size: 1.35rem;
 }
@@ -2810,10 +2810,8 @@ textarea::placeholder {
 .example-card .example-request {
   margin: 0;
   color: var(--ts-silver);
-  font-size: 0.76rem;
-  font-weight: 760;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 0.9rem;
+  font-weight: 700;
 }
 
 .example-card h3 {
@@ -2887,7 +2885,7 @@ textarea::placeholder {
   display: grid;
   width: 3.5rem;
   color: var(--ts-text-faint);
-  font-size: 0.62rem;
+  font-size: 0.72rem;
   text-align: center;
   text-transform: uppercase;
   place-items: center;
@@ -2901,19 +2899,25 @@ textarea::placeholder {
   justify-content: center;
 }
 
-.intro-limitations {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.7fr);
-  gap: 2rem;
-  align-items: end;
-  padding: 3rem 0;
+.intro-scope {
+  display: flex;
+  gap: 1rem;
+  align-items: baseline;
+  padding: 1.5rem 0;
+  color: var(--ts-text-muted);
   border-top: 1px solid var(--ts-line);
+  border-bottom: 1px solid var(--ts-line);
 }
 
-.intro-limitations > p {
+.intro-scope strong {
+  flex: 0 0 auto;
+  color: var(--ts-ice);
+}
+
+.intro-scope > p {
+  max-width: 900px;
   margin: 0;
-  color: var(--ts-text-muted);
-  line-height: 1.7;
+  line-height: 1.6;
 }
 
 .intro-final-cta {
@@ -2962,7 +2966,7 @@ textarea::placeholder {
 .demo-hero h1 {
   margin: 0;
   font-family: var(--font-display);
-  font-size: clamp(2.55rem, 5vw, 4.7rem);
+  font-size: clamp(2.55rem, 4.6vw, 4rem);
   line-height: 1;
   letter-spacing: -0.05em;
 }
@@ -2971,6 +2975,8 @@ textarea::placeholder {
   max-width: 720px;
   margin: 1rem 0 0;
   color: var(--ts-text-muted);
+  font-size: 1.05rem;
+  line-height: 1.65;
 }
 
 .demo-readiness {
@@ -3096,7 +3102,7 @@ textarea::placeholder {
   margin-bottom: 0.85rem;
   padding: 0.3rem 0.5rem;
   color: var(--ts-cyan-bright);
-  font-size: 0.64rem;
+  font-size: 0.72rem;
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -3198,7 +3204,7 @@ textarea::placeholder {
   min-height: 46px;
   padding: 0.6rem;
   color: var(--ts-silver);
-  font-size: 0.72rem;
+  font-size: 0.82rem;
   background: rgba(0, 217, 255, 0.055);
   border: 1px solid rgba(54, 236, 255, 0.2);
   border-radius: var(--radius-small);
@@ -3271,7 +3277,7 @@ textarea::placeholder {
   margin: 0.85rem 0 0;
   color: var(--ts-text-faint);
   font-family: var(--font-mono);
-  font-size: 0.65rem;
+  font-size: 0.72rem;
   text-align: right;
 }
 
@@ -3300,7 +3306,7 @@ textarea::placeholder {
 .sandbox-preview-cart strong {
   padding: 0.75rem;
   color: var(--ts-silver);
-  font-size: 0.72rem;
+  font-size: 0.85rem;
   background: rgba(7, 30, 42, 0.68);
   border: 1px solid var(--ts-line);
   border-radius: var(--radius-small);
@@ -3375,7 +3381,7 @@ textarea::placeholder {
 .workshop-form legend {
   padding: 0 0.4rem;
   color: var(--ts-cyan-bright);
-  font-size: 0.72rem;
+  font-size: 0.85rem;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -3385,7 +3391,7 @@ textarea::placeholder {
   display: grid;
   gap: 0.4rem;
   color: var(--ts-silver);
-  font-size: 0.76rem;
+  font-size: 0.875rem;
   font-weight: 720;
 }
 
@@ -3398,7 +3404,7 @@ textarea::placeholder {
 .workshop-form label small,
 .workshop-form fieldset > p {
   color: var(--ts-text-faint);
-  font-size: 0.65rem;
+  font-size: 0.75rem;
   font-weight: 500;
 }
 
@@ -3478,11 +3484,12 @@ textarea::placeholder {
   border-radius: var(--radius-small);
 }
 
-.live-agent-disabled {
+.workshop-scope {
   margin: 0;
   padding: 0.75rem;
   color: var(--ts-text-muted);
-  font-size: 0.72rem;
+  font-size: 0.82rem;
+  line-height: 1.55;
   background: rgba(201, 223, 235, 0.04);
   border-left: 2px solid var(--ts-silver);
 }
@@ -3604,6 +3611,7 @@ textarea::placeholder {
 .workshop-result-assertions small {
   margin-top: 0.16rem;
   color: var(--ts-text-faint);
+  font-size: 0.75rem;
 }
 
 .workshop-result-state {
@@ -3689,6 +3697,8 @@ textarea::placeholder {
 .results-level-heading p:not(.eyebrow) {
   max-width: 720px;
   color: var(--ink-muted);
+  font-size: 1.02rem;
+  line-height: 1.6;
 }
 
 .session-result-section {
@@ -3868,6 +3878,11 @@ textarea::placeholder {
   overflow: hidden;
 }
 
+.results-integrity .panel-heading h2 {
+  font-size: clamp(1.75rem, 3vw, 2.5rem);
+  line-height: 1.1;
+}
+
 .evidence-table-wrap {
   width: 100%;
   max-width: 100%;
@@ -3974,16 +3989,14 @@ textarea::placeholder {
 }
 
 .research-section-heading h2,
-.research-boundary h2,
 .phalanx-bridge h2 {
   margin: 0;
-  font-size: clamp(2rem, 4.8vw, 4.1rem);
+  font-size: clamp(2rem, 4vw, 3.25rem);
   line-height: 1.02;
   letter-spacing: -0.045em;
 }
 
 .research-section-heading > p:not(.eyebrow),
-.research-boundary > p:not(.eyebrow),
 .phalanx-bridge p:not(.eyebrow) {
   max-width: 760px;
   margin: 1rem 0 0;
@@ -4071,7 +4084,7 @@ textarea::placeholder {
 .research-paper h3 {
   max-width: 920px;
   margin: 1rem 0 0;
-  font-size: clamp(2rem, 4.6vw, 4rem);
+  font-size: clamp(2rem, 3.7vw, 2.85rem);
   line-height: 1.02;
   letter-spacing: -0.045em;
 }
@@ -4101,7 +4114,7 @@ textarea::placeholder {
 .research-paper-body h4 {
   margin: 0;
   color: var(--ink);
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -4144,7 +4157,7 @@ textarea::placeholder {
   min-height: 42px;
   padding: 0.65rem 0.85rem;
   color: var(--ink);
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   font-weight: 750;
   text-decoration: none;
   background: rgba(7, 30, 42, 0.6);
@@ -4180,14 +4193,42 @@ textarea::placeholder {
   flex: 0 0 auto;
 }
 
-.research-boundary {
-  padding: clamp(1rem, 4vw, 2.5rem) 0;
-  border-top: 1px solid var(--line);
+.route-setup {
+  margin: 1rem 0;
 }
 
-.research-boundary h2 {
-  max-width: 900px;
-  font-size: clamp(2rem, 4.2vw, 3.7rem);
+.route-setup p {
+  font-size: 0.9rem !important;
+}
+
+.route-page .receipt-grid h3 {
+  font-size: 0.9rem;
+}
+
+.studio-expert-heading {
+  display: flex;
+  gap: 1.5rem;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  padding: 1.25rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.studio-expert-heading > div {
+  max-width: 780px;
+}
+
+.studio-expert-heading h2 {
+  margin: 0;
+  font-size: clamp(1.8rem, 3vw, 2.6rem);
+  line-height: 1.08;
+}
+
+.studio-expert-heading p:not(.eyebrow) {
+  margin: 0.8rem 0 0;
+  color: var(--ink-muted);
+  line-height: 1.6;
 }
 
 @media (max-width: 900px) {
@@ -4217,9 +4258,9 @@ textarea::placeholder {
     min-height: 190px;
   }
 
-  .intro-limitations {
-    grid-template-columns: 1fr;
-    align-items: start;
+  .intro-scope {
+    display: grid;
+    gap: 0.45rem;
   }
 
   .research-method-flow,
@@ -4396,13 +4437,13 @@ textarea::placeholder {
   .intro-actions .button {
     min-width: 0;
     padding-inline: 0.65rem;
-    font-size: 0.78rem;
+    font-size: 0.85rem;
     text-align: center;
   }
 
   .intro-microcopy {
     margin-top: 0.55rem;
-    font-size: 0.65rem;
+    font-size: 0.72rem;
   }
 
   .intro-hero::after {
@@ -4430,7 +4471,6 @@ textarea::placeholder {
   }
 
   .intro-section-heading h2,
-  .intro-limitations h2,
   .intro-final-cta h2 {
     font-size: 2rem;
   }
@@ -4488,7 +4528,7 @@ textarea::placeholder {
 
   .demo-mode-nav a {
     padding-inline: 0.35rem;
-    font-size: 0.68rem;
+    font-size: 0.78rem;
   }
 
   .guided-stage {
@@ -4527,7 +4567,7 @@ textarea::placeholder {
   .guided-controls .button {
     min-width: 0;
     padding-inline: 0.55rem;
-    font-size: 0.74rem;
+    font-size: 0.82rem;
   }
 
   .guided-timing {
@@ -4573,6 +4613,14 @@ textarea::placeholder {
 
   .research-method-flow strong {
     margin-top: 1.8rem;
+  }
+
+  .studio-expert-heading {
+    display: block;
+  }
+
+  .studio-expert-heading .status-pill {
+    margin-top: 0.8rem;
   }
 
   .results-level-heading {

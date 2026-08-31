@@ -321,25 +321,25 @@ export function ContractWorkshop() {
       <div className="workshop-heading">
         <div>
           <p className="eyebrow">Reference checkout environment</p>
-          <h2 id="contract-workshop-title">Write the behavior your site intends to permit.</h2>
+          <h2 id="contract-workshop-title">Define what should happen—and what must not.</h2>
           <p>
-            Compile a strict synthetic contract, validate it without a model call, then—when WebMCP
-            is ready—run the declared invocation through the page’s native adapter.
+            Describe a request, choose the permitted decision and state changes, then check the
+            contract or run the call through WebMCP.
           </p>
         </div>
         <RuntimeStatus state={runtimeState}>
           {runtimeState === "ready"
-            ? "Native WebMCP ready"
+            ? "WebMCP ready"
             : runtimeState === "checking"
               ? "Checking WebMCP"
-              : "Native run unavailable"}
+              : "Native execution unavailable"}
         </RuntimeStatus>
       </div>
 
       <div className="workshop-layout">
         <form className="workshop-form" onSubmit={validate} noValidate>
           <fieldset disabled={busy}>
-            <legend>1. Describe the request</legend>
+            <legend>1. Request</legend>
             <label>
               <span>
                 Test name <small>optional</small>
@@ -369,7 +369,7 @@ export function ContractWorkshop() {
           </fieldset>
 
           <fieldset disabled={busy}>
-            <legend>2. Declare the intended behavior</legend>
+            <legend>2. Expected behavior</legend>
             <div className="workshop-two-fields">
               <label>
                 <span>Expected decision</span>
@@ -449,7 +449,7 @@ export function ContractWorkshop() {
           </fieldset>
 
           <fieldset disabled={busy}>
-            <legend>3. Declare effects and replay</legend>
+            <legend>3. Allowed and forbidden effects</legend>
             <div className="workshop-two-fields">
               <label>
                 <span>Allowed state change</span>
@@ -518,7 +518,7 @@ export function ContractWorkshop() {
 
           <div className="workshop-actions">
             <button className="button button-primary" type="submit">
-              Validate contract
+              Check contract
             </button>
             <button
               className="button button-secondary"
@@ -526,7 +526,7 @@ export function ContractWorkshop() {
               disabled={!nativeReady}
               onClick={() => void runNative()}
             >
-              {busy ? "Running native test…" : "Run native invocation"}
+              {busy ? "Running through WebMCP…" : "Run through WebMCP"}
             </button>
             <button
               className="button button-secondary"
@@ -534,12 +534,12 @@ export function ContractWorkshop() {
               disabled={busy}
               onClick={() => void resetFixture()}
             >
-              Reset workshop fixture
+              Reset
             </button>
           </div>
-          <p className="live-agent-disabled">
-            <strong>Live agent test unavailable.</strong> The public model-backed Workshop lane is
-            disabled and no scripted decision is substituted.
+          <p className="workshop-scope">
+            Contract checking uses no model. Native execution tests the declared call and state
+            effect; it does not score model selection.
           </p>
         </form>
 
@@ -549,8 +549,8 @@ export function ContractWorkshop() {
           ) : (
             <div className="workshop-empty">
               <p className="eyebrow">Compiled contract</p>
-              <h3>Your validated contract will appear here.</h3>
-              <p>Expected outcomes remain separate from any future live agent decision.</p>
+              <h3>Your contract will appear here.</h3>
+              <p>Expected behavior remains separate from observed evidence.</p>
             </div>
           )}
           {result ? <WorkshopResult result={result} /> : null}
@@ -561,7 +561,7 @@ export function ContractWorkshop() {
                 type="button"
                 onClick={() => downloadResult(result)}
               >
-                Download my result JSON
+                Download result JSON
               </button>
               <a className="button button-secondary" href="/results?session=current">
                 Open Results

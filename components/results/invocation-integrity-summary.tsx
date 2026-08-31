@@ -34,17 +34,14 @@ export function InvocationIntegritySummary() {
     >
       <div className="panel-heading">
         <div>
-          <p className="eyebrow">Invocation Integrity · separate denominator</p>
-          <h2 id="integrity-summary-title">
-            Tested hostile invocations preserved all three declared invariants.
-          </h2>
+          <p className="eyebrow">Invocation Integrity · tested separately</p>
+          <h2 id="integrity-summary-title">Three hostile calls. Three preserved invariants.</h2>
         </div>
-        <StatusPill state="ready">3/3 separate integrity cases</StatusPill>
+        <StatusPill state="ready">3/3 integrity cases</StatusPill>
       </div>
       <p>
-        Deterministic direct WebMCP calls tested closed schemas, nonexistent items, and replay.
-        Trusted outcomes came from independent server-side state and ledger evidence—not only tool
-        responses. This score is never combined with semantic accuracy.
+        Direct WebMCP tests tried forbidden fields, a nonexistent item, and a duplicate request.
+        Independent server state and ledger evidence determined each verdict.
       </p>
 
       <div className="evidence-table-wrap">
@@ -81,7 +78,7 @@ export function InvocationIntegritySummary() {
       </div>
 
       <details className="expert-disclosure">
-        <summary>Inspect technical receipt and expert exports</summary>
+        <summary>View technical receipt and exports</summary>
         <dl className="expert-receipt-grid">
           <div>
             <dt>Evidence package</dt>
@@ -102,7 +99,7 @@ export function InvocationIntegritySummary() {
         </dl>
         <div className="button-row compact-buttons">
           <a className="button button-secondary" href="/invocation-integrity">
-            Open integrity test and export surface
+            Open full integrity test
           </a>
         </div>
       </details>

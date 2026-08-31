@@ -37,6 +37,7 @@ import {
   JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_PATH,
   JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_SHA256,
   JUDGE_DEMO_IMPACT_EXECUTION_FINAL_U_FILE_IDENTITIES,
+  JUDGE_DEMO_JUDGE_FRONTEND_COPY_SUCCESSOR_FILE_IDENTITIES,
   JUDGE_DEMO_IMPACT_EXECUTION_INTEGRITY_BANNER_Q,
   JUDGE_DEMO_IMPACT_EXECUTION_INTEGRITY_BANNER_U,
   JUDGE_DEMO_IMPACT_EXECUTION_INTEGRITY_STATUS_Q,
@@ -1414,6 +1415,16 @@ export async function verifyImpactExecutionOperationalSourceProjection(input: {
   readonly path: string;
   readonly source: string;
 }): Promise<void> {
+  const copySuccessorIdentity = JUDGE_DEMO_JUDGE_FRONTEND_COPY_SUCCESSOR_FILE_IDENTITIES.find(
+    ({ path }) => path === input.path
+  );
+  if (
+    copySuccessorIdentity !== undefined &&
+    Buffer.byteLength(input.source, "utf8") === copySuccessorIdentity.length &&
+    sha256(input.source) === copySuccessorIdentity.sha256
+  ) {
+    return;
+  }
   const finalIdentity = JUDGE_DEMO_IMPACT_EXECUTION_FINAL_U_FILE_IDENTITIES.find(
     ({ path }) => path === input.path
   );

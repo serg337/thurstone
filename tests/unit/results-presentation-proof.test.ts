@@ -1,6 +1,8 @@
 import { canonicalJson, canonicalSha256, sha256Hex } from "@/lib/evidence/digest";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import {
+  JUDGE_DEMO_JUDGE_FRONTEND_COPY_SUCCESSOR_FILE_IDENTITIES,
   JUDGE_DEMO_IMPACT_EXECUTION_FINAL_U_FILE_IDENTITIES,
   JUDGE_DEMO_IMPACT_EXECUTION_PRESENTATION_PATHS,
   JUDGE_DEMO_IMPACT_EXECUTION_PRESENTATION_PATHS_HASH,
@@ -134,6 +136,13 @@ describe("Gate 6 terminal presentation proof", () => {
     expect(JUDGE_DEMO_IMPACT_EXECUTION_FINAL_U_FILE_IDENTITIES.map(({ path }) => path)).toEqual(
       JUDGE_DEMO_IMPACT_EXECUTION_PRESENTATION_PATHS
     );
+    expect(JUDGE_DEMO_JUDGE_FRONTEND_COPY_SUCCESSOR_FILE_IDENTITIES).toHaveLength(16);
+    for (const identity of JUDGE_DEMO_JUDGE_FRONTEND_COPY_SUCCESSOR_FILE_IDENTITIES) {
+      expect(JUDGE_DEMO_IMPACT_EXECUTION_PRESENTATION_PATHS).toContain(identity.path);
+      const source = readFileSync(identity.path);
+      expect(source).toHaveLength(identity.length);
+      expect(createHash("sha256").update(source).digest("hex")).toBe(identity.sha256);
+    }
     const compressedImpactPatch = Buffer.from(
       JUDGE_DEMO_IMPACT_EXECUTION_U_PATCH_BROTLI_BASE64URL,
       "base64url"
