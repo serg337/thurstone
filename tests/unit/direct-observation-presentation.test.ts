@@ -36,7 +36,7 @@ function transition(
   } as unknown as JudgeDemoInvocationIntegrityTransition;
 }
 
-function impactExecutionFinalization(withRepair = false) {
+function impactExecutionFinalization(withRepair = false, withAlias = false) {
   const value = {
     protocol: {
       predecessorCommit: JUDGE_DEMO_IMPACT_EXECUTION_PREDECESSOR_COMMIT,
@@ -60,6 +60,15 @@ function impactExecutionFinalization(withRepair = false) {
       ? {
           ciTimeoutRepair: {
             successorCommit: "1".repeat(40)
+          }
+        }
+      : {}),
+    ...(withAlias
+      ? {
+          originAliasFinalization: {
+            implementation: {
+              successorCommit: "2".repeat(40)
+            }
           }
         }
       : {})
@@ -149,6 +158,18 @@ describe("Direct observation presentation critical blobs", () => {
         activeBlobOid: JUDGE_DEMO_IMPACT_EXECUTION_LAB_CLIENT_U_BLOB_OID,
         invocationIntegrityTransition: null,
         impactExecutionFinalization: impactExecutionFinalization()
+      })
+    ).toBe("verified-impact-execution-transition");
+
+    expect(
+      verifyDirectObservationCriticalBlob({
+        path: JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_PATH,
+        activeCommit: "2".repeat(40),
+        checkedOutBlobOid: JUDGE_DEMO_IMPACT_EXECUTION_LAB_CLIENT_U_BLOB_OID,
+        observationBlobOid: JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_BLOB_OID,
+        activeBlobOid: JUDGE_DEMO_IMPACT_EXECUTION_LAB_CLIENT_U_BLOB_OID,
+        invocationIntegrityTransition: null,
+        impactExecutionFinalization: impactExecutionFinalization(true, true)
       })
     ).toBe("verified-impact-execution-transition");
 

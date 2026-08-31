@@ -119,6 +119,14 @@ import {
   JUDGE_DEMO_IMPACT_EXECUTION_PRESENTATION_PATHS_HASH,
   JUDGE_DEMO_IMPACT_EXECUTION_PROTOCOL_PATHS,
   JUDGE_DEMO_IMPACT_EXECUTION_PROTOCOL_PATHS_HASH,
+  JUDGE_DEMO_ORIGIN_ALIAS_IMPLEMENTATION_PATHS,
+  JUDGE_DEMO_ORIGIN_ALIAS_IMPLEMENTATION_PATHS_HASH,
+  JUDGE_DEMO_ORIGIN_ALIAS_CHECKOUT_REPAIR_PATHS,
+  JUDGE_DEMO_ORIGIN_ALIAS_CHECKOUT_REPAIR_PATHS_HASH,
+  JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_COMMIT,
+  JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_TREE,
+  JUDGE_DEMO_ORIGIN_ALIAS_PROTOCOL_PATHS,
+  JUDGE_DEMO_ORIGIN_ALIAS_PROTOCOL_PATHS_HASH,
   JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_COMMIT,
   JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_PATH,
   JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_SHA256,
@@ -248,6 +256,50 @@ function impactExecutionGitPatch(input: {
   return result.status === 0 && Buffer.isBuffer(result.stdout) ? result.stdout : null;
 }
 
+const ORIGIN_ALIAS_SHELL_CANONICAL_BLOCK = `  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+    "href",
+    "https://thurstone.invarra.ai"
+  );
+`;
+const ORIGIN_ALIAS_SHELL_REQUEST_BLOCK = `  const brandedOrigin = await request.post("/api/probe/issue", {
+    headers: { ...headers, Origin: "https://thurstone.invarra.ai" },
+    data: {}
+  });
+  expect(brandedOrigin.status()).toBe(503);
+  await expect(brandedOrigin.json()).resolves.toEqual({
+    error: "probe_disabled",
+    inferencePerformed: false
+  });
+
+`;
+
+async function historicalImpactCheckoutBytes(input: {
+  readonly cwd: string;
+  readonly commit: string;
+  readonly path: string;
+}): Promise<Buffer | null> {
+  const available = availableGitBlobBytes(input.cwd, input.commit, input.path);
+  if (available !== null) return available;
+  if (input.path !== "tests/browser/shell.spec.ts") return null;
+  const current = await readFile(join(input.cwd, input.path), "utf8");
+  if (
+    current.split(ORIGIN_ALIAS_SHELL_CANONICAL_BLOCK).length !== 2 ||
+    current.split(ORIGIN_ALIAS_SHELL_REQUEST_BLOCK).length !== 2
+  ) {
+    throw new Error("judge_demo_origin_alias_shell_projection_invalid");
+  }
+  const reconstructed = Buffer.from(
+    current
+      .replace(ORIGIN_ALIAS_SHELL_CANONICAL_BLOCK, "")
+      .replace(ORIGIN_ALIAS_SHELL_REQUEST_BLOCK, "")
+  );
+  const expected = treeEntry(input.cwd, input.commit, input.path);
+  if (expected?.mode !== "100644" || expected.blobOid !== blobOid(reconstructed)) {
+    throw new Error("judge_demo_origin_alias_shell_reconstruction_invalid");
+  }
+  return reconstructed;
+}
+
 function blobOid(bytes: Buffer): string {
   return createHash("sha1").update(`blob ${bytes.length}\0`).update(bytes).digest("hex");
 }
@@ -257,6 +309,7 @@ async function verifyImpactExecutionPatchEffect(input: {
   readonly predecessorCommit: string;
   readonly successorCommit: string;
   readonly expectedPatch: Buffer;
+  readonly historicalCheckoutPaths?: readonly string[];
 }): Promise<"git-diff" | "reverse-reconstruction"> {
   const actualPatch = impactExecutionGitPatch(input);
   if (actualPatch !== null) {
@@ -269,7 +322,16 @@ async function verifyImpactExecutionPatchEffect(input: {
   const directory = await mkdtemp(join(tmpdir(), "thurstone-impact-patch-"));
   try {
     for (const path of JUDGE_DEMO_IMPACT_EXECUTION_PRESENTATION_PATHS) {
-      const bytes = await activeCheckoutBlobBytes(input.cwd, input.successorCommit, path);
+      const bytes = input.historicalCheckoutPaths?.includes(path)
+        ? await historicalImpactCheckoutBytes({
+            cwd: input.cwd,
+            commit: input.successorCommit,
+            path
+          })
+        : await activeCheckoutBlobBytes(input.cwd, input.successorCommit, path);
+      if (bytes === null) {
+        throw new Error(`judge_demo_impact_execution_patch_blob_missing:${path}`);
+      }
       const target = join(directory, path);
       await mkdir(dirname(target), { recursive: true });
       await writeFile(target, bytes, { mode: 0o600 });
@@ -707,12 +769,18 @@ async function verifyRecoveryFinalization(input: {
       blobOid(checkedOutTest.bytes) ===
         JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_SUCCESSOR_TEST_BLOB_OID &&
       sha256(checkedOutTest.bytes) === JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_SUCCESSOR_TEST_SHA256;
+    const originAliasProtocolSource = [
+      "JUDGE_DEMO_ORIGIN_ALIAS_FINALIZATION_VERSION",
+      "JUDGE_DEMO_ORIGIN_ALIAS_PROTOCOL_PATHS_HASH",
+      "JUDGE_DEMO_ORIGIN_ALIAS_IMPLEMENTATION_PATHS_HASH",
+      "test_origin_alias_impact_finalization_missing"
+    ].every((marker) => occurrenceCount(testSource, marker) >= 1);
     if (
       validation.timeoutPath !== JUDGE_DEMO_CI_TIMEOUT_PATH ||
       validation.timeoutMs !== JUDGE_DEMO_CI_TIMEOUT_MS ||
       validation.timeoutCount !== JUDGE_DEMO_CI_TIMEOUT_COUNT ||
       timeoutCount !==
-        (exactImpactExecutionCiTimeoutRepairSource
+        (exactImpactExecutionCiTimeoutRepairSource || originAliasProtocolSource
           ? JUDGE_DEMO_CI_TIMEOUT_COUNT - 1
           : JUDGE_DEMO_CI_TIMEOUT_COUNT)
     ) {
@@ -1574,6 +1642,7 @@ export async function verifyImpactExecutionOperationalSourceProjection(input: {
 async function verifyImpactExecutionOperationalProjections(input: {
   readonly cwd: string;
   readonly successorCommit: string;
+  readonly historicalCheckoutPaths?: readonly string[];
 }): Promise<void> {
   if (
     sha256(JUDGE_DEMO_IMPACT_EXECUTION_LAZY_HELPER_TEMPLATE) !==
@@ -1602,9 +1671,17 @@ async function verifyImpactExecutionOperationalProjections(input: {
   impactExecutionProspectivePatch();
   const paths = JUDGE_DEMO_IMPACT_EXECUTION_FINAL_U_FILE_IDENTITIES.map(({ path }) => path);
   for (const path of paths) {
-    const source = new TextDecoder("utf-8", { fatal: true }).decode(
-      await activeCheckoutBlobBytes(input.cwd, input.successorCommit, path)
-    );
+    const bytes = input.historicalCheckoutPaths?.includes(path)
+      ? await historicalImpactCheckoutBytes({
+          cwd: input.cwd,
+          commit: input.successorCommit,
+          path
+        })
+      : await activeCheckoutBlobBytes(input.cwd, input.successorCommit, path);
+    if (bytes === null) {
+      throw new Error(`judge_demo_impact_execution_historical_blob_missing:${path}`);
+    }
+    const source = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
     await verifyImpactExecutionOperationalSourceProjection({ path, source });
   }
 }
@@ -1643,6 +1720,12 @@ export async function verifyImpactExecutionFinalizationCheckout(input: {
   readonly ciTimeoutRepairChanges: readonly GitTreeChange[];
 }> {
   const ciTimeoutRepair = input.finalization.ciTimeoutRepair ?? null;
+  const originAliasFinalization = input.finalization.originAliasFinalization ?? null;
+  const terminalCheckoutCommit =
+    originAliasFinalization?.checkoutRepair?.successorCommit ??
+    originAliasFinalization?.implementation.successorCommit ??
+    ciTimeoutRepair?.successorCommit ??
+    input.finalization.presentation.successorCommit;
   const expectedChain = [
     input.finalization.protocol.predecessorCommit,
     input.finalization.protocol.successorCommit,
@@ -1739,7 +1822,14 @@ export async function verifyImpactExecutionFinalizationCheckout(input: {
     cwd: input.cwd,
     predecessorCommit: input.finalization.protocol.successorCommit,
     successorCommit: input.finalization.presentation.successorCommit,
-    expectedPatch
+    expectedPatch,
+    historicalCheckoutPaths:
+      originAliasFinalization === null
+        ? []
+        : [
+            ...JUDGE_DEMO_ORIGIN_ALIAS_IMPLEMENTATION_PATHS,
+            ...JUDGE_DEMO_ORIGIN_ALIAS_CHECKOUT_REPAIR_PATHS
+          ]
   });
   if (
     impactExecutionPresentationProjectionTree({
@@ -1765,19 +1855,10 @@ export async function verifyImpactExecutionFinalizationCheckout(input: {
     ) {
       throw new Error(`judge_demo_impact_execution_protocol_checkout_drift:${path}`);
     }
-    if (
-      ciTimeoutRepair === null ||
-      !JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_REPAIR_PATHS.includes(path)
-    ) {
-      await activeCheckoutBlobBytes(
-        input.cwd,
-        input.finalization.presentation.successorCommit,
-        path
-      );
-    }
+    await activeCheckoutBlobBytes(input.cwd, terminalCheckoutCommit, path);
   }
   for (const path of JUDGE_DEMO_IMPACT_EXECUTION_PRESENTATION_PATHS) {
-    await activeCheckoutBlobBytes(input.cwd, input.finalization.presentation.successorCommit, path);
+    await activeCheckoutBlobBytes(input.cwd, terminalCheckoutCommit, path);
   }
   const frozenLabPredecessorEntry = treeEntry(
     input.cwd,
@@ -1810,7 +1891,7 @@ export async function verifyImpactExecutionFinalizationCheckout(input: {
   );
   const frozenLabBytes = await activeCheckoutBlobBytes(
     input.cwd,
-    input.finalization.presentation.successorCommit,
+    terminalCheckoutCommit,
     JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_PATH
   );
   if (
@@ -1822,11 +1903,20 @@ export async function verifyImpactExecutionFinalizationCheckout(input: {
   }
   await verifyImpactExecutionOperationalProjections({
     cwd: input.cwd,
-    successorCommit: input.finalization.presentation.successorCommit
+    successorCommit: input.finalization.presentation.successorCommit,
+    historicalCheckoutPaths:
+      originAliasFinalization === null
+        ? []
+        : [
+            ...JUDGE_DEMO_ORIGIN_ALIAS_IMPLEMENTATION_PATHS,
+            ...JUDGE_DEMO_ORIGIN_ALIAS_CHECKOUT_REPAIR_PATHS
+          ]
   });
   if (ciTimeoutRepair !== null) {
-    for (const path of JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_REPAIR_PATHS) {
-      await activeCheckoutBlobBytes(input.cwd, ciTimeoutRepair.successorCommit, path);
+    if (originAliasFinalization === null) {
+      for (const path of JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_REPAIR_PATHS) {
+        await activeCheckoutBlobBytes(input.cwd, ciTimeoutRepair.successorCommit, path);
+      }
     }
     const predecessorEntry = treeEntry(
       input.cwd,
@@ -1843,11 +1933,18 @@ export async function verifyImpactExecutionFinalizationCheckout(input: {
       ciTimeoutRepair.successorCommit,
       JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_PATH
     );
-    const successorBytes = await activeCheckoutBlobBytes(
-      input.cwd,
-      ciTimeoutRepair.successorCommit,
-      JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_PATH
-    );
+    const successorBytes =
+      originAliasFinalization === null
+        ? await activeCheckoutBlobBytes(
+            input.cwd,
+            ciTimeoutRepair.successorCommit,
+            JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_PATH
+          )
+        : availableGitBlobBytes(
+            input.cwd,
+            ciTimeoutRepair.successorCommit,
+            JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_PATH
+          );
     if (
       JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_REPAIR_PATHS.some((path) =>
         JUDGE_DEMO_IMPACT_EXECUTION_PRESENTATION_PATHS.includes(path)
@@ -1860,6 +1957,7 @@ export async function verifyImpactExecutionFinalizationCheckout(input: {
       predecessorEntry.blobOid !==
         JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_PREDECESSOR_TEST_BLOB_OID ||
       (predecessorBytes !== null &&
+        successorBytes !== null &&
         (predecessorBytes.byteLength !==
           JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_PREDECESSOR_TEST_BYTES ||
           sha256(predecessorBytes) !==
@@ -1868,8 +1966,10 @@ export async function verifyImpactExecutionFinalizationCheckout(input: {
             successorBytes.toString("utf8"))) ||
       successorEntry?.mode !== "100644" ||
       successorEntry.blobOid !== JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_SUCCESSOR_TEST_BLOB_OID ||
-      successorBytes.byteLength !== JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_SUCCESSOR_TEST_BYTES ||
-      sha256(successorBytes) !== JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_SUCCESSOR_TEST_SHA256
+      (successorBytes !== null &&
+        (successorBytes.byteLength !==
+          JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_SUCCESSOR_TEST_BYTES ||
+          sha256(successorBytes) !== JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_SUCCESSOR_TEST_SHA256))
     ) {
       throw new Error("judge_demo_impact_execution_ci_timeout_checkout_invalid");
     }
@@ -1888,6 +1988,8 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
   const ciPortabilityRepair = terminal?.ciPortabilityRepair ?? null;
   const impactExecutionFinalization = terminal?.impactExecutionFinalization ?? null;
   const impactExecutionCiTimeoutRepair = impactExecutionFinalization?.ciTimeoutRepair ?? null;
+  const originAliasFinalization = impactExecutionFinalization?.originAliasFinalization ?? null;
+  const originAliasCheckoutRepair = originAliasFinalization?.checkoutRepair ?? null;
   const evidenceMaterialCommit =
     terminal?.evidenceMaterialCommit ?? input.transition.successorCommit;
   const expectedChain =
@@ -1908,7 +2010,16 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
                 impactExecutionFinalization.presentation.successorCommit,
                 ...(impactExecutionCiTimeoutRepair === null
                   ? []
-                  : [impactExecutionCiTimeoutRepair.successorCommit])
+                  : [impactExecutionCiTimeoutRepair.successorCommit]),
+                ...(originAliasFinalization === null
+                  ? []
+                  : [
+                      ...originAliasFinalization.protocol.commits,
+                      originAliasFinalization.implementation.successorCommit,
+                      ...(originAliasCheckoutRepair === null
+                        ? []
+                        : [...originAliasCheckoutRepair.commits])
+                    ])
               ])
         ];
   if (
@@ -1934,7 +2045,15 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
               impactExecutionFinalization.presentation.successorTree ||
             (impactExecutionCiTimeoutRepair !== null &&
               commitTree(input.cwd, impactExecutionCiTimeoutRepair.successorCommit) !==
-                impactExecutionCiTimeoutRepair.successorTree)))))
+                impactExecutionCiTimeoutRepair.successorTree) ||
+            (originAliasFinalization !== null &&
+              (commitTree(input.cwd, originAliasFinalization.protocol.successorCommit) !==
+                originAliasFinalization.protocol.successorTree ||
+                commitTree(input.cwd, originAliasFinalization.implementation.successorCommit) !==
+                  originAliasFinalization.implementation.successorTree ||
+                (originAliasCheckoutRepair !== null &&
+                  commitTree(input.cwd, originAliasCheckoutRepair.successorCommit) !==
+                    originAliasCheckoutRepair.successorTree)))))))
   ) {
     throw new Error("judge_demo_invocation_evidence_chain_invalid");
   }
@@ -2003,6 +2122,42 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
   const impactExecutionPresentationChanges = impactExecutionCheckout?.presentationChanges ?? [];
   const impactExecutionCiTimeoutRepairChanges =
     impactExecutionCheckout?.ciTimeoutRepairChanges ?? [];
+  const originAliasProtocolChanges =
+    originAliasFinalization === null
+      ? []
+      : [
+          ...gitTreeChanges(
+            input.cwd,
+            originAliasFinalization.protocol.predecessorCommit,
+            originAliasFinalization.protocol.successorCommit
+          )
+        ].sort((left, right) =>
+          judgeDemoInvocationIntegrityEvidencePathCompare(left.path, right.path)
+        );
+  const originAliasImplementationChanges =
+    originAliasFinalization === null
+      ? []
+      : [
+          ...gitTreeChanges(
+            input.cwd,
+            originAliasFinalization.implementation.predecessorCommit,
+            originAliasFinalization.implementation.successorCommit
+          )
+        ].sort((left, right) =>
+          judgeDemoInvocationIntegrityEvidencePathCompare(left.path, right.path)
+        );
+  const originAliasCheckoutRepairChanges =
+    originAliasCheckoutRepair === null
+      ? []
+      : [
+          ...gitTreeChanges(
+            input.cwd,
+            originAliasCheckoutRepair.predecessorCommit,
+            originAliasCheckoutRepair.successorCommit
+          )
+        ].sort((left, right) =>
+          judgeDemoInvocationIntegrityEvidencePathCompare(left.path, right.path)
+        );
   if (
     canonicalJson(protocolChanges.map(({ path }) => path)) !==
       canonicalJson(JUDGE_DEMO_INVOCATION_INTEGRITY_EVIDENCE_PROTOCOL_PATHS) ||
@@ -2065,7 +2220,51 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
                 canonicalJson(impactExecutionCiTimeoutRepairChanges) !==
                   canonicalJson(impactExecutionCiTimeoutRepair.treeChanges) ||
                 (await canonicalSha256(impactExecutionCiTimeoutRepairChanges)) !==
-                  impactExecutionCiTimeoutRepair.gitTreeProjectionHash))))))
+                  impactExecutionCiTimeoutRepair.gitTreeProjectionHash)) ||
+            (originAliasFinalization !== null &&
+              (originAliasFinalization.protocol.predecessorCommit !==
+                JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_COMMIT ||
+                originAliasFinalization.protocol.predecessorTree !==
+                  JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_TREE ||
+                canonicalJson(originAliasFinalization.protocol.commits) !==
+                  canonicalJson(
+                    firstParentCommitChain(
+                      input.cwd,
+                      originAliasFinalization.protocol.predecessorCommit,
+                      originAliasFinalization.protocol.successorCommit
+                    ).slice(1)
+                  ) ||
+                canonicalJson(originAliasProtocolChanges.map(({ path }) => path)) !==
+                  canonicalJson(JUDGE_DEMO_ORIGIN_ALIAS_PROTOCOL_PATHS) ||
+                canonicalJson(originAliasImplementationChanges.map(({ path }) => path)) !==
+                  canonicalJson(JUDGE_DEMO_ORIGIN_ALIAS_IMPLEMENTATION_PATHS) ||
+                (await canonicalSha256(JUDGE_DEMO_ORIGIN_ALIAS_PROTOCOL_PATHS)) !==
+                  JUDGE_DEMO_ORIGIN_ALIAS_PROTOCOL_PATHS_HASH ||
+                (await canonicalSha256(JUDGE_DEMO_ORIGIN_ALIAS_IMPLEMENTATION_PATHS)) !==
+                  JUDGE_DEMO_ORIGIN_ALIAS_IMPLEMENTATION_PATHS_HASH ||
+                (await canonicalSha256(originAliasProtocolChanges)) !==
+                  originAliasFinalization.protocol.gitTreeProjectionHash ||
+                (await canonicalSha256(originAliasImplementationChanges)) !==
+                  originAliasFinalization.implementation.gitTreeProjectionHash ||
+                (originAliasCheckoutRepair !== null &&
+                  (originAliasCheckoutRepair.predecessorCommit !==
+                    originAliasFinalization.implementation.successorCommit ||
+                    originAliasCheckoutRepair.predecessorTree !==
+                      originAliasFinalization.implementation.successorTree ||
+                    canonicalJson(originAliasCheckoutRepair.commits) !==
+                      canonicalJson(
+                        firstParentCommitChain(
+                          input.cwd,
+                          originAliasCheckoutRepair.predecessorCommit,
+                          originAliasCheckoutRepair.successorCommit
+                        ).slice(1)
+                      ) ||
+                    canonicalJson(originAliasCheckoutRepairChanges.map(({ path }) => path)) !==
+                      canonicalJson(JUDGE_DEMO_ORIGIN_ALIAS_CHECKOUT_REPAIR_PATHS) ||
+                    (await canonicalSha256(JUDGE_DEMO_ORIGIN_ALIAS_CHECKOUT_REPAIR_PATHS)) !==
+                      JUDGE_DEMO_ORIGIN_ALIAS_CHECKOUT_REPAIR_PATHS_HASH ||
+                    (await canonicalSha256(originAliasCheckoutRepairChanges)) !==
+                      originAliasCheckoutRepair.gitTreeProjectionHash))))))))
   ) {
     throw new Error("judge_demo_invocation_evidence_projection_invalid");
   }
@@ -2156,7 +2355,29 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
       throw new Error(`judge_demo_impact_execution_ci_timeout_mode_invalid:${change.path}`);
     }
   }
-  if (impactExecutionFinalization !== null) {
+  for (const change of [
+    ...originAliasProtocolChanges,
+    ...originAliasImplementationChanges,
+    ...originAliasCheckoutRepairChanges
+  ]) {
+    if (
+      change.status !== "M" ||
+      change.predecessorMode !== "100644" ||
+      change.successorMode !== "100644" ||
+      change.predecessorBlobOid === null ||
+      change.successorBlobOid === null ||
+      change.predecessorBlobOid === change.successorBlobOid
+    ) {
+      throw new Error(`judge_demo_origin_alias_mode_invalid:${change.path}`);
+    }
+  }
+  const terminalImpactCommit =
+    originAliasCheckoutRepair?.successorCommit ??
+    originAliasFinalization?.implementation.successorCommit ??
+    impactExecutionCiTimeoutRepair?.successorCommit ??
+    impactExecutionFinalization?.presentation.successorCommit ??
+    null;
+  if (impactExecutionFinalization !== null && terminalImpactCommit !== null) {
     for (const path of JUDGE_DEMO_IMPACT_EXECUTION_PROTOCOL_PATHS) {
       const protocolEntry = treeEntry(
         input.cwd,
@@ -2176,23 +2397,10 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
       ) {
         throw new Error(`judge_demo_impact_execution_protocol_checkout_drift:${path}`);
       }
-      if (
-        impactExecutionCiTimeoutRepair === null ||
-        !JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_REPAIR_PATHS.includes(path)
-      ) {
-        await activeCheckoutBlobBytes(
-          input.cwd,
-          impactExecutionFinalization.presentation.successorCommit,
-          path
-        );
-      }
+      await activeCheckoutBlobBytes(input.cwd, terminalImpactCommit, path);
     }
     for (const path of JUDGE_DEMO_IMPACT_EXECUTION_PRESENTATION_PATHS) {
-      await activeCheckoutBlobBytes(
-        input.cwd,
-        impactExecutionFinalization.presentation.successorCommit,
-        path
-      );
+      await activeCheckoutBlobBytes(input.cwd, terminalImpactCommit, path);
     }
     const frozenLabEntry = treeEntry(
       input.cwd,
@@ -2201,7 +2409,7 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
     );
     const frozenLabBytes = await activeCheckoutBlobBytes(
       input.cwd,
-      impactExecutionFinalization.presentation.successorCommit,
+      terminalImpactCommit,
       JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_PATH
     );
     if (
@@ -2212,12 +2420,48 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
       throw new Error("judge_demo_impact_execution_lab_client_presentation_invalid");
     }
     if (impactExecutionCiTimeoutRepair !== null) {
-      for (const path of JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_REPAIR_PATHS) {
-        await activeCheckoutBlobBytes(
-          input.cwd,
-          impactExecutionCiTimeoutRepair.successorCommit,
-          path
-        );
+      if (originAliasFinalization === null) {
+        for (const path of JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_REPAIR_PATHS) {
+          await activeCheckoutBlobBytes(
+            input.cwd,
+            impactExecutionCiTimeoutRepair.successorCommit,
+            path
+          );
+        }
+      }
+    }
+  }
+  if (originAliasFinalization !== null) {
+    for (const path of JUDGE_DEMO_ORIGIN_ALIAS_PROTOCOL_PATHS) {
+      const protocolEntry = treeEntry(
+        input.cwd,
+        originAliasFinalization.protocol.successorCommit,
+        path
+      );
+      const implementationEntry = treeEntry(
+        input.cwd,
+        originAliasFinalization.implementation.successorCommit,
+        path
+      );
+      if (
+        protocolEntry === null ||
+        implementationEntry === null ||
+        protocolEntry.mode !== "100644" ||
+        canonicalJson(protocolEntry) !== canonicalJson(implementationEntry)
+      ) {
+        throw new Error(`judge_demo_origin_alias_protocol_drift:${path}`);
+      }
+    }
+    for (const path of JUDGE_DEMO_ORIGIN_ALIAS_IMPLEMENTATION_PATHS) {
+      await activeCheckoutBlobBytes(
+        input.cwd,
+        originAliasFinalization.implementation.successorCommit,
+        path
+      );
+    }
+    if (originAliasCheckoutRepair !== null) {
+      for (const path of JUDGE_DEMO_ORIGIN_ALIAS_CHECKOUT_REPAIR_PATHS) {
+        await activeCheckoutBlobBytes(input.cwd, originAliasCheckoutRepair.successorCommit, path);
       }
     }
   }
@@ -2225,7 +2469,9 @@ export async function verifyInvocationIntegrityEvidenceCheckout(input: {
     const testSource = new TextDecoder("utf-8", { fatal: true }).decode(
       await activeCheckoutBlobBytes(
         input.cwd,
-        impactExecutionCiTimeoutRepair?.successorCommit ??
+        originAliasCheckoutRepair?.successorCommit ??
+          originAliasFinalization?.implementation.successorCommit ??
+          impactExecutionCiTimeoutRepair?.successorCommit ??
           impactExecutionFinalization?.presentation.successorCommit ??
           ciPortabilityRepair?.successorCommit ??
           ciFinalization.successorCommit,
@@ -2430,7 +2676,18 @@ async function verifyTransitionGit(input: {
                         ...(input.transition.terminalFinalization?.impactExecutionFinalization
                           ?.ciTimeoutRepair === undefined
                           ? []
-                          : JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_REPAIR_PATHS)
+                          : JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_REPAIR_PATHS),
+                        ...(input.transition.terminalFinalization?.impactExecutionFinalization
+                          ?.originAliasFinalization === undefined
+                          ? []
+                          : [
+                              ...JUDGE_DEMO_ORIGIN_ALIAS_PROTOCOL_PATHS,
+                              ...JUDGE_DEMO_ORIGIN_ALIAS_IMPLEMENTATION_PATHS,
+                              ...(input.transition.terminalFinalization.impactExecutionFinalization
+                                .originAliasFinalization.checkoutRepair === undefined
+                                ? []
+                                : JUDGE_DEMO_ORIGIN_ALIAS_CHECKOUT_REPAIR_PATHS)
+                            ])
                       ])
                 ])
               ].sort(judgeDemoInvocationIntegrityEvidencePathCompare)
@@ -2501,7 +2758,14 @@ async function verifyTransitionGit(input: {
               JUDGE_DEMO_IMPACT_EXECUTION_PRESENTATION_PATHS.includes(path) ||
               (transition.terminalFinalization.impactExecutionFinalization.ciTimeoutRepair !==
                 undefined &&
-                JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_REPAIR_PATHS.includes(path)))
+                JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_REPAIR_PATHS.includes(path)) ||
+              (transition.terminalFinalization.impactExecutionFinalization
+                .originAliasFinalization !== undefined &&
+                (JUDGE_DEMO_ORIGIN_ALIAS_PROTOCOL_PATHS.includes(path) ||
+                  JUDGE_DEMO_ORIGIN_ALIAS_IMPLEMENTATION_PATHS.includes(path) ||
+                  (transition.terminalFinalization.impactExecutionFinalization
+                    .originAliasFinalization.checkoutRepair !== undefined &&
+                    JUDGE_DEMO_ORIGIN_ALIAS_CHECKOUT_REPAIR_PATHS.includes(path)))))
           )
       )) ||
     (transition.kind === "collateral-links" && changedCriticalPaths.length !== 0)

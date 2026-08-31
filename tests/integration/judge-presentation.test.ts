@@ -51,6 +51,10 @@ import {
   JUDGE_DEMO_GATE9_PUBLIC_REPOSITORY_URL,
   JUDGE_DEMO_GATE9_RELEASE_URL,
   JUDGE_DEMO_IMPACT_EXECUTION_ACTIVE_IMMUTABLE_PROJECTION_HASH,
+  JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_PREDECESSOR_COMMIT,
+  JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_PREDECESSOR_TREE,
+  JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_REPAIR_PATHS,
+  JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_REPAIR_VERSION,
   JUDGE_DEMO_IMPACT_EXECUTION_DEPENDENCY_PROJECTION_HASH,
   JUDGE_DEMO_IMPACT_EXECUTION_FINALIZATION_VERSION,
   JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_BLOB_OID,
@@ -119,6 +123,20 @@ import {
   JUDGE_DEMO_IMPACT_EXECUTION_U_PATCH_BROTLI_SHA256,
   JUDGE_DEMO_IMPACT_EXECUTION_U_PATCH_RAW_BYTES,
   JUDGE_DEMO_IMPACT_EXECUTION_U_PATCH_SHA256,
+  JUDGE_DEMO_ORIGIN_ALIAS_FINALIZATION_VERSION,
+  JUDGE_DEMO_ORIGIN_ALIAS_CHECKOUT_REPAIR_PATHS,
+  JUDGE_DEMO_ORIGIN_ALIAS_CHECKOUT_REPAIR_PATHS_HASH,
+  JUDGE_DEMO_ORIGIN_ALIAS_CHECKOUT_REPAIR_VERSION,
+  JUDGE_DEMO_ORIGIN_ALIAS_IMPLEMENTATION_PATHS,
+  JUDGE_DEMO_ORIGIN_ALIAS_IMPLEMENTATION_PATHS_HASH,
+  JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_BINDING_HASH,
+  JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_COMMIT,
+  JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_ENVELOPE_HASH,
+  JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_GATE6_PROOF_HASH,
+  JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_TRANSITION_PROOF_HASH,
+  JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_TREE,
+  JUDGE_DEMO_ORIGIN_ALIAS_PROTOCOL_PATHS,
+  JUDGE_DEMO_ORIGIN_ALIAS_PROTOCOL_PATHS_HASH,
   JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_COMMIT,
   JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_PATH,
   JUDGE_DEMO_INVOCATION_INTEGRITY_AMENDMENT_SHA256,
@@ -1947,6 +1965,223 @@ describe("judge provider-free presentation lineage", () => {
       verifyJudgeDemoPresentationTransition({
         ...nonzeroImpact,
         proofHash: await canonicalSha256(nonzeroImpact)
+      })
+    ).rejects.toThrow();
+
+    const originProtocolCommit = "7".repeat(40);
+    const originProtocolTree = "8".repeat(40);
+    const originSuccessorCommit = "9".repeat(40);
+    const originSuccessorTree = "a".repeat(40);
+    const originCandidate = structuredClone(impactVerified);
+    if (
+      originCandidate.kind !== "invocation-integrity-evidence" ||
+      !originCandidate.terminalFinalization?.impactExecutionFinalization
+    ) {
+      throw new Error("test_origin_alias_impact_finalization_missing");
+    }
+    const originImpact = originCandidate.terminalFinalization.impactExecutionFinalization;
+    originCandidate.successorCommit = originSuccessorCommit;
+    originImpact.presentation.successorCommit =
+      JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_PREDECESSOR_COMMIT;
+    originImpact.presentation.successorTree =
+      JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_PREDECESSOR_TREE;
+    const timeoutTreeChanges = JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_REPAIR_PATHS.map(
+      (path, index) => ({
+        path,
+        status: "M" as const,
+        predecessorMode: "100644" as const,
+        successorMode: "100644" as const,
+        predecessorBlobOid: createHash("sha1").update(`${path}:before:${index}`).digest("hex"),
+        successorBlobOid: createHash("sha1").update(`${path}:after:${index}`).digest("hex")
+      })
+    );
+    originImpact.ciTimeoutRepair = {
+      version: JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_REPAIR_VERSION,
+      successorCommit: JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_COMMIT,
+      successorTree: JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_TREE,
+      treeChanges: timeoutTreeChanges,
+      gitTreeProjectionHash: await canonicalSha256(timeoutTreeChanges),
+      assertionBodiesChanged: false,
+      providerCallsPerformed: 0,
+      modelCallsPerformed: 0,
+      scoredCallsPerformed: 0,
+      calibrationCallsPerformed: 0,
+      directObservationCallsPerformed: 0,
+      storeWritesPerformed: 0
+    };
+    originImpact.originAliasFinalization = {
+      version: JUDGE_DEMO_ORIGIN_ALIAS_FINALIZATION_VERSION,
+      predecessorBinding: {
+        activeCommit: JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_COMMIT,
+        activeTree: JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_TREE,
+        gate6ProofHash: JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_GATE6_PROOF_HASH,
+        bindingHash: JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_BINDING_HASH,
+        evidenceTransitionProofHash: JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_TRANSITION_PROOF_HASH,
+        activeEnvelopeHash: JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_ENVELOPE_HASH,
+        dependencyProjectionHash: JUDGE_DEMO_IMPACT_EXECUTION_DEPENDENCY_PROJECTION_HASH
+      },
+      protocol: {
+        predecessorCommit: JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_COMMIT,
+        predecessorTree: JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_TREE,
+        successorCommit: originProtocolCommit,
+        successorTree: originProtocolTree,
+        commits: [originProtocolCommit],
+        changedPathCount: JUDGE_DEMO_ORIGIN_ALIAS_PROTOCOL_PATHS.length,
+        changedPathsHash: JUDGE_DEMO_ORIGIN_ALIAS_PROTOCOL_PATHS_HASH,
+        gitTreeProjectionHash: "b".repeat(64)
+      },
+      implementation: {
+        predecessorCommit: originProtocolCommit,
+        predecessorTree: originProtocolTree,
+        successorCommit: originSuccessorCommit,
+        successorTree: originSuccessorTree,
+        changedPathCount: JUDGE_DEMO_ORIGIN_ALIAS_IMPLEMENTATION_PATHS.length,
+        changedPathsHash: JUDGE_DEMO_ORIGIN_ALIAS_IMPLEMENTATION_PATHS_HASH,
+        gitTreeProjectionHash: "c".repeat(64)
+      },
+      historicalEvidenceOrigin: "https://toolproof-rust.vercel.app",
+      canonicalProductOrigin: "https://thurstone.invarra.ai",
+      historicalEvidenceRewritten: false,
+      toolContractChanged: false,
+      semanticCasesChanged: false,
+      providerCallsPerformed: 0,
+      modelCallsPerformed: 0,
+      scoredCallsPerformed: 0,
+      calibrationCallsPerformed: 0,
+      directObservationCallsPerformed: 0,
+      storeWritesPerformed: 0
+    };
+    originCandidate.firstParentChainHash = await canonicalSha256([
+      value.predecessorCommit,
+      value.protocolCommit,
+      JUDGE_DEMO_GATE9_EVIDENCE_MATERIAL_COMMIT,
+      value.protocolFinalizationCommit,
+      JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_COMMIT,
+      JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_COMMIT,
+      JUDGE_DEMO_IMPACT_EXECUTION_PREDECESSOR_COMMIT,
+      impactProtocolCommit,
+      JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_PREDECESSOR_COMMIT,
+      JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_COMMIT,
+      originProtocolCommit,
+      originSuccessorCommit
+    ]);
+    const originPayload = { ...originCandidate } as Record<string, unknown>;
+    delete originPayload.proofHash;
+    const originVerified = await verifyJudgeDemoPresentationTransition({
+      ...originPayload,
+      proofHash: await canonicalSha256(originPayload)
+    });
+    expect(originVerified).toMatchObject({
+      successorCommit: originSuccessorCommit,
+      terminalFinalization: {
+        impactExecutionFinalization: {
+          originAliasFinalization: {
+            canonicalProductOrigin: "https://thurstone.invarra.ai",
+            historicalEvidenceOrigin: "https://toolproof-rust.vercel.app",
+            protocol: { predecessorCommit: JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_COMMIT },
+            implementation: { successorCommit: originSuccessorCommit }
+          }
+        }
+      }
+    });
+    const originRepairFirstCommit = "c".repeat(40);
+    const originRepairSecondCommit = "b".repeat(40);
+    const originRepairThirdCommit = "f".repeat(40);
+    const originRepairCommit = "d".repeat(40);
+    const originRepairTree = "e".repeat(40);
+    const originRepairCandidate = structuredClone(originVerified);
+    if (originRepairCandidate.kind !== "invocation-integrity-evidence") {
+      throw new Error("test_origin_alias_checkout_repair_kind_invalid");
+    }
+    const originRepairImpact =
+      originRepairCandidate.terminalFinalization?.impactExecutionFinalization;
+    if (!originRepairImpact?.originAliasFinalization) {
+      throw new Error("test_origin_alias_checkout_repair_parent_missing");
+    }
+    const originRepairFinalization = originRepairImpact.originAliasFinalization;
+    originRepairCandidate.successorCommit = originRepairCommit;
+    originRepairFinalization.checkoutRepair = {
+      version: JUDGE_DEMO_ORIGIN_ALIAS_CHECKOUT_REPAIR_VERSION,
+      predecessorCommit: originSuccessorCommit,
+      predecessorTree: originSuccessorTree,
+      successorCommit: originRepairCommit,
+      successorTree: originRepairTree,
+      commits: [
+        originRepairFirstCommit,
+        originRepairSecondCommit,
+        originRepairThirdCommit,
+        originRepairCommit
+      ],
+      changedPathCount: JUDGE_DEMO_ORIGIN_ALIAS_CHECKOUT_REPAIR_PATHS.length,
+      changedPathsHash: JUDGE_DEMO_ORIGIN_ALIAS_CHECKOUT_REPAIR_PATHS_HASH,
+      gitTreeProjectionHash: "d".repeat(64),
+      providerCallsPerformed: 0,
+      modelCallsPerformed: 0,
+      scoredCallsPerformed: 0,
+      calibrationCallsPerformed: 0,
+      directObservationCallsPerformed: 0,
+      storeWritesPerformed: 0
+    };
+    originRepairCandidate.firstParentChainHash = await canonicalSha256([
+      value.predecessorCommit,
+      value.protocolCommit,
+      JUDGE_DEMO_GATE9_EVIDENCE_MATERIAL_COMMIT,
+      value.protocolFinalizationCommit,
+      JUDGE_DEMO_GATE9_COLLATERAL_CANDIDATE_COMMIT,
+      JUDGE_DEMO_GATE9_CI_FINALIZATION_CANDIDATE_COMMIT,
+      JUDGE_DEMO_IMPACT_EXECUTION_PREDECESSOR_COMMIT,
+      impactProtocolCommit,
+      JUDGE_DEMO_IMPACT_EXECUTION_CI_TIMEOUT_PREDECESSOR_COMMIT,
+      JUDGE_DEMO_ORIGIN_ALIAS_PREDECESSOR_COMMIT,
+      originProtocolCommit,
+      originSuccessorCommit,
+      originRepairFirstCommit,
+      originRepairSecondCommit,
+      originRepairThirdCommit,
+      originRepairCommit
+    ]);
+    const originRepairPayload = { ...originRepairCandidate } as Record<string, unknown>;
+    delete originRepairPayload.proofHash;
+    const originRepairVerified = await verifyJudgeDemoPresentationTransition({
+      ...originRepairPayload,
+      proofHash: await canonicalSha256(originRepairPayload)
+    });
+    expect(originRepairVerified).toMatchObject({
+      successorCommit: originRepairCommit,
+      terminalFinalization: {
+        impactExecutionFinalization: {
+          originAliasFinalization: {
+            checkoutRepair: {
+              predecessorCommit: originSuccessorCommit,
+              successorCommit: originRepairCommit,
+              providerCallsPerformed: 0
+            }
+          }
+        }
+      }
+    });
+    const invalidOriginAlias = structuredClone(originVerified) as unknown as Record<
+      string,
+      unknown
+    >;
+    const invalidOriginTerminal = invalidOriginAlias.terminalFinalization as Record<
+      string,
+      unknown
+    >;
+    const invalidOriginImpact = invalidOriginTerminal.impactExecutionFinalization as Record<
+      string,
+      unknown
+    >;
+    const invalidOriginFinalization = invalidOriginImpact.originAliasFinalization as Record<
+      string,
+      unknown
+    >;
+    invalidOriginFinalization.canonicalProductOrigin = "https://lookalike.example";
+    delete invalidOriginAlias.proofHash;
+    await expect(
+      verifyJudgeDemoPresentationTransition({
+        ...invalidOriginAlias,
+        proofHash: await canonicalSha256(invalidOriginAlias)
       })
     ).rejects.toThrow();
   });

@@ -91,7 +91,9 @@ export function verifyDirectObservationCriticalBlob(
       JUDGE_DEMO_IMPACT_EXECUTION_PREDECESSOR_COMMIT &&
     impactExecution.protocol.successorCommit === impactExecution.presentation.predecessorCommit &&
     impactExecution.protocol.successorTree === impactExecution.presentation.predecessorTree &&
-    (impactExecution.ciTimeoutRepair?.successorCommit ??
+    (impactExecution.originAliasFinalization?.checkoutRepair?.successorCommit ??
+      impactExecution.originAliasFinalization?.implementation.successorCommit ??
+      impactExecution.ciTimeoutRepair?.successorCommit ??
       impactExecution.presentation.successorCommit) === input.activeCommit &&
     (impactExecution.ciTimeoutRepair === undefined ||
       (impactExecution.presentation.successorCommit ===
@@ -187,7 +189,9 @@ async function verifiedPresentationTransitions(activeCommit: string): Promise<{
     (await canonicalSha256(transition.implementation.treeChanges)) !==
       transition.implementation.gitTreeProjectionHash ||
     (impactExecutionFinalization !== null &&
-      ((impactExecutionFinalization.ciTimeoutRepair?.successorCommit ??
+      ((impactExecutionFinalization.originAliasFinalization?.checkoutRepair?.successorCommit ??
+        impactExecutionFinalization.originAliasFinalization?.implementation.successorCommit ??
+        impactExecutionFinalization.ciTimeoutRepair?.successorCommit ??
         impactExecutionFinalization.presentation.successorCommit) !== activeCommit ||
         impactExecutionFinalization.protocol.predecessorCommit !==
           JUDGE_DEMO_IMPACT_EXECUTION_PREDECESSOR_COMMIT))
