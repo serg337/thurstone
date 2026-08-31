@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { installEmulatedConsumer } from "./support/emulated-consumer";
+
 test("Guided Demo completes the six-step reference walkthrough without a model call", async ({
   page
 }) => {
@@ -82,7 +84,9 @@ test("Demo mode navigation preserves the URL hash and opens the complete Sandbox
   page
 }) => {
   await page.goto("/demo#contract-workshop");
-  await expect(page.getByRole("heading", { name: /Turn your expectation into/iu })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Write the behavior your site intends to permit." })
+  ).toBeVisible();
 
   await page.getByRole("link", { name: "Open Sandbox", exact: true }).click();
   await expect(page).toHaveURL(/\/demo#open-sandbox$/u);
@@ -107,4 +111,87 @@ test("Demo remains useful without WebMCP and has no superseded score or horizont
     clientWidth: document.documentElement.clientWidth
   }));
   expect(width.scrollWidth).toBeLessThanOrEqual(width.clientWidth);
+});
+
+test("Contract Workshop validates provider-free and keeps native execution honestly unavailable", async ({
+  page
+}) => {
+  await page.goto("/demo#contract-workshop");
+  await expect(page.getByText("Native run unavailable", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Validate contract", exact: true }).click();
+  await expect(page.getByRole("article", { name: /^Pass:/u })).toContainText("Contract validation");
+  await expect(page.getByRole("button", { name: "Run native invocation" })).toBeDisabled();
+  await expect(page.locator(".live-agent-disabled")).toContainText("Live agent test unavailable");
+  const stored = await page.evaluate(() => sessionStorage.getItem("thurstone:demo-result@1"));
+  expect(stored).toContain('"source":"contract_validation"');
+});
+
+test("JSON-string Contract Workshop runs a real read-only native invocation", async ({ page }) => {
+  await installEmulatedConsumer(page, "json-string");
+  await page.goto("/demo#contract-workshop");
+  await expect(page.getByText("Native WebMCP ready", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Validate contract", exact: true }).click();
+  const native = page.getByRole("button", { name: "Run native invocation" });
+  await expect(native).toBeEnabled();
+  await native.click();
+  const result = page.getByRole("article", { name: /^Pass:/u });
+  await expect(result).toContainText("Live native invocation");
+  await expect(page.getByLabel("Workshop trusted state result")).toContainText("Revision 0");
+  await expect(page.getByLabel("Workshop trusted state result")).toContainText("1 event(s)");
+});
+
+test("JSON-string Contract Workshop proves one cart transition plus replay no-op", async ({
+  page
+}) => {
+  await installEmulatedConsumer(page, "json-string");
+  await page.goto("/demo#contract-workshop");
+  await expect(page.getByText("Native WebMCP ready", { exact: true })).toBeVisible();
+  await page.getByLabel("Expected tool").selectOption("cart_update");
+  await page.getByLabel("User request").fill("Set the stoneware mug quantity to four.");
+  await page.getByRole("spinbutton", { name: "Quantity", exact: true }).fill("4");
+  await page.getByRole("button", { name: "Validate contract", exact: true }).click();
+  await page.getByRole("button", { name: "Run native invocation" }).click();
+  const state = page.getByLabel("Workshop trusted state result");
+  await expect(state).toContainText("Revision 1");
+  await expect(state).toContainText("2 event(s)");
+  await expect(state).toContainText("replay observed");
+  await expect(page.getByRole("article", { name: /^Pass:/u })).toContainText(
+    "Replay produced no second state transition"
+  );
+});
+
+test("Contract Workshop rejects incoherent effect and replay declarations", async ({ page }) => {
+  await page.goto("/demo#contract-workshop");
+  await page.getByLabel("Expected tool").selectOption("cart_update");
+  await page.getByLabel("Replay policy").selectOption("read_only");
+  await page.getByRole("button", { name: "Validate contract", exact: true }).click();
+  await expect(page.locator(".workshop-error")).toContainText(/exactly_once replay/iu);
+  await expect(page.getByText("Ready for an honestly labeled test.")).toHaveCount(0);
+});
+
+test("Contract Workshop exports only the current synthetic tab result and clears it on reset", async ({
+  page
+}) => {
+  await page.goto("/demo#contract-workshop");
+  await page.getByLabel("Test name").fill("Judge-authored review contract");
+  await page.getByRole("button", { name: "Validate contract", exact: true }).click();
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download my result JSON" }).click();
+  const download = await downloadPromise;
+  const stream = await download.createReadStream();
+  let text = "";
+  for await (const chunk of stream) text += chunk.toString();
+  const parsed = JSON.parse(text) as Record<string, unknown>;
+  expect(parsed).toMatchObject({
+    version: "thurstone-demo-result@1",
+    source: "contract_validation",
+    verdict: "pass"
+  });
+  expect(text).not.toMatch(/api[_-]?key|cookie|browser history|authorization/iu);
+
+  await page.getByRole("button", { name: "Reset workshop fixture" }).click();
+  await expect(page.getByText("Your validated contract will appear here.")).toBeVisible();
+  await expect
+    .poll(() => page.evaluate(() => sessionStorage.getItem("thurstone:demo-result@1")))
+    .toBeNull();
 });

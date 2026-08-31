@@ -3124,6 +3124,327 @@ textarea::placeholder {
   grid-column: 1 / -1;
 }
 
+/* F4 — Contract Workshop */
+
+.contract-workshop {
+  min-height: 680px;
+}
+
+.workshop-heading {
+  display: flex;
+  gap: 1.5rem;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+.workshop-heading > div:first-child {
+  max-width: 760px;
+}
+
+.workshop-heading > div > p:not(.eyebrow) {
+  margin: 0.85rem 0 0;
+  color: var(--ts-text-muted);
+  line-height: 1.6;
+}
+
+.workshop-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(360px, 5fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.workshop-form,
+.workshop-output {
+  min-width: 0;
+}
+
+.workshop-form {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.workshop-form fieldset {
+  display: grid;
+  gap: 0.8rem;
+  margin: 0;
+  padding: 1rem;
+  background: rgba(3, 14, 20, 0.58);
+  border: 1px solid var(--ts-line);
+  border-radius: var(--radius-small);
+}
+
+.workshop-form legend {
+  padding: 0 0.4rem;
+  color: var(--ts-cyan-bright);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.workshop-form label {
+  display: grid;
+  gap: 0.4rem;
+  color: var(--ts-silver);
+  font-size: 0.76rem;
+  font-weight: 720;
+}
+
+.workshop-form label > span {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+.workshop-form label small,
+.workshop-form fieldset > p {
+  color: var(--ts-text-faint);
+  font-size: 0.65rem;
+  font-weight: 500;
+}
+
+.workshop-form input:not([type="checkbox"]),
+.workshop-form textarea,
+.workshop-form select {
+  width: 100%;
+  padding: 0.62rem 0.72rem;
+}
+
+.workshop-form textarea {
+  resize: vertical;
+}
+
+.workshop-two-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.operation-id-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+}
+
+.workshop-checks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.workshop-checks label {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  min-height: 44px;
+  padding: 0.62rem;
+  color: var(--ts-text-muted);
+  font-weight: 600;
+  background: rgba(201, 223, 235, 0.035);
+  border: 1px solid var(--ts-line);
+  border-radius: var(--radius-small);
+}
+
+.workshop-checks input {
+  flex: 0 0 auto;
+  margin-top: 0.15rem;
+  accent-color: var(--ts-cyan);
+}
+
+.trusted-state-source {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: space-between;
+  margin: 0;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--ts-line);
+}
+
+.trusted-state-source strong {
+  color: var(--ts-ice);
+}
+
+.workshop-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.workshop-error {
+  margin: 0;
+  padding: 0.8rem;
+  color: var(--ts-amber-bright);
+  background: var(--ts-amber-soft);
+  border: 1px solid rgba(255, 151, 0, 0.32);
+  border-radius: var(--radius-small);
+}
+
+.live-agent-disabled {
+  margin: 0;
+  padding: 0.75rem;
+  color: var(--ts-text-muted);
+  font-size: 0.72rem;
+  background: rgba(201, 223, 235, 0.04);
+  border-left: 2px solid var(--ts-silver);
+}
+
+.workshop-output {
+  display: grid;
+  gap: 0.8rem;
+  position: sticky;
+  top: 88px;
+}
+
+.workshop-empty,
+.contract-preview,
+.workshop-result {
+  padding: 1rem;
+  background: rgba(3, 14, 20, 0.66);
+  border: 1px solid var(--ts-line);
+  border-radius: var(--radius-small);
+}
+
+.workshop-empty h3,
+.contract-preview h3 {
+  margin: 0;
+  color: var(--ts-ice);
+}
+
+.workshop-empty > p:not(.eyebrow) {
+  color: var(--ts-text-muted);
+}
+
+.contract-preview dl {
+  margin: 1rem 0 0;
+}
+
+.contract-preview dl > div {
+  display: grid;
+  grid-template-columns: 8rem minmax(0, 1fr);
+  gap: 0.65rem;
+  padding: 0.55rem 0;
+  border-top: 1px solid var(--ts-line);
+}
+
+.contract-preview dt {
+  color: var(--ts-text-faint);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+}
+
+.contract-preview dd {
+  margin: 0;
+  color: var(--ts-silver);
+  overflow-wrap: anywhere;
+}
+
+.contract-preview details,
+.workshop-result > details {
+  margin-top: 0.8rem;
+  color: var(--ts-cyan);
+}
+
+.contract-preview details > code {
+  display: block;
+  margin-top: 0.7rem;
+  color: var(--ts-text-faint);
+  font-size: 0.62rem;
+  overflow-wrap: anywhere;
+}
+
+.contract-preview pre,
+.workshop-result pre {
+  max-height: 280px;
+  margin: 0.7rem 0 0;
+  padding: 0.7rem;
+  overflow: auto;
+  color: var(--ts-silver);
+  font-size: 0.62rem;
+  background: var(--ts-bg-deep);
+  border: 1px solid var(--ts-line);
+  border-radius: 6px;
+}
+
+.workshop-result .verdict-card {
+  box-shadow: none;
+}
+
+.workshop-result-assertions {
+  display: grid;
+  gap: 0.4rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workshop-result-assertions li {
+  display: flex;
+  gap: 0.55rem;
+  padding: 0.55rem;
+  color: var(--ts-silver);
+  background: rgba(0, 217, 255, 0.045);
+  border: 1px solid rgba(54, 236, 255, 0.16);
+  border-radius: 6px;
+}
+
+.workshop-result-assertions li[data-passed="false"] {
+  color: var(--ts-amber-bright);
+  background: var(--ts-amber-soft);
+  border-color: rgba(255, 151, 0, 0.24);
+}
+
+.workshop-result-assertions li > span {
+  color: var(--ts-cyan-bright);
+}
+
+.workshop-result-assertions strong,
+.workshop-result-assertions small {
+  display: block;
+}
+
+.workshop-result-assertions small {
+  margin-top: 0.16rem;
+  color: var(--ts-text-faint);
+}
+
+.workshop-result-state {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+  margin-top: 0.7rem;
+}
+
+.workshop-result-state article {
+  padding: 0.6rem;
+  background: rgba(201, 223, 235, 0.035);
+  border: 1px solid var(--ts-line);
+  border-radius: 6px;
+}
+
+.workshop-result-state span,
+.workshop-result-state strong,
+.workshop-result-state small {
+  display: block;
+}
+
+.workshop-result-state span,
+.workshop-result-state small {
+  color: var(--ts-text-faint);
+  font-size: 0.62rem;
+}
+
+.workshop-result-state strong {
+  margin: 0.2rem 0;
+  color: var(--ts-ice);
+  font-size: 0.78rem;
+}
+
+.workshop-downloads {
+  margin-top: 0;
+}
+
 @keyframes pulse {
   0%,
   100% {
@@ -3187,6 +3508,14 @@ textarea::placeholder {
 
   .workshop-preview-steps {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workshop-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .workshop-output {
+    position: static;
   }
 
   .meaning-card {
@@ -3441,6 +3770,33 @@ textarea::placeholder {
 
   .sandbox-preview {
     display: block;
+  }
+
+  .workshop-heading {
+    display: block;
+  }
+
+  .workshop-heading .runtime-status {
+    margin-top: 0.8rem;
+  }
+
+  .workshop-two-fields,
+  .workshop-checks,
+  .workshop-result-state {
+    grid-template-columns: 1fr;
+  }
+
+  .operation-id-field {
+    grid-template-columns: 1fr;
+  }
+
+  .trusted-state-source {
+    display: grid;
+  }
+
+  .workshop-actions {
+    display: grid;
+    grid-template-columns: 1fr;
   }
 
   .route-page:has(#impact-execution-judge-action) {
