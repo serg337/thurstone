@@ -5,6 +5,10 @@ test("judge shell is honest, navigable, and permanently marks the simulation", a
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.goto("/");
 
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+    "href",
+    "https://thurstone.invarra.ai"
+  );
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Unit tests for meaning");
   await expect(page.getByText("Simulated checkout — no purchase occurs.")).toBeVisible();
 
@@ -93,6 +97,16 @@ test("Probe controls disclose policy while inference routes fail closed", async 
       inferencePerformed: false
     });
   }
+
+  const brandedOrigin = await request.post("/api/probe/issue", {
+    headers: { ...headers, Origin: "https://thurstone.invarra.ai" },
+    data: {}
+  });
+  expect(brandedOrigin.status()).toBe(503);
+  await expect(brandedOrigin.json()).resolves.toEqual({
+    error: "probe_disabled",
+    inferencePerformed: false
+  });
 
   const crossSite = await request.post("/api/probe/issue", {
     headers: { ...headers, Origin: "https://attacker.example", "Sec-Fetch-Site": "cross-site" },

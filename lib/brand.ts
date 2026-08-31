@@ -1,5 +1,6 @@
 export const PRODUCT_NAME = "Thurstone" as const;
 export const PRODUCT_BYLINE = "Thurstone by Invarra — created by Sergio Valencia." as const;
+export const PRODUCT_ORIGIN = "https://thurstone.invarra.ai" as const;
 
 /**
  * The challenge evidence was captured before the product rename. Stable `toolproof-*` and

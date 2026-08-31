@@ -2,6 +2,7 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 
+import { PRODUCT_ORIGIN } from "@/lib/brand";
 import { PROBE_PRODUCTION_ORIGIN } from "@/lib/probe/policy";
 
 const MAX_DISABLED_ROUTE_BODY_BYTES = 4_096;
@@ -20,6 +21,10 @@ export interface ProbeRequestBoundaryOptions {
   readonly maximumBodyBytes: number;
   readonly requireCsrfHeader?: boolean;
   readonly allowedMethod?: "POST" | "PUT" | "DELETE";
+}
+
+export function isAllowedProbeRequestOrigin(origin: string | null): boolean {
+  return origin === PROBE_PRODUCTION_ORIGIN || origin === PRODUCT_ORIGIN;
 }
 
 function declaredBodyLength(request: Request, maximumBodyBytes: number): void {
@@ -42,7 +47,7 @@ export function assertProbeRequestBoundary(
   if (request.method !== (options.allowedMethod ?? "POST")) {
     throw new ProbeHttpError("method_not_allowed", 405);
   }
-  if (request.headers.get("origin") !== PROBE_PRODUCTION_ORIGIN) {
+  if (!isAllowedProbeRequestOrigin(request.headers.get("origin"))) {
     throw new ProbeHttpError("request_rejected", 403);
   }
   if (request.headers.get("sec-fetch-site") !== "same-origin") {

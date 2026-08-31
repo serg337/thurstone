@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { readBoundedProbeJson } from "@/lib/probe/http";
+import { isAllowedProbeRequestOrigin, readBoundedProbeJson } from "@/lib/probe/http";
 import { probeRouteErrorResponse } from "@/lib/probe/route-response";
 import {
   PROBE_CALIBRATION_ATTEMPT,
@@ -68,7 +68,7 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   if (
-    request.headers.get("origin") !== "https://toolproof-rust.vercel.app" ||
+    !isAllowedProbeRequestOrigin(request.headers.get("origin")) ||
     request.headers.get("sec-fetch-site") !== "same-origin"
   ) {
     return NextResponse.json(
@@ -115,7 +115,7 @@ export async function PUT(request: Request) {
 
 export async function DELETE(request: Request) {
   if (
-    request.headers.get("origin") !== "https://toolproof-rust.vercel.app" ||
+    !isAllowedProbeRequestOrigin(request.headers.get("origin")) ||
     request.headers.get("sec-fetch-site") !== "same-origin"
   ) {
     return NextResponse.json(
