@@ -20,10 +20,11 @@ test("Home presents the semantic release product before technical detail", async
     "href",
     "/demo"
   );
-  await expect(page.getByRole("link", { name: "See verified results" })).toHaveAttribute(
+  await expect(page.getByRole("link", { name: "See verified reference results" })).toHaveAttribute(
     "href",
     "/results"
   );
+  await expect(page.getByText(/uncover semantic mistakes in their WebMCP catalog/iu)).toBeVisible();
   const backdrop = page.locator(".hero-signal-backdrop");
   await expect(backdrop).toHaveCount(1);
   await expect(backdrop).toHaveAttribute("aria-hidden", "true");
@@ -34,68 +35,92 @@ test("Home presents the semantic release product before technical detail", async
   await expect(
     page.getByText("@Browser Open https://thurstone.invarra.ai/demo", { exact: true })
   ).toBeVisible();
-  await expect(
-    page.getByText(/Chrome extension side chat is not the Site Tools consumer/iu)
-  ).toBeVisible();
-  await expect(page.getByLabel("Flagged Chrome compatibility")).toBeVisible();
+  await expect(page.getByText(/enter this exact command in the chat/iu)).toBeVisible();
+  await expect(page.getByText("Flagged Chrome compatibility", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Open the technical Lab" })).toHaveCount(0);
+  const footer = page.locator("footer");
+  await expect(footer.getByText("Thurstone by Invarra", { exact: true })).toBeVisible();
+  await expect(footer.getByText("Open source · MIT License", { exact: true })).toBeVisible();
+  await expect(footer.getByText(/created by Sergio|evolving draft|No affiliation/iu)).toHaveCount(
+    0
+  );
 });
 
-test("Home explains the failure, real-agent mechanism, and five evidence stages", async ({
-  page
-}) => {
+test("Home follows one semantic failure through diagnosis and rerun", async ({ page }) => {
   await page.goto("/");
   await expect(
     page.getByRole("heading", {
-      name: "The missing failure lives between the user’s words and your code."
+      name: "Follow a semantic bug from the user’s words to a verified fix."
     })
   ).toBeVisible();
-  await expect(page.getByText(/The code worked\. The behavior was wrong/iu)).toBeVisible();
-  await expect(page.getByText(/Unit tests prove that a tool works/iu)).toBeVisible();
-  const flow = page.getByRole("list", { name: "Thurstone verification flow" });
-  await expect(flow.getByRole("listitem")).toHaveCount(5);
-  for (const stage of ["Define", "Agent decides", "Native WebMCP", "Verify reality", "Diagnose"]) {
+  const flow = page.getByRole("list", {
+    name: "How Thurstone turns a semantic mismatch into a verified fix"
+  });
+  await expect(flow.getByRole("listitem")).toHaveCount(6);
+  for (const stage of [
+    "01 · The request",
+    "02 · The owner’s contract",
+    "03 · The agent decision",
+    "04 · Native WebMCP",
+    "05 · Trusted verdict",
+    "06 · Fix and rerun"
+  ]) {
     await expect(flow.getByText(stage, { exact: true })).toBeVisible();
   }
-  await flow.getByText("What this means", { exact: true }).first().click();
-  await expect(flow.getByText(/required tool, arguments, allowed effects/iu)).toBeVisible();
+  await expect(
+    flow.getByText(/Expected.*checkout_request.*observed.*order_review/iu)
+  ).toBeVisible();
+  await expect(page.getByText(/does not stop at.*failed/iu)).toBeVisible();
+  await expect(page.getByText(/not a claim about the agent’s private reasoning/iu)).toBeVisible();
 });
 
 test("Home keeps semantic and Invocation Integrity proof separate", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Semantic behaviors" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Intended behaviors verified" })).toBeVisible();
   await expect(page.getByText("24/24", { exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Invocation Integrity" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Tested hostile invocations preserved site rules" })
+  ).toBeVisible();
   await expect(page.getByText("3/3", { exact: true })).toBeVisible();
   await expect(page.getByLabel("Separate test matrices", { exact: true })).toBeVisible();
+  await page.getByText("Inspect all 24 semantic behaviors", { exact: true }).click();
+  await expect(
+    page.getByRole("table", { name: "Homepage semantic reference matrix" }).getByRole("row")
+  ).toHaveCount(25);
+  await page.getByText("Inspect the 3 Invocation Integrity tests", { exact: true }).click();
+  await expect(
+    page.getByRole("table", { name: "Homepage Invocation Integrity Matrix" }).getByRole("row")
+  ).toHaveCount(4);
   await expect(page.getByText(/27\s*\/\s*27/u)).toHaveCount(0);
 });
 
-test("Home states the reference scope without promising arbitrary-site enforcement", async ({
-  page
-}) => {
+test("Demo owns the reference-sandbox scope instead of the sales homepage", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByText("Challenge scope", { exact: true })).toBeVisible();
-  await expect(page.getByText(/synthetic reference checkout/iu)).toBeVisible();
-  await expect(page.getByText(/does not intercept live customer sessions/iu)).toBeVisible();
+  await expect(page.getByLabel("Demo scope")).toHaveCount(0);
+  await expect(page.getByText(/does not monitor live shoppers/iu)).toHaveCount(0);
   await expect(page.getByRole("textbox", { name: /website url/iu })).toHaveCount(0);
   await expect(page.getByText(/23\s*\/\s*24/u)).toHaveCount(0);
+  await page.goto("/demo");
+  await expect(page.getByLabel("Demo scope")).toBeVisible();
+  await expect(page.getByText(/synthetic checkout sandbox/iu)).toBeVisible();
+  await expect(page.getByText(/does not monitor live shoppers/iu)).toBeVisible();
 });
 
 test("Home answers the complete cold-review product contract", async ({ page }) => {
   await page.goto("/");
   const answers = [
     page.getByText(/code can be correct/iu),
-    page.getByText(/website owners define what a request should mean/iu),
+    page.getByText(/uncover semantic mistakes in their WebMCP catalog/iu),
     page.getByText("Before the first launch", { exact: true }),
-    page.getByRole("heading", { name: "Turn intent into a release test." }),
-    page.getByText(/supported agent sees only the request and live tools/iu),
+    page.getByRole("heading", { name: /Follow a semantic bug/iu }),
+    page.getByText(/fresh agent chooses from the real catalog/iu),
     page.getByRole("link", { name: "Test with your agent" }),
-    page.getByText(/first admitted tool invocation/iu),
-    page.getByText(/Check trusted state and ledger independently/iu),
-    page.getByRole("heading", { name: "An issue should tell you where to look next." }),
+    page.getByText("04 · Native WebMCP", { exact: true }),
+    page.getByText("05 · Trusted verdict", { exact: true }),
+    page.getByText("06 · Fix and rerun", { exact: true }),
     page.getByText(/scheduled regression suite after launch/iu),
     page.getByText("24/24", { exact: true }),
-    page.getByText(/does not intercept live customer sessions/iu)
+    page.getByText("Inspect the 3 Invocation Integrity tests", { exact: true })
   ];
   for (const answer of answers) await expect(answer).toBeVisible();
   expect(answers).toHaveLength(12);
@@ -107,7 +132,7 @@ test("Home keeps both primary judge actions inside the first viewport", async ({
   expect(viewport).not.toBeNull();
   for (const link of [
     page.getByRole("link", { name: "Test with your agent" }),
-    page.getByRole("link", { name: "See verified results" })
+    page.getByRole("link", { name: "See verified reference results" })
   ]) {
     const box = await link.boundingBox();
     expect(box).not.toBeNull();

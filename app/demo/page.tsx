@@ -26,6 +26,14 @@ export default function DemoPage() {
         </div>
       </header>
       <BrowserEntryGuide />
+      <aside className="demo-scope-note" aria-label="Demo scope">
+        <strong>A safe reference environment</strong>
+        <p>
+          This demo uses a synthetic checkout sandbox. Real teams connect Thurstone to their own
+          WebMCP catalog and test environment before release. Thurstone tests releases; it does not
+          monitor live shoppers.
+        </p>
+      </aside>
       <DemoClient />
     </div>
   );

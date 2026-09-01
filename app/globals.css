@@ -2899,6 +2899,59 @@ textarea::placeholder {
   justify-content: center;
 }
 
+.reference-evidence-disclosures {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+.reference-evidence-disclosures details {
+  overflow: hidden;
+  background: rgba(5, 20, 29, 0.82);
+  border: 1px solid var(--ts-line-strong);
+  border-radius: var(--radius);
+}
+
+.reference-evidence-disclosures summary {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 64px;
+  padding: 1rem 1.15rem;
+  color: var(--ts-ice);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.reference-evidence-disclosures summary small {
+  color: var(--ts-text-faint);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-align: right;
+}
+
+.reference-evidence-disclosures details[open] summary {
+  background: var(--ts-cyan-soft);
+  border-bottom: 1px solid var(--ts-line);
+}
+
+.reference-evidence-disclosures .evidence-table-wrap {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.reference-evidence-disclosures td strong,
+.reference-evidence-disclosures td small {
+  display: block;
+}
+
+.reference-evidence-disclosures td small {
+  margin-top: 0.2rem;
+  color: var(--ts-text-muted);
+}
+
 .intro-scope {
   display: flex;
   gap: 1rem;
@@ -3661,7 +3714,7 @@ textarea::placeholder {
 
 .browser-entry-guide {
   display: grid;
-  grid-template-columns: minmax(0, 7fr) minmax(250px, 3fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.75rem;
   margin: 0 0 1rem;
   padding: 0.85rem;
@@ -3675,8 +3728,7 @@ textarea::placeholder {
   margin-top: 1rem;
 }
 
-.browser-entry-primary,
-.browser-entry-compatibility {
+.browser-entry-primary {
   min-width: 0;
   padding: 0.8rem;
   border-radius: var(--radius-small);
@@ -3687,8 +3739,7 @@ textarea::placeholder {
   border: 1px solid rgba(54, 236, 255, 0.18);
 }
 
-.browser-entry-primary h2,
-.browser-entry-compatibility h3 {
+.browser-entry-primary h2 {
   margin: 0;
   color: var(--ts-ice);
 }
@@ -3698,8 +3749,7 @@ textarea::placeholder {
   letter-spacing: -0.02em;
 }
 
-.browser-entry-primary > p:not(.eyebrow),
-.browser-entry-compatibility p {
+.browser-entry-primary > p:not(.eyebrow) {
   margin: 0.55rem 0 0;
   color: var(--ts-text-muted);
   font-size: 0.82rem;
@@ -3726,35 +3776,29 @@ textarea::placeholder {
   font-size: 0.76rem;
 }
 
-.browser-entry-compatibility {
+.browser-entry-guide[data-compact="true"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.demo-scope-note {
+  display: flex;
+  gap: 0.9rem;
+  align-items: baseline;
+  margin: 0 0 1rem;
+  padding: 0.9rem 1rem;
+  color: var(--ts-text-muted);
   background: rgba(201, 223, 235, 0.035);
   border: 1px solid var(--ts-line);
+  border-radius: var(--radius-small);
 }
 
-.browser-entry-compatibility > span {
-  display: block;
-  margin-bottom: 0.35rem;
-  color: var(--ts-text-faint);
-  font-size: 0.64rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.demo-scope-note strong {
+  flex: 0 0 auto;
+  color: var(--ts-ice);
 }
 
-.browser-entry-compatibility h3 {
-  font-size: 0.95rem;
-}
-
-.browser-entry-compatibility a {
-  display: inline-flex;
-  margin-top: 0.65rem;
-  color: var(--ts-cyan-bright);
-  font-size: 0.78rem;
-  font-weight: 760;
-}
-
-.browser-entry-guide[data-compact="true"] {
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.5fr);
+.demo-scope-note p {
+  margin: 0;
 }
 
 .owner-demo {
@@ -4685,6 +4729,105 @@ textarea::placeholder {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.55rem;
+}
+
+.semantic-story-example {
+  margin: 0 0 1rem;
+  color: var(--ts-text-muted);
+  font-size: 1.02rem;
+}
+
+.semantic-story-example strong {
+  color: var(--ts-ice);
+}
+
+.semantic-story-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.7rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.semantic-story-grid li {
+  position: relative;
+  min-width: 0;
+  min-height: 205px;
+  padding: 1.1rem;
+  background: linear-gradient(145deg, rgba(8, 29, 40, 0.88), rgba(3, 13, 19, 0.96));
+  border: 1px solid var(--ts-line);
+  border-radius: var(--radius-small);
+}
+
+.semantic-story-grid li[data-outcome="issue"] {
+  background: linear-gradient(145deg, rgba(70, 37, 4, 0.48), rgba(19, 12, 5, 0.96));
+  border-color: rgba(255, 151, 0, 0.34);
+  box-shadow: var(--ts-glow-amber);
+}
+
+.semantic-story-grid li[data-outcome="next"] {
+  background: linear-gradient(145deg, rgba(0, 67, 82, 0.36), rgba(3, 18, 24, 0.96));
+  border-color: rgba(54, 236, 255, 0.3);
+  box-shadow: var(--ts-glow-cyan);
+}
+
+.semantic-story-grid span {
+  color: var(--ts-cyan-bright);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.semantic-story-grid li[data-outcome="issue"] span {
+  color: var(--ts-amber-bright);
+}
+
+.semantic-story-grid h3 {
+  margin: 1.65rem 0 0;
+  color: var(--ts-ice);
+  font-size: 1.08rem;
+  line-height: 1.4;
+}
+
+.semantic-story-grid h3 code {
+  color: var(--ts-cyan-bright);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+}
+
+.semantic-story-grid p {
+  margin: 0.65rem 0 0;
+  color: var(--ts-text-muted);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.semantic-story-payoff {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.35fr) minmax(0, 1fr);
+  gap: 0.5rem 1rem;
+  margin-top: 1rem;
+  padding: 1.15rem;
+  background: var(--ts-cyan-soft);
+  border: 1px solid rgba(54, 236, 255, 0.2);
+  border-radius: var(--radius-small);
+}
+
+.semantic-story-payoff strong {
+  color: var(--ts-ice);
+}
+
+.semantic-story-payoff p,
+.semantic-story-payoff small {
+  margin: 0;
+  color: var(--ts-text-muted);
+}
+
+.semantic-story-payoff small {
+  grid-column: 2;
+  color: var(--ts-text-faint);
 }
 
 .semantic-failure-example > div {
@@ -6257,7 +6400,8 @@ textarea::placeholder {
 
 @media (max-width: 1000px) {
   .semantic-failure-example,
-  .product-workflow-timeline {
+  .product-workflow-timeline,
+  .semantic-story-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -6284,6 +6428,7 @@ textarea::placeholder {
   }
 
   .semantic-failure-example,
+  .semantic-story-grid,
   .lifecycle-grid,
   .direction-grid,
   .product-direction .direction-grid,
@@ -6296,6 +6441,21 @@ textarea::placeholder {
   .semantic-failure-example > div[data-outcome="issue"],
   .product-workflow-timeline li:last-child {
     grid-column: auto;
+  }
+
+  .semantic-story-payoff,
+  .demo-scope-note,
+  .reference-evidence-disclosures summary {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .semantic-story-payoff small {
+    grid-column: auto;
+  }
+
+  .reference-evidence-disclosures summary small {
+    text-align: left;
   }
 
   .release-loop {

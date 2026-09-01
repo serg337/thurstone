@@ -12,15 +12,15 @@ Show the homepage product statement and say:
 > AI agents can operate websites. Thurstone verifies that they do what the website owner
 > intended—and nothing the owner prohibited. A working WebMCP handler alone cannot prove that.
 
-Click **Test Thurstone** within the first 10–15 seconds.
+Click **Test with your agent** within the first 10–15 seconds.
 
-## 0:12–0:28 — The release test
+## 0:12–0:28 — From hidden failure to verified fix
 
-Show the five-stage mechanism and say:
+Show the homepage progression and say:
 
-> The owner chooses real deployed tools, turns representative requests into a contract suite, and
-> sends one selected case to a fresh agent. Thurstone observes the native call, checks independent
-> site state and ledger effects, diagnoses any mismatch, and preserves the result as a regression.
+> Thurstone follows the full chain: request, owner contract, fresh-agent decision, native call,
+> trusted verdict, and a concrete next step. It does not stop at failed; it shows where observed
+> behavior diverged and preserves the case for rerun.
 
 ## 0:28–0:47 — Stage 1: meaning and known state
 

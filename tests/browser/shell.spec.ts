@@ -107,15 +107,17 @@ test("Probe controls disclose policy while inference routes fail closed", async 
 
 test("home makes WebMCP, trusted reality, and both judge paths explicit", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByText(/website owners define what a request should mean/iu)).toBeVisible();
-  const flow = page.getByRole("list", { name: "Thurstone verification flow" });
+  await expect(page.getByText(/uncover semantic mistakes in their WebMCP catalog/iu)).toBeVisible();
+  const flow = page.getByRole("list", {
+    name: "How Thurstone turns a semantic mismatch into a verified fix"
+  });
   await expect(flow).toContainText("Native WebMCP");
-  await expect(flow).toContainText("Verify reality");
+  await expect(flow).toContainText("Trusted verdict");
   await expect(page.getByRole("link", { name: "Test with your agent" })).toHaveAttribute(
     "href",
     "/demo"
   );
-  await expect(page.getByRole("link", { name: "See verified results" })).toHaveAttribute(
+  await expect(page.getByRole("link", { name: "See verified reference results" })).toHaveAttribute(
     "href",
     "/results"
   );
@@ -123,7 +125,7 @@ test("home makes WebMCP, trusted reality, and both judge paths explicit", async 
   expect(viewport).not.toBeNull();
   for (const link of [
     page.getByRole("link", { name: "Test with your agent" }),
-    page.getByRole("link", { name: "See verified results" })
+    page.getByRole("link", { name: "See verified reference results" })
   ]) {
     const box = await link.boundingBox();
     expect(box).not.toBeNull();

@@ -17,23 +17,25 @@ test("homepage sells the semantic release problem, mechanism, and action", async
     "href",
     "/demo"
   );
-  await expect(page.getByText(/The code worked\. The behavior was wrong/iu)).toBeVisible();
-  await expect(page.getByText(/Unit tests prove that a tool works/iu)).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Turn intent into a release test." })
+    page.getByRole("heading", {
+      name: "Follow a semantic bug from the user’s words to a verified fix."
+    })
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "An issue should tell you where to look next." })
+    page.getByText(/Expected.*checkout_request.*observed.*order_review/iu)
   ).toBeVisible();
-  await expect(
-    page.getByText(/investigation hypothesis—not a claim about the agent’s private reasoning/iu)
-  ).toBeVisible();
+  await expect(page.getByText(/not a claim about the agent’s private reasoning/iu)).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Run Thurstone whenever meaning can drift." })
   ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Don’t watch a demo. Run one with your own agent." })
   ).toBeVisible();
+  await expect(page.getByRole("link", { name: "Test Thurstone with your agent" })).toHaveAttribute(
+    "href",
+    "/demo"
+  );
   await expect(page.getByText("24/24", { exact: true })).toBeVisible();
   await expect(page.getByText("3/3", { exact: true })).toBeVisible();
   await expect(page.getByText(/27\s*\/\s*27/u)).toHaveCount(0);

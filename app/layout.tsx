@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 
 import { SimulationNotice } from "@/components/simulation-notice";
 import { SiteHeader } from "@/components/site-header";
-import { PRODUCT_BYLINE, PRODUCT_NAME, PRODUCT_ORIGIN } from "@/lib/brand";
+import { PRODUCT_NAME, PRODUCT_ORIGIN } from "@/lib/brand";
 import { PROBE_RESULTS_COOKIE, PROBE_SESSION_COOKIE } from "@/lib/probe/session";
 import { SCORED_RESULTS_COOKIE, SCORED_SESSION_COOKIE } from "@/lib/scored/session.server";
 
@@ -61,8 +61,8 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <SimulationNotice />
         <main id="main-content">{children}</main>
         <footer className="site-footer">
-          <span>{PRODUCT_BYLINE}</span>
-          <span>WebMCP is an evolving draft. No affiliation or endorsement is implied.</span>
+          <span>Thurstone by Invarra</span>
+          <span>Open source · MIT License</span>
         </footer>
       </body>
     </html>

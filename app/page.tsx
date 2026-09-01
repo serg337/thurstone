@@ -1,37 +1,7 @@
 import { HeroSignalBackdrop } from "@/components/hero-signal-backdrop";
 import { BrowserEntryGuide } from "@/components/demo/browser-entry-guide";
+import { ReferenceEvidenceDisclosures } from "@/components/results/reference-evidence-disclosures";
 import { StatusPill } from "@/components/status-pill";
-import { SignalFlow, type SignalFlowStage } from "@/components/ui/signal-flow";
-
-const flowStages: readonly SignalFlowStage[] = Object.freeze([
-  {
-    title: "Define",
-    summary: "Turn intended meaning into a contract.",
-    detail:
-      "Declare the required tool, arguments, allowed effects, forbidden effects, and replay policy."
-  },
-  {
-    title: "Agent decides",
-    summary: "Your supported agent sees only the request and live tools.",
-    detail: "The owner’s expected answer stays outside the agent-visible surface."
-  },
-  {
-    title: "Native WebMCP",
-    summary: "Observe the first admitted tool invocation.",
-    detail: "Thurstone records the native tool, raw and canonical arguments, build, and catalog."
-  },
-  {
-    title: "Verify reality",
-    summary: "Check trusted state and ledger independently.",
-    detail: "A tool response never decides the verdict; the site-owned state and ledger do."
-  },
-  {
-    title: "Diagnose",
-    summary: "See what failed and where to investigate.",
-    detail:
-      "Deterministic facts, qualified hypotheses, and a concrete rerun criterion preserve the case."
-  }
-]);
 
 const lifecycleUses = [
   "Before the first launch",
@@ -55,98 +25,97 @@ export default function HomePage() {
             <span>The agent can still choose the wrong action.</span>
           </h1>
           <p className="intro-lede">
-            Thurstone lets website owners define what a request should mean, test it with a real
-            agent, and verify what the site actually changed—before that behavior reaches users.
+            Thurstone helps website owners uncover semantic mistakes in their WebMCP catalog,
+            understand what went wrong, and fix them before agents frustrate real visitors or
+            customers.
           </p>
           <div className="button-row intro-actions" aria-label="Start with Thurstone">
             <a className="button button-primary" href="/demo">
               Test with your agent
             </a>
             <a className="button button-secondary" href="/results">
-              See verified results
+              See verified reference results
             </a>
           </div>
-          <p className="intro-microcopy">
-            No account · safe reference checkout · use ChatGPT desktop&apos;s built-in Browser
-          </p>
           <BrowserEntryGuide compact />
         </div>
       </section>
 
-      <section className="intro-section" aria-labelledby="problem-title">
+      <section
+        className="intro-section semantic-release-story"
+        aria-labelledby="release-story-title"
+      >
         <div className="intro-section-heading">
-          <p className="eyebrow">The bug ordinary tests miss</p>
-          <h2 id="problem-title">
-            The missing failure lives between the user’s words and your code.
+          <p className="eyebrow">From hidden failure to verified fix</p>
+          <h2 id="release-story-title">
+            Follow a semantic bug from the user’s words to a verified fix.
           </h2>
           <p>
-            A handler can execute perfectly and still be the wrong action for what the user meant.
+            Thurstone tests the whole chain your handler tests cannot see. The owner declares what a
+            request must mean. A fresh agent chooses from the real catalog. Thurstone captures the
+            native call, checks independent site state and the ledger, and turns any mismatch into a
+            regression the team can run again.
           </p>
         </div>
-        <div
-          className="semantic-failure-example"
-          role="group"
-          aria-label="Semantic failure example"
-        >
-          <div>
-            <span>User</span>
-            <strong>“I’m considering checkout.”</strong>
-          </div>
-          <div>
-            <span>Agent</span>
-            <strong>Calls `checkout_request`</strong>
-          </div>
-          <div>
-            <span>Handler</span>
-            <strong>Executes correctly</strong>
-          </div>
-          <div>
-            <span>Site</span>
-            <strong>Creates a pending checkout</strong>
-          </div>
-          <div data-outcome="issue">
-            <span>Verdict</span>
-            <strong>The code worked. The behavior was wrong.</strong>
-          </div>
-        </div>
-        <p className="semantic-failure-payoff">
-          <strong>Unit tests prove that a tool works.</strong> Thurstone tests whether it should
-          have been called.
+        <p className="semantic-story-example">
+          <strong>Example:</strong> a shopper explicitly asks to begin checkout. Both available
+          tools work, but only one matches what the shopper meant.
         </p>
-      </section>
-
-      <section className="intro-section" aria-labelledby="mechanism-title">
-        <div className="intro-section-heading">
-          <p className="eyebrow">The product mechanism</p>
-          <h2 id="mechanism-title">Turn intent into a release test.</h2>
-          <p>Human contract → agent decision → native WebMCP → trusted reality → next action.</p>
-        </div>
-        <SignalFlow stages={flowStages} />
-      </section>
-
-      <section className="intro-section actionable-failure" aria-labelledby="diagnosis-title">
-        <div className="intro-section-heading">
-          <p className="eyebrow">Actionable failure</p>
-          <h2 id="diagnosis-title">An issue should tell you where to look next.</h2>
+        <ol
+          className="semantic-story-grid"
+          aria-label="How Thurstone turns a semantic mismatch into a verified fix"
+        >
+          <li>
+            <span>01 · The request</span>
+            <h3>“I’m ready—start checkout for this cart.”</h3>
+            <p>The human intent is explicit and consequential.</p>
+          </li>
+          <li>
+            <span>02 · The owner’s contract</span>
+            <h3>
+              Call <code>checkout_request</code> exactly once.
+            </h3>
+            <p>Create one pending approval and make no other state change.</p>
+          </li>
+          <li>
+            <span>03 · The agent decision</span>
+            <h3>
+              The fresh agent selects <code>order_review</code>.
+            </h3>
+            <p>It sees the request and live tools—but never the owner’s answer key.</p>
+          </li>
+          <li>
+            <span>04 · Native WebMCP</span>
+            <h3>
+              <code>order_review</code> executes correctly.
+            </h3>
+            <p>The handler returns a valid read-only order summary.</p>
+          </li>
+          <li data-outcome="issue">
+            <span>05 · Trusted verdict</span>
+            <h3>
+              Expected <code>checkout_request</code>; observed <code>order_review</code>.
+            </h3>
+            <p>No checkout transition occurred. The contract failed at tool selection.</p>
+          </li>
+          <li data-outcome="next">
+            <span>06 · Fix and rerun</span>
+            <h3>Investigate the boundary between review and authorization.</h3>
+            <p>Clarify the catalog descriptions, then rerun this preserved case.</p>
+          </li>
+        </ol>
+        <div className="semantic-story-payoff">
+          <strong>Thurstone does not stop at “failed.”</strong>
           <p>
-            Thurstone identifies which tested layer diverged, shows the evidence, and recommends
-            what to investigate. You make the change; Thurstone reruns the contract to verify it.
+            It identifies which tested layer diverged, shows the evidence, and gives the owner a
+            concrete criterion for the next run. The owner makes the change; Thurstone verifies
+            whether the same contract now passes.
           </p>
-        </div>
-        <article className="diagnosis-example-card">
-          <span>Wrong tool selected</span>
-          <h3>Expected `checkout_request`; observed `order_review`.</h3>
-          <p>
-            No checkout transition occurred. The evidence places the mismatch at tool selection.
-          </p>
-          <strong>
-            Investigate whether the descriptions clearly distinguish read-only review from explicit
-            checkout authorization, then rerun the same case.
-          </strong>
           <small>
-            This is an investigation hypothesis—not a claim about the agent’s private reasoning.
+            The recommended investigation is based on observed evidence—not a claim about the
+            agent’s private reasoning.
           </small>
-        </article>
+        </div>
       </section>
 
       <section className="intro-section" aria-labelledby="lifecycle-title">
@@ -176,21 +145,26 @@ export default function HomePage() {
           act, and see whether the real effect matches what you intended.
         </p>
         <a className="button button-primary" href="/demo">
-          Build a contract
+          Test Thurstone with your agent
         </a>
       </section>
 
       <section className="intro-section proof-section" aria-labelledby="proof-title">
         <div className="intro-section-heading">
           <p className="eyebrow">Verified reference evidence</p>
-          <h2 id="proof-title">A working product, backed by separate test matrices.</h2>
+          <h2 id="proof-title">Proven on our reference WebMCP.</h2>
+          <p>
+            These are Thurstone’s existing reference results—not results from your browser. Open
+            either matrix to inspect every tested request, expected behavior, observed action,
+            verified effect, and verdict.
+          </p>
         </div>
         <div className="proof-grid">
           <article className="proof-card proof-semantic">
             <StatusPill state="ready">Verified semantic run</StatusPill>
             <p className="proof-score">24/24</p>
-            <h3>Semantic behaviors</h3>
-            <p>24 provider decisions · 20 native calls · 4 correct clarifications</p>
+            <h3>Intended behaviors verified</h3>
+            <p>24 real agent decisions · 20 native calls · 4 correct clarifications</p>
           </article>
           <div className="proof-separator" aria-label="Separate test matrices">
             <span>Separate</span>
@@ -198,28 +172,20 @@ export default function HomePage() {
           <article className="proof-card proof-integrity">
             <StatusPill state="ready">Provider-free native tests</StatusPill>
             <p className="proof-score">3/3</p>
-            <h3>Invocation Integrity</h3>
-            <p>Privileged fields · nonexistent items · replay</p>
+            <h3>Tested hostile invocations preserved site rules</h3>
+            <p>Privileged fields · nonexistent items · duplicate execution</p>
           </article>
         </div>
+        <ReferenceEvidenceDisclosures />
         <div className="button-row proof-actions">
           <a className="button button-primary" href="/results">
-            Inspect the results
+            View complete evidence
           </a>
           <a className="button button-secondary" href="/workflow">
             See the workflow
           </a>
         </div>
       </section>
-
-      <aside className="intro-scope" aria-label="Thurstone challenge scope">
-        <strong>Challenge scope</strong>
-        <p>
-          This experience uses Thurstone’s synthetic reference checkout. Customer deployments would
-          connect the same workflow to their own catalog, test environment, and trusted-state
-          source. Thurstone tests releases; it does not intercept live customer sessions.
-        </p>
-      </aside>
     </div>
   );
 }

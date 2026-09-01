@@ -4,13 +4,12 @@ test("primary copy tells one coherent semantic-release story at readable sizes",
   page
 }) => {
   await page.goto("/");
-  await expect(page.getByText(/website owners define what a request should mean/iu)).toBeVisible();
-  await expect(page.getByText("Challenge scope", { exact: true })).toBeVisible();
-  await expect(page.getByText(/The code worked\. The behavior was wrong/iu)).toBeVisible();
+  await expect(page.getByText(/uncover semantic mistakes in their WebMCP catalog/iu)).toBeVisible();
+  await expect(page.getByText(/does not stop at.*failed/iu)).toBeVisible();
   await expect(page.getByText(/runtime enforcement/iu)).toHaveCount(0);
 
   const essentialSizes = await page
-    .locator(".signal-flow p, .semantic-failure-example strong")
+    .locator(".semantic-story-grid h3, .semantic-story-grid p")
     .evaluateAll((elements) =>
       elements.map((element) => Number.parseFloat(getComputedStyle(element).fontSize))
     );
@@ -21,6 +20,7 @@ test("primary copy tells one coherent semantic-release story at readable sizes",
   await expect(
     page.getByRole("heading", { name: "Test Thurstone as a WebMCP owner." })
   ).toBeVisible();
+  await expect(page.getByLabel("Demo scope")).toBeVisible();
   await expect(page.locator(".demo-mode-nav, .demo-readiness")).toHaveCount(0);
 
   await page.goto("/workflow");

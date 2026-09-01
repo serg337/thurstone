@@ -63,6 +63,10 @@ test("Demo presents one five-stage WebMCP-owner workflow without a model call", 
   await expect(
     page.getByText("@Browser Open https://thurstone.invarra.ai/demo", { exact: true })
   ).toBeVisible();
+  await expect(page.getByText(/enter this exact command in the chat/iu)).toBeVisible();
+  await expect(page.getByLabel("Demo scope")).toBeVisible();
+  await expect(page.getByText(/does not monitor live shoppers/iu)).toBeVisible();
+  await expect(page.getByText("Flagged Chrome compatibility", { exact: true })).toHaveCount(0);
   expect(inferenceRequests).toEqual([]);
 });
 
