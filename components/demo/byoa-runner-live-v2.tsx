@@ -434,7 +434,7 @@ export function ByoaRunnerV2() {
   }
 
   if (source) {
-    const command = `@Browser Open ${source.url}`;
+    const command = `@Browser Open ${source.url}, then follow the request shown on the page.`;
     return (
       <section
         className="agent-runner-empty agent-handoff-source"

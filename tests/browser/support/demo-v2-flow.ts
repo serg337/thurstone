@@ -4,6 +4,16 @@ import type { RuntimeModelContext } from "@/lib/webmcp/runtime";
 
 import { installEmulatedConsumer } from "./emulated-consumer";
 
+const HANDOFF_COMMAND_PREFIX = "@Browser Open ";
+const HANDOFF_COMMAND_SUFFIX = ", then follow the request shown on the page.";
+
+export function handoffUrlFromCommand(command: string): string {
+  if (!command.startsWith(HANDOFF_COMMAND_PREFIX) || !command.endsWith(HANDOFF_COMMAND_SUFFIX)) {
+    throw new Error("The fresh-agent command does not match the frozen complete-command format.");
+  }
+  return command.slice(HANDOFF_COMMAND_PREFIX.length, -HANDOFF_COMMAND_SUFFIX.length);
+}
+
 export async function prepareV2Handoff(
   owner: Page,
   input: {
@@ -26,10 +36,7 @@ export async function prepareV2Handoff(
   await owner.getByRole("button", { name: "Review and arm selected case" }).click();
   await owner.getByRole("button", { name: "Arm live test" }).click();
   await owner.waitForURL(/\/demo\/run#handoff-source-v2$/u);
-  return (await owner.getByLabel("Exact fresh-agent command").inputValue()).replace(
-    /^@Browser Open /u,
-    ""
-  );
+  return handoffUrlFromCommand(await owner.getByLabel("Exact fresh-agent command").inputValue());
 }
 
 export async function openFreshV2(

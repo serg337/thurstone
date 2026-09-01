@@ -21,28 +21,21 @@ import {
 import { resolveDeploymentCommit } from "@/lib/deployment/commit";
 
 import {
+  BYOA_HANDOFF_PREPARE_MAX_BODY_BYTES,
+  ByoaHandoffHttpError,
   isTrustedHandoffRequest,
+  readBoundedHandoffJson,
   trustedHandoffClientOrigin
 } from "@/lib/demo/agent-handoff-http.server";
 
 export const dynamic = "force-dynamic";
 
-const MAX_BODY_BYTES = 96 * 1024;
-
 export async function POST(request: Request) {
   if (!isTrustedHandoffRequest(request)) {
     return NextResponse.json({ error: "handoff_origin_invalid" }, { status: 403 });
   }
-  const declaredLength = Number(request.headers.get("content-length") ?? "0");
-  if (declaredLength > MAX_BODY_BYTES) {
-    return NextResponse.json({ error: "handoff_body_too_large" }, { status: 413 });
-  }
   try {
-    const bytes = await request.text();
-    if (Buffer.byteLength(bytes, "utf8") > MAX_BODY_BYTES) {
-      return NextResponse.json({ error: "handoff_body_too_large" }, { status: 413 });
-    }
-    const value = JSON.parse(bytes) as unknown;
+    const value = await readBoundedHandoffJson(request, BYOA_HANDOFF_PREPARE_MAX_BODY_BYTES);
     if (
       typeof value === "object" &&
       value !== null &&
@@ -126,7 +119,13 @@ export async function POST(request: Request) {
       },
       { headers: { "Cache-Control": "no-store" } }
     );
-  } catch {
+  } catch (caught) {
+    if (caught instanceof ByoaHandoffHttpError) {
+      return NextResponse.json(
+        { error: caught.code },
+        { status: caught.status, headers: { "Cache-Control": "no-store" } }
+      );
+    }
     return NextResponse.json({ error: "handoff_prepare_invalid" }, { status: 400 });
   }
 }

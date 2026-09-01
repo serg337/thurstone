@@ -37,6 +37,7 @@ vi.mock("@/lib/deployment/commit", () => ({
 }));
 
 import { POST as prepare } from "@/app/api/demo/handoff/prepare/route";
+import { BYOA_HANDOFF_PREPARE_MAX_BODY_BYTES } from "@/lib/demo/agent-handoff-http.server";
 import { ByoaHandoffLedgerV2Error } from "@/lib/demo/handoff-ledger-v2.server";
 
 function request(): Request {
@@ -56,6 +57,28 @@ function request(): Request {
   });
 }
 
+function oversizedChunkedRequest(): Request {
+  const chunk = new TextEncoder().encode("x".repeat(32 * 1024));
+  const chunkCount = Math.floor(BYOA_HANDOFF_PREPARE_MAX_BODY_BYTES / chunk.byteLength) + 1;
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (let index = 0; index < chunkCount; index += 1) controller.enqueue(chunk);
+      controller.close();
+    }
+  });
+  return new Request("https://thurstone.invarra.ai/api/demo/handoff/prepare", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Origin: "https://thurstone.invarra.ai",
+      "X-Thurstone-Origin": "https://thurstone.invarra.ai",
+      "X-Thurstone-Request": "byoa-handoff"
+    },
+    body,
+    duplex: "half"
+  } as RequestInit & { duplex: "half" });
+}
+
 describe("Handoff v2 prepare anti-abuse mapping", () => {
   beforeEach(() => {
     mocks.issue.mockReset();
@@ -73,4 +96,16 @@ describe("Handoff v2 prepare anti-abuse mapping", () => {
       expect(mocks.issue).toHaveBeenCalledTimes(1);
     }
   );
+
+  it("rejects a chunked oversized prepare body while streaming and before schema or ledger work", async () => {
+    const input = oversizedChunkedRequest();
+    expect(input.headers.get("content-length")).toBeNull();
+
+    const response = await prepare(input);
+
+    expect(response.status).toBe(413);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    await expect(response.json()).resolves.toEqual({ error: "handoff_body_too_large" });
+    expect(mocks.issue).not.toHaveBeenCalled();
+  });
 });

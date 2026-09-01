@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 import type { RuntimeModelContext } from "@/lib/webmcp/runtime";
 
 import { installEmulatedConsumer } from "./support/emulated-consumer";
+import { handoffUrlFromCommand } from "./support/demo-v2-flow";
 
 async function openOwner(page: import("@playwright/test").Page) {
   await page.goto("/demo");
@@ -154,7 +155,10 @@ test("fresh v2 handoff registers nothing before explicit start, then exposes exa
   await page.waitForURL(/\/demo\/run#handoff-source-v2$/u);
 
   const command = await page.getByLabel("Exact fresh-agent command").inputValue();
-  const handoffUrl = command.replace(/^@Browser Open /u, "");
+  expect(command).toMatch(
+    /^@Browser Open https?:\/\/[^\s]+\/demo\/handoff#[^\s,]+, then follow the request shown on the page\.$/u
+  );
+  const handoffUrl = handoffUrlFromCommand(command);
   await expect(page.getByRole("button", { name: /Run in this tab/iu })).toHaveCount(0);
   await expect
     .poll(() => page.evaluate(async () => (await document.modelContext?.getTools?.())?.length ?? 0))

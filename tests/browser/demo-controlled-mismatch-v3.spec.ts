@@ -3,6 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 import type { RuntimeModelContext } from "@/lib/webmcp/runtime";
 
 import { installEmulatedConsumer } from "./support/emulated-consumer";
+import { handoffUrlFromCommand } from "./support/demo-v2-flow";
 
 async function prepareFreshCheckoutCase(owner: Page): Promise<string> {
   await owner.goto("/demo");
@@ -18,10 +19,7 @@ async function prepareFreshCheckoutCase(owner: Page): Promise<string> {
   await owner.getByRole("button", { name: "Review and arm selected case" }).click();
   await owner.getByRole("button", { name: "Arm live test" }).click();
   await owner.waitForURL(/\/demo\/run#handoff-source-v2$/u);
-  return (await owner.getByLabel("Exact fresh-agent command").inputValue()).replace(
-    /^@Browser Open /u,
-    ""
-  );
+  return handoffUrlFromCommand(await owner.getByLabel("Exact fresh-agent command").inputValue());
 }
 
 async function invokeCheckout(page: Page): Promise<void> {

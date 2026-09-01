@@ -60,7 +60,8 @@ fresh GPT-5.6 Sol or Terra ChatGPT Work or Codex task in the latest ChatGPT desk
 built-in Browser to open the prepared handoff. Do not share, fork, reference, or resume the owner
 task. Do not use Chrome extension side chat.
 
-Show **Test received**, **Continue to readiness**, then **Start live observation**.
+Show the non-consuming handoff landing, choose **Receive isolated test**, then show **Test
+received**, **Continue to readiness**, and **Start live observation**.
 
 > Before explicit start, no target tools or countdown exist. Starting registers only the frozen
 > catalog. The fresh page has the request, fixture, and live tool descriptions—not the owner's

@@ -32,8 +32,9 @@ Last checked: **2026-09-01**
   observation start, and Result v3
 - BYOA catalog: two to four real reference tools selected from `cart_get`, `cart_update`,
   `order_review`, and `checkout_request`; one selected case and one eligible call per live trial
-- Fresh handoff lifecycle: one-time atomic issue/claim, `RECEIVED`, `READY_TO_ARM`, explicit start,
-  then exact catalog registration and bounded timer
+- Fresh handoff lifecycle: non-consuming landing, explicit one-time **Receive isolated test**
+  claim, `RECEIVED`, `READY_TO_ARM`, explicit start, then exact catalog registration and bounded
+  timer
 - Trusted challenge state, suites, results, and My Tests v2: bounded browser-local site-owned data
 - Redis Demo use: expiring digest-bound handoff/admission ledger only, not customer state or a
   customer database

@@ -68,10 +68,13 @@ operator lane and remain subject to the Redis lifetime guard.
    and open **Review and arm selected case**. Confirm **Owner expects** and **Agent receives** are
    separate, the selected case is explicit, and the technical preflight is ready.
 5. Choose **Arm live test**. On the owner-only prepared screen, copy the complete `@Browser`
-   command. Keep the opaque URL out of recordings, screenshots, logs, exports, and public text. It
-   expires after ten minutes, and the owner surface registers no target tools or timer.
+   command, including `then follow the request shown on the page.` Keep the opaque URL out of
+   recordings, screenshots, logs, exports, and public text. It expires after ten minutes, and the
+   owner surface registers no target tools or timer.
 6. Paste the command in a new supported task that does not share, fork, reference, or resume the
-   owner task. Confirm the opaque link opens `/demo/handoff` and then `/demo/run` directly.
+   owner task. Confirm the opaque link opens the non-consuming `/demo/handoff` landing without
+   registering tools or starting the timer. Choose **Receive isolated test** exactly once and
+   confirm the claimed task enters `/demo/run`.
 7. At **Test received**, confirm only the request, selected catalog, and fixture are visible. The
    expected action, arguments, effects, replay policy, approval class, and scoring assertions must
    be absent from DOM, accessibility tree, URL, storage, transport, logs, and client-visible errors.

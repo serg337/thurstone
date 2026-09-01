@@ -71,7 +71,8 @@ enforcement or security certification.
 5. Choose **Arm live test**. From the owner-only prepared screen, copy the complete `@Browser`
    command. Do not publish the opaque URL or include it in evidence, logs, screenshots, or video.
 6. Paste that command into a genuinely fresh supported task—not a share, fork, reference, or
-   continuation of the owner task. The fresh page advances from received to ready before
+   continuation of the owner task. The non-consuming landing registers nothing; choose **Receive
+   isolated test** once to claim it and enter `/demo/run`. Advance from received to ready before
    **Start live observation** registers the exact selected catalog and starts the timer.
 7. Let the fresh agent follow the frozen request. The first eligible native callback is the only
    invocation admitted to domain execution; a wrong first call is still measured honestly.

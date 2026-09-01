@@ -128,7 +128,8 @@ Testing instructions:
 5. On the owner-only prepared screen, copy the complete `@Browser` command. Do not publish, record,
    or export its opaque URL; it expires after ten minutes.
 6. Paste the command into a genuinely fresh supported task—not a share, fork, reference, or resume
-   of the owner task. Confirm only the request, fixture, and selected catalog are visible.
+   of the owner task. The first landing is non-consuming; choose **Receive isolated test** once,
+   then confirm only the request, fixture, and selected catalog are visible in `/demo/run`.
 7. Choose **Continue to readiness**, then **Start live observation**. Only then does Thurstone
    register the exact catalog and start the timer. Let the fresh agent follow the frozen request;
    the first eligible native callback is the one admitted call.

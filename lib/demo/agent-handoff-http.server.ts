@@ -4,6 +4,8 @@ const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 /** Maximum encoded request body accepted by the small handoff control routes. */
 export const BYOA_HANDOFF_CONTROL_MAX_BODY_BYTES = 16 * 1024;
+/** Maximum encoded request body accepted while preparing a bounded demo handoff. */
+export const BYOA_HANDOFF_PREPARE_MAX_BODY_BYTES = 96 * 1024;
 
 export class ByoaHandoffHttpError extends Error {
   constructor(
