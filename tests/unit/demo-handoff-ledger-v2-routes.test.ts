@@ -10,8 +10,10 @@ import {
   createByoaHandoffLedgerV2Redis,
   issueByoaHandoffV2,
   receiveByoaHandoffV2,
+  resetByoaHandoffLedgerV2FakeForTests,
   type ByoaHandoffLedgerV2Redis
 } from "@/lib/demo/handoff-ledger-v2.server";
+import { BYOA_HANDOFF_CONTROL_MAX_BODY_BYTES } from "@/lib/demo/agent-handoff-http.server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocked = vi.hoisted(() => ({
@@ -69,6 +71,10 @@ function request(path: string, body: unknown, context?: string): Request {
   });
 }
 
+function oversizedRequest(path: string): Request {
+  return request(path, { padding: "x".repeat(BYOA_HANDOFF_CONTROL_MAX_BODY_BYTES) });
+}
+
 async function issue() {
   await issueByoaHandoffV2(redis(), {
     runId: mocked.runId,
@@ -84,6 +90,7 @@ describe("Handoff v2 route atomicity", () => {
     vi.setSystemTime(START);
     vi.stubEnv("NODE_ENV", "test");
     vi.stubEnv("TOOLPROOF_BROWSER_FAKE_PROBE", "1");
+    resetByoaHandoffLedgerV2FakeForTests({ NODE_ENV: "test" } as NodeJS.ProcessEnv);
     mocked.runId = `byoa_run_aaaaaaaa-aaaa-4aaa-8aaa-${Math.floor(Math.random() * 1e12)
       .toString()
       .padStart(12, "0")}`;
@@ -211,5 +218,19 @@ describe("Handoff v2 route atomicity", () => {
         )
       ).status
     ).toBe(409);
+  });
+
+  it("rejects oversized open, control, reveal, and revoke bodies before parsing", async () => {
+    const routes = [
+      [open, "/api/demo/handoff/open"],
+      [control, "/api/demo/handoff/control"],
+      [reveal, "/api/demo/handoff/reveal"],
+      [revoke, "/api/demo/handoff/revoke"]
+    ] as const;
+    for (const [route, path] of routes) {
+      const response = await route(oversizedRequest(path));
+      expect(response.status, path).toBe(413);
+      await expect(response.json()).resolves.toMatchObject({ error: "handoff_body_too_large" });
+    }
   });
 });

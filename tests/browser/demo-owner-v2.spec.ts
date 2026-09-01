@@ -163,12 +163,27 @@ test("fresh v2 handoff registers nothing before explicit start, then exposes exa
   const contaminatedPromise = context.waitForEvent("page");
   await page.evaluate((url) => window.open(url, "_blank"), handoffUrl);
   const contaminated = await contaminatedPromise;
-  await expect(contaminated.getByText(/inherited owner-side contract data/iu)).toBeVisible();
+  await expect(contaminated.getByText(/contains owner-side suite data/iu)).toBeVisible();
   await contaminated.close();
+
+  const ordinary = await context.newPage();
+  let ordinaryOpenRequests = 0;
+  ordinary.on("request", (request) => {
+    if (request.url().endsWith("/api/demo/handoff/open")) ordinaryOpenRequests += 1;
+  });
+  await ordinary.goto(handoffUrl);
+  await expect(
+    ordinary.getByRole("heading", { name: "Receive this test in ChatGPT's Browser." })
+  ).toBeVisible();
+  await expect(ordinary.getByText(/Do not receive this link in ordinary Chrome/iu)).toBeVisible();
+  await ordinary.waitForTimeout(100);
+  expect(ordinaryOpenRequests).toBe(0);
+  await ordinary.close();
 
   const fresh = await context.newPage();
   await installEmulatedConsumer(fresh);
   await fresh.goto(handoffUrl);
+  await fresh.getByRole("button", { name: "Receive isolated test" }).click();
   await fresh.waitForURL(/\/demo\/run$/u);
   await expect(
     fresh.getByRole("heading", { name: "Review what this agent receives." })
@@ -208,8 +223,9 @@ test("fresh v2 handoff registers nothing before explicit start, then exposes exa
   const secondFresh = await context.newPage();
   await installEmulatedConsumer(secondFresh);
   await secondFresh.goto(handoffUrl);
+  await secondFresh.getByRole("button", { name: "Receive isolated test" }).click();
   await expect(
-    secondFresh.getByRole("heading", { name: "Open a fresh handoff link." })
+    secondFresh.getByRole("heading", { name: "Open a genuinely fresh handoff." })
   ).toBeVisible();
   await expect
     .poll(() =>

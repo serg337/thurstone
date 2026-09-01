@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 
-import { isTrustedHandoffRequest } from "@/lib/demo/agent-handoff-http.server";
+import {
+  ByoaHandoffHttpError,
+  isTrustedHandoffRequest,
+  readBoundedHandoffJson
+} from "@/lib/demo/agent-handoff-http.server";
 import { byoaHandoffRevokeRequestV2Schema } from "@/lib/demo/agent-handoff-v2";
 import { isByoaHandoffV2Token, openByoaHandoffV2 } from "@/lib/demo/agent-handoff-token-v2.server";
 import {
@@ -16,7 +20,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "handoff_origin_invalid" }, { status: 403 });
   }
   try {
-    const input = byoaHandoffRevokeRequestV2Schema.parse(await request.json());
+    const input = byoaHandoffRevokeRequestV2Schema.parse(await readBoundedHandoffJson(request));
     if (!isByoaHandoffV2Token(input.token)) {
       return NextResponse.json({ error: "handoff_revoke_invalid" }, { status: 400 });
     }
@@ -32,15 +36,20 @@ export async function POST(request: Request) {
     );
   } catch (caught) {
     const status =
-      caught instanceof Error && caught.name === "ZodError"
-        ? 400
-        : caught instanceof ByoaHandoffLedgerV2Error &&
-            caught.code === "HANDOFF_REVOKE_INVALID_STATE"
-          ? 409
+      caught instanceof ByoaHandoffHttpError
+        ? caught.status
+        : caught instanceof Error && caught.name === "ZodError"
+          ? 400
           : caught instanceof ByoaHandoffLedgerV2Error &&
-              (caught.code === "HANDOFF_EXPIRED" || caught.code === "HANDOFF_MISSING")
-            ? 410
-            : 503;
-    return NextResponse.json({ error: "handoff_revoke_denied" }, { status });
+              caught.code === "HANDOFF_REVOKE_INVALID_STATE"
+            ? 409
+            : caught instanceof ByoaHandoffLedgerV2Error &&
+                (caught.code === "HANDOFF_EXPIRED" || caught.code === "HANDOFF_MISSING")
+              ? 410
+              : 503;
+    return NextResponse.json(
+      { error: caught instanceof ByoaHandoffHttpError ? caught.code : "handoff_revoke_denied" },
+      { status }
+    );
   }
 }

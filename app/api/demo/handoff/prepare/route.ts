@@ -73,6 +73,18 @@ export async function POST(request: Request) {
           expiresAtMs: Date.parse(envelope.expiresAt)
         });
       } catch (caught) {
+        if (
+          caught instanceof ByoaHandoffLedgerV2Error &&
+          (caught.code === "HANDOFF_ISSUE_RATE_LIMIT" || caught.code === "HANDOFF_ACTIVE_LIMIT")
+        ) {
+          return NextResponse.json(
+            { error: "handoff_rate_limited" },
+            {
+              status: 429,
+              headers: { "Cache-Control": "no-store", "Retry-After": "60" }
+            }
+          );
+        }
         const status =
           caught instanceof ByoaHandoffLedgerV2Error && caught.code === "HANDOFF_ISSUE_CONFLICT"
             ? 409

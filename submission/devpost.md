@@ -14,10 +14,12 @@ not intend.
 
 Thurstone is the missing semantic testing layer for that boundary.
 
-The owner creates a human-readable contract for one behavior: the user request, expected tool,
-allowed arguments, permitted state changes, forbidden effects, and replay policy. Thurstone then
-opens an isolated page that exposes only the frozen agent-visible WebMCP catalog. A real external
-agent—such as the judge’s own supported ChatGPT agent—uses the native Site Tools path.
+The owner chooses two to four real tools from a bounded reference WebMCP library, then builds a
+human-readable contract suite from representative requests. Each independent case declares an
+expected tool, argument predicate, permitted state changes, forbidden effects, and policy. The
+owner selects one case for one live trial. Thurstone then creates an opaque, expiring handoff whose
+fresh page exposes only the frozen request, fixture, and selected agent-visible WebMCP catalog. A
+real external agent—such as the judge's own supported ChatGPT agent—uses the native Site Tools path.
 
 Thurstone does not trust the model’s explanation or even the tool response. It independently checks
 the selected tool, canonical arguments, native handler trace, trusted site state before and after,
@@ -30,11 +32,18 @@ original result.
 The challenge experience is intentionally bring-your-own-agent. It lets a judge act like a WebMCP
 owner instead of watching a hard-coded animation:
 
-1. define intended meaning in a six-step contract wizard;
-2. review exactly what the agent will and will not see;
-3. arm one isolated two-tool Site Tools catalog;
-4. send the frozen request to a fresh supported agent;
-5. inspect the native call, trusted effect, verdict, diagnosis, and regression artifact.
+1. understand one consequential meaning boundary in a known synthetic fixture;
+2. choose two to four preconfigured real WebMCP tools and preview exactly what the agent receives;
+3. build a named multi-case contract suite, select one case, and review the isolated answer key;
+4. send that selected case through an opaque one-time handoff to a genuinely fresh supported
+   agent;
+5. explicitly start one bounded observation, then inspect Result v3, deterministic diagnosis, and
+   a browser-local regression artifact.
+
+A separate `/demo/controlled` example deliberately invokes the wrong real tool with no model call.
+It shows how an action that looks plausible without verification becomes an evidence-backed ISSUE
+when the owner contract, trusted state, ledger, and assertions are compared. It is never presented
+as an authentic model failure and never enters either reference score.
 
 ## Why WebMCP is essential
 
@@ -58,9 +67,15 @@ declared invariants under deterministic hostile direct calls.
 ## How it was built
 
 Thurstone uses TypeScript, Next.js, React, WebMCP `document.modelContext.registerTool()`, Vercel,
-Upstash Redis, Playwright, and Vitest. The isolated BYOA runner synchronously admits at most one
-eligible native call, retires its catalog after terminal evidence, propagates cancellation, and
-binds results to the exact fixture, toolset, manifest, build, state, ledger, and descriptor digest.
+Upstash Redis, Playwright, and Vitest. Strict versioned catalog, suite, case, live-contract, Result
+v3, and My Tests v2 schemas bind results to the exact fixture, toolset, manifest, build, state,
+ledger, descriptor, and regression lineage. The isolated BYOA runner moves through received and
+ready states before explicit start, synchronously admits at most one eligible native call, retires
+its catalog after terminal evidence, and propagates cancellation.
+
+The challenge checkout's trusted state, contract suites, results, and saved regressions are bounded
+browser-local, site-owned data. Redis holds only an expiring, digest-bound ledger for atomic handoff
+issue, claim, start, and terminal transitions; it is not a customer database.
 
 Provider-backed reference evaluations are stateless (`store: false`) and protected by a durable
 160-call / USD $10 lifetime guard. The judge-facing BYOA workflow itself makes no Thurstone-paid
@@ -76,11 +91,16 @@ fact that was never observed.
 
 ## Limitations
 
-The current self-service challenge product authors and runs contracts in Thurstone’s synthetic
-reference checkout with two frozen target tools. It does not connect to arbitrary external sites.
-Thurstone is a testing and audit system—not runtime enforcement, certification, guaranteed
-security, or proof that a malicious site will behave identically after testing. A result applies to
-the declared contract, agent observation, fixture, and tested build.
+The current self-service challenge product authors and runs suites in Thurstone's synthetic
+reference checkout with two to four preconfigured real target tools. It does not connect to
+arbitrary external sites. The one-call BYOA trial does not measure replay; replay/idempotency is a
+separate Invocation Integrity case. Thurstone can verify that its own fresh page withholds the
+owner answer, but it cannot certify every consumer's hidden context or identity. An
+`independent-agent-native` claim therefore requires an actually fresh supported built-in Browser
+task and authentic capture. Flagged Chrome is a separate compatibility path, not independent
+agent-selection evidence. Thurstone is a testing and audit system—not runtime enforcement,
+certification, guaranteed security, or proof that a malicious site will behave identically after
+testing. A result applies to the declared contract, agent observation, fixture, and tested build.
 
 **No purchase occurs.** The application contains no payment, account, inventory, messaging,
 shipment, or external transaction path.
@@ -96,21 +116,31 @@ Live URL: https://thurstone.invarra.ai
 
 Testing instructions:
 
-1. Choose **Test Thurstone** and complete the six-step owner contract on `/demo`.
-2. Keep the default explicit-checkout case for the shortest path, or edit the request and the two
-   agent-visible tool descriptions.
-3. Review the hidden owner contract separately from the projection the agent will receive, then
-   choose **Arm live test** and copy the opaque fresh-agent URL.
-4. Start a fresh GPT-5.6 Sol or Terra ChatGPT Work or Codex task in the latest ChatGPT desktop app.
-   Use its built-in Browser (`@Browser`) to open the copied URL. The Chrome extension side chat is
-   not the Site Tools consumer. The URL expires after ten minutes and should not be published.
-5. Verify the isolated run shows the request and two native Site Tools without showing the expected
-   tool or effect rubric. Send the exact request and let the fresh agent choose one tool.
-6. Inspect expected versus observed behavior, canonical arguments, trusted state, ledger diff,
-   assertions, verdict, and deterministic next step.
-7. Save a PASS or ISSUE to **My Tests**, then open **Results** to see it before the unchanged 24/24
-   semantic reference and separate 3/3 integrity matrix.
-8. Use `/lab` only for the expert five-tool sandbox and historical native receipts.
+1. In a genuinely fresh GPT-5.6 Sol or Terra ChatGPT Work or Codex task, use the latest ChatGPT
+   desktop app's built-in Browser and send `@Browser Open https://thurstone.invarra.ai/demo`. The
+   Chrome extension side chat is not the Site Tools consumer.
+2. **Stage 1:** review the meaning boundary and fixed synthetic fixture.
+3. **Stage 2:** keep the default pair or choose two to four real reference tools. You may edit only
+   agent-visible titles and descriptions; schemas, annotations, handlers, and effects stay fixed.
+4. **Stage 3:** name the suite, add one to six independent cases, choose one live case, then select
+   **Review and arm selected case**. Confirm **Owner expects** is separate from **Agent receives**,
+   then choose **Arm live test**.
+5. On the owner-only prepared screen, copy the complete `@Browser` command. Do not publish, record,
+   or export its opaque URL; it expires after ten minutes.
+6. Paste the command into a genuinely fresh supported task—not a share, fork, reference, or resume
+   of the owner task. Confirm only the request, fixture, and selected catalog are visible.
+7. Choose **Continue to readiness**, then **Start live observation**. Only then does Thurstone
+   register the exact catalog and start the timer. Let the fresh agent follow the frozen request;
+   the first eligible native callback is the one admitted call.
+8. Inspect Result v3: expected and observed behavior, canonical arguments, browser-local site-owned
+   before/after state, ledger diff, assertions, evidence tier, verdict, diagnosis, and recommended
+   next step. Save PASS/ISSUE to **My Tests v2** or export it; INCOMPLETE/UNAVAILABLE remains
+   honestly inconclusive.
+9. Open **See how Thurstone catches a mismatch** for the separate controlled no-model-call example.
+   Then open **Results** for **My Tests v2**, unchanged **24/24 semantic behaviors**, and the
+   separate **3/3 Invocation Integrity Matrix**.
+10. Use `/lab` only for advanced direct catalog, cart, cancellation, reset, and native-receipt
+    compatibility testing.
 
 Public repository URL: pending final public release
 

@@ -17,7 +17,11 @@ import {
   grantByoaHandoffV2Reveal
 } from "@/lib/demo/handoff-ledger-v2.server";
 
-import { isTrustedHandoffRequest } from "@/lib/demo/agent-handoff-http.server";
+import {
+  ByoaHandoffHttpError,
+  isTrustedHandoffRequest,
+  readBoundedHandoffJson
+} from "@/lib/demo/agent-handoff-http.server";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +30,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "handoff_origin_invalid" }, { status: 403 });
   }
   try {
-    const value = await request.json();
+    const value = await readBoundedHandoffJson(request);
     const token = (await cookies()).get(BYOA_HANDOFF_COOKIE)?.value;
     if (!token) throw new Error("missing");
     if (isByoaHandoffV2Token(token)) {
@@ -66,7 +70,10 @@ export async function POST(request: Request) {
       { version: BYOA_HANDOFF_REVEAL_VERSION, contract: envelope.session.contract },
       { headers: { "Cache-Control": "no-store" } }
     );
-  } catch {
+  } catch (caught) {
+    if (caught instanceof ByoaHandoffHttpError) {
+      return NextResponse.json({ error: caught.code }, { status: caught.status });
+    }
     return NextResponse.json({ error: "handoff_reveal_unavailable" }, { status: 404 });
   }
 }

@@ -9,6 +9,16 @@ export const BYOA_HANDOFF_LEDGER_V2_NAMESPACE = "tp:{webmcp26}:demo-handoff-v2" 
 export const BYOA_HANDOFF_LEDGER_V2_MAX_TTL_MS = 15 * 60 * 1000;
 export const BYOA_HANDOFF_LEDGER_V2_TIMEOUT_MS = 120 * 1000;
 export const BYOA_HANDOFF_LEDGER_V2_FINALIZATION_GRACE_MS = 5 * 1000;
+/** Provider-independent issuance window enforced atomically by Redis server time. */
+export const BYOA_HANDOFF_LEDGER_V2_ISSUE_WINDOW_MS = 60 * 1000;
+/** Maximum newly issued v2 handoffs in one rolling issuance window. */
+export const BYOA_HANDOFF_LEDGER_V2_ISSUE_LIMIT = 60;
+/** Maximum concurrently active, unexpired v2 handoffs. */
+export const BYOA_HANDOFF_LEDGER_V2_ACTIVE_LIMIT = 200;
+export const BYOA_HANDOFF_LEDGER_V2_ISSUE_RATE_KEY =
+  `${BYOA_HANDOFF_LEDGER_V2_NAMESPACE}:issuance-rate` as const;
+export const BYOA_HANDOFF_LEDGER_V2_ACTIVE_KEY =
+  `${BYOA_HANDOFF_LEDGER_V2_NAMESPACE}:active` as const;
 
 const runIdPattern = /^byoa_run_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
 const digestPattern = /^[a-f0-9]{64}$/u;
@@ -91,6 +101,17 @@ if redis.call("EXISTS", KEYS[1]) == 1 then
   return {0, "HANDOFF_ISSUE_CONFLICT", state or "MISSING"}
 end
 
+redis.call("ZREMRANGEBYSCORE", KEYS[2], "-inf", now_ms - tonumber(ARGV[6]))
+redis.call("ZREMRANGEBYSCORE", KEYS[3], "-inf", now_ms)
+local issued_in_window = tonumber(redis.call("ZCARD", KEYS[2]) or "0")
+if issued_in_window >= tonumber(ARGV[7]) then
+  return {0, "HANDOFF_ISSUE_RATE_LIMIT", tostring(issued_in_window)}
+end
+local active_count = tonumber(redis.call("ZCARD", KEYS[3]) or "0")
+if active_count >= tonumber(ARGV[8]) then
+  return {0, "HANDOFF_ACTIVE_LIMIT", tostring(active_count)}
+end
+
 redis.call("HSET", KEYS[1],
   "v", ARGV[1],
   "s", "ISSUED",
@@ -100,6 +121,10 @@ redis.call("HSET", KEYS[1],
   "i", tostring(now_ms)
 )
 redis.call("PEXPIREAT", KEYS[1], expires_at_ms)
+redis.call("ZADD", KEYS[2], now_ms, ARGV[3])
+redis.call("PEXPIRE", KEYS[2], tonumber(ARGV[6]) + 1000)
+redis.call("ZADD", KEYS[3], expires_at_ms, ARGV[3])
+redis.call("PEXPIRE", KEYS[3], tonumber(ARGV[5]) + 1000)
 return {1, "ISSUED_NEW", "ISSUED", now_ms, expires_at_ms, 0}
 `;
 
@@ -202,6 +227,7 @@ if ARGV[5] ~= "SETTLED" and ARGV[5] ~= "UNAVAILABLE" then
 end
 local started_at_ms = tonumber(redis.call("HGET", KEYS[1], "a") or "0")
 redis.call("HSET", KEYS[1], "s", ARGV[5], "z", tostring(now_ms))
+redis.call("ZREM", KEYS[2], ARGV[3])
 return {1, ARGV[5] .. "_NEW", ARGV[5], now_ms, expires_at_ms, started_at_ms}
 `;
 
@@ -227,6 +253,7 @@ if now_ms < started_at_ms + tonumber(ARGV[5]) then
   return {0, "HANDOFF_TIMEOUT_EARLY", tostring(started_at_ms + tonumber(ARGV[5]) - now_ms)}
 end
 redis.call("HSET", KEYS[1], "s", "TIMED_OUT", "z", tostring(now_ms))
+redis.call("ZREM", KEYS[2], ARGV[3])
 return {1, "TIMED_OUT_NEW", "TIMED_OUT", now_ms, expires_at_ms, started_at_ms}
 `;
 
@@ -268,10 +295,12 @@ if redis.call("HGET", KEYS[1], "v") ~= ARGV[1]
 then return {0, "HANDOFF_BINDING_MISMATCH"} end
 local state = redis.call("HGET", KEYS[1], "s")
 if state == "REVOKED" then
+  redis.call("ZREM", KEYS[2], ARGV[3])
   return {2, "REVOKED_EXISTING", state, now_ms, expires_at_ms, 0}
 end
 if state ~= "ISSUED" then return {0, "HANDOFF_REVOKE_INVALID_STATE", state or "MISSING"} end
 redis.call("HSET", KEYS[1], "s", "REVOKED", "z", tostring(now_ms))
+redis.call("ZREM", KEYS[2], ARGV[3])
 return {1, "REVOKED_NEW", "REVOKED", now_ms, expires_at_ms, 0}
 `;
 
@@ -350,20 +379,38 @@ interface BrowserFakeRecord {
 
 const browserFakeGlobal = globalThis as typeof globalThis & {
   __thurstoneByoaHandoffLedgerV2?: Map<string, BrowserFakeRecord>;
+  __thurstoneByoaHandoffIssueRateV2?: Map<string, number>;
+  __thurstoneByoaHandoffActiveV2?: Map<string, number>;
 };
 
 class BrowserFakeByoaHandoffLedgerV2Redis implements ByoaHandoffLedgerV2Redis {
   private readonly records =
     browserFakeGlobal.__thurstoneByoaHandoffLedgerV2 ??
     (browserFakeGlobal.__thurstoneByoaHandoffLedgerV2 = new Map());
+  private readonly issuanceRate =
+    browserFakeGlobal.__thurstoneByoaHandoffIssueRateV2 ??
+    (browserFakeGlobal.__thurstoneByoaHandoffIssueRateV2 = new Map());
+  private readonly active =
+    browserFakeGlobal.__thurstoneByoaHandoffActiveV2 ??
+    (browserFakeGlobal.__thurstoneByoaHandoffActiveV2 = new Map());
 
   private record(key: string): BrowserFakeRecord | undefined {
     const record = this.records.get(key);
     if (record && record.expiresAtMs <= Date.now()) {
       this.records.delete(key);
+      this.active.delete(record.tokenDigest);
       return undefined;
     }
     return record;
+  }
+
+  private reapGuard(now: number, issueWindowMs: number): void {
+    for (const [tokenDigest, issuedAtMs] of this.issuanceRate) {
+      if (issuedAtMs <= now - issueWindowMs) this.issuanceRate.delete(tokenDigest);
+    }
+    for (const [tokenDigest, expiresAtMs] of this.active) {
+      if (expiresAtMs <= now) this.active.delete(tokenDigest);
+    }
   }
 
   async eval<TResult = unknown>(script: string, keys: string[], args: string[]): Promise<TResult> {
@@ -386,6 +433,12 @@ class BrowserFakeByoaHandoffLedgerV2Redis implements ByoaHandoffLedgerV2Redis {
     const now = Date.now();
     const record = this.record(key);
     if (script === BYOA_HANDOFF_LEDGER_V2_SCRIPTS.issue) {
+      if (
+        keys[1] !== BYOA_HANDOFF_LEDGER_V2_ISSUE_RATE_KEY ||
+        keys[2] !== BYOA_HANDOFF_LEDGER_V2_ACTIVE_KEY
+      ) {
+        return [0, "INVALID_HANDOFF_GUARD_KEY"];
+      }
       const expiresAtMs = Number(args[3]);
       if (expiresAtMs <= now) return [0, "HANDOFF_EXPIRED"];
       if (expiresAtMs - now > Number(args[4])) return [0, "HANDOFF_TTL_INVALID"];
@@ -397,6 +450,14 @@ class BrowserFakeByoaHandoffLedgerV2Redis implements ByoaHandoffLedgerV2Redis {
           record.expiresAtMs === expiresAtMs
           ? [2, "ISSUE_EXISTING", record.state, now, expiresAtMs, 0]
           : [0, "HANDOFF_ISSUE_CONFLICT", record.state];
+      }
+      const issueWindowMs = Number(args[5]);
+      this.reapGuard(now, issueWindowMs);
+      if (this.issuanceRate.size >= Number(args[6])) {
+        return [0, "HANDOFF_ISSUE_RATE_LIMIT", String(this.issuanceRate.size)];
+      }
+      if (this.active.size >= Number(args[7])) {
+        return [0, "HANDOFF_ACTIVE_LIMIT", String(this.active.size)];
       }
       this.records.set(key, {
         version: args[0]!,
@@ -411,6 +472,8 @@ class BrowserFakeByoaHandoffLedgerV2Redis implements ByoaHandoffLedgerV2Redis {
         terminalAtMs: null,
         expiresAtMs
       });
+      this.issuanceRate.set(args[2]!, now);
+      this.active.set(args[2]!, expiresAtMs);
       return [1, "ISSUED_NEW", "ISSUED", now, expiresAtMs, 0];
     }
     if (script === BYOA_HANDOFF_LEDGER_V2_SCRIPTS.read && !record) {
@@ -440,12 +503,17 @@ class BrowserFakeByoaHandoffLedgerV2Redis implements ByoaHandoffLedgerV2Redis {
       record.tokenDigest === args[2];
     if (!contextBound) return [0, "HANDOFF_BINDING_MISMATCH"];
     if (script === BYOA_HANDOFF_LEDGER_V2_SCRIPTS.revoke) {
+      if (keys[1] !== BYOA_HANDOFF_LEDGER_V2_ACTIVE_KEY) {
+        return [0, "INVALID_HANDOFF_GUARD_KEY"];
+      }
       if (record.state === "REVOKED") {
+        this.active.delete(record.tokenDigest);
         return [2, "REVOKED_EXISTING", "REVOKED", now, record.expiresAtMs, 0];
       }
       if (record.state !== "ISSUED") return [0, "HANDOFF_REVOKE_INVALID_STATE", record.state];
       record.state = "REVOKED";
       record.terminalAtMs = now;
+      this.active.delete(record.tokenDigest);
       return [1, "REVOKED_NEW", "REVOKED", now, record.expiresAtMs, 0];
     }
     const context = args[3];
@@ -481,6 +549,9 @@ class BrowserFakeByoaHandoffLedgerV2Redis implements ByoaHandoffLedgerV2Redis {
       return [1, "STARTED_NEW", "STARTED", now, record.expiresAtMs, now];
     }
     if (script === BYOA_HANDOFF_LEDGER_V2_SCRIPTS.terminal) {
+      if (keys[1] !== BYOA_HANDOFF_LEDGER_V2_ACTIVE_KEY) {
+        return [0, "INVALID_HANDOFF_GUARD_KEY"];
+      }
       if (record.state !== "STARTED") {
         return [0, "HANDOFF_TERMINAL_INVALID_STATE", record.state];
       }
@@ -490,14 +561,19 @@ class BrowserFakeByoaHandoffLedgerV2Redis implements ByoaHandoffLedgerV2Redis {
       }
       record.state = target;
       record.terminalAtMs = now;
+      this.active.delete(record.tokenDigest);
       return [1, `${target}_NEW`, target, now, record.expiresAtMs, record.startedAtMs ?? 0];
     }
     if (script === BYOA_HANDOFF_LEDGER_V2_SCRIPTS.timeout) {
+      if (keys[1] !== BYOA_HANDOFF_LEDGER_V2_ACTIVE_KEY) {
+        return [0, "INVALID_HANDOFF_GUARD_KEY"];
+      }
       if (record.state !== "STARTED") return [0, "HANDOFF_TIMEOUT_INVALID_STATE", record.state];
       const dueAt = (record.startedAtMs ?? 0) + Number(args[4]);
       if (now < dueAt) return [0, "HANDOFF_TIMEOUT_EARLY", String(dueAt - now)];
       record.state = "TIMED_OUT";
       record.terminalAtMs = now;
+      this.active.delete(record.tokenDigest);
       return [1, "TIMED_OUT_NEW", "TIMED_OUT", now, record.expiresAtMs, record.startedAtMs ?? 0];
     }
     if (script === BYOA_HANDOFF_LEDGER_V2_SCRIPTS.reveal) {
@@ -519,6 +595,17 @@ export function createByoaHandoffLedgerV2Redis(
     return new BrowserFakeByoaHandoffLedgerV2Redis();
   }
   return createProbeRedis(environment) as unknown as ByoaHandoffLedgerV2Redis;
+}
+
+export function resetByoaHandoffLedgerV2FakeForTests(
+  environment: NodeJS.ProcessEnv = process.env
+): void {
+  if (environment.NODE_ENV !== "test") {
+    throw new ByoaHandoffLedgerV2Error("BROWSER_FAKE_RESET_FORBIDDEN");
+  }
+  browserFakeGlobal.__thurstoneByoaHandoffLedgerV2?.clear();
+  browserFakeGlobal.__thurstoneByoaHandoffIssueRateV2?.clear();
+  browserFakeGlobal.__thurstoneByoaHandoffActiveV2?.clear();
 }
 
 function assertDigest(value: string, label: string): void {
@@ -586,13 +673,20 @@ export async function issueByoaHandoffV2(
   return parseReply(
     await redis.eval(
       BYOA_HANDOFF_LEDGER_V2_SCRIPTS.issue,
-      [byoaHandoffLedgerV2Key(input.runId)],
+      [
+        byoaHandoffLedgerV2Key(input.runId),
+        BYOA_HANDOFF_LEDGER_V2_ISSUE_RATE_KEY,
+        BYOA_HANDOFF_LEDGER_V2_ACTIVE_KEY
+      ],
       [
         BYOA_HANDOFF_LEDGER_V2_VERSION,
         input.contractDigest,
         digestByoaHandoffV2Token(input.token),
         String(input.expiresAtMs),
-        String(BYOA_HANDOFF_LEDGER_V2_MAX_TTL_MS)
+        String(BYOA_HANDOFF_LEDGER_V2_MAX_TTL_MS),
+        String(BYOA_HANDOFF_LEDGER_V2_ISSUE_WINDOW_MS),
+        String(BYOA_HANDOFF_LEDGER_V2_ISSUE_LIMIT),
+        String(BYOA_HANDOFF_LEDGER_V2_ACTIVE_LIMIT)
       ]
     )
   );
@@ -649,7 +743,7 @@ export async function settleByoaHandoffV2(
   return parseReply(
     await redis.eval(
       BYOA_HANDOFF_LEDGER_V2_SCRIPTS.terminal,
-      [byoaHandoffLedgerV2Key(input.runId)],
+      [byoaHandoffLedgerV2Key(input.runId), BYOA_HANDOFF_LEDGER_V2_ACTIVE_KEY],
       [...bindingArguments(input), terminal]
     )
   );
@@ -662,7 +756,7 @@ export async function timeoutByoaHandoffV2(
   return parseReply(
     await redis.eval(
       BYOA_HANDOFF_LEDGER_V2_SCRIPTS.timeout,
-      [byoaHandoffLedgerV2Key(input.runId)],
+      [byoaHandoffLedgerV2Key(input.runId), BYOA_HANDOFF_LEDGER_V2_ACTIVE_KEY],
       [...bindingArguments(input), String(BYOA_HANDOFF_LEDGER_V2_TIMEOUT_MS)]
     )
   );
@@ -689,7 +783,7 @@ export async function revokeByoaHandoffV2(
   return parseReply(
     await redis.eval(
       BYOA_HANDOFF_LEDGER_V2_SCRIPTS.revoke,
-      [byoaHandoffLedgerV2Key(input.runId)],
+      [byoaHandoffLedgerV2Key(input.runId), BYOA_HANDOFF_LEDGER_V2_ACTIVE_KEY],
       [BYOA_HANDOFF_LEDGER_V2_VERSION, input.contractDigest, digestByoaHandoffV2Token(input.token)]
     )
   );

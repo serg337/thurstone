@@ -3763,6 +3763,8 @@ textarea::placeholder {
 }
 
 .owner-progress {
+  min-width: 0;
+  max-width: 100%;
   padding: 0.75rem;
   background: rgba(3, 14, 20, 0.82);
   border: 1px solid var(--ts-line);
@@ -3777,6 +3779,8 @@ textarea::placeholder {
 }
 
 .owner-progress ol {
+  min-width: 0;
+  max-width: 100%;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.4rem;
@@ -3786,6 +3790,7 @@ textarea::placeholder {
 }
 
 .owner-progress li {
+  min-width: 0;
   display: grid;
   grid-template-columns: 1.65rem minmax(0, 1fr);
   gap: 0.45rem;
@@ -3810,6 +3815,8 @@ textarea::placeholder {
 }
 
 .owner-progress li strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-size: 0.72rem;
   line-height: 1.25;
 }
@@ -3833,6 +3840,9 @@ textarea::placeholder {
 }
 
 .owner-demo-stage {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
   min-height: 620px;
   padding: clamp(1rem, 3vw, 1.75rem);
   background:
@@ -3845,6 +3855,9 @@ textarea::placeholder {
 
 .owner-demo-stage-wide {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .owner-demo-stage-wide > .owner-fixture {
@@ -6309,6 +6322,13 @@ textarea::placeholder {
 }
 
 @media (max-width: 680px) {
+  .page-shell {
+    width: 100%;
+    max-width: 100%;
+    padding-inline: 0.75rem;
+    box-sizing: border-box;
+  }
+
   .owner-progress {
     overflow: visible;
   }

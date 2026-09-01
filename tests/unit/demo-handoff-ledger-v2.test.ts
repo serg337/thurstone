@@ -1,5 +1,10 @@
 import {
+  BYOA_HANDOFF_LEDGER_V2_ACTIVE_KEY,
+  BYOA_HANDOFF_LEDGER_V2_ACTIVE_LIMIT,
   BYOA_HANDOFF_LEDGER_V2_FINALIZATION_GRACE_MS,
+  BYOA_HANDOFF_LEDGER_V2_ISSUE_LIMIT,
+  BYOA_HANDOFF_LEDGER_V2_ISSUE_RATE_KEY,
+  BYOA_HANDOFF_LEDGER_V2_ISSUE_WINDOW_MS,
   BYOA_HANDOFF_LEDGER_V2_MAX_TTL_MS,
   BYOA_HANDOFF_LEDGER_V2_NAMESPACE,
   BYOA_HANDOFF_LEDGER_V2_SCRIPTS,
@@ -14,6 +19,7 @@ import {
   issueByoaHandoffV2,
   readByoaHandoffV2Status,
   receiveByoaHandoffV2,
+  resetByoaHandoffLedgerV2FakeForTests,
   revokeByoaHandoffV2,
   settleByoaHandoffV2,
   startByoaHandoffV2,
@@ -54,13 +60,14 @@ describe("ephemeral atomic BYOA Handoff v2 ledger", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(START);
+    resetByoaHandoffLedgerV2FakeForTests({ NODE_ENV: "test" } as NodeJS.ProcessEnv);
   });
 
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  it("uses one strict isolated key, bounded TTL, and digest-only tiny fields", async () => {
+  it("uses a strict isolated keyspace, bounded TTL, and digest-only tiny fields", async () => {
     const redis = fakeRedis();
     const { value, receipt } = await issued(redis);
     expect(receipt).toMatchObject({ disposition: "ISSUED_NEW", state: "ISSUED" });
@@ -69,6 +76,12 @@ describe("ephemeral atomic BYOA Handoff v2 ledger", () => {
     );
     expect(byoaHandoffLedgerV2Key(value.runId)).not.toContain(":auth:");
     expect(byoaHandoffLedgerV2Key(value.runId)).not.toContain(":totals");
+    expect(BYOA_HANDOFF_LEDGER_V2_ISSUE_RATE_KEY).toBe(
+      `${BYOA_HANDOFF_LEDGER_V2_NAMESPACE}:issuance-rate`
+    );
+    expect(BYOA_HANDOFF_LEDGER_V2_ACTIVE_KEY).toBe(`${BYOA_HANDOFF_LEDGER_V2_NAMESPACE}:active`);
+    expect(BYOA_HANDOFF_LEDGER_V2_ISSUE_RATE_KEY).not.toContain(":auth:");
+    expect(BYOA_HANDOFF_LEDGER_V2_ACTIVE_KEY).not.toContain(":totals");
 
     const status = await readByoaHandoffV2Status(redis, value.runId);
     expect(status).toMatchObject({
@@ -97,6 +110,81 @@ describe("ephemeral atomic BYOA Handoff v2 ledger", () => {
         expiresAtMs: Date.now() + 10 * 60 * 1000
       })
     ).rejects.toMatchObject({ code: "HANDOFF_ISSUE_CONFLICT" });
+  });
+
+  it("charges an exact issue once and enforces the rolling issuance cap with Redis time", async () => {
+    const redis = fakeRedis();
+    const first = binding();
+    const expiresAtMs = Date.now() + 10 * 60 * 1000;
+    await issueByoaHandoffV2(redis, { ...first, expiresAtMs });
+    await expect(issueByoaHandoffV2(redis, { ...first, expiresAtMs })).resolves.toMatchObject({
+      disposition: "ISSUE_EXISTING"
+    });
+    for (let index = 1; index < BYOA_HANDOFF_LEDGER_V2_ISSUE_LIMIT; index += 1) {
+      await issueByoaHandoffV2(redis, {
+        ...binding(),
+        expiresAtMs: Date.now() + 10 * 60 * 1000
+      });
+    }
+    await expect(
+      issueByoaHandoffV2(redis, {
+        ...binding(),
+        expiresAtMs: Date.now() + 10 * 60 * 1000
+      })
+    ).rejects.toMatchObject({ code: "HANDOFF_ISSUE_RATE_LIMIT" });
+
+    vi.setSystemTime(START + BYOA_HANDOFF_LEDGER_V2_ISSUE_WINDOW_MS + 1);
+    await expect(
+      issueByoaHandoffV2(redis, {
+        ...binding(),
+        expiresAtMs: Date.now() + 10 * 60 * 1000
+      })
+    ).resolves.toMatchObject({ disposition: "ISSUED_NEW" });
+  });
+
+  it("bounds active unexpired handoffs and releases capacity on revoke and terminal state", async () => {
+    const redis = fakeRedis();
+    const values: ReturnType<typeof binding>[] = [];
+    for (let index = 0; index < BYOA_HANDOFF_LEDGER_V2_ACTIVE_LIMIT; index += 1) {
+      if (index > 0 && index % BYOA_HANDOFF_LEDGER_V2_ISSUE_LIMIT === 0) {
+        vi.setSystemTime(Date.now() + BYOA_HANDOFF_LEDGER_V2_ISSUE_WINDOW_MS + 1);
+      }
+      const value = binding();
+      values.push(value);
+      await issueByoaHandoffV2(redis, {
+        ...value,
+        expiresAtMs: Date.now() + 10 * 60 * 1000
+      });
+    }
+    await expect(
+      issueByoaHandoffV2(redis, {
+        ...binding(),
+        expiresAtMs: Date.now() + 10 * 60 * 1000
+      })
+    ).rejects.toMatchObject({ code: "HANDOFF_ACTIVE_LIMIT" });
+
+    await revokeByoaHandoffV2(redis, values[0]!);
+    await expect(
+      issueByoaHandoffV2(redis, {
+        ...binding(),
+        expiresAtMs: Date.now() + 10 * 60 * 1000
+      })
+    ).resolves.toMatchObject({ disposition: "ISSUED_NEW" });
+
+    const terminal = values[1]!;
+    await claimByoaHandoffV2(redis, terminal);
+    await receiveByoaHandoffV2(redis, terminal);
+    await startByoaHandoffV2(redis, terminal);
+    await settleByoaHandoffV2(redis, terminal, "SETTLED");
+    await expect(
+      issueByoaHandoffV2(redis, {
+        ...binding(),
+        expiresAtMs: Date.now() + 10 * 60 * 1000
+      })
+    ).resolves.toMatchObject({ disposition: "ISSUED_NEW" });
+    await expect(readByoaHandoffV2Status(redis, terminal.runId)).resolves.toMatchObject({
+      state: "SETTLED"
+    });
   });
 
   it("claims once, retries in the same context, and rejects a second context", async () => {
@@ -222,6 +310,9 @@ describe("ephemeral atomic BYOA Handoff v2 ledger", () => {
     await expect(revokeByoaHandoffV2(redis, first.value)).resolves.toMatchObject({
       disposition: "REVOKED_EXISTING"
     });
+    await expect(readByoaHandoffV2Status(redis, first.value.runId)).resolves.toMatchObject({
+      state: "REVOKED"
+    });
     await expect(claimByoaHandoffV2(redis, first.value)).rejects.toBeInstanceOf(
       ByoaHandoffLedgerV2Error
     );
@@ -247,6 +338,18 @@ describe("ephemeral atomic BYOA Handoff v2 ledger", () => {
     await expect(grantByoaHandoffV2Reveal(redis, value)).rejects.toThrow("redis unavailable");
   });
 
+  it("forbids the in-memory ledger and test reset in production", () => {
+    expect(() =>
+      createByoaHandoffLedgerV2Redis({
+        NODE_ENV: "production",
+        TOOLPROOF_BROWSER_FAKE_PROBE: "1"
+      } as NodeJS.ProcessEnv)
+    ).toThrow("BROWSER_FAKE_LEDGER_FORBIDDEN");
+    expect(() =>
+      resetByoaHandoffLedgerV2FakeForTests({ NODE_ENV: "production" } as NodeJS.ProcessEnv)
+    ).toThrow("BROWSER_FAKE_RESET_FORBIDDEN");
+  });
+
   it("ships Lua that uses Redis TIME and one-key expiry rather than probe guard keys", () => {
     for (const [operation, script] of Object.entries(BYOA_HANDOFF_LEDGER_V2_SCRIPTS)) {
       expect(script).not.toContain(":auth:");
@@ -254,6 +357,11 @@ describe("ephemeral atomic BYOA Handoff v2 ledger", () => {
       if (operation !== "read") expect(script).toContain('redis.call("TIME")');
     }
     expect(BYOA_HANDOFF_LEDGER_V2_SCRIPTS.issue).toContain('redis.call("PEXPIREAT"');
+    expect(BYOA_HANDOFF_LEDGER_V2_SCRIPTS.issue).toContain('redis.call("ZREMRANGEBYSCORE"');
+    expect(BYOA_HANDOFF_LEDGER_V2_SCRIPTS.issue).toContain('redis.call("ZCARD"');
+    expect(BYOA_HANDOFF_LEDGER_V2_SCRIPTS.terminal).toContain('redis.call("ZREM"');
+    expect(BYOA_HANDOFF_LEDGER_V2_SCRIPTS.timeout).toContain('redis.call("ZREM"');
+    expect(BYOA_HANDOFF_LEDGER_V2_SCRIPTS.revoke).toContain('redis.call("ZREM"');
     expect(BYOA_HANDOFF_LEDGER_V2_SCRIPTS.timeout).toContain("started_at_ms + tonumber(ARGV[5])");
   });
 });

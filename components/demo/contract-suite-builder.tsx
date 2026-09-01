@@ -387,6 +387,11 @@ function ReviewArmDialog({
           </dl>
         </details>
 
+        <p className={styles.privacyNotice}>
+          Only this synthetic selected case and catalog enter the expiring encrypted handoff. Do not
+          include personal, customer, credential, payment, confidential, or secret data.
+        </p>
+
         <div className={styles.dialogActions}>
           <button className={styles.secondaryButton} type="button" onClick={onCancel}>
             Keep editing
@@ -646,6 +651,10 @@ export function ContractSuiteBuilder({
           />
           <small className={styles.fieldHelp}>
             Write one realistic example of the intent—not every sentence a user might say.
+          </small>
+          <small className={styles.privacyNotice}>
+            Synthetic test data only. Do not enter personal, customer, credential, payment,
+            confidential, or secret data.
           </small>
 
           <label htmlFor={expectedToolId}>What should the agent do?</label>

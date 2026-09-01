@@ -14,7 +14,11 @@ import {
   createByoaHandoffLedgerV2Redis
 } from "@/lib/demo/handoff-ledger-v2.server";
 
-import { isTrustedHandoffRequest } from "@/lib/demo/agent-handoff-http.server";
+import {
+  ByoaHandoffHttpError,
+  isTrustedHandoffRequest,
+  readBoundedHandoffJson
+} from "@/lib/demo/agent-handoff-http.server";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +27,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "handoff_origin_invalid" }, { status: 403 });
   }
   try {
-    const value = await request.json();
+    const value = await readBoundedHandoffJson(request);
     const token =
       typeof value === "object" && value !== null && typeof Reflect.get(value, "token") === "string"
         ? String(Reflect.get(value, "token"))
@@ -75,7 +79,10 @@ export async function POST(request: Request) {
       byoaHandoffCookieOptions(request.url, envelope.expiresAt)
     );
     return response;
-  } catch {
+  } catch (caught) {
+    if (caught instanceof ByoaHandoffHttpError) {
+      return NextResponse.json({ error: caught.code }, { status: caught.status });
+    }
     return NextResponse.json({ error: "handoff_token_invalid" }, { status: 410 });
   }
 }

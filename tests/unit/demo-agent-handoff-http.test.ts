@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  BYOA_HANDOFF_CONTROL_MAX_BODY_BYTES,
+  ByoaHandoffHttpError,
   isTrustedHandoffRequest,
+  readBoundedHandoffJson,
   trustedHandoffClientOrigin
 } from "@/lib/demo/agent-handoff-http.server";
 
@@ -54,5 +57,29 @@ describe("BYOA handoff HTTP boundary", () => {
       trustedHandoffClientOrigin(request({ "X-Thurstone-Origin": "https://attacker.example" }))
     ).toBeNull();
     expect(trustedHandoffClientOrigin(request())).toBeNull();
+  });
+
+  it("parses a bounded JSON body and rejects declared or streamed oversize before parsing", async () => {
+    const valid = new Request("https://thurstone.invarra.ai/api/demo/handoff/open", {
+      method: "POST",
+      body: JSON.stringify({ token: "opaque" })
+    });
+    await expect(readBoundedHandoffJson(valid)).resolves.toEqual({ token: "opaque" });
+
+    const declared = new Request("https://thurstone.invarra.ai/api/demo/handoff/open", {
+      method: "POST",
+      headers: { "Content-Length": String(BYOA_HANDOFF_CONTROL_MAX_BODY_BYTES + 1) },
+      body: "{}"
+    });
+    await expect(readBoundedHandoffJson(declared)).rejects.toMatchObject({
+      code: "handoff_body_too_large",
+      status: 413
+    });
+
+    const streamed = new Request("https://thurstone.invarra.ai/api/demo/handoff/open", {
+      method: "POST",
+      body: JSON.stringify({ padding: "x".repeat(BYOA_HANDOFF_CONTROL_MAX_BODY_BYTES) })
+    });
+    await expect(readBoundedHandoffJson(streamed)).rejects.toBeInstanceOf(ByoaHandoffHttpError);
   });
 });

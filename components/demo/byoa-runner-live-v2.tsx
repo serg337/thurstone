@@ -480,6 +480,11 @@ export function ByoaRunnerV2() {
           The opaque link expires in ten minutes. No native tools or countdown run in this owner
           task.
         </p>
+        <p className="agent-runner-recovery">
+          <strong>Do not open this link in ordinary Chrome or Chrome extension side chat.</strong>{" "}
+          Opening is non-consuming, but only a fresh ChatGPT desktop built-in Browser task should
+          claim and run the test.
+        </p>
       </section>
     );
   }

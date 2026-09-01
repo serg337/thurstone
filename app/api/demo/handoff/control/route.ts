@@ -1,7 +1,11 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
-import { isTrustedHandoffRequest } from "@/lib/demo/agent-handoff-http.server";
+import {
+  ByoaHandoffHttpError,
+  isTrustedHandoffRequest,
+  readBoundedHandoffJson
+} from "@/lib/demo/agent-handoff-http.server";
 import {
   byoaHandoffControlRequestV2Schema,
   parseByoaFreshContextV2Header
@@ -23,7 +27,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "handoff_origin_invalid" }, { status: 403 });
   }
   try {
-    const input = byoaHandoffControlRequestV2Schema.parse(await request.json());
+    const input = byoaHandoffControlRequestV2Schema.parse(await readBoundedHandoffJson(request));
     const freshContextId = parseByoaFreshContextV2Header(request.headers);
     const token = (await cookies()).get(BYOA_HANDOFF_COOKIE)?.value;
     if (!token || !isByoaHandoffV2Token(token)) {
@@ -62,19 +66,24 @@ export async function POST(request: Request) {
     );
   } catch (caught) {
     const status =
-      caught instanceof Error && caught.name === "ZodError"
-        ? 400
-        : caught instanceof ByoaHandoffLedgerV2Error &&
-            (caught.code === "HANDOFF_EXPIRED" ||
-              caught.code === "HANDOFF_MISSING" ||
-              caught.code === "HANDOFF_LIFETIME_INSUFFICIENT")
-          ? 410
+      caught instanceof ByoaHandoffHttpError
+        ? caught.status
+        : caught instanceof Error && caught.name === "ZodError"
+          ? 400
           : caught instanceof ByoaHandoffLedgerV2Error &&
-              (caught.code.endsWith("INVALID_STATE") ||
-                caught.code === "HANDOFF_TIMEOUT_EARLY" ||
-                caught.code === "HANDOFF_BINDING_MISMATCH")
-            ? 409
-            : 503;
-    return NextResponse.json({ error: "handoff_control_denied" }, { status });
+              (caught.code === "HANDOFF_EXPIRED" ||
+                caught.code === "HANDOFF_MISSING" ||
+                caught.code === "HANDOFF_LIFETIME_INSUFFICIENT")
+            ? 410
+            : caught instanceof ByoaHandoffLedgerV2Error &&
+                (caught.code.endsWith("INVALID_STATE") ||
+                  caught.code === "HANDOFF_TIMEOUT_EARLY" ||
+                  caught.code === "HANDOFF_BINDING_MISMATCH")
+              ? 409
+              : 503;
+    return NextResponse.json(
+      { error: caught instanceof ByoaHandoffHttpError ? caught.code : "handoff_control_denied" },
+      { status }
+    );
   }
 }

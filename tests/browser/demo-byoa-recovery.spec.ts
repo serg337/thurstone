@@ -20,7 +20,10 @@ test("canceling an unclaimed handoff revokes it and preserves the owner suite", 
   const revoked = await context.newPage();
   await installEmulatedConsumer(revoked);
   await revoked.goto(handoffUrl);
-  await expect(revoked.getByRole("heading", { name: "Open a fresh handoff link." })).toBeVisible();
+  await revoked.getByRole("button", { name: "Receive isolated test" }).click();
+  await expect(
+    revoked.getByRole("heading", { name: "Open a genuinely fresh handoff." })
+  ).toBeVisible();
   await expect
     .poll(() =>
       revoked.evaluate(async () => (await document.modelContext?.getTools?.())?.length ?? 0)
@@ -55,6 +58,7 @@ test("unsupported provider becomes honest pre-arm UNAVAILABLE only after explici
   const handoffUrl = await prepareV2Handoff(owner);
   const fresh = await context.newPage();
   await fresh.goto(handoffUrl);
+  await fresh.getByRole("button", { name: "Receive isolated test" }).click();
   await fresh.waitForURL(/\/demo\/run$/u);
   await fresh.getByRole("button", { name: "Continue to readiness" }).click();
   await fresh.getByRole("button", { name: "Start live observation" }).click();

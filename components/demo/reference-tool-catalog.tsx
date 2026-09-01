@@ -130,6 +130,10 @@ export function ReferenceToolCatalog({
             This test varies only the session-local agent-facing wording while real schemas,
             handlers, and effects remain fixed.
           </p>
+          <p className={styles.privacyNotice}>
+            Synthetic test wording only. Do not enter personal, customer, credential, payment,
+            confidential, or secret data.
+          </p>
         </div>
         <span className={styles.count} aria-live="polite">
           {snapshot.tools.length} real tools selected
@@ -249,7 +253,9 @@ export function ReferenceToolCatalog({
                 </div>
                 <div>
                   <span>Fixed input schema</span>
-                  <pre>{JSON.stringify(tool.inputSchema, null, 2)}</pre>
+                  <pre tabIndex={0} aria-label={`${tool.name} fixed input schema`}>
+                    {JSON.stringify(tool.inputSchema, null, 2)}
+                  </pre>
                 </div>
               </div>
 
@@ -257,7 +263,9 @@ export function ReferenceToolCatalog({
                 <summary>
                   View <code>registerTool()</code> definition
                 </summary>
-                <pre>{JSON.stringify(registrationView(tool), null, 2)}</pre>
+                <pre tabIndex={0} aria-label={`${tool.name} registerTool definition`}>
+                  {JSON.stringify(registrationView(tool), null, 2)}
+                </pre>
               </details>
             </article>
           );

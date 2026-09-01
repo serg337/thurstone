@@ -40,6 +40,10 @@ export async function openFreshV2(
   const fresh = await context.newPage();
   await installEmulatedConsumer(fresh, argumentMode);
   await fresh.goto(handoffUrl);
+  await expect(
+    fresh.getByRole("heading", { name: "Receive this test in ChatGPT's Browser." })
+  ).toBeVisible();
+  await fresh.getByRole("button", { name: "Receive isolated test" }).click();
   await fresh.waitForURL(/\/demo\/run$/u);
   await expect(
     fresh.getByRole("heading", { name: "Review what this agent receives." })

@@ -25,6 +25,13 @@
   line-height: 1.55;
 }
 
+.privacyNotice {
+  padding: 0.6rem 0.7rem;
+  color: var(--ts-orange) !important;
+  background: rgba(255, 153, 0, 0.055);
+  border-left: 2px solid var(--ts-orange);
+}
+
 .count,
 .preview > header > span {
   flex: 0 0 auto;
