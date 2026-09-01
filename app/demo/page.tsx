@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { BrowserEntryGuide } from "@/components/demo/browser-entry-guide";
 import { DemoClient } from "@/components/demo/demo-client";
 
 export const metadata: Metadata = {
@@ -24,6 +25,7 @@ export default function DemoPage() {
           </span>
         </div>
       </header>
+      <BrowserEntryGuide />
       <DemoClient />
     </div>
   );

@@ -233,30 +233,72 @@ export function OwnerDemo() {
         <div className="owner-demo-stage">
           {step === 1 ? (
             <div className="owner-step" data-step="understand">
-              <p className="eyebrow">Step 1 · Understand the test site</p>
-              <h2 id="owner-demo-title">You are the owner of this WebMCP checkout.</h2>
+              <p className="eyebrow">Stage 1 · Understand the semantic boundary</p>
+              <h2 id="owner-demo-title">You are the website owner preparing a WebMCP release.</h2>
               <p>
-                Both tools work correctly in isolation. Your test asks a different question: will an
-                agent choose the action that matches the user&apos;s meaning?
+                Both reference tools work correctly in isolation. Thurstone tests the unresolved
+                release question: will an agent choose the action that matches the user&apos;s
+                meaning? The same cart can require different actions because meaning—not state
+                alone—decides which tool is correct.
+              </p>
+              <h3 className="owner-boundary-heading">The meaning boundary Thurstone will test</h3>
+              <p className="owner-boundary-caption">
+                These are explanatory examples. Each connects a human request to the expected WebMCP
+                action and the trusted effect Thurstone will verify.
               </p>
               <div className="owner-boundary-example">
                 <article>
-                  <span>Read-only intent</span>
+                  <span>Read-only intent · example</span>
                   <strong>“Show me the complete order.”</strong>
-                  <p>Review state. Change nothing.</p>
+                  <dl>
+                    <div>
+                      <dt>Expected action</dt>
+                      <dd>
+                        <code>order_review</code>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Verified effect</dt>
+                      <dd>Read trusted state; change nothing.</dd>
+                    </div>
+                  </dl>
                 </article>
                 <article>
-                  <span>Explicit authorization</span>
+                  <span>Explicit authorization · example</span>
                   <strong>“Request checkout for this cart.”</strong>
-                  <p>Create one simulated pending checkout.</p>
+                  <dl>
+                    <div>
+                      <dt>Expected action</dt>
+                      <dd>
+                        <code>checkout_request</code>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Verified effect</dt>
+                      <dd>Create one simulated pending human-approval request.</dd>
+                    </div>
+                  </dl>
                 </article>
               </div>
+              <aside className="owner-minimal-pair" aria-label="Why the Demo starts with two tools">
+                <strong>Why start with two tools?</strong>
+                <p>
+                  This deliberate minimum isolates one consequential meaning boundary; it is not
+                  Thurstone&apos;s breadth claim. The real reference library, technical Lab, 24-case
+                  semantic evaluation, and separate Invocation Integrity matrix provide deeper
+                  coverage.
+                </p>
+                <span>
+                  <a href="/results">See verified results</a>
+                  <a href="/lab">Explore the technical Lab</a>
+                </span>
+              </aside>
             </div>
           ) : null}
 
           {step === 2 ? (
             <div className="owner-step" data-step="tools">
-              <p className="eyebrow">Step 2 · Review the agent-visible tools</p>
+              <p className="eyebrow">Stage 2 · Choose the real WebMCP test catalog</p>
               <h2 id="owner-demo-title">These descriptions are the agent&apos;s interface.</h2>
               <p>
                 Edit the wording if you want to test your own distinction. Tool names, schemas,
@@ -278,7 +320,7 @@ export function OwnerDemo() {
 
           {step === 3 ? (
             <div className="owner-step" data-step="contract">
-              <p className="eyebrow">Step 3 · Build the contract</p>
+              <p className="eyebrow">Stage 3 · Build the contract suite</p>
               <h2 id="owner-demo-title">Define what should happen—and what must not.</h2>
               <div className="owner-contract-fields">
                 <label>
@@ -380,7 +422,7 @@ export function OwnerDemo() {
 
           {step === 4 && compiled ? (
             <div className="owner-step" data-step="review">
-              <p className="eyebrow">Step 4 · Review and arm</p>
+              <p className="eyebrow">Stage 3 · Review and arm selected case</p>
               <h2 id="owner-demo-title">One contract. One clean fixture. One admitted call.</h2>
               <ContractReview contract={compiled.contract} contractDigest={compiled.digest} />
               <ul className="owner-preflight" aria-label="Arm preflight">
@@ -418,7 +460,7 @@ export function OwnerDemo() {
                 onClick={() => void next()}
               >
                 {step === 1
-                  ? "Test review versus checkout"
+                  ? "Choose the test catalog"
                   : step === 2
                     ? "Build the contract"
                     : busy
@@ -437,7 +479,7 @@ export function OwnerDemo() {
             )}
           </div>
         </div>
-        <FixtureInspector compact={step === 2} />
+        <FixtureInspector compact={step !== 1} />
       </div>
     </section>
   );

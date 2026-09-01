@@ -6,7 +6,7 @@ import { installEmulatedConsumer } from "./support/emulated-consumer";
 
 async function arm(page: Page) {
   await page.goto("/demo");
-  await page.getByRole("button", { name: "Test review versus checkout" }).click();
+  await page.getByRole("button", { name: "Choose the test catalog" }).click();
   await page.getByRole("button", { name: "Build the contract" }).click();
   await page.getByRole("button", { name: "Review contract" }).click();
   await Promise.all([
@@ -99,7 +99,7 @@ test("Edit contract restores the saved request and descriptors in the owner wiza
   await expect(page.locator("[data-byoa-state='PASS']")).toBeVisible();
   await page.getByRole("button", { name: "Edit contract" }).click();
   await expect(page).toHaveURL(/\/demo$/u);
-  await expect(page.getByText("Step 2 of 6", { exact: true })).toBeVisible();
+  await expect(page.getByText("Stage 2 of 5", { exact: true })).toBeVisible();
   await expect(page.getByLabel(/Agent-visible description/iu).first()).toHaveValue(
     /current final read-only order summary/iu
   );

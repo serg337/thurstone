@@ -4,7 +4,7 @@ import { installEmulatedConsumer } from "./support/emulated-consumer";
 
 async function arm(page: Page) {
   await page.goto("/demo");
-  await page.getByRole("button", { name: "Test review versus checkout" }).click();
+  await page.getByRole("button", { name: "Choose the test catalog" }).click();
   await page.getByRole("button", { name: "Build the contract" }).click();
   await page.getByRole("button", { name: "Review contract" }).click();
   await Promise.all([

@@ -391,7 +391,7 @@ export function ByoaRunner() {
         aria-labelledby="agent-handoff-source-title"
         data-byoa-state="HANDOFF_SOURCE"
       >
-        <p className="eyebrow">Step 5 of 6 · fresh-agent handoff</p>
+        <p className="eyebrow">Stage 4 of 5 · fresh-agent handoff</p>
         <h1 id="agent-handoff-source-title">Open this test in a fresh agent task.</h1>
         <p>
           Copy the opaque link, start a fresh GPT-5.6 Sol or Terra ChatGPT Work or Codex task, and
@@ -448,7 +448,7 @@ export function ByoaRunner() {
         aria-labelledby="byoa-terminal-title"
         data-byoa-state={sessionState}
       >
-        <p className="eyebrow">Step 6 of 6 · deterministic verdict</p>
+        <p className="eyebrow">Stage 5 of 5 · deterministic verdict</p>
         <h1 id="byoa-terminal-title">{verdictTitle(result)}</h1>
         <p>
           Expected <code>{result.expectedTool}</code>; observed{" "}
@@ -512,7 +512,7 @@ export function ByoaRunner() {
     >
       <div className="agent-runner-heading">
         <div>
-          <p className="eyebrow">Step 5 of 6 · isolated live test</p>
+          <p className="eyebrow">Stage 4 of 5 · isolated live test</p>
           <h1 id="agent-runner-title">Your test is armed.</h1>
           <p>
             In the latest ChatGPT desktop app, use its built-in Browser with a fresh GPT-5.6 Sol or

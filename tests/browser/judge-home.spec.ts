@@ -28,6 +28,16 @@ test("Home presents the semantic release product before technical detail", async
   await expect(backdrop).toHaveCount(1);
   await expect(backdrop).toHaveAttribute("aria-hidden", "true");
   await expect(backdrop.locator(".hero-input-nodes > *")).toHaveCount(5);
+  await expect(
+    page.getByRole("heading", { name: "Open Thurstone in ChatGPT's Browser" })
+  ).toBeVisible();
+  await expect(
+    page.getByText("@Browser Open https://thurstone.invarra.ai/demo", { exact: true })
+  ).toBeVisible();
+  await expect(
+    page.getByText(/Chrome extension side chat is not the Site Tools consumer/iu)
+  ).toBeVisible();
+  await expect(page.getByLabel("Flagged Chrome compatibility")).toBeVisible();
 });
 
 test("Home explains the failure, real-agent mechanism, and five evidence stages", async ({

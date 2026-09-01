@@ -94,7 +94,7 @@ test("Workflow separates the working challenge product from product direction", 
 async function createCurrentResult(page: Page) {
   await installEmulatedConsumer(page);
   await page.goto("/demo");
-  await page.getByRole("button", { name: "Test review versus checkout" }).click();
+  await page.getByRole("button", { name: "Choose the test catalog" }).click();
   await page.getByRole("button", { name: "Build the contract" }).click();
   await page.getByRole("button", { name: "Review contract" }).click();
   await Promise.all([

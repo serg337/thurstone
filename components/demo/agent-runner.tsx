@@ -61,7 +61,7 @@ export function AgentRunner() {
     <section className="agent-runner-shell" aria-labelledby="agent-runner-title">
       <div className="agent-runner-heading">
         <div>
-          <p className="eyebrow">Step 5 of 6 · isolated run document</p>
+          <p className="eyebrow">Stage 4 of 5 · isolated run document</p>
           <h1 id="agent-runner-title">Your test is prepared.</h1>
           <p>
             This document contains only the safe fixture, request, and frozen agent-visible catalog.

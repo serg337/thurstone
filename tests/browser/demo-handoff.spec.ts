@@ -23,7 +23,7 @@ test("opaque handoff opens an isolated fresh-browser run without exposing the an
 }) => {
   await installEmulatedConsumer(page);
   await page.goto("/demo");
-  await page.getByRole("button", { name: "Test review versus checkout" }).click();
+  await page.getByRole("button", { name: "Choose the test catalog" }).click();
   await page.getByRole("button", { name: "Build the contract" }).click();
   await page.getByRole("button", { name: "Review contract" }).click();
   await Promise.all([

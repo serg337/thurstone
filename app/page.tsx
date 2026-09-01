@@ -1,4 +1,5 @@
 import { HeroSignalBackdrop } from "@/components/hero-signal-backdrop";
+import { BrowserEntryGuide } from "@/components/demo/browser-entry-guide";
 import { StatusPill } from "@/components/status-pill";
 import { SignalFlow, type SignalFlowStage } from "@/components/ui/signal-flow";
 
@@ -68,6 +69,7 @@ export default function HomePage() {
           <p className="intro-microcopy">
             No account · safe reference checkout · use ChatGPT desktop&apos;s built-in Browser
           </p>
+          <BrowserEntryGuide compact />
         </div>
       </section>
 

@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 import { installEmulatedConsumer } from "./support/emulated-consumer";
 
 async function advanceToContract(page: import("@playwright/test").Page) {
-  await page.getByRole("button", { name: "Test review versus checkout" }).click();
+  await page.getByRole("button", { name: "Choose the test catalog" }).click();
   await page.getByRole("button", { name: "Build the contract" }).click();
 }
 
@@ -15,7 +15,9 @@ async function advanceToReview(page: import("@playwright/test").Page) {
   ).toBeVisible();
 }
 
-test("Demo presents one six-step WebMCP-owner workflow without a model call", async ({ page }) => {
+test("Demo presents one five-stage WebMCP-owner workflow without a model call", async ({
+  page
+}) => {
   const inferenceRequests: string[] = [];
   page.on("request", (request) => {
     if (/\/api\/(?:demo|probe|scored|successor-eval)\//u.test(request.url())) {
@@ -28,19 +30,35 @@ test("Demo presents one six-step WebMCP-owner workflow without a model call", as
   await expect(
     page.getByRole("heading", { name: "Test Thurstone as a WebMCP owner." })
   ).toBeVisible();
-  await expect(page.getByText("Step 1 of 6", { exact: true })).toBeVisible();
+  await expect(page.getByText("Stage 1 of 5", { exact: true })).toBeVisible();
   for (const label of [
-    "Understand the test site",
-    "Review the agent-visible tools",
-    "Build the contract",
-    "Review and arm",
-    "Ask the agent",
-    "Inspect the verdict"
+    "Understand the semantic boundary",
+    "Choose the real WebMCP test catalog",
+    "Build the contract suite",
+    "Send the selected case to a fresh agent",
+    "Inspect, diagnose, and preserve"
   ]) {
     await expect(page.getByText(label, { exact: true })).toBeVisible();
   }
-  await expect(page.getByText(/You are the owner of this WebMCP checkout/iu)).toBeVisible();
+  await expect(page.getByText(/website owner preparing a WebMCP release/iu)).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "The meaning boundary Thurstone will test" })
+  ).toBeVisible();
+  await expect(page.getByText("order_review", { exact: true })).toBeVisible();
+  await expect(page.getByText("checkout_request", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText(/known starting state lets Thurstone prove exactly what changed/iu)
+  ).toBeVisible();
+  await expect(
+    page.getByText(/deliberate minimum isolates one consequential meaning boundary/iu)
+  ).toBeVisible();
   await expect(page.getByText(/Field notebook/iu)).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Open Thurstone in ChatGPT's Browser" })
+  ).toBeVisible();
+  await expect(
+    page.getByText("@Browser Open https://thurstone.invarra.ai/demo", { exact: true })
+  ).toBeVisible();
   expect(inferenceRequests).toEqual([]);
 });
 
@@ -61,8 +79,8 @@ test("Demo does not register target tools even when a consumer is available", as
 
 test("owner can edit and reset the exact two agent-visible descriptions", async ({ page }) => {
   await page.goto("/demo");
-  await page.getByRole("button", { name: "Test review versus checkout" }).click();
-  await expect(page.getByText("Step 2 of 6", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Choose the test catalog" }).click();
+  await expect(page.getByText("Stage 2 of 5", { exact: true })).toBeVisible();
 
   const descriptions = page.getByLabel(/Agent-visible description/iu);
   await expect(descriptions).toHaveCount(2);
@@ -82,7 +100,7 @@ test("contract authoring teaches tool, arguments, effects, and replay", async ({
   await page.goto("/demo");
   await advanceToContract(page);
 
-  await expect(page.getByText("Step 3 of 6", { exact: true })).toBeVisible();
+  await expect(page.getByText("Stage 3 of 5", { exact: true })).toBeVisible();
   await expect(page.getByText("Valid unique operation ID", { exact: true })).toBeVisible();
   await expect(page.getByText("Pending checkout, once", { exact: true })).toBeVisible();
   await expect(page.getByText("Exactly once", { exact: true })).toBeVisible();
@@ -95,7 +113,7 @@ test("contract authoring teaches tool, arguments, effects, and replay", async ({
 
 test("invalid agent-visible descriptor fails closed before review", async ({ page }) => {
   await page.goto("/demo");
-  await page.getByRole("button", { name: "Test review versus checkout" }).click();
+  await page.getByRole("button", { name: "Choose the test catalog" }).click();
   await page
     .getByLabel(/Agent-visible description/iu)
     .first()
@@ -103,7 +121,7 @@ test("invalid agent-visible descriptor fails closed before review", async ({ pag
   await page.getByRole("button", { name: "Build the contract" }).click();
   await page.getByRole("button", { name: "Review contract" }).click();
   await expect(page.locator(".workshop-error")).toContainText(/plain synthetic text/iu);
-  await expect(page.getByText("Step 3 of 6", { exact: true })).toBeVisible();
+  await expect(page.getByText("Stage 3 of 5", { exact: true })).toBeVisible();
 });
 
 test("review separates the hidden owner contract from the agent projection", async ({ page }) => {
@@ -164,9 +182,9 @@ test("arming uses a hard navigation and stores a bounded isolated projection", a
 });
 
 test("Demo remains usable at narrow width without page overflow", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 320, height: 844 });
   await page.goto("/demo");
-  await expect(page.getByRole("button", { name: "Test review versus checkout" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Choose the test catalog" })).toBeVisible();
   const width = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
     clientWidth: document.documentElement.clientWidth

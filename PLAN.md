@@ -27,7 +27,7 @@ implemented through additive versioned schemas and identities.
    - Add an immutable registry for the real reference-checkout tools, a strict versioned 2–4 tool
      Demo catalog, a bounded 0–6 case suite, selected-case live Contract v3, and isolated tab-scoped
      storage with canonical identities and fail-closed parsing.
-3. **R2 — Judge entry and Stage 1**
+3. **R2 — Judge entry and Stage 1: PASS**
    - Make the exact built-in-Browser entry command explicit, teach the owner/agent/trusted-state
      boundary, make the synthetic cart safely editable and resettable, and keep the owner document
      free of registered target tools.

@@ -3659,6 +3659,104 @@ textarea::placeholder {
   font-size: 0.78rem;
 }
 
+.browser-entry-guide {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(250px, 3fr);
+  gap: 0.75rem;
+  margin: 0 0 1rem;
+  padding: 0.85rem;
+  background: rgba(3, 14, 20, 0.86);
+  border: 1px solid rgba(54, 236, 255, 0.24);
+  border-radius: var(--radius);
+}
+
+.intro-copy > .browser-entry-guide {
+  max-width: 820px;
+  margin-top: 1rem;
+}
+
+.browser-entry-primary,
+.browser-entry-compatibility {
+  min-width: 0;
+  padding: 0.8rem;
+  border-radius: var(--radius-small);
+}
+
+.browser-entry-primary {
+  background: linear-gradient(145deg, rgba(0, 217, 255, 0.09), rgba(3, 14, 20, 0.42));
+  border: 1px solid rgba(54, 236, 255, 0.18);
+}
+
+.browser-entry-primary h2,
+.browser-entry-compatibility h3 {
+  margin: 0;
+  color: var(--ts-ice);
+}
+
+.browser-entry-primary h2 {
+  font-size: clamp(1.15rem, 2vw, 1.55rem);
+  letter-spacing: -0.02em;
+}
+
+.browser-entry-primary > p:not(.eyebrow),
+.browser-entry-compatibility p {
+  margin: 0.55rem 0 0;
+  color: var(--ts-text-muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.browser-entry-primary > code {
+  display: block;
+  max-width: 100%;
+  margin-top: 0.65rem;
+  padding: 0.65rem 0.75rem;
+  overflow-wrap: anywhere;
+  color: var(--ts-ice);
+  background: var(--ts-bg-deep);
+  border: 1px solid var(--ts-line);
+  border-radius: 6px;
+  user-select: all;
+}
+
+.browser-entry-primary > strong {
+  display: block;
+  margin-top: 0.65rem;
+  color: var(--ts-orange);
+  font-size: 0.76rem;
+}
+
+.browser-entry-compatibility {
+  background: rgba(201, 223, 235, 0.035);
+  border: 1px solid var(--ts-line);
+}
+
+.browser-entry-compatibility > span {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: var(--ts-text-faint);
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.browser-entry-compatibility h3 {
+  font-size: 0.95rem;
+}
+
+.browser-entry-compatibility a {
+  display: inline-flex;
+  margin-top: 0.65rem;
+  color: var(--ts-cyan-bright);
+  font-size: 0.78rem;
+  font-weight: 760;
+}
+
+.browser-entry-guide[data-compact="true"] {
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.5fr);
+}
+
 .owner-demo {
   display: grid;
   gap: 1rem;
@@ -3680,7 +3778,7 @@ textarea::placeholder {
 
 .owner-progress ol {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.4rem;
   margin: 0;
   padding: 0;
@@ -3760,6 +3858,19 @@ textarea::placeholder {
   line-height: 1.65;
 }
 
+.owner-boundary-heading {
+  margin: 1.65rem 0 0;
+  color: var(--ts-ice);
+  font-size: clamp(1.25rem, 2.2vw, 1.7rem);
+}
+
+.owner-boundary-caption {
+  max-width: 760px;
+  margin: 0.45rem 0 0;
+  color: var(--ts-text-muted);
+  line-height: 1.55;
+}
+
 .owner-boundary-example,
 .owner-tool-grid,
 .owner-contract-rules {
@@ -3795,9 +3906,74 @@ textarea::placeholder {
   line-height: 1.45;
 }
 
-.owner-boundary-example p {
-  margin: 0.55rem 0 0;
+.owner-boundary-example dl {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0.85rem 0 0;
+}
+
+.owner-boundary-example dl > div {
+  display: grid;
+  grid-template-columns: minmax(112px, 0.45fr) minmax(0, 1fr);
+  gap: 0.6rem;
+  align-items: baseline;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--ts-line);
+}
+
+.owner-boundary-example dt,
+.owner-boundary-example dd {
+  margin: 0;
+}
+
+.owner-boundary-example dt {
+  color: var(--ts-text-faint);
+  font-size: 0.68rem;
+  font-weight: 760;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.owner-boundary-example dd {
   color: var(--ts-text-muted);
+  line-height: 1.45;
+}
+
+.owner-boundary-example code {
+  color: var(--ts-cyan-bright);
+}
+
+.owner-minimal-pair {
+  margin-top: 0.75rem;
+  padding: 0.85rem 1rem;
+  background: rgba(201, 223, 235, 0.035);
+  border: 1px solid var(--ts-line);
+  border-radius: var(--radius-small);
+}
+
+.owner-minimal-pair > strong {
+  color: var(--ts-ice);
+}
+
+.owner-minimal-pair > p {
+  margin: 0.4rem 0 0;
+  color: var(--ts-text-muted);
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+.owner-minimal-pair > span {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  margin-top: 0.55rem;
+}
+
+.owner-minimal-pair a,
+.owner-fixture-advanced {
+  color: var(--ts-cyan-bright);
+  font-size: 0.76rem;
+  font-weight: 760;
 }
 
 .owner-fixture {
@@ -3809,14 +3985,41 @@ textarea::placeholder {
   border-radius: var(--radius);
 }
 
-.owner-fixture h2 {
-  margin: 0;
+.owner-fixture details,
+.owner-fixture summary {
+  min-width: 0;
+}
+
+.owner-fixture summary {
+  display: grid;
+  gap: 0.4rem;
+  cursor: pointer;
+  list-style-position: inside;
+}
+
+.owner-fixture summary > span:first-child {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.owner-fixture summary strong {
   font-size: 1.45rem;
 }
 
-.owner-fixture > div > p:not(.eyebrow) {
+.owner-fixture-summary {
+  color: var(--ts-text-faint);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+}
+
+.owner-fixture-content {
+  margin-top: 0.75rem;
+}
+
+.owner-fixture-content > p {
   margin: 0.6rem 0 0;
   color: var(--ts-text-muted);
+  font-size: 0.83rem;
   line-height: 1.55;
 }
 
@@ -3856,6 +4059,11 @@ textarea::placeholder {
 .owner-fixture-boundary span {
   color: var(--ts-text-muted);
   line-height: 1.45;
+}
+
+.owner-fixture-advanced {
+  display: inline-flex;
+  margin-top: 0.8rem;
 }
 
 .owner-tool-editor {
@@ -5316,6 +5524,11 @@ textarea::placeholder {
 }
 
 @media (max-width: 900px) {
+  .browser-entry-guide,
+  .browser-entry-guide[data-compact="true"] {
+    grid-template-columns: 1fr;
+  }
+
   .hero,
   .judge-path {
     grid-template-columns: 1fr;
@@ -5641,8 +5854,8 @@ textarea::placeholder {
   }
 
   .owner-progress ol {
-    grid-template-columns: repeat(6, minmax(140px, 1fr));
-    min-width: 860px;
+    grid-template-columns: repeat(5, minmax(140px, 1fr));
+    min-width: 710px;
   }
 
   .owner-demo-stage {
@@ -6092,7 +6305,11 @@ textarea::placeholder {
   }
 
   .owner-progress ol {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: 1fr;
     min-width: 0;
+  }
+
+  .owner-boundary-example dl > div {
+    grid-template-columns: 1fr;
   }
 }
