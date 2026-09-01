@@ -8,8 +8,12 @@ async function arm(page: Page) {
   await page.getByRole("button", { name: "Build the contract" }).click();
   await page.getByRole("button", { name: "Review contract" }).click();
   await Promise.all([
-    page.waitForURL(/\/demo\/run$/u),
+    page.waitForURL(/\/demo\/run#handoff-source$/u),
     page.getByRole("button", { name: "Arm live test" }).click()
+  ]);
+  await Promise.all([
+    page.waitForURL(/\/demo\/run$/u),
+    page.getByRole("button", { name: "Run in this tab instead" }).click()
   ]);
   await expect(page.locator("[data-byoa-state='ARMED']")).toBeVisible();
 }

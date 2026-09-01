@@ -126,8 +126,15 @@ test("arming uses a hard navigation and stores a bounded isolated projection", a
   await advanceToReview(page);
 
   await Promise.all([
-    page.waitForURL(/\/demo\/run$/u),
+    page.waitForURL(/\/demo\/run#handoff-source$/u),
     page.getByRole("button", { name: "Arm live test" }).click()
+  ]);
+  await expect(page.locator("[data-byoa-state='HANDOFF_SOURCE']")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Copy fresh-agent test URL" })).toBeVisible();
+  await expect(page.getByText(/Owner's hidden contract/iu)).toHaveCount(0);
+  await Promise.all([
+    page.waitForURL(/\/demo\/run$/u),
+    page.getByRole("button", { name: "Run in this tab instead" }).click()
   ]);
   await expect(
     page.getByRole("heading", { name: "Live agent testing is unavailable in this browser." })

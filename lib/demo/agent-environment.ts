@@ -7,6 +7,7 @@ import {
   type ByoaToolDescriptorV1,
   type ByoaToolName
 } from "@/lib/demo/contract-v2";
+import type { AgentVisibleRunProjection } from "@/lib/demo/agent-projection";
 import { canonicalSha256 } from "@/lib/evidence/digest";
 import {
   CheckoutTraceLedger,
@@ -99,7 +100,7 @@ export class ByoaInvocationGate {
 
 export interface ByoaAgentEnvironment {
   readonly appCommit: string;
-  readonly contract: ByoaContractV2;
+  readonly contract: ByoaContractV2 | null;
   readonly store: CheckoutSessionStore;
   readonly ledger: CheckoutTraceLedger;
   readonly gate: ByoaInvocationGate;
@@ -126,11 +127,19 @@ export async function createByoaAgentEnvironment(
   contract: ByoaContractV2,
   appCommit: string
 ): Promise<ByoaAgentEnvironment> {
+  return createByoaAgentEnvironmentFromDescriptors(contract.descriptors, appCommit, contract);
+}
+
+async function createByoaAgentEnvironmentFromDescriptors(
+  descriptors: readonly ByoaToolDescriptorV1[],
+  appCommit: string,
+  contract: ByoaContractV2 | null
+): Promise<ByoaAgentEnvironment> {
   const manifestHash = await canonicalSha256({
     toolsetVersion: BYOA_DEMO_TOOLSET_VERSION,
     domainVersion: CHECKOUT_DOMAIN_VERSION,
     appCommit,
-    descriptors: contract.descriptors,
+    descriptors,
     handlerVersions: BYOA_TOOL_NAMES.map((name) => ({ name, version: handlerVersion(name) }))
   });
   const ledger = new CheckoutTraceLedger({
@@ -144,7 +153,7 @@ export async function createByoaAgentEnvironment(
   const gate = new ByoaInvocationGate();
   const tools = Object.freeze(
     BYOA_TOOL_NAMES.map((name) => {
-      const descriptor = descriptorByName(contract.descriptors, name);
+      const descriptor = descriptorByName(descriptors, name);
       const source = canonical.byName[name];
       return Object.freeze({
         ...source,
@@ -187,4 +196,11 @@ export async function createByoaAgentEnvironment(
     initialLedger: ledger.snapshot(),
     manifestHash
   });
+}
+
+export async function createByoaAgentEnvironmentFromProjection(
+  projection: AgentVisibleRunProjection,
+  appCommit: string
+): Promise<ByoaAgentEnvironment> {
+  return createByoaAgentEnvironmentFromDescriptors(projection.descriptors, appCommit, null);
 }

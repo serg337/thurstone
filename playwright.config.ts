@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const browserCommit = "e".repeat(40);
+const browserSigningSecret = Buffer.alloc(32, 11).toString("base64url");
 const gate3SourceBinding = Buffer.from(
   JSON.stringify({
     source: {
@@ -31,7 +32,7 @@ export default defineConfig({
     ? {}
     : {
         webServer: {
-          command: `TOOLPROOF_BROWSER_FAKE_PROBE=1 TOOLPROOF_COMMIT_SHA=${browserCommit} TOOLPROOF_GATE3_SOURCE_BINDING_B64=${gate3SourceBinding} npm run dev`,
+          command: `TOOLPROOF_BROWSER_FAKE_PROBE=1 TOOLPROOF_COMMIT_SHA=${browserCommit} TOOLPROOF_SIGNING_SECRET=${browserSigningSecret} TOOLPROOF_GATE3_SOURCE_BINDING_B64=${gate3SourceBinding} npm run dev`,
           url: "http://127.0.0.1:3000/api/health",
           reuseExistingServer: !process.env.CI,
           timeout: 120_000

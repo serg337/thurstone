@@ -35,7 +35,7 @@ const terminalStates: ReadonlySet<ByoaSessionState> = new Set([
   "UNAVAILABLE"
 ]);
 
-const transitionSchema = z
+export const byoaSessionTransitionSchema = z
   .object({
     from: byoaSessionStateSchema,
     to: byoaSessionStateSchema,
@@ -54,7 +54,7 @@ export const byoaAgentSessionSchema = z
     createdAt: z.string().datetime({ offset: false }),
     updatedAt: z.string().datetime({ offset: false }),
     expiresAt: z.string().datetime({ offset: false }),
-    transitions: z.array(transitionSchema).min(1).max(24),
+    transitions: z.array(byoaSessionTransitionSchema).min(1).max(24),
     terminalResultDigest: z
       .string()
       .regex(/^[a-f0-9]{64}$/u)

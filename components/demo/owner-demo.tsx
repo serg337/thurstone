@@ -20,6 +20,11 @@ import {
   transitionByoaSession,
   writeByoaAgentSession
 } from "@/lib/demo/agent-session";
+import {
+  BYOA_HANDOFF_PREPARE_VERSION,
+  byoaHandoffPrepareResponseSchema,
+  writeByoaHandoffUrl
+} from "@/lib/demo/agent-handoff";
 import { writeAgentVisibleRunProjection } from "@/lib/demo/agent-projection";
 import { clearContractDraftSeed, readContractDraftSeed } from "@/lib/demo/contract-draft-seed";
 import { clearRegressionRerun } from "@/lib/demo/regression-rerun";
@@ -194,8 +199,27 @@ export function OwnerDemo() {
       });
       writeByoaAgentSession(window.sessionStorage, navigating);
       clearRegressionRerun(window.sessionStorage);
-      writeAgentVisibleRunProjection(window.sessionStorage, agentVisibleRunProjection(navigating));
-      window.location.replace("/demo/run");
+      const projection = agentVisibleRunProjection(navigating);
+      writeAgentVisibleRunProjection(window.sessionStorage, projection);
+      const response = await fetch("/api/demo/handoff/prepare", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Thurstone-Request": "byoa-handoff",
+          "X-Thurstone-Origin": window.location.origin
+        },
+        body: JSON.stringify({
+          version: BYOA_HANDOFF_PREPARE_VERSION,
+          session: navigating,
+          projection,
+          rerun: null
+        }),
+        cache: "no-store"
+      });
+      if (!response.ok) throw new Error("The fresh-agent handoff could not be prepared.");
+      const prepared = byoaHandoffPrepareResponseSchema.parse(await response.json());
+      writeByoaHandoffUrl(window.sessionStorage, prepared.handoffUrl);
+      window.location.replace("/demo/run#handoff-source");
     } catch (caught) {
       setError(errorMessage(caught));
       setBusy(false);

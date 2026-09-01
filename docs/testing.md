@@ -41,12 +41,15 @@ operator lane and remain subject to the Redis lifetime guard.
 ## Manual production BYOA verification
 
 1. Open `/demo` on the exact production SHA and keep the default explicit-checkout contract.
-2. Arm the isolated run and verify the visible catalog contains only `order_review` and
-   `checkout_request`.
-3. In the built-in Browser (`@Browser`) of the latest ChatGPT desktop app, use a fresh GPT-5.6 Sol
-   or Terra ChatGPT Work or Codex agent. Do not use Chrome extension side chat for this proof.
-4. Send the exact frozen request and allow one native Site Tools call.
-5. Confirm the terminal result contains the exact build and manifest, canonical arguments, trusted
+2. Arm the test, copy the opaque fresh-agent URL, and keep its owner tab open. Do not publish or
+   record the URL; it expires after ten minutes.
+3. Start a fresh GPT-5.6 Sol or Terra ChatGPT Work or Codex task in the latest ChatGPT desktop app.
+   Use its built-in Browser (`@Browser`) to open the copied URL. Do not use Chrome extension side
+   chat for this proof.
+4. Verify the fresh run shows only `order_review`, `checkout_request`, the synthetic fixture, and
+   the frozen request—not the expected tool or effect rubric.
+5. Send the exact frozen request and allow one native Site Tools call.
+6. Confirm the terminal result contains the exact build and manifest, canonical arguments, trusted
    before/after state, ledger diff, assertions, and PASS or ISSUE verdict.
-6. Confirm the catalog is retired, a second call cannot reach the domain, no Thurstone-paid model
+7. Confirm the catalog is retired, a second call cannot reach the domain, no Thurstone-paid model
    request occurred, and PASS/ISSUE can be saved as a digest-linked regression.

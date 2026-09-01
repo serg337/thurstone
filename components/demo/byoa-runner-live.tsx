@@ -6,9 +6,26 @@ import { DiagnosticResult } from "@/components/demo/diagnostic-result";
 import { RegressionActions } from "@/components/demo/regression-actions";
 import { FixtureInspector } from "@/components/demo/fixture-inspector";
 import type { ByoaAgentEnvironment } from "@/lib/demo/agent-environment";
-import { createByoaAgentEnvironment } from "@/lib/demo/agent-environment";
+import {
+  createByoaAgentEnvironment,
+  createByoaAgentEnvironmentFromProjection
+} from "@/lib/demo/agent-environment";
+import {
+  BYOA_HANDOFF_REVEAL_VERSION,
+  byoaHandoffBootstrapResponseSchema,
+  byoaHandoffRevealResponseSchema,
+  clearByoaHandoffUrl,
+  clearRemoteByoaSession,
+  hydrateRemoteByoaSession,
+  readByoaHandoffUrl,
+  readRemoteByoaSession,
+  transitionRemoteByoaSession,
+  writeRemoteByoaSession,
+  type RemoteByoaSessionV1
+} from "@/lib/demo/agent-handoff";
 import {
   readAgentVisibleRunProjection,
+  writeAgentVisibleRunProjection,
   type AgentVisibleRunProjection
 } from "@/lib/demo/agent-projection";
 import {
@@ -23,13 +40,23 @@ import { byoaContractDigest, verifyByoaContract } from "@/lib/demo/contract-v2";
 import { evaluateByoaEnvironment } from "@/lib/demo/evaluator";
 import { createNoInvocationResult } from "@/lib/demo/no-invocation-result";
 import type { ByoaDemoResultV2 } from "@/lib/demo/result-v2";
-import { readRegressionRerun, type RegressionRerunV1 } from "@/lib/demo/regression-rerun";
+import {
+  readRegressionRerun,
+  writeRegressionRerun,
+  type RegressionRerunV1
+} from "@/lib/demo/regression-rerun";
 import { detectWebMcpCapabilities } from "@/lib/webmcp/capabilities";
 import { webMcpRegistryManager, type RegistryStatus } from "@/lib/webmcp/registry-manager";
 
 const APP_COMMIT = process.env.NEXT_PUBLIC_TOOLPROOF_COMMIT_SHA?.trim() || "0".repeat(40);
 const OBSERVATION_TIMEOUT_MS = 120_000;
 const CONSUMER_DELIVERY_GRACE_MS = 50;
+
+type ActiveByoaSession = ByoaAgentSessionV1 | RemoteByoaSessionV1;
+
+function isRemoteSession(session: ActiveByoaSession): session is RemoteByoaSessionV1 {
+  return session.version === "thurstone-byoa-remote-session@1";
+}
 
 function terminalState(verdict: ByoaDemoResultV2["verdict"]): ByoaSessionState {
   if (verdict === "pass") return "PASS";
@@ -52,29 +79,53 @@ export function ByoaRunner() {
   const [result, setResult] = useState<ByoaDemoResultV2>();
   const [error, setError] = useState<string>();
   const [copied, setCopied] = useState(false);
+  const [handoffSourceUrl, setHandoffSourceUrl] = useState<string>();
+  const [handoffCopied, setHandoffCopied] = useState(false);
   const [rerunCaseDigest, setRerunCaseDigest] = useState<string | null>(null);
-  const sessionRef = useRef<ByoaAgentSessionV1 | undefined>(undefined);
+  const sessionRef = useRef<ActiveByoaSession | undefined>(undefined);
   const environmentPromiseRef = useRef<Promise<ByoaAgentEnvironment> | undefined>(undefined);
   const releaseRef = useRef<{ release: () => void }>({ release: () => undefined });
   const terminalRef = useRef(false);
   const armedAtRef = useRef<string | undefined>(undefined);
 
   const rerunRef = useRef<RegressionRerunV1 | null>(null);
-  function persistSession(session: ByoaAgentSessionV1): void {
+  function persistSession(session: ActiveByoaSession): void {
     sessionRef.current = session;
     setSessionState(session.state);
-    writeByoaAgentSession(window.sessionStorage, session);
+    if (isRemoteSession(session)) writeRemoteByoaSession(window.sessionStorage, session);
+    else writeByoaAgentSession(window.sessionStorage, session);
   }
 
-  function move(to: ByoaSessionState, reasonCode: string): ByoaAgentSessionV1 {
+  function move(to: ByoaSessionState, reasonCode: string): ActiveByoaSession {
     const current = sessionRef.current;
     if (!current) throw new Error("The BYOA session is not loaded.");
-    const next = transitionByoaSession(current, to, {
-      at: new Date().toISOString(),
-      reasonCode
-    });
+    const transition = { at: new Date().toISOString(), reasonCode };
+    const next = isRemoteSession(current)
+      ? transitionRemoteByoaSession(current, to, transition)
+      : transitionByoaSession(current, to, transition);
     persistSession(next);
     return next;
+  }
+
+  async function revealSession(session: ActiveByoaSession): Promise<ByoaAgentSessionV1> {
+    if (!isRemoteSession(session)) return session;
+    const response = await fetch("/api/demo/handoff/reveal", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Thurstone-Request": "byoa-handoff"
+      },
+      body: JSON.stringify({
+        version: BYOA_HANDOFF_REVEAL_VERSION,
+        runId: session.runId,
+        contractDigest: session.contractDigest
+      }),
+      cache: "no-store"
+    });
+    if (!response.ok)
+      throw new Error("The hidden owner contract could not be revealed after observation.");
+    const revealed = byoaHandoffRevealResponseSchema.parse(await response.json());
+    return hydrateRemoteByoaSession(session, revealed.contract);
   }
 
   async function persistTerminal(
@@ -84,11 +135,14 @@ export function ByoaRunner() {
     if (terminalRef.current || !fromSession) return;
     terminalRef.current = true;
     await writeByoaResult(window.sessionStorage, terminalResult);
-    const terminal = transitionByoaSession(fromSession, terminalState(terminalResult.verdict), {
+    const transition = {
       at: terminalResult.completedAt,
       reasonCode: `result_${terminalResult.verdict}`,
       resultDigest: terminalResult.resultDigest
-    });
+    };
+    const terminal = isRemoteSession(fromSession)
+      ? transitionRemoteByoaSession(fromSession, terminalState(terminalResult.verdict), transition)
+      : transitionByoaSession(fromSession, terminalState(terminalResult.verdict), transition);
     persistSession(terminal);
     setTimeout(() => {
       releaseRef.current.release();
@@ -109,8 +163,9 @@ export function ByoaRunner() {
       if (!current || current.state !== "OBSERVING") return;
       setProgress("Verifying trusted state");
       const evaluating = move("EVALUATING", "native_handler_settled");
+      const revealedSession = await revealSession(evaluating);
       const terminalResult = await evaluateByoaEnvironment({
-        session: evaluating,
+        session: revealedSession,
         environment,
         armedAt: armedAtRef.current ?? evaluating.updatedAt,
         completedAt: new Date().toISOString(),
@@ -127,8 +182,9 @@ export function ByoaRunner() {
       if (terminalRef.current || disposed) return;
       const current = sessionRef.current;
       if (!current) return;
+      const revealedSession = await revealSession(current);
       const terminalResult = await createNoInvocationResult({
-        session: current,
+        session: revealedSession,
         environment,
         verdict,
         armedAt: armedAtRef.current ?? current.updatedAt,
@@ -141,26 +197,52 @@ export function ByoaRunner() {
 
     async function start(): Promise<void> {
       try {
-        const [storedSession, storedProjection, storedResult, storedRerun] = await Promise.all([
-          Promise.resolve(readByoaAgentSession(window.sessionStorage)),
-          Promise.resolve(readAgentVisibleRunProjection(window.sessionStorage)),
-          readByoaResult(window.sessionStorage),
-          Promise.resolve(readRegressionRerun(window.sessionStorage))
-        ]);
+        if (window.location.hash === "#handoff-source") {
+          const sourceUrl = readByoaHandoffUrl(window.sessionStorage);
+          if (!sourceUrl) throw new Error("No fresh-agent handoff exists in this tab.");
+          setHandoffSourceUrl(sourceUrl);
+          return;
+        }
+
+        const [storedSession, initialProjection, storedResult, initialRerun, storedRemoteSession] =
+          await Promise.all([
+            Promise.resolve(readByoaAgentSession(window.sessionStorage)),
+            Promise.resolve(readAgentVisibleRunProjection(window.sessionStorage)),
+            readByoaResult(window.sessionStorage),
+            Promise.resolve(readRegressionRerun(window.sessionStorage)),
+            Promise.resolve(readRemoteByoaSession(window.sessionStorage))
+          ]);
+        let storedProjection = initialProjection;
+        let storedRerun = initialRerun;
+        let activeSession: ActiveByoaSession | null = storedSession ?? storedRemoteSession;
+        if (!activeSession || !storedProjection) {
+          const response = await fetch("/api/demo/handoff/bootstrap", {
+            cache: "no-store"
+          });
+          if (response.ok) {
+            const bootstrap = byoaHandoffBootstrapResponseSchema.parse(await response.json());
+            activeSession = bootstrap.session;
+            storedProjection = bootstrap.projection;
+            storedRerun = bootstrap.rerun;
+            writeRemoteByoaSession(window.sessionStorage, bootstrap.session);
+            writeAgentVisibleRunProjection(window.sessionStorage, bootstrap.projection);
+            if (bootstrap.rerun) writeRegressionRerun(window.sessionStorage, bootstrap.rerun);
+          }
+        }
         if (disposed) return;
-        if (!storedSession || !storedProjection) {
+        if (!activeSession || !storedProjection) {
           throw new Error("No armed test exists in this tab.");
         }
-        sessionRef.current = storedSession;
+        sessionRef.current = activeSession;
         rerunRef.current = storedRerun;
         setRerunCaseDigest(storedRerun?.caseDigest ?? null);
-        setSessionState(storedSession.state);
+        setSessionState(activeSession.state);
         setProjection(storedProjection);
         if (Date.parse(storedProjection.expiresAt) <= Date.now()) {
           throw new Error("This armed test expired. Return to Demo and arm a fresh contract.");
         }
-        if (["PASS", "ISSUE", "INCOMPLETE", "UNAVAILABLE"].includes(storedSession.state)) {
-          if (!storedResult || storedResult.resultDigest !== storedSession.terminalResultDigest) {
+        if (["PASS", "ISSUE", "INCOMPLETE", "UNAVAILABLE"].includes(activeSession.state)) {
+          if (!storedResult || storedResult.resultDigest !== activeSession.terminalResultDigest) {
             throw new Error("The terminal session result could not be verified.");
           }
           terminalRef.current = true;
@@ -168,23 +250,33 @@ export function ByoaRunner() {
           setProgress("Result ready");
           return;
         }
-        const contract = await verifyByoaContract(storedSession.contract);
-        if ((await byoaContractDigest(contract)) !== storedSession.contractDigest) {
-          throw new Error("The armed contract digest does not verify.");
+        let contract = null;
+        if (!isRemoteSession(activeSession)) {
+          contract = await verifyByoaContract(activeSession.contract);
+          if ((await byoaContractDigest(contract)) !== activeSession.contractDigest) {
+            throw new Error("The armed contract digest does not verify.");
+          }
         }
         if (!environmentPromiseRef.current) {
-          environmentPromiseRef.current = createByoaAgentEnvironment(contract, APP_COMMIT);
+          environmentPromiseRef.current = contract
+            ? createByoaAgentEnvironment(contract, APP_COMMIT)
+            : createByoaAgentEnvironmentFromProjection(storedProjection, APP_COMMIT);
         }
         const environment = await environmentPromiseRef.current;
         if (disposed) return;
-        if (storedSession.state === "NAVIGATING") {
+        if (activeSession.state === "NAVIGATING") {
           persistSession(
-            transitionByoaSession(storedSession, "PREPARING", {
-              at: new Date().toISOString(),
-              reasonCode: "isolated_document_loaded"
-            })
+            isRemoteSession(activeSession)
+              ? transitionRemoteByoaSession(activeSession, "PREPARING", {
+                  at: new Date().toISOString(),
+                  reasonCode: "isolated_document_loaded"
+                })
+              : transitionByoaSession(activeSession, "PREPARING", {
+                  at: new Date().toISOString(),
+                  reasonCode: "isolated_document_loaded"
+                })
           );
-        } else if (storedSession.state !== "PREPARING") {
+        } else if (activeSession.state !== "PREPARING") {
           await finalizeNoInvocation(
             environment,
             "incomplete",
@@ -232,13 +324,9 @@ export function ByoaRunner() {
               const current = sessionRef.current;
               if (!current || current.state !== "PREPARING") return;
               setProgress("Tools ready");
-              const providerReady = move("PROVIDER_READY", "frozen_catalog_registered");
-              const armed = transitionByoaSession(providerReady, "ARMED", {
-                at: new Date().toISOString(),
-                reasonCode: "observation_boundary_armed"
-              });
+              move("PROVIDER_READY", "frozen_catalog_registered");
+              const armed = move("ARMED", "observation_boundary_armed");
               armedAtRef.current = armed.updatedAt;
-              persistSession(armed);
               setProgress("Waiting for agent");
               timeout = setTimeout(() => {
                 void finalizeNoInvocation(
@@ -276,11 +364,59 @@ export function ByoaRunner() {
     setCopied(true);
   }
 
+  async function copyHandoffUrl() {
+    if (!handoffSourceUrl) return;
+    await navigator.clipboard.writeText(handoffSourceUrl);
+    setHandoffCopied(true);
+  }
+
+  function runInThisTab() {
+    clearByoaHandoffUrl(window.sessionStorage);
+    window.location.replace("/demo/run");
+  }
+
   function clearUnfinishedSession() {
     if (terminalRef.current) return;
     window.sessionStorage.removeItem("thurstone:byoa-session@1");
     window.sessionStorage.removeItem("thurstone:byoa-agent-projection@1");
     window.sessionStorage.removeItem("thurstone:byoa-result@2");
+    clearRemoteByoaSession(window.sessionStorage);
+    clearByoaHandoffUrl(window.sessionStorage);
+  }
+
+  if (handoffSourceUrl) {
+    return (
+      <section
+        className="agent-runner-empty agent-handoff-source"
+        aria-labelledby="agent-handoff-source-title"
+        data-byoa-state="HANDOFF_SOURCE"
+      >
+        <p className="eyebrow">Step 5 of 6 · fresh-agent handoff</p>
+        <h1 id="agent-handoff-source-title">Open this test in a fresh agent task.</h1>
+        <p>
+          Copy the opaque link, start a fresh GPT-5.6 Sol or Terra ChatGPT Work or Codex task, and
+          open it with @Browser. Before the agent acts, the fresh run receives only the request and
+          frozen two-tool catalog—not the owner&apos;s expected tool, allowed effects, or forbidden
+          effects.
+        </p>
+        <div className="button-row">
+          <button
+            className="button button-primary"
+            type="button"
+            onClick={() => void copyHandoffUrl()}
+          >
+            {handoffCopied ? "Fresh-agent URL copied" : "Copy fresh-agent test URL"}
+          </button>
+          <button className="button button-secondary" type="button" onClick={runInThisTab}>
+            Run in this tab instead
+          </button>
+        </div>
+        <p className="intro-microcopy">
+          The handoff expires in ten minutes. Do not paste the link into public messages or evidence
+          exports.
+        </p>
+      </section>
+    );
   }
 
   if (error) {

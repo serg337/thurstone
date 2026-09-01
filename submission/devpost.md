@@ -100,16 +100,17 @@ Testing instructions:
 2. Keep the default explicit-checkout case for the shortest path, or edit the request and the two
    agent-visible tool descriptions.
 3. Review the hidden owner contract separately from the projection the agent will receive, then
-   choose **Arm live agent test**.
-4. On `/demo/run`, use the built-in Browser (`@Browser`) in the latest ChatGPT desktop app with a
-   fresh GPT-5.6 Sol or Terra ChatGPT Work or Codex agent. The Chrome extension side chat is not the
-   Site Tools consumer. Send the exact request and let the built-in-browser agent choose one of the
-   two native Site Tools.
-5. Inspect expected versus observed behavior, canonical arguments, trusted state, ledger diff,
+   choose **Arm live agent test** and copy the opaque fresh-agent URL.
+4. Start a fresh GPT-5.6 Sol or Terra ChatGPT Work or Codex task in the latest ChatGPT desktop app.
+   Use its built-in Browser (`@Browser`) to open the copied URL. The Chrome extension side chat is
+   not the Site Tools consumer. The URL expires after ten minutes and should not be published.
+5. Verify the isolated run shows the request and two native Site Tools without showing the expected
+   tool or effect rubric. Send the exact request and let the fresh agent choose one tool.
+6. Inspect expected versus observed behavior, canonical arguments, trusted state, ledger diff,
    assertions, verdict, and deterministic next step.
-6. Save a PASS or ISSUE to **My Tests**, then open **Results** to see it before the unchanged 24/24
+7. Save a PASS or ISSUE to **My Tests**, then open **Results** to see it before the unchanged 24/24
    semantic reference and separate 3/3 integrity matrix.
-7. Use `/lab` only for the expert five-tool sandbox and historical native receipts.
+8. Use `/lab` only for the expert five-tool sandbox and historical native receipts.
 
 Public repository URL: pending final public release
 

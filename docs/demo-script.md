@@ -40,14 +40,16 @@ Say:
 > the request, fixture summary, and exactly two live tool descriptions—nothing that tells it which
 > answer Thurstone expects.
 
-Click **Arm live agent test**.
+Click **Arm live agent test**, then **Copy fresh-agent test URL**. Keep the opaque URL itself out of
+the recording.
 
 ## 1:08–1:33 — Bring your own agent
 
-On the isolated `/demo/run` page, show the frozen request and two-tool catalog. In the built-in
-Browser (`@Browser`) of the latest ChatGPT desktop app, use a fresh GPT-5.6 Sol or Terra ChatGPT Work
-or Codex agent. Send the exact request and let the agent invoke the native `checkout_request` Site
-Tool. Do not use Chrome extension side chat for this proof.
+Start a fresh GPT-5.6 Sol or Terra ChatGPT Work or Codex task in the latest ChatGPT desktop app. Use
+its built-in Browser (`@Browser`) to open the copied handoff. On the isolated `/demo/run` page, show
+the frozen request and two-tool catalog, then send the exact request and let the agent invoke the
+native `checkout_request` Site Tool. Do not use Chrome extension side chat for this proof. Do not
+show the owner contract in the fresh task before the call.
 
 Say:
 

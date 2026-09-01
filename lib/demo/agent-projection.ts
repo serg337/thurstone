@@ -30,7 +30,7 @@ const descriptorSchema = z
     name: z.enum(["order_review", "checkout_request"]),
     title: z.string().min(3).max(80),
     description: z.string().min(20).max(600),
-    inputSchema: projectionJsonSchema,
+    inputSchema: z.record(z.string(), projectionJsonSchema),
     annotations: z
       .object({
         readOnlyHint: z.boolean(),

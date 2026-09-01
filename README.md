@@ -56,12 +56,15 @@ enforcement or security certification.
 1. Open [the Demo](https://thurstone.invarra.ai/demo) and define one intended behavior in the
    six-step owner workflow.
 2. Review the hidden contract separately from the exact two-tool projection the agent will see.
-3. Choose **Arm live agent test** to hard-navigate into the isolated `/demo/run` document.
-4. In the latest ChatGPT desktop app, use its built-in Browser (`@Browser`) with a fresh GPT-5.6 Sol
-   or Terra ChatGPT Work or Codex agent. Do not use Chrome extension side chat for the Site Tools
-   proof.
-5. Send the frozen request and let the built-in-browser agent choose from the live catalog.
-6. Inspect the native tool, canonical arguments, trusted before/after state, ledger diff, verdict,
+3. Choose **Arm live agent test**, then copy the ten-minute opaque fresh-agent URL. Do not publish
+   or include that URL in evidence.
+4. Start a fresh GPT-5.6 Sol or Terra ChatGPT Work or Codex task in the latest ChatGPT desktop app.
+   Use its built-in Browser (`@Browser`) to open the copied URL. Do not use Chrome extension side
+   chat for the Site Tools proof.
+5. Send the frozen request. The isolated run receives the request and two-tool catalog before the
+   call, but not the owner's expected tool or effect rubric.
+6. Let the fresh agent choose from the live catalog, then inspect the native tool, canonical
+   arguments, trusted before/after state, ledger diff, verdict,
    and deterministic next step.
 7. Save a PASS or ISSUE as a browser-local regression case, then edit or rerun it without
    overwriting the original result.
