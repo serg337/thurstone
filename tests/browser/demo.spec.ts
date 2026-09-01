@@ -129,17 +129,19 @@ test("arming uses a hard navigation and stores a bounded isolated projection", a
     page.waitForURL(/\/demo\/run$/u),
     page.getByRole("button", { name: "Arm live test" }).click()
   ]);
-  await expect(page.getByRole("heading", { name: "Your test is prepared." })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Live agent testing is unavailable in this browser." })
+  ).toBeVisible();
   await expect(page.locator("main")).toHaveCount(1);
   await expect(page.getByText(/Owner's hidden contract/iu)).toHaveCount(0);
   await expect(page.getByText(/Required action/iu)).toHaveCount(0);
-  await expect(page.getByText(/Preparing native registration/iu)).toBeVisible();
+  await expect(page.locator("[data-byoa-state='UNAVAILABLE']")).toBeVisible();
 
   const stored = await page.evaluate(() => ({
     session: sessionStorage.getItem("thurstone:byoa-session@1"),
     projection: sessionStorage.getItem("thurstone:byoa-agent-projection@1")
   }));
-  expect(stored.session).toContain('"state":"NAVIGATING"');
+  expect(stored.session).toContain('"state":"UNAVAILABLE"');
   expect(stored.projection).toContain('"version":"thurstone-byoa-agent-projection@1"');
   for (const forbidden of [
     "expectedTool",

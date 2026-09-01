@@ -46,6 +46,7 @@ export function RegressionActions({
       createdAt: new Date().toISOString()
     });
     setSaved(entry);
+    window.dispatchEvent(new Event("thurstone:my-tests-change"));
     return entry;
   }
 

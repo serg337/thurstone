@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
 import { readFile } from "node:fs/promises";
-import path from "node:path";
 
 test("back, forward, and refresh preserve honest top-level document boundaries", async ({
   page
@@ -10,7 +9,7 @@ test("back, forward, and refresh preserve honest top-level document boundaries",
   await expect(page).toHaveURL(/\/demo$/u);
   await expect(
     page.getByRole("heading", {
-      name: "See whether intent becomes the permitted WebMCP action."
+      name: "Test Thurstone as a WebMCP owner."
     })
   ).toBeVisible();
   await page.goBack();
@@ -18,7 +17,9 @@ test("back, forward, and refresh preserve honest top-level document boundaries",
   await page.goForward();
   await expect(page).toHaveURL(/\/demo$/u);
   await page.reload();
-  await expect(page.getByRole("heading", { name: "One boundary in 60 seconds." })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Test Thurstone as a WebMCP owner." })
+  ).toBeVisible();
 });
 
 test("cold slow-network rendering honors reduced motion", async ({ page }) => {
@@ -29,11 +30,11 @@ test("cold slow-network rendering honors reduced motion", async ({ page }) => {
   });
   await page.goto(`/?cold=${Date.now()}`, { waitUntil: "domcontentloaded", timeout: 30_000 });
   await expect(page.getByRole("heading", { level: 1 })).toContainText(
-    "AI agents can operate websites.",
+    "Your WebMCP code can be correct.",
     { timeout: 20_000 }
   );
   const motion = await page
-    .getByRole("link", { name: "Test Thurstone", exact: true })
+    .getByRole("link", { name: "Test with your agent", exact: true })
     .evaluate((element) => {
       const style = getComputedStyle(element);
       return {
@@ -74,7 +75,7 @@ test("keyboard focus and live status announcements expose the deterministic path
 
 test("pre-unlock Lab DOM, transport, console, and storage omit frozen truth", async ({ page }) => {
   const manifest = JSON.parse(
-    await readFile(path.resolve(process.cwd(), "scripts/gate3-leakage-sentinels.json"), "utf8")
+    await readFile(new URL("../../scripts/gate3-leakage-sentinels.json", import.meta.url), "utf8")
   ) as { readonly sentinels: readonly string[] };
   const observed: string[] = [];
   const responseReads: Promise<void>[] = [];

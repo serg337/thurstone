@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 export const PRIMARY_NAVIGATION = Object.freeze([
   { href: "/demo", label: "Demo" },
   { href: "/results", label: "Results" },
+  { href: "/workflow", label: "Workflow" },
   { href: "/research", label: "Research" }
 ] as const);
 

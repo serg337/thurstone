@@ -2,84 +2,45 @@ import { HeroSignalBackdrop } from "@/components/hero-signal-backdrop";
 import { StatusPill } from "@/components/status-pill";
 import { SignalFlow, type SignalFlowStage } from "@/components/ui/signal-flow";
 
-const problemCards = Object.freeze([
-  Object.freeze({
-    number: "01",
-    title: "Selection",
-    text: "Did the agent choose the intended tool—or ask when the request was unclear?"
-  }),
-  Object.freeze({
-    number: "02",
-    title: "Arguments",
-    text: "Did the call include the requested values—and exclude forbidden ones?"
-  }),
-  Object.freeze({
-    number: "03",
-    title: "Effects",
-    text: "Did trusted state change exactly once, in the permitted way?"
-  })
-]);
-
 const flowStages: readonly SignalFlowStage[] = Object.freeze([
-  Object.freeze({
-    title: "Human contract",
-    summary: "Declare the intended action, allowed effects, and forbidden effects.",
+  {
+    title: "Define",
+    summary: "Turn intended meaning into a contract.",
     detail:
-      "The contract is fixed before the test, including arguments, replay policy, and prohibited outcomes."
-  }),
-  Object.freeze({
-    title: "Agent decision",
-    summary: "A fresh agent context decides what the request requires.",
-    detail:
-      "Expected answers stay outside the agent context so the contract cannot instruct the decision."
-  }),
-  Object.freeze({
+      "Declare the required tool, arguments, allowed effects, forbidden effects, and replay policy."
+  },
+  {
+    title: "Agent decides",
+    summary: "Your supported agent sees only the request and live tools.",
+    detail: "The owner’s expected answer stays outside the agent-visible surface."
+  },
+  {
     title: "Native WebMCP",
-    summary: "Run any selected tool through the page’s live catalog.",
-    detail: "Thurstone records the tool, arguments, result, and exact application build."
-  }),
-  Object.freeze({
-    title: "Trusted state",
-    summary: "Check before-and-after state independently of the tool response.",
-    detail: "A tool’s success message is never the verdict; observed state and ledger effects are."
-  }),
-  Object.freeze({
-    title: "Pass/fail receipt",
-    summary: "Compare the observed decision and effects with the contract.",
-    detail: "Each assertion resolves to a clear pass or issue with its evidence source."
-  })
+    summary: "Observe the first admitted tool invocation.",
+    detail: "Thurstone records the native tool, raw and canonical arguments, build, and catalog."
+  },
+  {
+    title: "Verify reality",
+    summary: "Check trusted state and ledger independently.",
+    detail: "A tool response never decides the verdict; the site-owned state and ledger do."
+  },
+  {
+    title: "Diagnose",
+    summary: "See what failed and where to investigate.",
+    detail:
+      "Deterministic facts, qualified hypotheses, and a concrete rerun criterion preserve the case."
+  }
 ]);
 
-const examples = Object.freeze([
-  Object.freeze({
-    request: "“Review my order.”",
-    behavior: "Read the final summary",
-    tool: "order_review",
-    invariant: "Cart and checkout state remain unchanged.",
-    state: "pass"
-  }),
-  Object.freeze({
-    request: "“I’m considering checkout.”",
-    behavior: "Ask for confirmation",
-    tool: "no tool call",
-    invariant: "No checkout request is created.",
-    state: "pass"
-  }),
-  Object.freeze({
-    request: "Checkout plus a privileged server field",
-    behavior: "Reject the invocation",
-    tool: "checkout_request",
-    invariant: "No ledger or trusted-state mutation.",
-    state: "blocked"
-  }),
-  Object.freeze({
-    request: "The same checkout operation, repeated",
-    behavior: "Treat the replay as a duplicate",
-    tool: "checkout_request",
-    invariant: "Exactly one permitted transition.",
-    state: "blocked"
-  })
-]);
+const lifecycleUses = [
+  "Before the first launch",
+  "Before every WebMCP change",
+  "After changing tool descriptions or schemas",
+  "When changing models or agent providers",
+  "After browser or WebMCP updates",
+  "To reproduce an agent mistake",
+  "As a scheduled regression suite after launch"
+] as const;
 
 export default function HomePage() {
   return (
@@ -87,89 +48,150 @@ export default function HomePage() {
       <section className="intro-hero" aria-labelledby="intro-title">
         <HeroSignalBackdrop />
         <div className="intro-copy">
-          <p className="eyebrow">Semantic judge for WebMCP</p>
+          <p className="eyebrow">Semantic release testing for WebMCP</p>
           <h1 id="intro-title">
-            AI agents can operate websites.
-            <span>Thurstone verifies what they actually do.</span>
+            Your WebMCP code can be correct.
+            <span>The agent can still choose the wrong action.</span>
           </h1>
           <p className="intro-lede">
-            Turn a website owner’s expectations into a testable contract. Thurstone runs it through
-            live WebMCP and checks the permitted effect—and that prohibited effects did not occur.
+            Thurstone lets website owners define what a request should mean, test it with a real
+            agent, and verify what the site actually changed—before that behavior reaches users.
           </p>
           <div className="button-row intro-actions" aria-label="Start with Thurstone">
             <a className="button button-primary" href="/demo">
-              Test Thurstone
+              Test with your agent
             </a>
             <a className="button button-secondary" href="/results">
               See verified results
             </a>
           </div>
           <p className="intro-microcopy">
-            No account · synthetic data · guided path works without WebMCP
+            No account · safe reference checkout · bring your own supported ChatGPT agent
           </p>
         </div>
       </section>
 
       <section className="intro-section" aria-labelledby="problem-title">
         <div className="intro-section-heading">
-          <p className="eyebrow">The missing test</p>
-          <h2 id="problem-title">Publishing a tool is not the same as proving its meaning.</h2>
+          <p className="eyebrow">The bug ordinary tests miss</p>
+          <h2 id="problem-title">
+            The missing failure lives between the user’s words and your code.
+          </h2>
           <p>
-            Handler tests prove a tool can run. Thurstone verifies whether natural-language intent
-            becomes the approved WebMCP action and effect.
+            A handler can execute perfectly and still be the wrong action for what the user meant.
           </p>
         </div>
-        <div className="problem-grid">
-          {problemCards.map((card) => (
-            <article key={card.title}>
-              <span>{card.number}</span>
-              <h3>{card.title}</h3>
-              <p>{card.text}</p>
-            </article>
-          ))}
+        <div
+          className="semantic-failure-example"
+          role="group"
+          aria-label="Semantic failure example"
+        >
+          <div>
+            <span>User</span>
+            <strong>“I’m considering checkout.”</strong>
+          </div>
+          <div>
+            <span>Agent</span>
+            <strong>Calls `checkout_request`</strong>
+          </div>
+          <div>
+            <span>Handler</span>
+            <strong>Executes correctly</strong>
+          </div>
+          <div>
+            <span>Site</span>
+            <strong>Creates a pending checkout</strong>
+          </div>
+          <div data-outcome="issue">
+            <span>Verdict</span>
+            <strong>The code worked. The behavior was wrong.</strong>
+          </div>
         </div>
+        <p className="semantic-failure-payoff">
+          <strong>Unit tests prove that a tool works.</strong> Thurstone tests whether it should
+          have been called.
+        </p>
       </section>
 
-      <section className="intro-section" aria-labelledby="flow-title">
+      <section className="intro-section" aria-labelledby="mechanism-title">
         <div className="intro-section-heading">
-          <p className="eyebrow">From intention to evidence</p>
-          <h2 id="flow-title">From human intent to verified effect.</h2>
-          <p>The contract stays separate from the agent, then meets the evidence at the verdict.</p>
+          <p className="eyebrow">The product mechanism</p>
+          <h2 id="mechanism-title">Turn intent into a release test.</h2>
+          <p>Human contract → agent decision → native WebMCP → trusted reality → next action.</p>
         </div>
         <SignalFlow stages={flowStages} />
       </section>
 
-      <section className="intro-section" aria-labelledby="examples-title">
+      <section className="intro-section actionable-failure" aria-labelledby="diagnosis-title">
         <div className="intro-section-heading">
-          <h2 id="examples-title">The same catalog can require different behavior.</h2>
+          <p className="eyebrow">Actionable failure</p>
+          <h2 id="diagnosis-title">An issue should tell you where to look next.</h2>
+          <p>
+            Thurstone identifies which tested layer diverged, shows the evidence, and recommends
+            what to investigate. You make the change; Thurstone reruns the contract to verify it.
+          </p>
         </div>
-        <div className="example-grid">
-          {examples.map((example) => (
-            <article className="example-card" data-state={example.state} key={example.request}>
-              <p className="example-request">{example.request}</p>
-              <h3>{example.behavior}</h3>
-              <code>{example.tool}</code>
-              <p>{example.invariant}</p>
-            </article>
+        <article className="diagnosis-example-card">
+          <span>Wrong tool selected</span>
+          <h3>Expected `checkout_request`; observed `order_review`.</h3>
+          <p>
+            No checkout transition occurred. The evidence places the mismatch at tool selection.
+          </p>
+          <strong>
+            Investigate whether the descriptions clearly distinguish read-only review from explicit
+            checkout authorization, then rerun the same case.
+          </strong>
+          <small>
+            This is an investigation hypothesis—not a claim about the agent’s private reasoning.
+          </small>
+        </article>
+      </section>
+
+      <section className="intro-section" aria-labelledby="lifecycle-title">
+        <div className="intro-section-heading">
+          <p className="eyebrow">Semantic regression</p>
+          <h2 id="lifecycle-title">Run Thurstone whenever meaning can drift.</h2>
+        </div>
+        <div className="lifecycle-grid">
+          {lifecycleUses.map((use) => (
+            <article key={use}>{use}</article>
           ))}
         </div>
+        <div className="release-loop" aria-label="WebMCP release loop">
+          <strong>Build or change WebMCP</strong>
+          <span aria-hidden="true">→</span>
+          <strong>Run Thurstone safely</strong>
+          <span aria-hidden="true">→</span>
+          <strong>Pass: release · Issue: investigate and rerun</strong>
+        </div>
+      </section>
+
+      <section className="intro-final-cta" aria-labelledby="live-invitation-title">
+        <p className="eyebrow">Live challenge experience</p>
+        <h2 id="live-invitation-title">Don’t watch a demo. Run one with your own agent.</h2>
+        <p>
+          Act as a WebMCP owner. Define the contract, arm the safe reference site, ask ChatGPT to
+          act, and see whether the real effect matches what you intended.
+        </p>
+        <a className="button button-primary" href="/demo">
+          Build a contract
+        </a>
       </section>
 
       <section className="intro-section proof-section" aria-labelledby="proof-title">
         <div className="intro-section-heading">
-          <p className="eyebrow">Current verified evidence</p>
-          <h2 id="proof-title">Verified against the live WebMCP boundary.</h2>
-          <p>Semantic behavior and invocation integrity answer different questions.</p>
+          <p className="eyebrow">Verified reference evidence</p>
+          <h2 id="proof-title">A working product, backed by separate test matrices.</h2>
         </div>
         <div className="proof-grid">
           <article className="proof-card proof-semantic">
             <StatusPill state="ready">Verified semantic run</StatusPill>
             <p className="proof-score">24/24</p>
-            <h3>Semantic behavior</h3>
-            <p>24 approved behaviors passed · 20 native calls · 4 correct clarifications</p>
+            <h3>Semantic behaviors</h3>
+            <p>24 provider decisions · 20 native calls · 4 correct clarifications</p>
           </article>
           <div className="proof-separator" aria-label="Separate test matrices">
-            <span>Separate test matrices</span>
+            <span>Separate</span>
           </div>
           <article className="proof-card proof-integrity">
             <StatusPill state="ready">Provider-free native tests</StatusPill>
@@ -182,32 +204,20 @@ export default function HomePage() {
           <a className="button button-primary" href="/results">
             Inspect the results
           </a>
+          <a className="button button-secondary" href="/workflow">
+            See the workflow
+          </a>
         </div>
       </section>
 
-      <aside className="intro-scope" aria-label="Thurstone scope">
-        <strong>Scope matters.</strong>
+      <aside className="intro-scope" aria-label="Thurstone challenge scope">
+        <strong>Challenge scope</strong>
         <p>
-          Thurstone verifies a declared contract and tested build. It is not runtime enforcement,
-          certification, guaranteed security, or proof about arbitrary websites.
+          This experience uses Thurstone’s synthetic reference checkout. Customer deployments would
+          connect the same workflow to their own catalog, test environment, and trusted-state
+          source. Thurstone tests releases; it does not intercept live customer sessions.
         </p>
       </aside>
-
-      <section className="intro-final-cta" aria-labelledby="final-cta-title">
-        <h2 id="final-cta-title">Test a WebMCP boundary yourself.</h2>
-        <p>Follow the guided example, define your own contract, or use the live sandbox.</p>
-        <div className="button-row">
-          <a className="button button-primary" href="/demo#guided-demo">
-            Start guided demo
-          </a>
-          <a className="button button-secondary" href="/demo#contract-workshop">
-            Open Contract Workshop
-          </a>
-          <a className="button button-secondary" href="/results">
-            View Results
-          </a>
-        </div>
-      </section>
     </div>
   );
 }

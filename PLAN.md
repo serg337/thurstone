@@ -23,7 +23,7 @@
 5. **M4 — Verdict, diagnosis, and regression loop: PASS**
    - Produce honest pass/issue/incomplete/unavailable results, deterministic next steps, and bounded
      browser-local save/export/edit/rerun behavior.
-6. **M5 — Homepage, Results, and Workflow**
+6. **M5 — Homepage, Results, and Workflow: PASS**
    - Ship the semantic-release sales journey, My Tests-first Results, and honest current/future
      Workflow page.
 7. **M6 — Qualification and native production proof**

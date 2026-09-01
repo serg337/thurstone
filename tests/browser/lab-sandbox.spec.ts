@@ -732,8 +732,7 @@ test("cross-surface navigation destroys Lab state and opens a clean document", a
 
   await page.getByRole("link", { name: "Demo", exact: true }).click();
   await expect(page).toHaveURL(/\/demo$/u);
-  await page.getByRole("link", { name: "Open Sandbox", exact: true }).click();
-  await page.getByRole("link", { name: "Open sandbox", exact: true }).click();
+  await page.goto("/lab");
   await expect(page).toHaveURL(/\/lab$/u);
   await expect(page.locator('[data-readiness-status="consumer-ready"]')).toBeVisible();
   await expect(mug.getByText("Current × 2", { exact: true })).toBeVisible();

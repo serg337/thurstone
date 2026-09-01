@@ -91,7 +91,7 @@ test("Studio and Demo navigation replaces the top-level document", async ({ page
     .toBeNull();
   await expect(
     page.getByRole("heading", {
-      name: "See whether intent becomes the permitted WebMCP action."
+      name: "Test Thurstone as a WebMCP owner."
     })
   ).toBeVisible();
 });
