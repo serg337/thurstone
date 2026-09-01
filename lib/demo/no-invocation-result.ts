@@ -13,6 +13,7 @@ export async function createNoInvocationResult(input: {
   readonly armedAt: string;
   readonly completedAt: string;
   readonly detail: string;
+  readonly previousResultDigest?: string | null;
 }): Promise<ByoaDemoResultV2> {
   const assertion: DemoAssertionV2 = {
     assertionId: "runtime.native-invocation-observed",
@@ -61,6 +62,6 @@ export async function createNoInvocationResult(input: {
     manifestHash: input.environment.manifestHash,
     armedAt: input.armedAt,
     completedAt: input.completedAt,
-    previousResultDigest: null
+    previousResultDigest: input.previousResultDigest ?? null
   });
 }

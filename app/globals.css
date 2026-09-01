@@ -4327,6 +4327,113 @@ textarea::placeholder {
   margin-top: 1rem;
 }
 
+.diagnostic-result,
+.regression-actions {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: rgba(3, 14, 20, 0.68);
+  border: 1px solid var(--ts-line);
+  border-radius: var(--radius-small);
+}
+
+.diagnostic-result > h2,
+.regression-actions > h2 {
+  margin: 0;
+  color: var(--ts-ice);
+  font-size: clamp(1.4rem, 3vw, 2.2rem);
+}
+
+.diagnostic-result > p,
+.diagnostic-investigation p,
+.diagnostic-next-step small {
+  color: var(--ts-text-muted);
+  line-height: 1.55;
+}
+
+.diagnostic-facts {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.8rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.diagnostic-facts li {
+  padding: 0.65rem;
+  color: var(--ts-silver);
+  background: rgba(201, 223, 235, 0.035);
+  border-left: 2px solid var(--ts-silver);
+}
+
+.diagnostic-investigation,
+.diagnostic-next-step {
+  margin-top: 0.85rem;
+  padding: 0.8rem;
+  background: rgba(0, 217, 255, 0.045);
+  border: 1px solid rgba(54, 236, 255, 0.16);
+  border-radius: 8px;
+}
+
+.diagnostic-investigation h3 {
+  margin: 0;
+  color: var(--ts-ice);
+}
+
+.diagnostic-next-step span,
+.diagnostic-next-step strong,
+.diagnostic-next-step small {
+  display: block;
+}
+
+.diagnostic-next-step span {
+  color: var(--ts-cyan-bright);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.diagnostic-next-step strong {
+  margin-top: 0.4rem;
+  color: var(--ts-ice);
+  line-height: 1.5;
+}
+
+.diagnostic-next-step small {
+  margin-top: 0.4rem;
+}
+
+.diagnostic-release-guidance {
+  padding-left: 0.7rem;
+  border-left: 2px solid var(--ts-cyan);
+}
+
+.diagnostic-replay-note {
+  padding: 0.65rem;
+  background: rgba(201, 223, 235, 0.035);
+  border-radius: 6px;
+}
+
+.diagnostic-result > details {
+  color: var(--ts-cyan);
+}
+
+.diagnostic-result > details ul {
+  color: var(--ts-text-muted);
+  line-height: 1.55;
+}
+
+.regression-actions .button-row {
+  margin-top: 0.85rem;
+}
+
+.regression-case-id {
+  display: block;
+  margin-top: 0.75rem;
+  color: var(--ts-text-faint);
+  font-size: 0.7rem;
+  overflow-wrap: anywhere;
+}
 @keyframes pulse {
   0%,
   100% {

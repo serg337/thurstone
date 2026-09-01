@@ -123,6 +123,7 @@ export async function evaluateByoaEnvironment(input: {
   readonly environment: ByoaAgentEnvironment;
   readonly armedAt: string;
   readonly completedAt: string;
+  readonly previousResultDigest?: string | null;
 }): Promise<ByoaDemoResultV2> {
   const { session, environment } = input;
   const ledger = environment.ledger.snapshot();
@@ -354,6 +355,6 @@ export async function evaluateByoaEnvironment(input: {
     manifestHash: environment.manifestHash,
     armedAt: input.armedAt,
     completedAt: input.completedAt,
-    previousResultDigest: null
+    previousResultDigest: input.previousResultDigest ?? null
   });
 }

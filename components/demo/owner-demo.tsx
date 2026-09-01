@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ZodError } from "zod";
 
 import { ContractReview } from "@/components/demo/contract-review";
@@ -21,6 +21,8 @@ import {
   writeByoaAgentSession
 } from "@/lib/demo/agent-session";
 import { writeAgentVisibleRunProjection } from "@/lib/demo/agent-projection";
+import { clearContractDraftSeed, readContractDraftSeed } from "@/lib/demo/contract-draft-seed";
+import { clearRegressionRerun } from "@/lib/demo/regression-rerun";
 import { CHECKOUT_REQUEST_METADATA } from "@/lib/webmcp/checkout-request-tool";
 import { ORDER_REVIEW_METADATA } from "@/lib/webmcp/order-review-tool";
 
@@ -67,6 +69,27 @@ export function OwnerDemo() {
   }>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+
+  useEffect(() => {
+    const seed = readContractDraftSeed(window.sessionStorage);
+    if (!seed) return;
+    queueMicrotask(() => {
+      setTools(
+        seed.descriptors.map((descriptor) => ({
+          name: descriptor.name,
+          title: descriptor.title,
+          description: descriptor.description,
+          readOnly: descriptor.name === "order_review"
+        })) as unknown as readonly [ToolDraft, ToolDraft]
+      );
+      setTitle(seed.title ?? "");
+      setRequest(seed.request);
+      setExpectedTool(seed.expectedTool);
+      setCompiled(undefined);
+      setStep(2);
+    });
+    clearContractDraftSeed(window.sessionStorage);
+  }, []);
 
   function updateTool(name: ByoaToolName, field: "title" | "description", value: string) {
     setTools(
@@ -170,6 +193,7 @@ export function OwnerDemo() {
         reasonCode: "owner_armed_live_test"
       });
       writeByoaAgentSession(window.sessionStorage, navigating);
+      clearRegressionRerun(window.sessionStorage);
       writeAgentVisibleRunProjection(window.sessionStorage, agentVisibleRunProjection(navigating));
       window.location.replace("/demo/run");
     } catch (caught) {

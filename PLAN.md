@@ -17,10 +17,10 @@
      taxonomy, precedence, and v1 compatibility tests.
 3. **M2 — Unified owner wizard: PASS**
    - Replace the primary Demo modes with one six-step owner workflow and frozen agent projection.
-4. **M3 — Isolated BYOA run**
+4. **M3 — Isolated BYOA run: PASS**
    - Hard-navigate to `/demo/run`, register one frozen two-tool catalog, admit one native call, and
      verify trusted state and ledger evidence.
-5. **M4 — Verdict, diagnosis, and regression loop**
+5. **M4 — Verdict, diagnosis, and regression loop: PASS**
    - Produce honest pass/issue/incomplete/unavailable results, deterministic next steps, and bounded
      browser-local save/export/edit/rerun behavior.
 6. **M5 — Homepage, Results, and Workflow**

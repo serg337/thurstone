@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { ByoaRunner } from "@/components/demo/byoa-runner";
+import { ByoaRunner } from "@/components/demo/byoa-runner-live";
 
 export const metadata: Metadata = {
   title: "Live test · Demo",

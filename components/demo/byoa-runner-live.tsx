@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { DiagnosticResult } from "@/components/demo/diagnostic-result";
+import { RegressionActions } from "@/components/demo/regression-actions";
 import { FixtureInspector } from "@/components/demo/fixture-inspector";
 import type { ByoaAgentEnvironment } from "@/lib/demo/agent-environment";
 import { createByoaAgentEnvironment } from "@/lib/demo/agent-environment";
@@ -21,6 +23,7 @@ import { byoaContractDigest, verifyByoaContract } from "@/lib/demo/contract-v2";
 import { evaluateByoaEnvironment } from "@/lib/demo/evaluator";
 import { createNoInvocationResult } from "@/lib/demo/no-invocation-result";
 import type { ByoaDemoResultV2 } from "@/lib/demo/result-v2";
+import { readRegressionRerun, type RegressionRerunV1 } from "@/lib/demo/regression-rerun";
 import { detectWebMcpCapabilities } from "@/lib/webmcp/capabilities";
 import { webMcpRegistryManager, type RegistryStatus } from "@/lib/webmcp/registry-manager";
 
@@ -49,12 +52,14 @@ export function ByoaRunner() {
   const [result, setResult] = useState<ByoaDemoResultV2>();
   const [error, setError] = useState<string>();
   const [copied, setCopied] = useState(false);
+  const [rerunCaseDigest, setRerunCaseDigest] = useState<string | null>(null);
   const sessionRef = useRef<ByoaAgentSessionV1 | undefined>(undefined);
   const environmentPromiseRef = useRef<Promise<ByoaAgentEnvironment> | undefined>(undefined);
   const releaseRef = useRef<{ release: () => void }>({ release: () => undefined });
   const terminalRef = useRef(false);
   const armedAtRef = useRef<string | undefined>(undefined);
 
+  const rerunRef = useRef<RegressionRerunV1 | null>(null);
   function persistSession(session: ByoaAgentSessionV1): void {
     sessionRef.current = session;
     setSessionState(session.state);
@@ -108,7 +113,8 @@ export function ByoaRunner() {
         session: evaluating,
         environment,
         armedAt: armedAtRef.current ?? evaluating.updatedAt,
-        completedAt: new Date().toISOString()
+        completedAt: new Date().toISOString(),
+        previousResultDigest: rerunRef.current?.previousResultDigest ?? null
       });
       await persistTerminal(terminalResult, evaluating);
     }
@@ -127,23 +133,27 @@ export function ByoaRunner() {
         verdict,
         armedAt: armedAtRef.current ?? current.updatedAt,
         completedAt: new Date().toISOString(),
-        detail
+        detail,
+        previousResultDigest: rerunRef.current?.previousResultDigest ?? null
       });
       await persistTerminal(terminalResult, current);
     }
 
     async function start(): Promise<void> {
       try {
-        const [storedSession, storedProjection, storedResult] = await Promise.all([
+        const [storedSession, storedProjection, storedResult, storedRerun] = await Promise.all([
           Promise.resolve(readByoaAgentSession(window.sessionStorage)),
           Promise.resolve(readAgentVisibleRunProjection(window.sessionStorage)),
-          readByoaResult(window.sessionStorage)
+          readByoaResult(window.sessionStorage),
+          Promise.resolve(readRegressionRerun(window.sessionStorage))
         ]);
         if (disposed) return;
         if (!storedSession || !storedProjection) {
           throw new Error("No armed test exists in this tab.");
         }
         sessionRef.current = storedSession;
+        rerunRef.current = storedRerun;
+        setRerunCaseDigest(storedRerun?.caseDigest ?? null);
         setSessionState(storedSession.state);
         setProjection(storedProjection);
         if (Date.parse(storedProjection.expiresAt) <= Date.now()) {
@@ -340,6 +350,8 @@ export function ByoaRunner() {
             <small>{result.ledgerDiff.stateTransitionCount} state transition(s)</small>
           </article>
         </div>
+        <DiagnosticResult result={result} />
+        <RegressionActions result={result} existingCaseDigest={rerunCaseDigest} />
         <details>
           <summary>View terminal evidence</summary>
           <pre>{JSON.stringify(result, null, 2)}</pre>
