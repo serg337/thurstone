@@ -1,11 +1,30 @@
 # Official source check
 
-Initial check: **2026-08-26**; Chrome 151 runtime clarification: **2026-08-27**; full pre-evidence-build primary-source recheck: **2026-08-29**
+Initial check: **2026-08-26**; Chrome 151 runtime clarification: **2026-08-27**; full pre-evidence-build primary-source recheck: **2026-08-29**; walkthrough-implementation recheck: **2026-09-01**
 Scope: current primary official WebMCP Challenge, OpenAI Site Tools, WebMCP draft, and Chrome implementation guidance only.
 
 The authenticated Devpost draft form was inventoried read-only on 2026-08-26. Required fields cover project name/elevator pitch, public project story and technology tags, try-it links/media/video, entrant/status/country, live URL and optional private testing instructions, public licensed repository, tested WebMCP clients, AI development tools, and learning/career-value questions. The 2026-08-29 public-source recheck did not reopen, edit, certify, or submit that authenticated form. Its known inventory remains valid as a preparation aid, while dynamic choices, final acknowledgments, and the actual receipt require the reserved Gate 9 authenticated recheck.
 
 Every URL below resolved successfully to current first-party content on 2026-08-29; the OpenAI supported-countries URL redirected from `platform.openai.com` to the current `developers.openai.com` documentation. Material requirements are mapped to planned or completed public evidence in [`CHALLENGE.md`](../CHALLENGE.md). No unofficial post, search snippet, secondary article, or generated summary is treated as authority.
+
+## Walkthrough-implementation recheck · 2026-09-01
+
+The Devpost Overview, Rules, Resources/FAQ, Dates, and Updates pages and the official OpenAI Site
+Tools, WebMCP draft, and Chrome implementation/security/evaluation/DevTools pages were reopened
+before the walkthrough successor. No material rule, deadline, artifact, judging, client, API, or
+security-guidance change requires a product-code change. The deadline remains September 3, 2026 at
+1:00 p.m. PDT (22:00 CEST); the working live URL, accurate description, public licensed repository,
+and public audio video shorter than three minutes remain required. The four judging criteria remain
+equally weighted. No authenticated Devpost field was changed.
+
+Official OpenAI guidance continues to identify the latest ChatGPT desktop app's built-in Browser
+with supported ChatGPT Work or Codex Sol/Terra models as the Site Tools consumer. It documents an
+“Open in ChatGPT” control on OpenAI-owned documentation pages, but no general public deep-link URL
+contract that a third-party site can safely synthesize and no agent-ready callback for a third-party
+document. Thurstone therefore will not invent a private link scheme or infer readiness: the fresh
+handoff must provide a complete copyable `@Browser Open <opaque-url>` command, and tool registration
+plus the bounded observation timer must begin only after an explicit **Start live observation**
+action. Opening the handoff in ordinary Chrome is preparation evidence only.
 
 ## Full 2026-08-29 recheck result
 
@@ -116,3 +135,4 @@ Do not remove an older check. Preserve a dated change record in the release/subm
 | 2026-08-27 | Chrome 151 runtime clarification recorded    | Verified serialized discovered schemas and supplied-title preservation in the M151 implementation and official browser tests; narrowed ToolProof normalization to schema transport only.                                                                                                                                                                                                                                                                                                                                                                                          |
 | 2026-08-29 | OpenAI Site Tools availability rechecked     | Official guidance still requires the latest ChatGPT desktop built-in browser and supports ChatGPT Work or Codex with GPT-5.6 Sol/Terra; Luna is disabled, Enterprise/Edu are unavailable, and rollout remains account-dependent. The built-in browser currently discovers top-level imperative JavaScript registrations, not declarative tools or iframe registrations, and performs a safety review for every invocation.                                                                                                                                                        |
 | 2026-08-29 | Full pre-evidence-build recheck complete     | Reopened every listed primary source and every FAQ entry. Current Rules now allow multiple unique/substantially different submissions; new Updates guidance permits human or AI-TTS narration and recommends an early working demo while reaffirming the deadline/artifacts/freeze. Dates conflict, FAQ typo, criteria, repo/license/live URL/video rules, OpenAI Site Tools, WebMCP draft, Chrome flag/API/security/eval/DevTools guidance, and Germany API eligibility otherwise remain materially unchanged. No implementation change or authenticated form mutation occurred. |
+| 2026-09-01 | Walkthrough-implementation recheck complete  | Reopened the current challenge and technical primary sources. No material rule or implementation change was found. Recorded the absence of a documented generic third-party ChatGPT deep-link contract or agent-ready signal and froze the manual full-command plus explicit-start design. No authenticated form mutation occurred.                                                                                                                                                                                                                                               |
