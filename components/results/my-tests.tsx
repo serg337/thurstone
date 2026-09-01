@@ -107,7 +107,7 @@ function TestSummary({
   );
 }
 
-export function MyTests() {
+export function MyTests({ hideWhenEmpty = false }: { readonly hideWhenEmpty?: boolean }) {
   const encoded = useSyncExternalStore(subscribe, snapshot, serverSnapshot);
   let current: ByoaDemoResultV2 | null = null;
   let entries: readonly SavedRegressionEntry[] = [];
@@ -159,6 +159,8 @@ export function MyTests() {
       </section>
     );
   }
+
+  if (hideWhenEmpty && !current && entries.length === 0) return null;
 
   return (
     <section className="my-tests" data-results-level="session" aria-labelledby="my-tests-title">

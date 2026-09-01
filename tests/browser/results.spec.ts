@@ -5,7 +5,7 @@ test("Results presents the current verified run without superseded comparison ev
 }) => {
   await page.goto("/results");
   await expect(
-    page.getByRole("heading", { name: "The cases you ran with your agent." })
+    page.getByRole("heading", { name: "Fresh-agent results and regression cases." })
   ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Every approved reference behavior passed." })
@@ -54,7 +54,7 @@ test("Results orders My Tests before separate 24/24 and 3/3 evidence", async ({ 
     .evaluateAll((elements) =>
       elements.map((element) => element.getAttribute("data-results-level"))
     );
-  expect(levels).toEqual(["session", "reference", "integrity"]);
+  expect(levels).toEqual(["session-v2", "reference", "integrity"]);
   await expect(page.getByText("24/24 semantic behaviors", { exact: true })).toBeVisible();
   await expect(page.getByText("3/3 integrity cases", { exact: true })).toBeVisible();
   await expect(page.getByText(/27\s*\/\s*27/u)).toHaveCount(0);
@@ -80,6 +80,8 @@ test("invalid My Tests data fails closed without hiding verified reference resul
     page.getByRole("heading", { name: "Every approved reference behavior passed." })
   ).toBeVisible();
   await page.getByRole("button", { name: "Clear invalid local data" }).click();
-  await expect(page.getByRole("heading", { name: "No local test yet." })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "No Contract v3 result in this browser session yet." })
+  ).toBeVisible();
   expect(await page.evaluate(() => sessionStorage.getItem("unrelated-test-key"))).toBe("preserve");
 });

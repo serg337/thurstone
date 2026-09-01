@@ -1,7 +1,7 @@
 "use client";
 
-import { OwnerDemo } from "@/components/demo/owner-demo";
+import { OwnerDemoV2 } from "@/components/demo/owner-demo-v2";
 
 export function DemoClient() {
-  return <OwnerDemo />;
+  return <OwnerDemoV2 />;
 }

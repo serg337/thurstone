@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { InvocationIntegritySummary } from "@/components/results/invocation-integrity-summary";
 import { MyTests } from "@/components/results/my-tests";
+import { MyTestsV2 } from "@/components/results/my-tests-v2";
 import { StatusPill } from "@/components/status-pill";
 import currentResult from "@/evidence/thurstone-current-result.json";
 
@@ -38,7 +39,8 @@ export default function ResultsPage() {
         </div>
       </header>
 
-      <MyTests />
+      <MyTestsV2 />
+      <MyTests hideWhenEmpty />
 
       <section
         className="results-reference"

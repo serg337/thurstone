@@ -4,15 +4,19 @@ import { installEmulatedConsumer } from "./support/emulated-consumer";
 
 async function advanceToContract(page: import("@playwright/test").Page) {
   await page.getByRole("button", { name: "Choose the test catalog" }).click();
-  await page.getByRole("button", { name: "Build the contract" }).click();
+  await page.getByRole("button", { name: "Build the contract suite" }).click();
 }
 
 async function advanceToReview(page: import("@playwright/test").Page) {
   await advanceToContract(page);
-  await page.getByRole("button", { name: "Review contract" }).click();
-  await expect(
-    page.getByRole("heading", { name: "One contract. One clean fixture. One admitted call." })
-  ).toBeVisible();
+  await page.getByLabel("Test-case name").fill("Request checkout");
+  await page
+    .getByLabel("Representative user request")
+    .fill("I am ready—request checkout for this cart.");
+  await page.getByLabel("What should the agent do?").selectOption("checkout_request");
+  await page.getByRole("button", { name: "Add test case" }).click();
+  await page.getByRole("button", { name: "Review and arm selected case" }).click();
+  await expect(page.getByRole("dialog", { name: /Arm “Request checkout”/u })).toBeVisible();
 }
 
 test("Demo presents one five-stage WebMCP-owner workflow without a model call", async ({
@@ -90,10 +94,12 @@ test("owner can edit and reset the exact two agent-visible descriptions", async 
   await expect(descriptions.first()).toHaveValue(
     "Return a read-only order summary and never create checkout state."
   );
-  await page.getByRole("button", { name: "Reset to verified default" }).first().click();
+  const reviewRow = page.locator('[data-tool-name="order_review"]');
+  await reviewRow.getByRole("button", { name: "Apply agent wording" }).click();
+  await reviewRow.getByRole("button", { name: "Reset to verified default" }).click();
   await expect(descriptions.first()).toHaveValue(/current final read-only order summary/iu);
-  await expect(page.getByText("order_review", { exact: true })).toBeVisible();
-  await expect(page.getByText("checkout_request", { exact: true })).toBeVisible();
+  await expect(page.getByText("order_review", { exact: true })).toHaveCount(2);
+  await expect(page.getByText("checkout_request", { exact: true })).toHaveCount(2);
 });
 
 test("contract authoring teaches tool, arguments, effects, and replay", async ({ page }) => {
@@ -101,14 +107,16 @@ test("contract authoring teaches tool, arguments, effects, and replay", async ({
   await advanceToContract(page);
 
   await expect(page.getByText("Stage 3 of 5", { exact: true })).toBeVisible();
-  await expect(page.getByText("Valid unique operation ID", { exact: true })).toBeVisible();
-  await expect(page.getByText("Pending checkout, once", { exact: true })).toBeVisible();
-  await expect(page.getByText("Exactly once", { exact: true })).toBeVisible();
-
-  await page.getByRole("radio", { name: /Review the order/iu }).check();
-  await expect(page.getByText("None", { exact: true })).toBeVisible();
-  await expect(page.getByText("Nothing", { exact: true })).toBeVisible();
-  await expect(page.getByText("Read-only", { exact: true })).toBeVisible();
+  await page.getByLabel("Test-case name").fill("Checkout authorization");
+  await page
+    .getByLabel("Representative user request")
+    .fill("I am ready—request checkout for this cart.");
+  await page.getByLabel("What should the agent do?").selectOption("checkout_request");
+  await expect(page.getByText(/One operation ID that is valid and unique/iu)).toBeVisible();
+  await expect(page.getByText("pending checkout", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Exactly-once policy/iu)).toBeVisible();
+  await page.getByRole("button", { name: "Add test case" }).click();
+  await expect(page.getByRole("heading", { name: "Checkout authorization" })).toBeVisible();
 });
 
 test("invalid agent-visible descriptor fails closed before review", async ({ page }) => {
@@ -118,24 +126,18 @@ test("invalid agent-visible descriptor fails closed before review", async ({ pag
     .getByLabel(/Agent-visible description/iu)
     .first()
     .fill("https://example.com unsafe");
-  await page.getByRole("button", { name: "Build the contract" }).click();
-  await page.getByRole("button", { name: "Review contract" }).click();
-  await expect(page.locator(".workshop-error")).toContainText(/plain synthetic text/iu);
-  await expect(page.getByText("Stage 3 of 5", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Apply agent wording" }).first().click();
+  await expect(page.getByText(/plain synthetic text/iu)).toBeVisible();
+  await expect(page.getByText("Stage 2 of 5", { exact: true })).toBeVisible();
 });
 
 test("review separates the hidden owner contract from the agent projection", async ({ page }) => {
   await page.goto("/demo");
   await advanceToReview(page);
 
-  await expect(page.getByRole("heading", { name: "What must happen" })).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "Request and two tools—no answer key" })
-  ).toBeVisible();
-  await expect(page.getByText("Create one pending checkout", { exact: true })).toBeVisible();
-  await expect(
-    page.getByText(/Expected behavior stays out of the agent-visible projection/iu)
-  ).toBeVisible();
+  await expect(page.getByText("Owner expects · hidden rubric")).toBeVisible();
+  await expect(page.getByText("Agent receives · no answer key")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Request plus the exact catalog" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Arm live test" })).toBeEnabled();
 });
 
@@ -144,30 +146,20 @@ test("arming uses a hard navigation and stores a bounded isolated projection", a
   await advanceToReview(page);
 
   await Promise.all([
-    page.waitForURL(/\/demo\/run#handoff-source$/u),
+    page.waitForURL(/\/demo\/run#handoff-source-v2$/u),
     page.getByRole("button", { name: "Arm live test" }).click()
   ]);
-  await expect(page.locator("[data-byoa-state='HANDOFF_SOURCE']")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Copy fresh-agent test URL" })).toBeVisible();
-  await expect(page.getByText(/Owner's hidden contract/iu)).toHaveCount(0);
-  await Promise.all([
-    page.waitForURL(/\/demo\/run$/u),
-    page.getByRole("button", { name: "Run in this tab instead" }).click()
-  ]);
-  await expect(
-    page.getByRole("heading", { name: "Live agent testing is unavailable in this browser." })
-  ).toBeVisible();
-  await expect(page.locator("main")).toHaveCount(1);
-  await expect(page.getByText(/Owner's hidden contract/iu)).toHaveCount(0);
-  await expect(page.getByText(/Required action/iu)).toHaveCount(0);
-  await expect(page.locator("[data-byoa-state='UNAVAILABLE']")).toBeVisible();
+  await expect(page.locator("[data-byoa-v2-state='HANDOFF_SOURCE']")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Copy @Browser command" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Run in this tab/iu })).toHaveCount(0);
+  await expect(page.getByText(/Owner expects|Expected action|Allowed effects/iu)).toHaveCount(0);
 
   const stored = await page.evaluate(() => ({
-    session: sessionStorage.getItem("thurstone:byoa-session@1"),
-    projection: sessionStorage.getItem("thurstone:byoa-agent-projection@1")
+    session: sessionStorage.getItem("thurstone:byoa-session@2"),
+    projection: sessionStorage.getItem("thurstone:byoa-agent-projection@2")
   }));
-  expect(stored.session).toContain('"state":"UNAVAILABLE"');
-  expect(stored.projection).toContain('"version":"thurstone-byoa-agent-projection@1"');
+  expect(stored.session).toContain('"state":"HANDOFF_ISSUED"');
+  expect(stored.projection).toContain('"version":"thurstone-byoa-agent-projection@2"');
   for (const forbidden of [
     "expectedTool",
     "argumentPredicate",

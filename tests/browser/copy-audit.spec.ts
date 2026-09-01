@@ -47,7 +47,7 @@ test("results and expert routes lead with conclusions before setup detail", asyn
     })
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "The cases you ran with your agent." })
+    page.getByRole("heading", { name: "Fresh-agent results and regression cases." })
   ).toBeVisible();
 
   await page.goto("/lab");

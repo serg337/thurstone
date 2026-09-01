@@ -3843,6 +3843,15 @@ textarea::placeholder {
   box-shadow: var(--ts-shadow);
 }
 
+.owner-demo-stage-wide {
+  width: 100%;
+}
+
+.owner-demo-stage-wide > .owner-fixture {
+  position: static;
+  margin-top: 1rem;
+}
+
 .owner-step > h2 {
   max-width: 800px;
   margin: 0;

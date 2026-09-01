@@ -1,0 +1,584 @@
+.builder {
+  display: grid;
+  gap: 1.5rem;
+  padding: clamp(1.25rem, 3vw, 2rem);
+  color: var(--ts-text);
+  background: linear-gradient(145deg, rgba(10, 28, 39, 0.96), rgba(3, 11, 16, 0.98));
+  border: 1px solid var(--ts-line);
+  border-radius: var(--radius);
+  box-shadow: var(--ts-shadow);
+}
+
+.header,
+.editorHeading,
+.visualizerHeading,
+.dialogHeader {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.header h2,
+.editor h3,
+.visualizer h3,
+.dialog h2,
+.dialog h3,
+.caseCard h4 {
+  margin: 0;
+  line-height: 1.16;
+  letter-spacing: -0.025em;
+}
+
+.header > div:first-child {
+  max-width: 760px;
+}
+
+.header > div > p:last-child,
+.dialogHeader p,
+.emptyState p,
+.executionBoundary p {
+  margin: 0.55rem 0 0;
+  color: var(--ts-text-muted);
+}
+
+.kicker,
+.ownerLabel,
+.agentLabel {
+  margin: 0 0 0.45rem;
+  color: var(--ts-cyan-bright);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.ownerLabel {
+  color: var(--ts-amber-bright);
+}
+
+.count {
+  display: flex;
+  align-items: baseline;
+  min-width: max-content;
+  padding: 0.62rem 0.75rem;
+  background: var(--ts-cyan-soft);
+  border: 1px solid var(--ts-line-strong);
+  border-radius: var(--radius-small);
+}
+
+.count strong {
+  color: var(--ts-cyan-bright);
+  font-size: 1.25rem;
+}
+
+.count span {
+  margin-left: 0.3rem;
+  color: var(--ts-text-muted);
+  font-size: 0.72rem;
+}
+
+.suiteName,
+.editor {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.suiteName {
+  max-width: 620px;
+}
+
+.suiteName label,
+.editor label,
+.arguments legend {
+  color: var(--ts-silver);
+  font-size: 0.76rem;
+  font-weight: 750;
+}
+
+.suiteName input,
+.editor input,
+.editor textarea,
+.editor select {
+  width: 100%;
+  color: var(--ts-text);
+  background: rgba(1, 8, 12, 0.75);
+  border: 1px solid rgba(156, 218, 242, 0.23);
+  border-radius: var(--radius-small);
+}
+
+.suiteName input,
+.editor input,
+.editor select {
+  min-height: 44px;
+  padding: 0.68rem 0.75rem;
+}
+
+.editor textarea {
+  min-height: 88px;
+  padding: 0.68rem 0.75rem;
+  resize: vertical;
+}
+
+.suiteName small,
+.fieldHelp,
+.arguments small {
+  color: var(--ts-text-faint);
+  font-size: 0.7rem;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(360px, 1.1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.editor,
+.visualizer {
+  padding: clamp(1rem, 2.4vw, 1.4rem);
+  background: rgba(3, 13, 19, 0.66);
+  border: 1px solid var(--ts-line);
+  border-radius: var(--radius-small);
+}
+
+.editorHeading,
+.visualizerHeading {
+  margin-bottom: 0.45rem;
+}
+
+.textButton,
+.caseActions button,
+.iconButton {
+  color: var(--ts-cyan-bright);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}
+
+.textButton,
+.caseActions button {
+  padding: 0.3rem;
+  font-size: 0.72rem;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.arguments {
+  margin: 0.3rem 0 0;
+  padding: 0.8rem;
+  border: 1px solid var(--ts-line);
+  border-radius: var(--radius-small);
+}
+
+.argumentGrid {
+  display: grid;
+  grid-template-columns: 1fr minmax(90px, 0.35fr);
+  gap: 0.7rem;
+  margin: 0.35rem 0;
+}
+
+.argumentGrid > div {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.argumentsNote,
+.isolationNote,
+.executionBoundary {
+  padding: 0.75rem;
+  background: rgba(0, 217, 255, 0.055);
+  border-left: 2px solid var(--ts-cyan);
+  border-radius: 0 var(--radius-small) var(--radius-small) 0;
+}
+
+.argumentsNote {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.argumentsNote span,
+.isolationNote {
+  color: var(--ts-text-muted);
+  font-size: 0.75rem;
+}
+
+.policyPreview,
+.caseSummary,
+.summaryList,
+.preflight dl {
+  display: grid;
+  gap: 0;
+  margin: 0.3rem 0 0;
+}
+
+.policyPreview > div,
+.caseSummary > div,
+.summaryList > div,
+.preflight dl > div {
+  display: grid;
+  grid-template-columns: minmax(92px, 0.38fr) 1fr;
+  gap: 0.65rem;
+  padding: 0.42rem 0;
+  border-bottom: 1px solid var(--ts-line);
+}
+
+.policyPreview dt,
+.caseSummary dt,
+.summaryList dt,
+.preflight dt {
+  color: var(--ts-text-faint);
+  font-size: 0.68rem;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.policyPreview dd,
+.caseSummary dd,
+.summaryList dd,
+.preflight dd {
+  margin: 0;
+  color: var(--ts-text-muted);
+  font-size: 0.73rem;
+  overflow-wrap: anywhere;
+}
+
+.policyPreview code,
+.caseSummary code,
+.summaryList code,
+.preflight code {
+  color: var(--ts-ice);
+}
+
+.error {
+  margin: 0;
+  padding: 0.7rem;
+  color: var(--ts-amber-bright);
+  background: var(--ts-amber-soft);
+  border: 1px solid rgba(255, 151, 0, 0.35);
+  border-radius: var(--radius-small);
+}
+
+.editorActions,
+.dialogActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 0.45rem;
+}
+
+.primaryButton,
+.secondaryButton,
+.armButton {
+  min-height: 42px;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.78rem;
+  font-weight: 780;
+  cursor: pointer;
+  border: 1px solid transparent;
+  border-radius: var(--radius-small);
+}
+
+.primaryButton,
+.armButton {
+  color: #001116;
+  background: linear-gradient(105deg, var(--ts-blue-bright), var(--ts-cyan-bright));
+  border-color: rgba(231, 248, 255, 0.28);
+}
+
+.secondaryButton {
+  color: var(--ts-ice);
+  background: rgba(7, 30, 42, 0.74);
+  border-color: var(--ts-line-strong);
+}
+
+.primaryButton:disabled,
+.armButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.visualizer {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.visualizerHeading > span {
+  color: var(--ts-text-faint);
+  font-size: 0.72rem;
+}
+
+.emptyState {
+  min-height: 150px;
+  padding: 1.1rem;
+  text-align: center;
+  border: 1px dashed var(--ts-line-strong);
+  border-radius: var(--radius-small);
+}
+
+.caseList {
+  display: grid;
+  gap: 0.7rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.caseCard {
+  padding: 0.9rem;
+  background: rgba(8, 27, 38, 0.74);
+  border: 1px solid var(--ts-line);
+  border-radius: var(--radius-small);
+}
+
+.caseCard[data-selected="true"] {
+  border-color: var(--ts-line-strong);
+  box-shadow: inset 3px 0 0 var(--ts-cyan);
+}
+
+.caseCard > header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.7rem;
+  align-items: start;
+}
+
+.caseCard header p,
+.agentCatalog p {
+  margin: 0.25rem 0 0;
+  color: var(--ts-text-muted);
+  font-size: 0.74rem;
+}
+
+.ordinal {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  color: var(--ts-bg-deep);
+  font-weight: 850;
+  place-items: center;
+  background: var(--ts-cyan-bright);
+  border-radius: 50%;
+}
+
+.selectedBadge {
+  padding: 0.24rem 0.4rem;
+  color: var(--ts-cyan-bright);
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: var(--ts-cyan-soft);
+  border: 1px solid var(--ts-line-strong);
+  border-radius: 999px;
+}
+
+.caseActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  align-items: center;
+  margin-top: 0.65rem;
+}
+
+.caseActions label {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+  margin-right: auto;
+  color: var(--ts-silver);
+  cursor: pointer;
+  font-size: 0.72rem;
+}
+
+.caseActions input {
+  width: auto;
+  min-height: auto;
+  accent-color: var(--ts-cyan);
+}
+
+.executionBoundary strong {
+  color: var(--ts-ice);
+}
+
+.executionBoundary p,
+.selectionHelp {
+  font-size: 0.73rem;
+}
+
+.armButton {
+  width: 100%;
+}
+
+.selectionHelp {
+  margin: -0.25rem 0 0;
+  color: var(--ts-amber-bright);
+  text-align: center;
+}
+
+.dialogBackdrop {
+  position: fixed;
+  z-index: 80;
+  display: grid;
+  padding: 1rem;
+  background: rgba(0, 4, 7, 0.82);
+  inset: 0;
+  overflow-y: auto;
+  place-items: center;
+  backdrop-filter: blur(10px);
+}
+
+.dialog {
+  width: min(980px, 100%);
+  max-height: calc(100vh - 2rem);
+  padding: clamp(1rem, 3vw, 1.5rem);
+  overflow-y: auto;
+  background: linear-gradient(145deg, var(--ts-surface-raised), var(--ts-bg-deep));
+  border: 1px solid var(--ts-line-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 35px 100px rgba(0, 0, 0, 0.72);
+}
+
+.iconButton {
+  width: 40px;
+  height: 40px;
+  font-size: 1.5rem;
+}
+
+.reviewColumns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin-top: 1rem;
+}
+
+.reviewColumns > section {
+  min-width: 0;
+  padding: 0.9rem;
+  background: rgba(2, 10, 15, 0.74);
+  border: 1px solid var(--ts-line);
+  border-radius: var(--radius-small);
+}
+
+.reviewColumns blockquote {
+  margin: 0.7rem 0;
+  padding: 0.7rem;
+  color: var(--ts-ice);
+  background: rgba(0, 217, 255, 0.05);
+  border-left: 2px solid var(--ts-cyan);
+}
+
+.agentCatalog,
+.preflight ul {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agentCatalog li {
+  padding: 0.6rem;
+  border: 1px solid var(--ts-line);
+  border-radius: var(--radius-small);
+}
+
+.agentCatalog strong,
+.agentCatalog code {
+  display: block;
+}
+
+.agentCatalog code {
+  color: var(--ts-cyan-bright);
+  font-size: 0.68rem;
+}
+
+.preflight {
+  margin-top: 0.8rem;
+  padding: 0.75rem;
+  border: 1px solid var(--ts-line);
+  border-radius: var(--radius-small);
+}
+
+.preflight summary {
+  color: var(--ts-silver);
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.preflight ul {
+  margin-top: 0.65rem;
+}
+
+.preflight li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.45rem;
+  color: var(--ts-text-muted);
+  font-size: 0.72rem;
+}
+
+.preflight li[data-state="ready"] strong {
+  color: var(--ts-cyan-bright);
+}
+
+.preflight li[data-state="blocked"] strong {
+  color: var(--ts-amber-bright);
+}
+
+.dialogActions {
+  justify-content: flex-end;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 860px) {
+  .workspace,
+  .reviewColumns {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .builder {
+    padding: 1rem;
+  }
+
+  .header,
+  .dialogHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .count {
+    width: fit-content;
+  }
+
+  .argumentGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .caseCard > header {
+    grid-template-columns: auto 1fr;
+  }
+
+  .selectedBadge {
+    grid-column: 2;
+    width: fit-content;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialogBackdrop {
+    backdrop-filter: none;
+  }
+}

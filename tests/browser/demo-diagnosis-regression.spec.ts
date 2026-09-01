@@ -1,144 +1,88 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
-import type { RuntimeModelContext } from "@/lib/webmcp/runtime";
+import { invokeFreshV2, openFreshV2, prepareV2Handoff, startFreshV2 } from "./support/demo-v2-flow";
 
-import { installEmulatedConsumer } from "./support/emulated-consumer";
-
-async function arm(page: Page) {
-  await page.goto("/demo");
-  await page.getByRole("button", { name: "Choose the test catalog" }).click();
-  await page.getByRole("button", { name: "Build the contract" }).click();
-  await page.getByRole("button", { name: "Review contract" }).click();
-  await Promise.all([
-    page.waitForURL(/\/demo\/run#handoff-source$/u),
-    page.getByRole("button", { name: "Arm live test" }).click()
-  ]);
-  await Promise.all([
-    page.waitForURL(/\/demo\/run$/u),
-    page.getByRole("button", { name: "Run in this tab instead" }).click()
-  ]);
-  await expect(page.locator("[data-byoa-state='ARMED']")).toBeVisible();
+async function passingResult(
+  context: import("@playwright/test").BrowserContext,
+  owner: import("@playwright/test").Page
+) {
+  const fresh = await openFreshV2(context, await prepareV2Handoff(owner));
+  await startFreshV2(fresh);
+  await invokeFreshV2(fresh, "checkout_request", { operationId: "diagnosis_pass_0001" });
+  await expect(fresh.locator("[data-byoa-v2-state='PASS']")).toBeVisible();
+  return fresh;
 }
 
-async function invoke(page: Page, name: "order_review" | "checkout_request", operationId?: string) {
-  await page.evaluate(
-    async ({ name, operationId }) => {
-      const context = document.modelContext as RuntimeModelContext | undefined;
-      if (!context?.getTools || !context.executeTool) throw new Error("Consumer unavailable");
-      const tools = await context.getTools();
-      const selected = tools.find((tool) => tool.name === name);
-      if (!selected) throw new Error(`Missing tool: ${name}`);
-      await context.executeTool(selected, JSON.stringify(operationId ? { operationId } : {}), {
-        signal: new AbortController().signal
-      });
-    },
-    { name, operationId }
-  );
-}
-
-test("PASS explains verified facts, replay scope, and saves/exports the regression case", async ({
-  page
+test("PASS explains trusted facts, replay scope, and saves/exports Result v3", async ({
+  context,
+  page: owner
 }) => {
-  await installEmulatedConsumer(page);
-  await arm(page);
-  await invoke(page, "checkout_request", "byoa_regression_checkout_0001");
-  await expect(page.locator("[data-byoa-state='PASS']")).toBeVisible();
-  await expect(page.getByText("What Thurstone verified", { exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "No mismatch to investigate" })).toBeVisible();
+  const fresh = await passingResult(context, owner);
   await expect(
-    page.getByText(/Replay was not measured inside this one-call BYOA trial/iu)
+    fresh.getByRole("heading", { name: "Why Thurstone reached this verdict" })
   ).toBeVisible();
-
-  await page.getByRole("button", { name: "Save as regression test" }).click();
-  await expect(page.getByRole("button", { name: "Saved in My Tests" })).toBeVisible();
-  const saved = await page.evaluate(() => sessionStorage.getItem("thurstone:my-tests@1"));
-  expect(saved).toContain('"version":"thurstone-my-tests@1"');
-  expect(saved).toContain('"results":[');
-
-  const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Export result JSON" }).click();
+  await expect(fresh.getByText(/Replay was not measured in this one-call trial/iu)).toBeVisible();
+  await fresh.getByRole("button", { name: "Save as regression" }).click();
+  await expect(fresh.getByRole("button", { name: "Saved as regression" })).toBeVisible();
+  const downloadPromise = fresh.waitForEvent("download");
+  await fresh.getByRole("button", { name: "Export Result v3 JSON" }).click();
   const download = await downloadPromise;
-  expect(download.suggestedFilename()).toMatch(/^thurstone-byoa-/u);
+  expect(download.suggestedFilename()).toMatch(/^thurstone-result-v3-/u);
+  await fresh.close();
 });
 
-test("ISSUE separates verified facts from hypothesis and gives a concrete next step", async ({
-  page
+test("ISSUE separates verified facts from hypothesis and gives one next step", async ({
+  context,
+  page: owner
 }) => {
-  await installEmulatedConsumer(page);
-  await arm(page);
-  await invoke(page, "order_review");
-  await expect(page.locator("[data-byoa-state='ISSUE']")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Wrong tool selected" })).toBeVisible();
+  const fresh = await openFreshV2(context, await prepareV2Handoff(owner));
+  await startFreshV2(fresh);
+  await invokeFreshV2(fresh, "order_review", {});
+  await expect(fresh.locator("[data-byoa-v2-state='ISSUE']")).toBeVisible();
+  await expect(fresh.getByRole("heading", { name: "Verified facts" })).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Evidence-backed investigation area" })
+    fresh.getByText("Investigation hypothesis—not private agent reasoning")
   ).toBeVisible();
-  await expect(
-    page
-      .locator(".diagnostic-investigation")
-      .getByText(/cannot establish why the agent made that choice/iu)
-  ).toBeVisible();
-  await expect(page.getByText("Recommended next step", { exact: true })).toBeVisible();
-  await expect(
-    page
-      .locator(".diagnostic-next-step")
-      .getByText(/Compare the expected and observed tool descriptions/iu)
-  ).toBeVisible();
-  await expect(
-    page
-      .locator(".diagnostic-release-guidance")
-      .getByText(/Do not release this WebMCP change until this case passes/iu)
-  ).toBeVisible();
+  await expect(fresh.getByText(/Recommended next step/iu)).toBeVisible();
+  await expect(fresh.getByText(/Release guidance:/iu)).toBeVisible();
+  await fresh.close();
 });
 
-test("Edit contract restores the saved request and descriptors in the owner wizard", async ({
-  page
+test("Edit a copy reconstructs one selected case in a new owner suite", async ({
+  context,
+  page: owner
 }) => {
-  await installEmulatedConsumer(page);
-  await arm(page);
-  await invoke(page, "checkout_request", "byoa_regression_checkout_0002");
-  await expect(page.locator("[data-byoa-state='PASS']")).toBeVisible();
-  await page.getByRole("button", { name: "Edit contract" }).click();
-  await expect(page).toHaveURL(/\/demo$/u);
-  await expect(page.getByText("Stage 2 of 5", { exact: true })).toBeVisible();
-  await expect(page.getByLabel(/Agent-visible description/iu).first()).toHaveValue(
-    /current final read-only order summary/iu
-  );
+  const fresh = await passingResult(context, owner);
+  await fresh.getByRole("button", { name: "Edit a copy" }).click();
+  await fresh.waitForURL(/\/demo$/u);
+  await fresh.getByRole("button", { name: "Choose the test catalog" }).click();
+  await fresh.getByRole("button", { name: "Build the contract suite" }).click();
+  await expect(fresh.getByRole("heading", { name: "Request checkout" })).toBeVisible();
+  await expect(fresh.getByText("I am ready—request checkout for this cart.")).toBeVisible();
+  await fresh.close();
 });
 
-test("Rerun appends a successor result under one immutable regression case", async ({ page }) => {
-  await installEmulatedConsumer(page);
-  await arm(page);
-  await invoke(page, "checkout_request", "byoa_regression_checkout_0003");
-  await expect(page.locator("[data-byoa-state='PASS']")).toBeVisible();
-  await page.getByRole("button", { name: "Save as regression test" }).click();
-  await page.getByRole("button", { name: "Rerun this case" }).click();
-  await expect(page.locator("[data-byoa-state='ARMED']")).toBeVisible();
-  await invoke(page, "checkout_request", "byoa_regression_checkout_0004");
-  await expect(page.locator("[data-byoa-state='PASS']")).toBeVisible();
-  await page.getByRole("button", { name: "Save as regression test" }).click();
-
-  const stored = await page.evaluate(
-    () =>
-      JSON.parse(sessionStorage.getItem("thurstone:my-tests@1") ?? "null") as {
-        entries: Array<{
-          results: Array<{ resultDigest: string; previousResultDigest: string | null }>;
-        }>;
-      }
-  );
-  expect(stored.entries).toHaveLength(1);
-  expect(stored.entries[0]?.results).toHaveLength(2);
-  expect(stored.entries[0]?.results[1]?.previousResultDigest).toBe(
-    stored.entries[0]?.results[0]?.resultDigest
-  );
-});
-
-test("INCOMPLETE cannot be saved as verified regression evidence", async ({ page }) => {
-  await installEmulatedConsumer(page);
-  await arm(page);
-  await page.reload();
-  await expect(page.locator("[data-byoa-state='INCOMPLETE']")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Save as regression test" })).toHaveCount(0);
+test("Rerun creates a fresh linked handoff instead of overwriting the terminal result", async ({
+  context,
+  page: owner
+}) => {
+  const fresh = await passingResult(context, owner);
+  const sourceDigest = await fresh.evaluate(() => {
+    const bytes = sessionStorage.getItem("thurstone:byoa-result@3");
+    return bytes ? (JSON.parse(bytes) as { resultDigest: string }).resultDigest : null;
+  });
+  await fresh.getByRole("button", { name: "Rerun in a fresh agent" }).click();
+  await fresh.waitForURL(/\/demo\/run\?source=[^#]+#handoff-source-v2$/u);
   await expect(
-    page.getByText(/No semantic release conclusion is valid from this run/iu)
+    fresh.getByRole("heading", { name: "Send this case to a genuinely fresh agent." })
   ).toBeVisible();
+  const link = await fresh.evaluate(() => {
+    const bytes = sessionStorage.getItem("thurstone:byoa-session@2");
+    return bytes
+      ? (JSON.parse(bytes) as { regressionLink: { previousResultDigest: string } | null })
+          .regressionLink
+      : null;
+  });
+  expect(link?.previousResultDigest).toBe(sourceDigest);
+  await fresh.close();
 });

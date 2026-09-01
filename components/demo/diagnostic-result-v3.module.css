@@ -1,0 +1,320 @@
+.result {
+  display: grid;
+  gap: 1rem;
+}
+
+.primaryActions :global(.regression-actions-v3) {
+  margin: 0;
+  border-color: rgba(54, 236, 255, 0.3);
+}
+
+.hero,
+.hierarchy,
+.arguments,
+.state,
+.assertions,
+.diagnosis,
+.evidence,
+.deeper,
+.raw {
+  min-width: 0;
+  padding: clamp(1rem, 2.4vw, 1.45rem);
+  background: rgba(4, 18, 25, 0.86);
+  border: 1px solid var(--ts-line);
+  border-radius: var(--radius);
+}
+
+.hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  border-color: rgba(54, 236, 255, 0.32);
+}
+
+.hero h1,
+.result h2,
+.result h3 {
+  margin: 0;
+}
+
+.hero p:not(:global(.eyebrow)),
+.result section > p,
+.result article p,
+.result small,
+.result dd,
+.result li {
+  color: var(--ts-text-muted);
+  line-height: 1.55;
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-content: flex-start;
+  justify-content: flex-end;
+}
+
+.badges span,
+.state > header > span {
+  padding: 0.35rem 0.55rem;
+  color: var(--ts-cyan-bright);
+  background: rgba(0, 217, 255, 0.08);
+  border: 1px solid rgba(54, 236, 255, 0.22);
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 780;
+  text-transform: capitalize;
+}
+
+.hierarchy > div,
+.arguments > div:last-child,
+.stateColumns,
+.ledger,
+.deeper > div {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.7rem;
+  margin-top: 0.8rem;
+}
+
+.hierarchy article,
+.arguments article,
+.stateColumns article,
+.ledger article {
+  min-width: 0;
+  padding: 0.8rem;
+  background: rgba(201, 223, 235, 0.035);
+  border: 1px solid var(--ts-line);
+  border-radius: var(--radius-small);
+}
+
+.hierarchy article > span,
+.arguments article > span,
+.stateColumns article > span,
+.ledger article > span,
+.nextStep > span {
+  display: block;
+  color: var(--ts-text-faint);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.hierarchy blockquote {
+  margin: 0.55rem 0 0;
+  color: var(--ts-ice);
+  font-weight: 700;
+}
+
+.hierarchy article > strong,
+.stateColumns article > strong,
+.ledger article > strong {
+  display: block;
+  margin-top: 0.5rem;
+  color: var(--ts-ice);
+}
+
+.hierarchy code,
+.evidence code {
+  color: var(--ts-cyan-bright);
+}
+
+.arguments {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.6fr) minmax(0, 1.4fr);
+  gap: 0.9rem;
+}
+
+.arguments > div:last-child {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 0;
+}
+
+.arguments pre,
+.raw pre {
+  max-width: 100%;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--ts-text-muted);
+  font-size: 0.72rem;
+}
+
+.state > header,
+.assertions > header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.stateColumns {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.stateColumns ul {
+  margin: 0.55rem 0;
+  padding-left: 1rem;
+}
+
+.ledger {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.ledger strong {
+  font-size: 1.4rem;
+}
+
+.replayBoundary {
+  margin-bottom: 0;
+  padding: 0.7rem;
+  background: rgba(255, 153, 0, 0.055);
+  border-left: 2px solid var(--ts-orange);
+}
+
+.assertions > header > strong {
+  color: var(--ts-cyan-bright);
+  font-size: 1.5rem;
+}
+
+.assertions ul,
+.facts ul,
+.evidence ul {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.8rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.assertions li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.7rem;
+  padding: 0.7rem;
+  border: 1px solid var(--ts-line);
+  border-radius: var(--radius-small);
+}
+
+.assertions li > span {
+  color: var(--ts-orange);
+  font-weight: 900;
+}
+
+.assertions li[data-passed="true"] > span {
+  color: var(--ts-cyan-bright);
+}
+
+.assertions li p {
+  margin: 0.25rem 0 0;
+}
+
+.facts,
+.hypothesis,
+.nextStep {
+  margin-top: 0.8rem;
+  padding: 0.8rem;
+  background: rgba(201, 223, 235, 0.035);
+  border: 1px solid var(--ts-line);
+  border-radius: var(--radius-small);
+}
+
+.facts li::before {
+  content: "✓";
+  margin-right: 0.5rem;
+  color: var(--ts-cyan-bright);
+}
+
+.hypothesis {
+  border-left: 2px solid var(--ts-orange);
+}
+
+.hypothesis p,
+.nextStep p {
+  margin-bottom: 0;
+}
+
+.nextStep > strong {
+  display: block;
+  margin-top: 0.45rem;
+  color: var(--ts-ice);
+}
+
+.releaseGuidance {
+  margin-bottom: 0;
+}
+
+.evidence dl {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.evidence dl > div {
+  min-width: 0;
+  padding: 0.65rem;
+  background: rgba(201, 223, 235, 0.035);
+  border-radius: var(--radius-small);
+}
+
+.evidence dt {
+  color: var(--ts-text-faint);
+  font-size: 0.66rem;
+  text-transform: uppercase;
+}
+
+.evidence dd {
+  margin: 0.35rem 0 0;
+  overflow-wrap: anywhere;
+}
+
+.deeper > div {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.deeper a {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.8rem;
+  color: inherit;
+  background: rgba(0, 217, 255, 0.045);
+  border: 1px solid rgba(54, 236, 255, 0.16);
+  border-radius: var(--radius-small);
+  text-decoration: none;
+}
+
+.deeper a span {
+  color: var(--ts-text-muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.raw summary {
+  cursor: pointer;
+  color: var(--ts-cyan-bright);
+  font-weight: 760;
+}
+
+@media (max-width: 760px) {
+  .hero,
+  .state > header,
+  .assertions > header {
+    display: grid;
+  }
+
+  .badges {
+    justify-content: flex-start;
+  }
+
+  .hierarchy > div,
+  .arguments,
+  .arguments > div:last-child,
+  .stateColumns,
+  .ledger,
+  .evidence dl,
+  .deeper > div {
+    grid-template-columns: 1fr;
+  }
+}

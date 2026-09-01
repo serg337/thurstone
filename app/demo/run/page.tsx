@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { ByoaRunner } from "@/components/demo/byoa-runner-live";
+import { ByoaRunnerRouter } from "@/components/demo/byoa-runner-router";
 
 export const metadata: Metadata = {
   title: "Live test · Demo",
@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 export default function DemoRunPage() {
   return (
     <div className="page-shell demo-run-page">
-      <ByoaRunner />
+      <ByoaRunnerRouter />
     </div>
   );
 }

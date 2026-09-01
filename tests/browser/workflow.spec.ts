@@ -1,8 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
-import type { RuntimeModelContext } from "@/lib/webmcp/runtime";
-
-import { installEmulatedConsumer } from "./support/emulated-consumer";
+import { invokeFreshV2, openFreshV2, prepareV2Handoff, startFreshV2 } from "./support/demo-v2-flow";
 
 test("homepage sells the semantic release problem, mechanism, and action", async ({ page }) => {
   await page.goto("/");
@@ -91,53 +89,38 @@ test("Workflow separates the working challenge product from product direction", 
   await expect(page.getByText(/directions, not current capabilities or promises/iu)).toBeVisible();
 });
 
-async function createCurrentResult(page: Page) {
-  await installEmulatedConsumer(page);
-  await page.goto("/demo");
-  await page.getByRole("button", { name: "Choose the test catalog" }).click();
-  await page.getByRole("button", { name: "Build the contract" }).click();
-  await page.getByRole("button", { name: "Review contract" }).click();
-  await Promise.all([
-    page.waitForURL(/\/demo\/run#handoff-source$/u),
-    page.getByRole("button", { name: "Arm live test" }).click()
-  ]);
-  await Promise.all([
-    page.waitForURL(/\/demo\/run$/u),
-    page.getByRole("button", { name: "Run in this tab instead" }).click()
-  ]);
-  await expect(page.locator("[data-byoa-state='ARMED']")).toBeVisible();
-  await page.evaluate(async () => {
-    const context = document.modelContext as RuntimeModelContext | undefined;
-    if (!context?.getTools || !context.executeTool) throw new Error("Consumer unavailable");
-    const selected = (await context.getTools()).find(({ name }) => name === "checkout_request");
-    if (!selected) throw new Error("Missing checkout_request");
-    await context.executeTool(
-      selected,
-      JSON.stringify({ operationId: "byoa_results_checkout_0001" }),
-      { signal: new AbortController().signal }
-    );
+async function createCurrentResult(context: BrowserContext, owner: Page) {
+  const fresh = await openFreshV2(context, await prepareV2Handoff(owner));
+  await startFreshV2(fresh);
+  await invokeFreshV2(fresh, "checkout_request", {
+    operationId: "byoa_results_checkout_0001"
   });
-  await expect(page.locator("[data-byoa-state='PASS']")).toBeVisible();
+  await expect(fresh.locator("[data-byoa-v2-state='PASS']")).toBeVisible();
+  return fresh;
 }
 
-test("Results orders My Tests before unchanged 24/24 and separate 3/3", async ({ page }) => {
-  await createCurrentResult(page);
-  await page.goto("/results");
+test("Results orders My Tests before unchanged 24/24 and separate 3/3", async ({
+  context,
+  page
+}) => {
+  const fresh = await createCurrentResult(context, page);
+  await fresh.goto("/results");
   await expect(
-    page.getByRole("heading", { name: "The cases you ran with your agent." })
+    fresh.getByRole("heading", { name: "Fresh-agent results and regression cases." })
   ).toBeVisible();
-  await expect(page.getByText("Current run", { exact: true })).toBeVisible();
+  await expect(fresh.getByText("Current Result v3 run", { exact: true })).toBeVisible();
   await expect(
-    page.locator(".my-test-decision").getByText(/Required.*checkout_request/iu)
+    fresh.locator(".my-test-decision").getByText(/Required.*checkout_request/iu)
   ).toBeVisible();
-  const levels = await page
+  const levels = await fresh
     .locator("[data-results-level]")
     .evaluateAll((elements) =>
       elements.map((element) => element.getAttribute("data-results-level"))
     );
-  expect(levels).toEqual(["session", "reference", "integrity"]);
-  await expect(page.getByText("24/24 semantic behaviors", { exact: true })).toBeVisible();
-  await expect(page.getByText("3/3 integrity cases", { exact: true })).toBeVisible();
+  expect(levels).toEqual(["session-v2", "reference", "integrity"]);
+  await expect(fresh.getByText("24/24 semantic behaviors", { exact: true })).toBeVisible();
+  await expect(fresh.getByText("3/3 integrity cases", { exact: true })).toBeVisible();
+  await fresh.close();
 });
 
 test("new judge pages reflow without horizontal page overflow", async ({ page }) => {

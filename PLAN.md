@@ -31,17 +31,17 @@ implemented through additive versioned schemas and identities.
    - Make the exact built-in-Browser entry command explicit, teach the owner/agent/trusted-state
      boundary, make the synthetic cart safely editable and resettable, and keep the owner document
      free of registered target tools.
-4. **R3 — Stage 2 real WebMCP catalog**
+4. **R3 — Stage 2 real WebMCP catalog: PASS**
    - Let the judge choose two to four existing real tools, edit only agent-visible metadata, inspect
      fixed schemas/handlers/effects, reset defaults, and preview the exact discoverable catalog.
-5. **R4 — Stage 3 suite builder and nested arm review**
+5. **R4 — Stage 3 suite builder and nested arm review: PASS**
    - Let the judge build, edit, remove, select, and validate up to six successive contract cases;
      show the suite as it grows; nest final selected-case review and arming inside this stage.
-6. **R5 — Fresh-agent handoff and explicit live-observation boundary**
+6. **R5 — Fresh-agent handoff and explicit live-observation boundary: PASS**
    - Keep owner preparation, fresh-context receipt, readiness, registration, and observation
      distinct. Opening the opaque URL—especially in ordinary Chrome—must not register tools or
      start the timer. Only an explicit start may expose the exact frozen catalog and admit one call.
-7. **R6 — Verdict, diagnosis, regression, and deeper proof**
+7. **R6 — Verdict, diagnosis, regression, and deeper proof: PASS**
    - Present requested/required/observed behavior, trusted before/after state, ledger diff,
      assertions, deterministic diagnosis, recommended next step, honest evidence tier, save/rerun
      behavior, a controlled mismatch example, and links to the five-tool Lab plus reference results.
