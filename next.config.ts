@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
 
+import { resolveDeploymentCommit } from "./lib/deployment/commit";
+
 const isDevelopment = process.env.NODE_ENV !== "production";
 
 const contentSecurityPolicy = [
@@ -19,8 +21,7 @@ const contentSecurityPolicy = [
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1"],
   env: {
-    NEXT_PUBLIC_TOOLPROOF_COMMIT_SHA:
-      process.env.TOOLPROOF_COMMIT_SHA ?? process.env.VERCEL_GIT_COMMIT_SHA ?? "unversioned"
+    NEXT_PUBLIC_TOOLPROOF_COMMIT_SHA: resolveDeploymentCommit(process.env)
   },
   poweredByHeader: false,
   reactStrictMode: true,

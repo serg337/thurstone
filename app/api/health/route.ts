@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { resolveDeploymentCommit } from "@/lib/deployment/commit";
+
 export const dynamic = "force-dynamic";
 
 export function GET() {
@@ -8,7 +10,7 @@ export function GET() {
       status: "ok",
       service: "toolproof",
       simulation: true,
-      commit: process.env.TOOLPROOF_COMMIT_SHA ?? process.env.VERCEL_GIT_COMMIT_SHA ?? "unversioned"
+      commit: resolveDeploymentCommit(process.env)
     },
     { headers: { "Cache-Control": "no-store" } }
   );

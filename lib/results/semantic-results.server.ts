@@ -922,8 +922,8 @@ export async function readSemanticResults(
       evidenceExports,
       presentation: Object.freeze({
         commit:
-          environment.TOOLPROOF_COMMIT_SHA?.trim() ??
           environment.VERCEL_GIT_COMMIT_SHA?.trim() ??
+          environment.TOOLPROOF_COMMIT_SHA?.trim() ??
           "unversioned",
         deploymentIdentity:
           environment.VERCEL_DEPLOYMENT_ID?.trim() ??

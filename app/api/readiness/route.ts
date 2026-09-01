@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { resolveDeploymentCommit } from "@/lib/deployment/commit";
 import { readJudgeDemoStatus } from "@/lib/judge/service.server";
 import { readPublicProbeControlStatus } from "@/lib/probe/status";
 
@@ -20,7 +21,7 @@ export async function GET() {
       modelBackedJudgeLane: judgeReady ? "ready" : "unavailable",
       judge,
       probe,
-      commit: process.env.TOOLPROOF_COMMIT_SHA ?? process.env.VERCEL_GIT_COMMIT_SHA ?? "unversioned"
+      commit: resolveDeploymentCommit(process.env)
     },
     {
       status: judgeReady ? 200 : 503,

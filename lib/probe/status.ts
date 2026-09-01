@@ -1,5 +1,6 @@
 import "server-only";
 
+import { resolveDeploymentCommit } from "@/lib/deployment/commit";
 import { getProbeConfigurationStatus } from "@/lib/probe/config";
 import {
   PROBE_GLOBAL_CALL_LIMIT,
@@ -74,8 +75,7 @@ export function isProbeGuardStatusConsistent(
 }
 
 export async function readPublicProbeControlStatus(environment: EnvironmentLike = process.env) {
-  const commit =
-    environment.TOOLPROOF_COMMIT_SHA ?? environment.VERCEL_GIT_COMMIT_SHA ?? "unversioned";
+  const commit = resolveDeploymentCommit(environment);
   const expectedPolicyHash = await probePolicyHash();
   const expectedScriptHash = await probeLedgerScriptHash();
   const configuration = getProbeConfigurationStatus(environment);
