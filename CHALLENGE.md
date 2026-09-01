@@ -26,10 +26,14 @@ Last checked: **2026-08-31**
 ## Current technical status
 
 - Primary production origin: `https://thurstone.invarra.ai`
+- Primary judge workflow: six-step owner contract on `/demo`, then an isolated bring-your-own-agent
+  native run on `/demo/run`
+- BYOA catalog: exactly `order_review` and `checkout_request`; one eligible call per armed test
 - Initial WebMCP tools: `cart_get`, `cart_update`, `checkout_request`, `order_review`
 - Pending-only tool: `checkout_cancel`
 - Current semantic evaluation: 24/24 approved behaviors passed
 - Current Invocation Integrity evaluation: 3/3 deterministic cases passed
+- Deterministic diagnosis and browser-local save/export/edit/rerun regression loop: complete
 - Full unit/integration, browser, accessibility, security, dependency, license, and secret-history
   checks: passing
 - Durable model-call guard: 160 calls / USD $10 lifetime ceiling

@@ -5,7 +5,7 @@
 **Thurstone by Invarra — created by Sergio Valencia.**
 
 [Live product](https://thurstone.invarra.ai) ·
-[Live sandbox](https://thurstone.invarra.ai/lab) ·
+[Live demo](https://thurstone.invarra.ai/demo) ·
 [Current results](https://thurstone.invarra.ai/results)
 
 Thurstone is a pre-release testing system for agent-callable websites. A human declares the
@@ -51,19 +51,22 @@ enforcement or security certification.
 
 ## Try it
 
-### ChatGPT in-app browser
+### Bring your own supported agent
 
-1. Open [the Lab](https://thurstone.invarra.ai/lab).
-2. Wait for the four-tool catalog to report **consumer-ready**.
-3. Ask ChatGPT to inspect the cart, change a quantity, review the order, or request simulated
-   checkout.
-4. Inspect the selected tool, arguments, and before/after state in Thurstone.
-5. Use **Hard reset fixture** whenever you want a clean checkout.
+1. Open [the Demo](https://thurstone.invarra.ai/demo) and define one intended behavior in the
+   six-step owner workflow.
+2. Review the hidden contract separately from the exact two-tool projection the agent will see.
+3. Choose **Arm live agent test** to hard-navigate into the isolated `/demo/run` document.
+4. Send the frozen request to a fresh supported ChatGPT agent and ask it to use the current page.
+5. Inspect the native tool, canonical arguments, trusted before/after state, ledger diff, verdict,
+   and deterministic next step.
+6. Save a PASS or ISSUE as a browser-local regression case, then edit or rerun it without
+   overwriting the original result.
 
 ### Chrome
 
 Use Chrome 149 or later, enable `chrome://flags/#enable-webmcp-testing`, relaunch Chrome, and open
-the same Lab.
+the same Demo. The expert `/lab` route remains available for direct catalog and invariant testing.
 
 The initial live catalog is:
 
@@ -87,8 +90,10 @@ The initial live catalog is:
 5. **Review before release.** Product, QA, safety, or release teams decide whether the behavior is
    ready to ship.
 
-The challenge build demonstrates this workflow with a fixed synthetic checkout contract. General
-bring-your-own-contract ingestion is a product roadmap item, not a current self-service feature.
+The challenge build provides self-service contract authoring, native external-agent execution,
+deterministic diagnosis, and browser-local regression preservation inside a fixed synthetic
+checkout reference environment. Connecting arbitrary external sites is a future product direction,
+not a current claim.
 
 ## WebMCP implementation
 

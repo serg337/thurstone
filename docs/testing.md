@@ -10,7 +10,14 @@ npm run typecheck
 npm test
 npm run test:browser:safe
 npm run build
+npm run verify:evidence
+npm run verify:semantic-preservation
+npm run verify:direct-site-tools
+npm run verify:direct-observation-presentation
 npm run verify:third-party
+npm run verify:publication
+npm run verify:probe-no-leakage
+npm run gate7:verify-adversarial
 npm audit --audit-level=high
 ```
 
@@ -21,9 +28,24 @@ npm audit --audit-level=high
 - Browser tests cover navigation, responsive layout, accessibility, ordinary UI behavior, WebMCP
   support messaging, and fail-closed controls.
 - Native Chrome verification confirms real Site Tools discovery and execution.
+- The primary `/demo` → `/demo/run` BYOA check confirms that the owner contract remains outside the
+  agent projection, exactly two tools register, one external native call is admitted, trusted state
+  and ledger evidence decide the verdict, and the catalog retires after terminal evidence.
 - The semantic evaluator independently checks each model decision and resulting page effect.
 - Invocation Integrity uses deterministic direct calls and a separate denominator.
 - CI scans complete reachable Git history for secrets.
 
 Paid model calls are never part of ordinary tests or CI. They require a temporary disabled-by-default
 operator lane and remain subject to the Redis lifetime guard.
+
+## Manual production BYOA verification
+
+1. Open `/demo` on the exact production SHA and keep the default explicit-checkout contract.
+2. Arm the isolated run and verify the visible catalog contains only `order_review` and
+   `checkout_request`.
+3. In a fresh supported external agent, send the exact frozen request and allow one native Site
+   Tools call.
+4. Confirm the terminal result contains the exact build and manifest, canonical arguments, trusted
+   before/after state, ledger diff, assertions, and PASS or ISSUE verdict.
+5. Confirm the catalog is retired, a second call cannot reach the domain, no Thurstone-paid model
+   request occurred, and PASS/ISSUE can be saved as a digest-linked regression.
