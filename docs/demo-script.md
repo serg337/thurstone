@@ -28,10 +28,10 @@ Show the five-stage mechanism and say:
 On `/demo`, complete the six-step owner workflow:
 
 1. keep the reference checkout fixture;
-2. choose the request `I’m ready—start checkout for this cart.`;
-3. expect `checkout_request`;
-4. require one pending checkout and exactly one state transition;
-5. keep the exactly-once replay policy;
+2. keep the request `I am ready—request checkout for this cart.`;
+3. review the two agent-visible descriptors;
+4. expect `checkout_request`;
+5. review the required pending-checkout effect and exactly-once replay policy;
 6. review the owner contract separately from the two descriptions the agent will see.
 
 Say:
@@ -40,7 +40,7 @@ Say:
 > the request, fixture summary, and exactly two live tool descriptions—nothing that tells it which
 > answer Thurstone expects.
 
-Click **Arm live agent test**, then **Copy fresh-agent test URL**. Keep the opaque URL itself out of
+Click **Arm live test**, then **Copy fresh-agent test URL**. Keep the opaque URL itself out of
 the recording.
 
 ## 1:08–1:33 — Bring your own agent
@@ -65,7 +65,7 @@ Return to the terminal result and show, in order:
 - expected versus observed tool and canonical arguments;
 - trusted state before and after;
 - the append-only ledger diff;
-- the exactly-once assertion;
+- the single-admission assertion;
 - the deterministic PASS or ISSUE verdict.
 
 Say:
@@ -77,7 +77,7 @@ Say:
 
 ## 2:04–2:25 — Preserve the regression
 
-Choose **Save to My Tests**, then briefly show export, edit, and rerun actions.
+Choose **Save as regression test**, then briefly show export, edit, and rerun actions.
 
 Say:
 
@@ -109,12 +109,14 @@ Finish on the Thurstone URL and Invarra attribution.
 
 - Final clean production SHA and `https://thurstone.invarra.ai` are visible or verifiable.
 - Authentic external-agent Site Tools invocation; no internal substitute.
+- The fresh-agent task sees no owner expected-tool or effect rubric before acting.
 - Exact owner request and two agent-visible descriptors are shown.
 - Trusted before/after state, ledger diff, verdict, and regression action are readable.
 - Synthetic checkout disclosure remains visible; no purchase or external transaction occurs.
 - Record at 16:9 with readable zoom, original narration, captions, and no credentials or personal
   tabs.
 - Browser console has zero warning/error attributable to Thurstone.
+- No Thurstone-paid model call or hosted fallback occurs; the user brings the fresh agent.
 - No secrets, capabilities, cookies, raw provider output, or private evidence appear.
 - Reference scores remain `24/24` and separate `3/3`; no combined score.
 - Uploaded public YouTube video is under three minutes and matches the deployed functionality.

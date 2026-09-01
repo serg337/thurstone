@@ -100,7 +100,7 @@ Testing instructions:
 2. Keep the default explicit-checkout case for the shortest path, or edit the request and the two
    agent-visible tool descriptions.
 3. Review the hidden owner contract separately from the projection the agent will receive, then
-   choose **Arm live agent test** and copy the opaque fresh-agent URL.
+   choose **Arm live test** and copy the opaque fresh-agent URL.
 4. Start a fresh GPT-5.6 Sol or Terra ChatGPT Work or Codex task in the latest ChatGPT desktop app.
    Use its built-in Browser (`@Browser`) to open the copied URL. The Chrome extension side chat is
    not the Site Tools consumer. The URL expires after ten minutes and should not be published.

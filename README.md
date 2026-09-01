@@ -56,7 +56,7 @@ enforcement or security certification.
 1. Open [the Demo](https://thurstone.invarra.ai/demo) and define one intended behavior in the
    six-step owner workflow.
 2. Review the hidden contract separately from the exact two-tool projection the agent will see.
-3. Choose **Arm live agent test**, then copy the ten-minute opaque fresh-agent URL. Do not publish
+3. Choose **Arm live test**, then copy the ten-minute opaque fresh-agent URL. Do not publish
    or include that URL in evidence.
 4. Start a fresh GPT-5.6 Sol or Terra ChatGPT Work or Codex task in the latest ChatGPT desktop app.
    Use its built-in Browser (`@Browser`) to open the copied URL. Do not use Chrome extension side

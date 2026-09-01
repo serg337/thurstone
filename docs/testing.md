@@ -41,8 +41,8 @@ operator lane and remain subject to the Redis lifetime guard.
 ## Manual production BYOA verification
 
 1. Open `/demo` on the exact production SHA and keep the default explicit-checkout contract.
-2. Arm the test, copy the opaque fresh-agent URL, and keep its owner tab open. Do not publish or
-   record the URL; it expires after ten minutes.
+2. Choose **Arm live test**, copy the opaque fresh-agent URL, and keep its owner tab open. Do not
+   publish or record the URL; it expires after ten minutes.
 3. Start a fresh GPT-5.6 Sol or Terra ChatGPT Work or Codex task in the latest ChatGPT desktop app.
    Use its built-in Browser (`@Browser`) to open the copied URL. Do not use Chrome extension side
    chat for this proof.
