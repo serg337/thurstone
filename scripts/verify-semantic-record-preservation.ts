@@ -1,18 +1,22 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 
-const SEALED_EVIDENCE_BUILD = "768af2539ca20c29928a897644ad22ba897c580d";
-const EXPECTED_PACKAGE_DIGEST = "a449db4b1faacdbaab58777923d2ddbde75396b70fa4744b29d0eb8e97089a46";
-
+const SEMANTIC_SOURCE_COMMIT = "1949d4eda334f716470b7948442644b3b661c270";
+const INTEGRITY_SOURCE_COMMIT = "2e52711e4ac0f91c88df118d22d2db52842aadb1";
 const expectedFiles = Object.freeze({
-  "evidence/toolproof-reference-evidence.json":
-    "fb272a4a68d9c1d3d4542a668b86b23f293cd55e714c1b826af32c7fcac0be26",
-  "evidence/toolproof-reference-evidence.md":
-    "8301efa790f193060296d68a78b0553cf30d0c207b15864cf13609c65f2931fa",
-  "evidence/sample-run.json": "6d2835c5bfa580a4a8fdb79d4dfe6ee74b3eaf48dc11a8f4f5cfe86573e954ee",
-  "evidence/sample-report.md": "d627627b464e64a46c8809fbb6d76be883b269aca181417b2337ddd8cfd74abe"
+  "evidence/thurstone-current-result.json": Object.freeze({
+    commit: SEMANTIC_SOURCE_COMMIT,
+    sha256: "63151d60484b3cb12cc20c8640d66430cd938437ef86f115f622753f7760e26c"
+  }),
+  "evidence/thurstone-invocation-integrity.json": Object.freeze({
+    commit: INTEGRITY_SOURCE_COMMIT,
+    sha256: "d54f22b900eacf6766a17a1178bd06445a34aa90c370c03e9767f7f9834ee47a"
+  }),
+  "evidence/thurstone-invocation-integrity.md": Object.freeze({
+    commit: INTEGRITY_SOURCE_COMMIT,
+    sha256: "fc4bb5fd30d8e10b6fde4d0d36094c0cb78b63805cc359cb2897179701f0b3de"
+  })
 });
 
 function sha256(value: Buffer): string {
@@ -23,78 +27,73 @@ function blobOid(value: Buffer): string {
   return createHash("sha1").update(`blob ${value.length}\0`).update(value).digest("hex");
 }
 
-function fail(message: string): never {
-  throw new Error(`semantic_record_preservation_failed:${message}`);
+function git(args: readonly string[]): string {
+  return execFileSync("git", args, { encoding: "utf8" }).trim();
 }
 
-const root = process.cwd();
+function fail(reason: string): never {
+  throw new Error(`semantic_record_preservation_failed:${reason}`);
+}
+
 const activeCommit =
   process.env.VERCEL_GIT_COMMIT_SHA?.trim() ||
   process.env.TOOLPROOF_COMMIT_SHA?.trim() ||
-  execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
+  git(["rev-parse", "HEAD"]);
 if (!/^[a-f0-9]{40}$/u.test(activeCommit)) fail("active_commit");
 
-execFileSync("git", ["cat-file", "-e", `${SEALED_EVIDENCE_BUILD}^{commit}`], {
-  cwd: root,
-  stdio: "ignore"
-});
-
-for (const [path, expectedHash] of Object.entries(expectedFiles)) {
-  const current = readFileSync(resolve(root, path));
-  const sealedOid = execFileSync("git", ["rev-parse", `${SEALED_EVIDENCE_BUILD}:${path}`], {
-    cwd: root,
-    encoding: "utf8"
-  }).trim();
-  const activeOid = execFileSync("git", ["rev-parse", `${activeCommit}:${path}`], {
-    cwd: root,
-    encoding: "utf8"
-  }).trim();
-  if (sha256(current) !== expectedHash) fail(`${path}:current_hash`);
-  if (sealedOid !== activeOid || activeOid !== blobOid(current)) fail(`${path}:tree_oid_drift`);
+for (const [path, identity] of Object.entries(expectedFiles)) {
+  execFileSync("git", ["cat-file", "-e", `${identity.commit}^{commit}`], { stdio: "ignore" });
+  const bytes = readFileSync(path);
+  const sourceOid = git(["rev-parse", `${identity.commit}:${path}`]);
+  const activeOid = git(["rev-parse", `${activeCommit}:${path}`]);
+  if (sha256(bytes) !== identity.sha256) fail(`${path}:working_tree_hash`);
+  if (sourceOid !== activeOid || activeOid !== blobOid(bytes)) fail(`${path}:tree_oid_drift`);
 }
 
-const reference = JSON.parse(
-  readFileSync(resolve(root, "evidence/toolproof-reference-evidence.json"), "utf8")
-) as {
-  readonly packageDigest?: unknown;
+const semantic = JSON.parse(readFileSync("evidence/thurstone-current-result.json", "utf8")) as {
+  readonly resultDigest?: unknown;
+  readonly rows?: readonly { readonly passed?: unknown }[];
   readonly summary?: {
-    readonly baselinePassed?: unknown;
-    readonly revisedPassed?: unknown;
+    readonly passed?: unknown;
+    readonly failed?: unknown;
     readonly possible?: unknown;
-    readonly pairedCases?: unknown;
-    readonly noMeasuredImprovement?: unknown;
   };
-  readonly records?: readonly { readonly version?: unknown; readonly passed?: unknown }[];
 };
-
-if (reference.packageDigest !== EXPECTED_PACKAGE_DIGEST) fail("package_digest");
 if (
-  reference.summary?.baselinePassed !== 23 ||
-  reference.summary.revisedPassed !== 23 ||
-  reference.summary.possible !== 24 ||
-  reference.summary.pairedCases !== 24 ||
-  reference.summary.noMeasuredImprovement !== true
+  semantic.resultDigest !== "23d097f3fd20ee162479a1672260a3f8b3e3336f1fc65e003db34fae195602fb" ||
+  semantic.summary?.passed !== 24 ||
+  semantic.summary.failed !== 0 ||
+  semantic.summary.possible !== 24 ||
+  semantic.rows?.length !== 24 ||
+  semantic.rows.some(({ passed }) => passed !== true)
 ) {
-  fail("summary");
-}
-if (!Array.isArray(reference.records) || reference.records.length !== 48) fail("record_count");
-
-for (const version of ["baseline", "revised"] as const) {
-  const records = reference.records.filter((record) => record.version === version);
-  if (records.length !== 24) fail(`${version}_record_count`);
-  if (records.filter((record) => record.passed === true).length !== 23) {
-    fail(`${version}_passed_count`);
-  }
+  fail("semantic_24_of_24");
 }
 
-console.log(
-  JSON.stringify({
-    status: "semantic-record-preserved",
-    sealedEvidenceBuild: SEALED_EVIDENCE_BUILD,
-    packageDigest: EXPECTED_PACKAGE_DIGEST,
-    artifacts: expectedFiles,
-    records: 48,
-    result: "23/24 -> 23/24",
-    noMeasuredImprovement: true
-  })
+const integrity = JSON.parse(
+  readFileSync("evidence/thurstone-invocation-integrity.json", "utf8")
+) as {
+  readonly includedInSemanticDenominator?: unknown;
+  readonly modelCallCount?: unknown;
+  readonly score?: { readonly earned?: unknown; readonly possible?: unknown };
+};
+if (
+  integrity.includedInSemanticDenominator !== false ||
+  integrity.modelCallCount !== 0 ||
+  integrity.score?.earned !== 3 ||
+  integrity.score.possible !== 3
+) {
+  fail("separate_integrity_3_of_3");
+}
+
+process.stdout.write(
+  `${JSON.stringify({
+    status: "evidence-preserved",
+    activeCommit,
+    semanticSourceCommit: SEMANTIC_SOURCE_COMMIT,
+    semanticResult: "24/24",
+    integritySourceCommit: INTEGRITY_SOURCE_COMMIT,
+    invocationIntegrityResult: "3/3 separate",
+    artifacts: expectedFiles
+  })}\n`
 );

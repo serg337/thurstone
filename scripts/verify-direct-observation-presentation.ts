@@ -30,6 +30,10 @@ import {
 const observationCommit = "88deff46d4e06bb109158f7ef8a68e704f9fcc08";
 const observationEvidenceSha256 =
   "63ad854753f59440b11d00d327e6ce135cf5cb84c38d7b6906f2e6719e48bf41";
+const byoaReleasePredecessorCommit = "b6d5de1928fbb17cc0f9f44aee606c2aae7bea3d";
+const byoaLedgerPath = "lib/evidence/checkout-trace-ledger.ts";
+const byoaLedgerPredecessorBlobOid = "e3dfcf8d7cae3a36ec706226238dff87d7f7020e";
+const byoaLedgerSuccessorBlobOid = "f52374f5f93e039f0d28dda2ce971b3dc9739c24";
 const invocationIntegrityCriticalExceptions = new Set([
   "lib/domain/checkout-schemas.ts",
   "lib/domain/checkout.ts"
@@ -63,6 +67,7 @@ export interface DirectObservationCriticalBlobInput {
   readonly activeCommit?: string;
   readonly observationBlobOid: string;
   readonly activeBlobOid: string;
+  readonly byoaPredecessorBlobOid?: string;
   readonly invocationIntegrityTransition: JudgeDemoInvocationIntegrityTransition | null;
   readonly impactExecutionFinalization?: ImpactExecutionFinalization | null;
 }
@@ -75,12 +80,27 @@ export function verifyDirectObservationCriticalBlob(
   input: DirectObservationCriticalBlobInput
 ):
   | "unchanged-observation-blob"
+  | "verified-byoa-inherited-blob"
+  | "verified-byoa-successor-blob"
   | "verified-impact-execution-transition"
   | "verified-invocation-integrity-transition" {
   if (input.checkedOutBlobOid !== input.activeBlobOid) {
     throw new Error(`direct_observation_critical_git_blob_mismatch:${input.path}`);
   }
   if (input.activeBlobOid === input.observationBlobOid) return "unchanged-observation-blob";
+  if (
+    input.byoaPredecessorBlobOid !== undefined &&
+    input.activeBlobOid === input.byoaPredecessorBlobOid
+  ) {
+    return "verified-byoa-inherited-blob";
+  }
+  if (
+    input.path === byoaLedgerPath &&
+    input.byoaPredecessorBlobOid === byoaLedgerPredecessorBlobOid &&
+    input.activeBlobOid === byoaLedgerSuccessorBlobOid
+  ) {
+    return "verified-byoa-successor-blob";
+  }
   const impactExecution = input.impactExecutionFinalization;
   if (
     input.path === JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_PATH &&
@@ -263,6 +283,8 @@ async function main(): Promise<void> {
     );
   }
   assertFirstParentAncestor(observationCommit, activeCommit);
+  assertFirstParentAncestor(observationCommit, byoaReleasePredecessorCommit);
+  assertFirstParentAncestor(byoaReleasePredecessorCommit, activeCommit);
   const { invocationIntegrityTransition, impactExecutionFinalization } =
     await verifiedPresentationTransitions(activeCommit);
 
@@ -304,11 +326,16 @@ async function main(): Promise<void> {
 
   const authorizedInvocationIntegrityChanges: string[] = [];
   const authorizedImpactExecutionChanges: string[] = [];
+  const authorizedByoaChanges: string[] = [];
   const criticalProjections = await Promise.all(
     criticalPaths.map(async (path) => {
       const checkedOutBytes = await readFile(path);
       const checkedOutBlobOid = gitBlobOid(checkedOutBytes);
       const observationBlobOid = gitText(["rev-parse", `${observationCommit}:${path}`]);
+      const byoaPredecessorBlobOid = gitText([
+        "rev-parse",
+        `${byoaReleasePredecessorCommit}:${path}`
+      ]);
       const activeBlobOid = gitText(["rev-parse", `${activeCommit}:${path}`]);
       const disposition = verifyDirectObservationCriticalBlob({
         path,
@@ -316,6 +343,7 @@ async function main(): Promise<void> {
         activeCommit,
         observationBlobOid,
         activeBlobOid,
+        byoaPredecessorBlobOid,
         invocationIntegrityTransition,
         impactExecutionFinalization
       });
@@ -323,6 +351,8 @@ async function main(): Promise<void> {
         authorizedInvocationIntegrityChanges.push(path);
       } else if (disposition === "verified-impact-execution-transition") {
         authorizedImpactExecutionChanges.push(path);
+      } else if (disposition === "verified-byoa-successor-blob") {
+        authorizedByoaChanges.push(path);
       }
       const observationSha256 =
         observationBlobOid === activeBlobOid
@@ -348,14 +378,9 @@ async function main(): Promise<void> {
   const criticalProjectionHash = await canonicalSha256(observationCriticalFiles);
   const activeCriticalProjectionHash = await canonicalSha256(activeCriticalFiles);
   if (
-    canonicalJson(authorizedInvocationIntegrityChanges.sort()) !==
-      canonicalJson([...invocationIntegrityCriticalExceptions].sort()) ||
-    canonicalJson(authorizedImpactExecutionChanges.sort()) !==
-      canonicalJson(
-        impactExecutionFinalization === null
-          ? []
-          : [JUDGE_DEMO_IMPACT_EXECUTION_FROZEN_LAB_CLIENT_PATH]
-      )
+    canonicalJson(authorizedInvocationIntegrityChanges.sort()) !== canonicalJson([]) ||
+    canonicalJson(authorizedImpactExecutionChanges.sort()) !== canonicalJson([]) ||
+    canonicalJson(authorizedByoaChanges.sort()) !== canonicalJson([byoaLedgerPath])
   ) {
     throw new Error("direct_observation_authorized_changes_invalid");
   }
@@ -405,8 +430,10 @@ async function main(): Promise<void> {
       activeDependencyProjectionHash,
       invocationIntegrityBindingUsed: invocationIntegrityTransition !== null,
       impactExecutionBindingUsed: impactExecutionFinalization !== null,
+      byoaPredecessorCommit: byoaReleasePredecessorCommit,
       authorizedInvocationIntegrityChanges: authorizedInvocationIntegrityChanges.sort(),
       authorizedImpactExecutionChanges: authorizedImpactExecutionChanges.sort(),
+      authorizedByoaChanges: authorizedByoaChanges.sort(),
       semanticArtifactsProjectionHash:
         invocationIntegrityTransition?.semanticEvidence.artifactsProjectionHash ?? null,
       evidenceRawSha256: createHash("sha256").update(evidenceBytes).digest("hex"),

@@ -98,6 +98,39 @@ describe("Direct observation presentation critical blobs", () => {
     ).toThrow("direct_observation_critical_git_blob_mismatch:lib/domain/checkout.ts");
   });
 
+  it("accepts only inherited predecessor blobs and the exact BYOA ledger successor", () => {
+    expect(
+      verifyDirectObservationCriticalBlob({
+        path: "lib/domain/checkout-schemas.ts",
+        checkedOutBlobOid: ACTIVE_BLOB,
+        observationBlobOid: OBSERVATION_BLOB,
+        activeBlobOid: ACTIVE_BLOB,
+        byoaPredecessorBlobOid: ACTIVE_BLOB,
+        invocationIntegrityTransition: null
+      })
+    ).toBe("verified-byoa-inherited-blob");
+    expect(
+      verifyDirectObservationCriticalBlob({
+        path: "lib/evidence/checkout-trace-ledger.ts",
+        checkedOutBlobOid: "f52374f5f93e039f0d28dda2ce971b3dc9739c24",
+        observationBlobOid: OBSERVATION_BLOB,
+        activeBlobOid: "f52374f5f93e039f0d28dda2ce971b3dc9739c24",
+        byoaPredecessorBlobOid: "e3dfcf8d7cae3a36ec706226238dff87d7f7020e",
+        invocationIntegrityTransition: null
+      })
+    ).toBe("verified-byoa-successor-blob");
+    expect(() =>
+      verifyDirectObservationCriticalBlob({
+        path: "lib/domain/checkout-session.ts",
+        checkedOutBlobOid: ACTIVE_BLOB,
+        observationBlobOid: OBSERVATION_BLOB,
+        activeBlobOid: ACTIVE_BLOB,
+        byoaPredecessorBlobOid: "c".repeat(40),
+        invocationIntegrityTransition: null
+      })
+    ).toThrow("direct_observation_critical_git_blob_mismatch:lib/domain/checkout-session.ts");
+  });
+
   it.each(["lib/domain/checkout-schemas.ts", "lib/domain/checkout.ts"])(
     "accepts only an exact verified invocation-integrity blob transition for %s",
     (path) => {

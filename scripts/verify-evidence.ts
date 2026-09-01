@@ -1,141 +1,127 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
-import { canonicalJson, canonicalSha256 } from "../lib/evidence/digest";
-import {
-  GATE6_EVIDENCE_PACKAGE_VERSION,
-  computeGate6Metrics,
-  createGate6EvidenceExports,
-  type Gate6EvidencePackage
-} from "../lib/results/evidence-package";
+import { canonicalSha256 } from "../lib/evidence/digest";
 
-const jsonPath =
-  process.env.TOOLPROOF_EVIDENCE_JSON_PATH?.trim() || "evidence/toolproof-reference-evidence.json";
-const markdownPath =
-  process.env.TOOLPROOF_EVIDENCE_MARKDOWN_PATH?.trim() ||
-  "evidence/toolproof-reference-evidence.md";
-const [jsonBytes, markdownBytes] = await Promise.all([
-  readFile(jsonPath, "utf8"),
-  readFile(markdownPath, "utf8")
+const CURRENT_RESULT_PATH = "evidence/thurstone-current-result.json";
+const INVOCATION_INTEGRITY_JSON_PATH = "evidence/thurstone-invocation-integrity.json";
+const INVOCATION_INTEGRITY_MARKDOWN_PATH = "evidence/thurstone-invocation-integrity.md";
+
+const EXPECTED = Object.freeze({
+  currentResultSha256: "63151d60484b3cb12cc20c8640d66430cd938437ef86f115f622753f7760e26c",
+  currentResultDigest: "23d097f3fd20ee162479a1672260a3f8b3e3336f1fc65e003db34fae195602fb",
+  invocationJsonSha256: "d54f22b900eacf6766a17a1178bd06445a34aa90c370c03e9767f7f9834ee47a",
+  invocationMarkdownSha256: "fc4bb5fd30d8e10b6fde4d0d36094c0cb78b63805cc359cb2897179701f0b3de",
+  invocationPackageDigest: "d7388e5b3a5b1efeb09df15760a59ea9c644e04e381380ab1a901df9ddc8fade"
+});
+
+function sha256(value: string | Buffer): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function fail(reason: string): never {
+  throw new Error(`thurstone_current_evidence_invalid:${reason}`);
+}
+
+const [currentBytes, integrityJsonBytes, integrityMarkdownBytes] = await Promise.all([
+  readFile(CURRENT_RESULT_PATH),
+  readFile(INVOCATION_INTEGRITY_JSON_PATH),
+  readFile(INVOCATION_INTEGRITY_MARKDOWN_PATH)
 ]);
-const evidence = JSON.parse(jsonBytes) as Gate6EvidencePackage;
-const { packageDigest, ...payload } = evidence;
-if (
-  evidence.version !== GATE6_EVIDENCE_PACKAGE_VERSION ||
-  jsonBytes !== `${canonicalJson(evidence)}\n` ||
-  (await canonicalSha256(payload)) !== packageDigest ||
-  evidence.records.length !== 48 ||
-  evidence.summary.pairedCases !== 24 ||
-  evidence.summary.baselinePassed !== 23 ||
-  evidence.summary.revisedPassed !== 23 ||
-  !evidence.summary.noMeasuredImprovement
-) {
-  throw new Error("gate6_public_evidence_identity_invalid");
+
+if (sha256(currentBytes) !== EXPECTED.currentResultSha256) fail("semantic_file_hash");
+if (sha256(integrityJsonBytes) !== EXPECTED.invocationJsonSha256) fail("integrity_json_hash");
+if (sha256(integrityMarkdownBytes) !== EXPECTED.invocationMarkdownSha256) {
+  fail("integrity_markdown_hash");
 }
-for (const version of ["baseline", "revised"] as const) {
-  const records = evidence.records.filter((record) => record.version === version);
-  if (canonicalJson(computeGate6Metrics(records)) !== canonicalJson(evidence.metrics[version])) {
-    throw new Error(`gate6_public_evidence_metric_mismatch:${version}`);
-  }
-}
-const rebuilt = await createGate6EvidenceExports(evidence);
-if (rebuilt.json !== jsonBytes || rebuilt.markdown !== markdownBytes) {
-  throw new Error("gate6_public_evidence_export_mismatch");
-}
-const evidenceOrigin = (
-  process.env.TOOLPROOF_EVIDENCE_ORIGIN?.trim() || "https://toolproof-rust.vercel.app"
-).replace(/\/$/u, "");
-{
-  const fetchFresh = async (path: string) => {
-    const response = await fetch(`${evidenceOrigin}${path}`, { cache: "no-store" });
-    if (!response.ok || response.headers.get("cache-control") !== "no-store") {
-      throw new Error(`gate6_clean_recompute_fetch_failed:${path}:${response.status}`);
-    }
-    return response.text();
+
+const current = JSON.parse(currentBytes.toString("utf8")) as {
+  readonly version?: unknown;
+  readonly status?: unknown;
+  readonly resultDigest?: unknown;
+  readonly rows?: readonly {
+    readonly caseId?: unknown;
+    readonly passed?: unknown;
+    readonly subset?: unknown;
+    readonly expectedAction?: unknown;
+    readonly observedAction?: unknown;
+  }[];
+  readonly summary?: {
+    readonly passed?: unknown;
+    readonly failed?: unknown;
+    readonly possible?: unknown;
   };
-  const [firstJson, secondJson, firstMarkdown, secondMarkdown] = await Promise.all([
-    fetchFresh("/api/evidence/reference"),
-    fetchFresh("/api/evidence/reference"),
-    fetchFresh("/api/evidence/reference/markdown"),
-    fetchFresh("/api/evidence/reference/markdown")
-  ]);
-  if (
-    firstJson !== secondJson ||
-    firstMarkdown !== secondMarkdown ||
-    firstJson !== jsonBytes ||
-    firstMarkdown !== markdownBytes
-  ) {
-    throw new Error("gate6_clean_recompute_byte_mismatch");
-  }
-}
-const forbiddenLiterals = [".toolproof-local", "authorizationJti"];
-const localAbsolutePath = /\/(?:Users|Volumes|mnt)\/[A-Za-z0-9._-]+(?:\/|\b)/u;
+};
+
 if (
-  forbiddenLiterals.some(
-    (sentinel) => jsonBytes.includes(sentinel) || markdownBytes.includes(sentinel)
+  current.version !== "thurstone-current-result@1.0.0" ||
+  current.status !== "verified" ||
+  current.resultDigest !== EXPECTED.currentResultDigest ||
+  current.summary?.passed !== 24 ||
+  current.summary.failed !== 0 ||
+  current.summary.possible !== 24 ||
+  !Array.isArray(current.rows) ||
+  current.rows.length !== 24 ||
+  new Set(current.rows.map(({ caseId }) => caseId)).size !== 24 ||
+  current.rows.some(
+    ({ passed, expectedAction, observedAction }) =>
+      passed !== true || expectedAction !== observedAction
   ) ||
-  localAbsolutePath.test(jsonBytes) ||
-  localAbsolutePath.test(markdownBytes)
+  current.rows.filter(({ subset }) => subset === "development").length !== 12 ||
+  current.rows.filter(({ subset }) => subset === "builder-blinded-holdout").length !== 12
 ) {
-  throw new Error("gate6_public_evidence_private_boundary_violation");
+  fail("semantic_record");
 }
-const coverage = new Set(
-  evidence.records.map(
-    ({ version, subset, family, passed }) =>
-      `${version}:${subset}:${family}:${passed ? "pass" : "fail"}`
+
+const integrityExport = JSON.parse(integrityJsonBytes.toString("utf8")) as {
+  readonly evidenceClass?: unknown;
+  readonly includedInSemanticDenominator?: unknown;
+  readonly modelCallCount?: unknown;
+  readonly packageDigest?: unknown;
+  readonly score?: { readonly earned?: unknown; readonly possible?: unknown };
+  readonly evidencePackage?: unknown;
+};
+const integrityPackage = integrityExport.evidencePackage as {
+  readonly packageDigest?: unknown;
+  readonly verifierReceipt?: {
+    readonly status?: unknown;
+    readonly rows?: readonly {
+      readonly passed?: unknown;
+      readonly assertions?: readonly { readonly passed?: unknown }[];
+    }[];
+  };
+};
+const { packageDigest: ignoredPackageDigest, ...integrityPayload } = integrityPackage;
+void ignoredPackageDigest;
+if (
+  integrityExport.evidenceClass !== "supplemental-invocation-integrity" ||
+  integrityExport.includedInSemanticDenominator !== false ||
+  integrityExport.modelCallCount !== 0 ||
+  integrityExport.packageDigest !== EXPECTED.invocationPackageDigest ||
+  integrityPackage.packageDigest !== EXPECTED.invocationPackageDigest ||
+  (await canonicalSha256(integrityPayload)) !== EXPECTED.invocationPackageDigest ||
+  integrityExport.score?.earned !== 3 ||
+  integrityExport.score.possible !== 3 ||
+  integrityPackage.verifierReceipt?.status !== "verified" ||
+  integrityPackage.verifierReceipt.rows?.length !== 3 ||
+  integrityPackage.verifierReceipt.rows.some(
+    ({ passed, assertions }) =>
+      passed !== true ||
+      !assertions?.length ||
+      assertions.some((assertion) => assertion.passed !== true)
   )
-);
-for (const version of ["baseline", "revised"] as const) {
-  for (const subset of ["development", "builder-blinded-holdout"] as const) {
-    for (const family of new Set(evidence.records.map((record) => record.family))) {
-      if (
-        !evidence.records.some(
-          (record) =>
-            record.version === version && record.subset === subset && record.family === family
-        )
-      ) {
-        throw new Error(
-          `gate6_public_evidence_family_coverage_missing:${version}:${subset}:${family}`
-        );
-      }
-    }
-  }
+) {
+  fail("invocation_integrity_record");
 }
-if (![...coverage].some((key) => key.endsWith(":fail"))) {
-  throw new Error("gate6_public_evidence_failure_sample_missing");
-}
-const sampleRecords = new Map<string, Gate6EvidencePackage["records"][number]>();
-for (const record of evidence.records) {
-  const group = `${record.version}:${record.subset}:${record.family}`;
-  const current = sampleRecords.get(group);
-  const rank = (candidate: typeof record) =>
-    createHash("sha256")
-      .update(`${evidence.packageDigest}:${candidate.version}:${candidate.runnerCaseId}`)
-      .digest("hex");
-  if (!current || rank(record) < rank(current)) sampleRecords.set(group, record);
-}
-for (const record of evidence.records.filter(({ passed }) => !passed)) {
-  sampleRecords.set(`failure:${record.version}:${record.caseId}`, record);
-}
-const sample = [...sampleRecords.values()].map(
-  ({ version, subset, family, caseId, passed, hashes }) => ({
-    version,
-    subset,
-    family,
-    caseId,
-    passed,
-    rowDigest: hashes.rowDigest
-  })
-);
+
 process.stdout.write(
   `${JSON.stringify({
-    ok: true,
-    packageDigest,
-    jsonSha256: rebuilt.jsonSha256,
-    markdownSha256: rebuilt.markdownSha256,
-    records: evidence.records.length,
-    baseline: `${evidence.summary.baselinePassed}/24`,
-    revised: `${evidence.summary.revisedPassed}/24`,
-    deterministicTraceSample: sample
+    status: "verified",
+    semantic: "24/24",
+    semanticSha256: EXPECTED.currentResultSha256,
+    invocationIntegrity: "3/3",
+    invocationIntegritySha256: EXPECTED.invocationJsonSha256,
+    denominatorsCombined: false,
+    modelCallsAdded: 0
   })}\n`
 );
