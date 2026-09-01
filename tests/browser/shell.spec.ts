@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 
-test("judge shell is honest, navigable, and permanently marks the simulation", async ({ page }) => {
+test("judge shell is honest, navigable, and marks the simulation where it is used", async ({
+  page
+}) => {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.goto("/");
@@ -12,7 +14,7 @@ test("judge shell is honest, navigable, and permanently marks the simulation", a
   await expect(page.getByRole("heading", { level: 1 })).toContainText(
     "Your WebMCP code can be correct."
   );
-  await expect(page.getByText("Synthetic checkout. No purchase occurs.")).toBeVisible();
+  await expect(page.getByText("Synthetic checkout. No purchase occurs.")).toBeHidden();
   await expect(page.getByRole("link", { name: "Thurstone home" })).toHaveAttribute("href", "/");
 
   const navigation = page.getByRole("navigation", { name: "Primary navigation" });
@@ -35,6 +37,7 @@ test("judge shell is honest, navigable, and permanently marks the simulation", a
   await expect(
     page.getByRole("heading", { name: "Test Thurstone as a WebMCP owner." })
   ).toBeVisible();
+  await expect(page.getByText("Synthetic checkout. No purchase occurs.")).toBeVisible();
   await expect(
     page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: "Demo" })
   ).toHaveAttribute("aria-current", "page");
@@ -109,10 +112,12 @@ test("home makes WebMCP, trusted reality, and both judge paths explicit", async 
   await page.goto("/");
   await expect(page.getByText(/uncover semantic mistakes in their WebMCP catalog/iu)).toBeVisible();
   const flow = page.getByRole("list", {
-    name: "How Thurstone turns a semantic mismatch into a verified fix"
+    name: "Shared WebMCP release preparation"
   });
-  await expect(flow).toContainText("Native WebMCP");
-  await expect(flow).toContainText("Trusted verdict");
+  await expect(flow).toContainText("Build your WebMCP");
+  await expect(flow).toContainText("Prepare to release");
+  await expect(page.getByText("Without Thurstone", { exact: true })).toBeVisible();
+  await expect(page.getByText("With Thurstone", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Test with your agent" })).toHaveAttribute(
     "href",
     "/demo"

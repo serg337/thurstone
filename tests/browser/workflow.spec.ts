@@ -22,9 +22,10 @@ test("homepage sells the semantic release problem, mechanism, and action", async
       name: "Follow a semantic bug from the user’s words to a verified fix."
     })
   ).toBeVisible();
-  await expect(
-    page.getByText(/Expected.*checkout_request.*observed.*order_review/iu)
-  ).toBeVisible();
+  await expect(page.getByText("Without Thurstone", { exact: true })).toBeVisible();
+  await expect(page.getByText("With Thurstone", { exact: true })).toBeVisible();
+  await expect(page.getByText("06 · Hidden bug reaches users", { exact: true })).toBeVisible();
+  await expect(page.getByText("06 · Verified deploy", { exact: true })).toBeVisible();
   await expect(page.getByText(/not a claim about the agent’s private reasoning/iu)).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Run Thurstone whenever meaning can drift." })

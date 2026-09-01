@@ -245,6 +245,10 @@ nav a {
   color: var(--ts-ice);
 }
 
+body:has(.intro-page) > .simulation-notice {
+  display: none;
+}
+
 .page-shell {
   width: min(1240px, calc(100% - 2.5rem));
   margin: 0 auto;
@@ -4731,48 +4735,55 @@ textarea::placeholder {
   gap: 0.55rem;
 }
 
-.semantic-story-example {
-  margin: 0 0 1rem;
-  color: var(--ts-text-muted);
-  font-size: 1.02rem;
+.semantic-release-map {
+  position: relative;
 }
 
-.semantic-story-example strong {
-  color: var(--ts-ice);
-}
-
-.semantic-story-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.7rem;
+.semantic-shared-path,
+.semantic-release-lane ol {
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.semantic-story-grid li {
+.semantic-shared-path {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.semantic-shared-path li,
+.semantic-release-lane ol li,
+.thurstone-release-check,
+.thurstone-release-outcomes article {
   position: relative;
   min-width: 0;
-  min-height: 205px;
-  padding: 1.1rem;
+  padding: 1rem;
   background: linear-gradient(145deg, rgba(8, 29, 40, 0.88), rgba(3, 13, 19, 0.96));
   border: 1px solid var(--ts-line);
   border-radius: var(--radius-small);
 }
 
-.semantic-story-grid li[data-outcome="issue"] {
-  background: linear-gradient(145deg, rgba(70, 37, 4, 0.48), rgba(19, 12, 5, 0.96));
-  border-color: rgba(255, 151, 0, 0.34);
-  box-shadow: var(--ts-glow-amber);
+.semantic-shared-path li {
+  min-height: 160px;
 }
 
-.semantic-story-grid li[data-outcome="next"] {
-  background: linear-gradient(145deg, rgba(0, 67, 82, 0.36), rgba(3, 18, 24, 0.96));
-  border-color: rgba(54, 236, 255, 0.3);
-  box-shadow: var(--ts-glow-cyan);
+.semantic-shared-path li:not(:last-child)::after {
+  position: absolute;
+  top: 50%;
+  right: -0.72rem;
+  z-index: 2;
+  width: 0.74rem;
+  height: 2px;
+  content: "";
+  background: linear-gradient(90deg, var(--ts-blue-bright), var(--ts-cyan-bright));
+  box-shadow: 0 0 12px rgba(0, 217, 255, 0.5);
 }
 
-.semantic-story-grid span {
+.semantic-shared-path span,
+.semantic-release-lane span,
+.thurstone-release-check > span,
+.thurstone-release-outcomes span {
   color: var(--ts-cyan-bright);
   font-size: 0.68rem;
   font-weight: 800;
@@ -4780,28 +4791,139 @@ textarea::placeholder {
   text-transform: uppercase;
 }
 
-.semantic-story-grid li[data-outcome="issue"] span {
+.semantic-shared-path h3,
+.semantic-release-lane h4,
+.thurstone-release-check h4,
+.thurstone-release-outcomes h4 {
+  margin: 1.25rem 0 0;
+  color: var(--ts-ice);
+  font-size: 1rem;
+  line-height: 1.45;
+}
+
+.semantic-release-lanes {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 3.1rem;
+}
+
+.semantic-release-lanes::before {
+  position: absolute;
+  top: -1.15rem;
+  left: 25%;
+  width: 50%;
+  height: 2px;
+  content: "";
+  background: linear-gradient(
+    90deg,
+    var(--ts-amber-bright),
+    rgba(201, 223, 235, 0.38) 48%,
+    var(--ts-cyan-bright)
+  );
+  box-shadow: 0 0 12px rgba(0, 217, 255, 0.22);
+}
+
+.semantic-release-lanes::after {
+  position: absolute;
+  bottom: calc(100% + 1.15rem);
+  left: 50%;
+  width: 2px;
+  height: 1.95rem;
+  content: "";
+  background: linear-gradient(180deg, var(--ts-cyan-bright), rgba(201, 223, 235, 0.38));
+  transform: translateX(-50%);
+}
+
+.semantic-release-lane {
+  min-width: 0;
+  padding: 1rem;
+  background: rgba(3, 14, 20, 0.72);
+  border: 1px solid var(--ts-line);
+  border-radius: var(--radius);
+}
+
+.semantic-release-lane > header {
+  min-height: 76px;
+  padding: 0 0.2rem 0.9rem;
+  border-bottom: 1px solid var(--ts-line);
+}
+
+.semantic-release-lane > header h3 {
+  margin: 0.3rem 0 0;
+  color: var(--ts-ice);
+  font-size: 1.25rem;
+}
+
+.lane-without {
+  border-color: rgba(255, 151, 0, 0.25);
+}
+
+.lane-without > header span,
+.lane-without li[data-outcome="issue"] span,
+.thurstone-release-outcomes article[data-outcome="issue"] span {
   color: var(--ts-amber-bright);
 }
 
-.semantic-story-grid h3 {
-  margin: 1.65rem 0 0;
-  color: var(--ts-ice);
-  font-size: 1.08rem;
-  line-height: 1.4;
+.lane-with {
+  border-color: rgba(54, 236, 255, 0.28);
+  box-shadow: var(--ts-glow-cyan);
 }
 
-.semantic-story-grid h3 code {
-  color: var(--ts-cyan-bright);
-  font-size: 0.92em;
-  overflow-wrap: anywhere;
+.semantic-release-lane ol {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.7rem;
+  margin-top: 0.9rem;
 }
 
-.semantic-story-grid p {
-  margin: 0.65rem 0 0;
+.semantic-release-lane ol li {
+  min-height: 170px;
+}
+
+.semantic-release-lane ol li[data-outcome="issue"],
+.thurstone-release-outcomes article[data-outcome="issue"] {
+  background: linear-gradient(145deg, rgba(70, 37, 4, 0.48), rgba(19, 12, 5, 0.96));
+  border-color: rgba(255, 151, 0, 0.32);
+}
+
+.thurstone-release-check {
+  min-height: 128px;
+  margin-top: 0.9rem;
+  background: linear-gradient(145deg, rgba(0, 67, 82, 0.36), rgba(3, 18, 24, 0.96));
+  border-color: rgba(54, 236, 255, 0.3);
+}
+
+.thurstone-release-outcomes {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.7rem;
+  margin-top: 0.7rem;
+}
+
+.thurstone-release-outcomes article {
+  min-height: 176px;
+}
+
+.thurstone-release-outcomes article[data-outcome="pass"] {
+  background: linear-gradient(145deg, rgba(0, 67, 82, 0.36), rgba(3, 18, 24, 0.96));
+  border-color: rgba(54, 236, 255, 0.3);
+}
+
+.thurstone-release-outcomes p {
+  margin: 0.55rem 0 0;
   color: var(--ts-text-muted);
   font-size: 0.9rem;
-  line-height: 1.55;
+  line-height: 1.5;
+}
+
+.thurstone-release-outcomes small {
+  display: inline-flex;
+  margin-top: 0.65rem;
+  color: var(--ts-amber-bright);
+  font-size: 0.68rem;
+  font-weight: 750;
 }
 
 .semantic-story-payoff {
@@ -6401,8 +6523,17 @@ textarea::placeholder {
 @media (max-width: 1000px) {
   .semantic-failure-example,
   .product-workflow-timeline,
-  .semantic-story-grid {
+  .semantic-shared-path {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .semantic-shared-path li::after,
+  .semantic-release-lanes::before {
+    display: none;
+  }
+
+  .semantic-release-lanes {
+    grid-template-columns: 1fr;
   }
 
   .semantic-failure-example > div[data-outcome="issue"],
@@ -6428,7 +6559,7 @@ textarea::placeholder {
   }
 
   .semantic-failure-example,
-  .semantic-story-grid,
+  .semantic-shared-path,
   .lifecycle-grid,
   .direction-grid,
   .product-direction .direction-grid,
@@ -6456,6 +6587,11 @@ textarea::placeholder {
 
   .reference-evidence-disclosures summary small {
     text-align: left;
+  }
+
+  .semantic-release-lane ol,
+  .thurstone-release-outcomes {
+    grid-template-columns: 1fr;
   }
 
   .release-loop {

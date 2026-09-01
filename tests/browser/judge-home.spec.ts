@@ -25,6 +25,7 @@ test("Home presents the semantic release product before technical detail", async
     "/results"
   );
   await expect(page.getByText(/uncover semantic mistakes in their WebMCP catalog/iu)).toBeVisible();
+  await expect(page.getByLabel("Simulation notice")).toBeHidden();
   const backdrop = page.locator(".hero-signal-backdrop");
   await expect(backdrop).toHaveCount(1);
   await expect(backdrop).toHaveAttribute("aria-hidden", "true");
@@ -46,30 +47,32 @@ test("Home presents the semantic release product before technical detail", async
   );
 });
 
-test("Home follows one semantic failure through diagnosis and rerun", async ({ page }) => {
+test("Home contrasts unchecked release with Thurstone's verified path", async ({ page }) => {
   await page.goto("/");
   await expect(
     page.getByRole("heading", {
       name: "Follow a semantic bug from the user’s words to a verified fix."
     })
   ).toBeVisible();
-  const flow = page.getByRole("list", {
-    name: "How Thurstone turns a semantic mismatch into a verified fix"
-  });
-  await expect(flow.getByRole("listitem")).toHaveCount(6);
+  const shared = page.getByRole("list", { name: "Shared WebMCP release preparation" });
+  await expect(shared.getByRole("listitem")).toHaveCount(4);
   for (const stage of [
-    "01 · The request",
-    "02 · The owner’s contract",
-    "03 · The agent decision",
-    "04 · Native WebMCP",
-    "05 · Trusted verdict",
-    "06 · Fix and rerun"
+    "01 · Build your WebMCP",
+    "02 · Configure the catalog",
+    "03 · Test each handler",
+    "04 · Prepare to release"
   ]) {
-    await expect(flow.getByText(stage, { exact: true })).toBeVisible();
+    await expect(shared.getByText(stage, { exact: true })).toBeVisible();
   }
-  await expect(
-    flow.getByText(/Expected.*checkout_request.*observed.*order_review/iu)
-  ).toBeVisible();
+  await expect(page.getByText(/handlers passed.*test whether agents understand/iu)).toBeVisible();
+  const unchecked = page.getByRole("list", { name: "Release path without Thurstone" });
+  await expect(unchecked.getByRole("listitem")).toHaveCount(2);
+  await expect(unchecked).toContainText("Hidden bug reaches users");
+  await expect(page.getByText("With Thurstone", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "With semantic release check" })).toBeVisible();
+  await expect(page.getByText("05 · Run Thurstone", { exact: true })).toBeVisible();
+  await expect(page.getByText("Fix and rerun", { exact: true })).toBeVisible();
+  await expect(page.getByText("06 · Verified deploy", { exact: true })).toBeVisible();
   await expect(page.getByText(/does not stop at.*failed/iu)).toBeVisible();
   await expect(page.getByText(/not a claim about the agent’s private reasoning/iu)).toBeVisible();
 });
@@ -113,11 +116,11 @@ test("Home answers the complete cold-review product contract", async ({ page }) 
     page.getByText(/uncover semantic mistakes in their WebMCP catalog/iu),
     page.getByText("Before the first launch", { exact: true }),
     page.getByRole("heading", { name: /Follow a semantic bug/iu }),
-    page.getByText(/fresh agent chooses from the real catalog/iu),
+    page.getByText(/semantic bugs can survive normal WebMCP development/iu),
     page.getByRole("link", { name: "Test with your agent" }),
-    page.getByText("04 · Native WebMCP", { exact: true }),
-    page.getByText("05 · Trusted verdict", { exact: true }),
-    page.getByText("06 · Fix and rerun", { exact: true }),
+    page.getByText("Without Thurstone", { exact: true }),
+    page.getByText("05 · Run Thurstone", { exact: true }),
+    page.getByText("06 · Verified deploy", { exact: true }),
     page.getByText(/scheduled regression suite after launch/iu),
     page.getByText("24/24", { exact: true }),
     page.getByText("Inspect the 3 Invocation Integrity tests", { exact: true })

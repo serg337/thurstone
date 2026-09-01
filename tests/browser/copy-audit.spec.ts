@@ -9,7 +9,9 @@ test("primary copy tells one coherent semantic-release story at readable sizes",
   await expect(page.getByText(/runtime enforcement/iu)).toHaveCount(0);
 
   const essentialSizes = await page
-    .locator(".semantic-story-grid h3, .semantic-story-grid p")
+    .locator(
+      ".semantic-shared-path h3, .semantic-release-lane h3, .semantic-release-lane h4, .semantic-release-lane p"
+    )
     .evaluateAll((elements) =>
       elements.map((element) => Number.parseFloat(getComputedStyle(element).fontSize))
     );
