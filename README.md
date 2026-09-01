@@ -57,16 +57,21 @@ enforcement or security certification.
    six-step owner workflow.
 2. Review the hidden contract separately from the exact two-tool projection the agent will see.
 3. Choose **Arm live agent test** to hard-navigate into the isolated `/demo/run` document.
-4. Send the frozen request to a fresh supported ChatGPT agent and ask it to use the current page.
-5. Inspect the native tool, canonical arguments, trusted before/after state, ledger diff, verdict,
+4. In the latest ChatGPT desktop app, use its built-in Browser (`@Browser`) with a fresh GPT-5.6 Sol
+   or Terra ChatGPT Work or Codex agent. Do not use Chrome extension side chat for the Site Tools
+   proof.
+5. Send the frozen request and let the built-in-browser agent choose from the live catalog.
+6. Inspect the native tool, canonical arguments, trusted before/after state, ledger diff, verdict,
    and deterministic next step.
-6. Save a PASS or ISSUE as a browser-local regression case, then edit or rerun it without
+7. Save a PASS or ISSUE as a browser-local regression case, then edit or rerun it without
    overwriting the original result.
 
 ### Chrome
 
 Use Chrome 149 or later, enable `chrome://flags/#enable-webmcp-testing`, relaunch Chrome, and open
-the same Demo. The expert `/lab` route remains available for direct catalog and invariant testing.
+the same Demo with a WebMCP-enabled consumer. This is a separate native compatibility path; the
+ChatGPT Chrome extension side chat is not the Site Tools consumer. The expert `/lab` route remains
+available for direct catalog and invariant testing.
 
 The initial live catalog is:
 

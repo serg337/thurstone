@@ -44,6 +44,10 @@ test("isolated run registers exactly the frozen two-tool catalog and withholds t
   await waitForArmed(page);
 
   await expect(page.getByRole("heading", { name: "Your test is armed." })).toBeVisible();
+  await expect(
+    page.getByText("Use ChatGPT desktop's built-in Browser.", { exact: true })
+  ).toBeVisible();
+  await expect(page.getByText(/Do not use the Chrome extension side chat/iu)).toBeVisible();
   await expect(page.getByText("Owner's hidden contract", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Required action", { exact: true })).toHaveCount(0);
   await expect(page.getByText("What the agent can use", { exact: true })).toBeVisible();

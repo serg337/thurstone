@@ -379,14 +379,22 @@ export function ByoaRunner() {
           <p className="eyebrow">Step 5 of 6 · isolated live test</p>
           <h1 id="agent-runner-title">Your test is armed.</h1>
           <p>
-            Ask a fresh supported ChatGPT agent to use this page, then send the exact synthetic
-            request below. Keep this page open while Thurstone waits for one native invocation.
+            In the latest ChatGPT desktop app, use its built-in Browser with a fresh GPT-5.6 Sol or
+            Terra ChatGPT Work or Codex agent, then send the exact synthetic request below. Keep
+            this page open while Thurstone waits for one native invocation.
           </p>
         </div>
         <a className="button button-secondary" href="/demo" onClick={clearUnfinishedSession}>
           Cancel test
         </a>
       </div>
+      <aside className="agent-consumer-note" aria-label="Required ChatGPT consumer">
+        <strong>Use ChatGPT desktop&apos;s built-in Browser.</strong>
+        <span>
+          Choose @Browser with GPT-5.6 Sol or Terra. Do not use the Chrome extension side chat for
+          this Site Tools proof.
+        </span>
+      </aside>
       <div className="agent-runner-grid">
         <div className="agent-runner-content">
           <section className="agent-request-card" aria-labelledby="agent-request-title">
@@ -419,9 +427,11 @@ export function ByoaRunner() {
           <details className="agent-setup-disclosure">
             <summary>Browser setup and test boundary</summary>
             <p>
-              Use ChatGPT&apos;s in-app browser with GPT-5.6 Sol or Terra, or Chrome 149+ with
-              WebMCP testing enabled. Thurstone admits the first native call; later attempts are
-              rejected before domain execution. The prompt binding remains user-attested.
+              Site Tools run in the built-in Browser of the latest ChatGPT desktop app with GPT-5.6
+              Sol or Terra. Use @Browser—not the Chrome extension side chat—for this ChatGPT proof.
+              Chrome 149+ with WebMCP testing enabled is a separate native compatibility path.
+              Thurstone admits the first native call; later attempts are rejected before domain
+              execution. The prompt binding remains user-attested.
             </p>
           </details>
         </div>

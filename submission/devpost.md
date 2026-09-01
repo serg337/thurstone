@@ -101,8 +101,10 @@ Testing instructions:
    agent-visible tool descriptions.
 3. Review the hidden owner contract separately from the projection the agent will receive, then
    choose **Arm live agent test**.
-4. On `/demo/run`, copy the exact request into a fresh supported ChatGPT agent and ask it to use the
-   current page. Let it invoke one of the two native Site Tools.
+4. On `/demo/run`, use the built-in Browser (`@Browser`) in the latest ChatGPT desktop app with a
+   fresh GPT-5.6 Sol or Terra ChatGPT Work or Codex agent. The Chrome extension side chat is not the
+   Site Tools consumer. Send the exact request and let the built-in-browser agent choose one of the
+   two native Site Tools.
 5. Inspect expected versus observed behavior, canonical arguments, trusted state, ledger diff,
    assertions, verdict, and deterministic next step.
 6. Save a PASS or ISSUE to **My Tests**, then open **Results** to see it before the unchanged 24/24

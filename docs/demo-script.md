@@ -44,9 +44,10 @@ Click **Arm live agent test**.
 
 ## 1:08–1:33 — Bring your own agent
 
-On the isolated `/demo/run` page, show the frozen request and two-tool catalog. In a fresh supported
-ChatGPT agent, send the exact request and ask it to use the current page. Let the agent invoke the
-native `checkout_request` Site Tool.
+On the isolated `/demo/run` page, show the frozen request and two-tool catalog. In the built-in
+Browser (`@Browser`) of the latest ChatGPT desktop app, use a fresh GPT-5.6 Sol or Terra ChatGPT Work
+or Codex agent. Send the exact request and let the agent invoke the native `checkout_request` Site
+Tool. Do not use Chrome extension side chat for this proof.
 
 Say:
 

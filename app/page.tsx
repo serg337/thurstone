@@ -66,7 +66,7 @@ export default function HomePage() {
             </a>
           </div>
           <p className="intro-microcopy">
-            No account · safe reference checkout · bring your own supported ChatGPT agent
+            No account · safe reference checkout · use ChatGPT desktop&apos;s built-in Browser
           </p>
         </div>
       </section>

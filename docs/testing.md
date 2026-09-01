@@ -43,9 +43,10 @@ operator lane and remain subject to the Redis lifetime guard.
 1. Open `/demo` on the exact production SHA and keep the default explicit-checkout contract.
 2. Arm the isolated run and verify the visible catalog contains only `order_review` and
    `checkout_request`.
-3. In a fresh supported external agent, send the exact frozen request and allow one native Site
-   Tools call.
-4. Confirm the terminal result contains the exact build and manifest, canonical arguments, trusted
+3. In the built-in Browser (`@Browser`) of the latest ChatGPT desktop app, use a fresh GPT-5.6 Sol
+   or Terra ChatGPT Work or Codex agent. Do not use Chrome extension side chat for this proof.
+4. Send the exact frozen request and allow one native Site Tools call.
+5. Confirm the terminal result contains the exact build and manifest, canonical arguments, trusted
    before/after state, ledger diff, assertions, and PASS or ISSUE verdict.
-5. Confirm the catalog is retired, a second call cannot reach the domain, no Thurstone-paid model
+6. Confirm the catalog is retired, a second call cannot reach the domain, no Thurstone-paid model
    request occurred, and PASS/ISSUE can be saved as a digest-linked regression.

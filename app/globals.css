@@ -4155,6 +4155,23 @@ textarea::placeholder {
   gap: 1rem;
 }
 
+.agent-consumer-note {
+  display: flex;
+  gap: 0.65rem;
+  align-items: baseline;
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+  color: var(--ts-ice);
+  background: rgba(0, 217, 255, 0.08);
+  border: 1px solid rgba(54, 236, 255, 0.28);
+  border-radius: var(--radius-small);
+}
+
+.agent-consumer-note span {
+  color: var(--ts-text-muted);
+  line-height: 1.5;
+}
+
 .agent-request-card,
 .agent-catalog-preview,
 .agent-runner-status,
