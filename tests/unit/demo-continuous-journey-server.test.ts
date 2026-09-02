@@ -13,7 +13,13 @@ import {
 } from "@/lib/demo/contract-suite";
 import { createByoaContractV3, expectedLineageForThurstoneSuite } from "@/lib/demo/contract-v3";
 import { createCompiledByoaSessionV2, transitionByoaSessionV2 } from "@/lib/demo/agent-session-v2";
-import { parseContinuousJourneyRedisRecord } from "@/lib/demo/continuous-journey.server";
+import {
+  advanceContinuousJourney,
+  parseContinuousJourneyRedisRecord,
+  readContinuousJourneyByRun,
+  recordContinuousJourneyResult,
+  storeContinuousJourney
+} from "@/lib/demo/continuous-journey.server";
 
 const at = (second: number) => `2026-09-02T12:00:${String(second).padStart(2, "0")}.000Z`;
 const readOnlyCase: ThurstoneContractCaseInput = {
@@ -92,33 +98,69 @@ async function planFixture() {
   });
 }
 
+function ownerSummary(plan: Awaited<ReturnType<typeof planFixture>>, position: number) {
+  const step = plan.steps[position]!;
+  return {
+    caseId: step.contract.caseId,
+    request: step.contract.request,
+    expectedTool: step.contract.expectedTool,
+    observedTool: step.contract.expectedTool,
+    expectedArguments: step.contract.argumentPredicate,
+    actualArguments: {},
+    verifiedEffect: "No trusted state change",
+    resultExplanation:
+      "The agent selected the contract-required read-only tool and the trusted checkout state did not change.",
+    primaryFindingCode: null,
+    primaryFindingTitle: null,
+    recommendedNextStep: null,
+    trustedStateAfter: {
+      revision: 0,
+      lines: [
+        { itemId: "field-notebook", name: "Field notebook", quantity: 1 },
+        { itemId: "stoneware-mug", name: "Stoneware mug", quantity: 2 }
+      ],
+      pendingCheckoutStatus: null
+    }
+  };
+}
+
+function redisReply(
+  plan: Awaited<ReturnType<typeof planFixture>>,
+  options: {
+    position?: number;
+    results?: unknown;
+    previousRunId?: string;
+    previousResultDigest?: string;
+    currentToken?: string;
+  } = {}
+) {
+  const position = options.position ?? 0;
+  const current = plan.steps[position]!;
+  return [
+    1,
+    plan.journeyId,
+    BYOA_CONTINUOUS_JOURNEY_VERSION,
+    plan,
+    position,
+    current.runId,
+    current.contractDigest,
+    Date.parse(current.expiresAt),
+    options.results ?? [],
+    options.previousRunId ?? "",
+    options.previousResultDigest ?? "",
+    options.currentToken ?? ""
+  ];
+}
+
 describe("production Redis journey decoding", () => {
   it("accepts both raw JSON strings and Upstash automatically deserialized values", async () => {
     const plan = await planFixture();
     const first = plan.steps[0]!;
-    const common = [
-      1,
-      plan.journeyId,
-      BYOA_CONTINUOUS_JOURNEY_VERSION,
-      null,
-      0,
-      first.runId,
-      first.contractDigest,
-      Date.parse(first.expiresAt),
-      null
-    ];
-    const raw = parseContinuousJourneyRedisRecord([
-      ...common.slice(0, 3),
-      JSON.stringify(plan),
-      ...common.slice(4, 8),
-      "[]"
-    ]);
-    const deserialized = parseContinuousJourneyRedisRecord([
-      ...common.slice(0, 3),
-      plan,
-      ...common.slice(4, 8),
-      []
-    ]);
+    const rawReply = redisReply(plan);
+    rawReply[3] = JSON.stringify(plan);
+    rawReply[8] = "[]";
+    const raw = parseContinuousJourneyRedisRecord(rawReply);
+    const deserialized = parseContinuousJourneyRedisRecord(redisReply(plan));
 
     expect(raw).toEqual(deserialized);
     expect(deserialized).toMatchObject({
@@ -127,6 +169,97 @@ describe("production Redis journey decoding", () => {
       currentRunId: first.runId,
       currentContractDigest: first.contractDigest,
       results: []
+    });
+  });
+
+  it("preserves a completed result identically across opaque and legacy Upstash encodings", async () => {
+    const plan = await planFixture();
+    const first = plan.steps[0]!;
+    const result = {
+      runId: first.runId,
+      verdict: "pass",
+      resultDigest: "a".repeat(64),
+      ownerSummary: ownerSummary(plan, 0)
+    };
+    const opaqueRaw = parseContinuousJourneyRedisRecord(
+      redisReply(plan, { results: JSON.stringify([JSON.stringify(result)]) })
+    );
+    const opaqueDeserialized = parseContinuousJourneyRedisRecord(
+      redisReply(plan, { results: [JSON.stringify(result)] })
+    );
+    const legacyDeserialized = parseContinuousJourneyRedisRecord(
+      redisReply(plan, { results: [result] })
+    );
+
+    expect(opaqueRaw).toEqual(opaqueDeserialized);
+    expect(opaqueDeserialized).toEqual(legacyDeserialized);
+    expect(legacyDeserialized?.results).toEqual([result]);
+  });
+
+  it("parses the retry binding after the first result advances to the second case", async () => {
+    const plan = await planFixture();
+    const first = plan.steps[0]!;
+    const resultDigest = "a".repeat(64);
+    const result = {
+      runId: first.runId,
+      verdict: "pass",
+      resultDigest,
+      ownerSummary: ownerSummary(plan, 0)
+    };
+    const parsed = parseContinuousJourneyRedisRecord(
+      redisReply(plan, {
+        position: 1,
+        results: [JSON.stringify(result)],
+        previousRunId: first.runId,
+        previousResultDigest: resultDigest,
+        currentToken: "tbh2.retry-token"
+      })
+    );
+
+    expect(parsed).toMatchObject({
+      position: 1,
+      currentRunId: plan.steps[1]!.runId,
+      previousRunId: first.runId,
+      previousResultDigest: resultDigest,
+      currentToken: "tbh2.retry-token",
+      results: [result]
+    });
+  });
+
+  it("round-trips result and replay state through the production-shaped server API", async () => {
+    const plan = await planFixture();
+    const first = plan.steps[0]!;
+    const second = plan.steps[1]!;
+    const resultDigest = "a".repeat(64);
+    const environment = { ...process.env, TOOLPROOF_BROWSER_FAKE_PROBE: "1" };
+
+    await storeContinuousJourney(plan, Date.parse(first.expiresAt), environment);
+    await recordContinuousJourneyResult(
+      first.runId,
+      "pass",
+      resultDigest,
+      ownerSummary(plan, 0),
+      environment
+    );
+    const beforeAdvance = await readContinuousJourneyByRun(first.runId, environment);
+    expect(beforeAdvance?.results).toHaveLength(1);
+    await advanceContinuousJourney(
+      beforeAdvance!,
+      second,
+      "tbh2.retry-token",
+      resultDigest,
+      environment
+    );
+
+    const byOriginalRun = await readContinuousJourneyByRun(first.runId, environment);
+    const byNextRun = await readContinuousJourneyByRun(second.runId, environment);
+    expect(byOriginalRun).toEqual(byNextRun);
+    expect(byNextRun).toMatchObject({
+      position: 1,
+      currentRunId: second.runId,
+      previousRunId: first.runId,
+      previousResultDigest: resultDigest,
+      currentToken: "tbh2.retry-token"
     });
   });
 
@@ -143,8 +276,30 @@ describe("production Redis journey decoding", () => {
         plan.steps[1]!.runId,
         first.contractDigest,
         Date.parse(first.expiresAt),
-        []
+        [],
+        "",
+        "",
+        ""
       ])
     ).toThrow(/record binding/iu);
+  });
+
+  it("fails closed when result order does not match the frozen plan", async () => {
+    const plan = await planFixture();
+    const second = plan.steps[1]!;
+    expect(() =>
+      parseContinuousJourneyRedisRecord(
+        redisReply(plan, {
+          results: [
+            {
+              runId: second.runId,
+              verdict: "pass",
+              resultDigest: "a".repeat(64),
+              ownerSummary: ownerSummary(plan, 1)
+            }
+          ]
+        })
+      )
+    ).toThrow(/result binding/iu);
   });
 });

@@ -233,6 +233,7 @@ export function ByoaRunnerV2() {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const terminalRef = useRef(false);
   const finalizationClaimedRef = useRef(false);
+  const sourceStatusFailureCountRef = useRef(0);
   const armedAtRef = useRef<string | null>(null);
   const environmentRef = useRef<ByoaAgentEnvironmentV2 | undefined>(undefined);
 
@@ -567,6 +568,12 @@ export function ByoaRunnerV2() {
     if (!source || sourceResult) return;
     let disposed = false;
     let timeout: ReturnType<typeof setTimeout> | undefined;
+    const stopAfterRepeatedStatusFailure = (message: string): boolean => {
+      sourceStatusFailureCountRef.current += 1;
+      if (sourceStatusFailureCountRef.current < 3) return false;
+      if (!disposed) setError(message);
+      return true;
+    };
     const poll = async () => {
       try {
         const queue = readContractRunQueue(window.sessionStorage);
@@ -592,6 +599,7 @@ export function ByoaRunnerV2() {
           }
         );
         if (response.ok) {
+          sourceStatusFailureCountRef.current = 0;
           const raw = await response.json();
           if (batched) {
             const status = byoaContinuousJourneyStatusResponseSchema.parse(raw);
@@ -619,9 +627,30 @@ export function ByoaRunnerV2() {
               return;
             }
           }
+        } else if (response.status === 404 || response.status >= 500) {
+          if (
+            stopAfterRepeatedStatusFailure(
+              response.status === 404
+                ? "Thurstone could not find the durable test state after three attempts. Preserve this page and create a fresh handoff."
+                : "Thurstone could not read the durable test state after three attempts. Preserve this page and create a fresh handoff after service recovery."
+            )
+          )
+            return;
+        } else {
+          if (!disposed) {
+            setError(
+              "This handoff can no longer be verified. Return to the contract and create a fresh handoff."
+            );
+          }
+          return;
         }
       } catch {
-        // The owner source remains usable while the fresh task is still starting.
+        if (
+          stopAfterRepeatedStatusFailure(
+            "Thurstone could not reach the durable test state after three attempts. Preserve this page and create a fresh handoff after network recovery."
+          )
+        )
+          return;
       }
       if (!disposed) timeout = setTimeout(() => void poll(), 1_500);
     };
@@ -1033,6 +1062,13 @@ export function ByoaRunnerV2() {
           </p>
         </header>
 
+        {error ? (
+          <div className="agent-runner-recovery" role="alert">
+            <strong>Live status verification stopped.</strong>
+            <p>{error}</p>
+          </div>
+        ) : null}
+
         <div className="handoff-launch-layout">
           <div className="handoff-launch-main">
             {journeyStopped && terminalJourneyResult ? (
@@ -1209,20 +1245,22 @@ export function ByoaRunnerV2() {
 
             <div
               className="handoff-live-status"
-              data-state={claimFailureBlocks ? "blocked" : "active"}
+              data-state={error || claimFailureBlocks ? "blocked" : "active"}
               role="status"
             >
               <span className="handoff-status-pulse" aria-hidden="true" />
               <div>
-                <strong>{statusTitle}</strong>
+                <strong>{error ? "Durable status unavailable" : statusTitle}</strong>
                 <p>
-                  {claimFailureBlocks
-                    ? "The claim stopped before any request, tool, or native invocation was exposed."
-                    : journeyStopped
-                      ? `${journeyPassedCount} passed, ${journeyIssueCount || 1} issue, and ${journeyNotRunCount} not run.`
-                      : agentConnected
-                        ? "Keep working in the same agent task while Thurstone verifies each step."
-                        : "Waiting for the secure handoff to be opened."}
+                  {error
+                    ? "Owner-side verification stopped; the progress count is no longer being updated."
+                    : claimFailureBlocks
+                      ? "The claim stopped before any request, tool, or native invocation was exposed."
+                      : journeyStopped
+                        ? `${journeyPassedCount} passed, ${journeyIssueCount || 1} issue, and ${journeyNotRunCount} not run.`
+                        : agentConnected
+                          ? "Keep working in the same agent task while Thurstone verifies each step."
+                          : "Waiting for the secure handoff to be opened."}
                 </p>
               </div>
               <div
@@ -1269,7 +1307,7 @@ export function ByoaRunnerV2() {
     );
   }
 
-  if (error) {
+  if (error && !result) {
     return (
       <section className="agent-runner-empty" data-byoa-v2-state="ERROR">
         <p className="eyebrow">Isolated run stopped safely</p>
@@ -1295,6 +1333,13 @@ export function ByoaRunnerV2() {
   if (result) {
     return (
       <section className="byoa-terminal-result" data-byoa-v2-state={sessionState}>
+        {error ? (
+          <div className="agent-runner-recovery" role="alert">
+            <strong>The next request was not received.</strong>
+            <p>{error}</p>
+            <p>Retry below. Thurstone will reuse the same admitted step without duplicating it.</p>
+          </div>
+        ) : null}
         {journey !== undefined ? (
           <div className="agent-runner-recovery" role="status">
             <strong>

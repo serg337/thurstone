@@ -1,6 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
+import {
+  BYOA_CONTINUOUS_JOURNEY_ADVANCE_VERSION,
+  BYOA_FRESH_CONTEXT_V2_STORAGE_KEY,
+  BYOA_REMOTE_SESSION_V2_STORAGE_KEY
+} from "@/lib/demo/agent-handoff-v2";
+import { BYOA_RESULT_V3_STORAGE_KEY } from "@/lib/demo/byoa-result-storage-v3";
 import { installEmulatedConsumer } from "./support/emulated-consumer";
 import {
   handoffUrlFromCommand,
@@ -102,7 +108,84 @@ test("continuous journey repeats tools in one agent page and carries trusted sta
 
   await startFreshV2(fresh, ["cart_get", "cart_update", "order_review", "checkout_request"]);
   await invokeFreshV2(fresh, "cart_get", {});
-  await expectPassAndContinue(fresh, 2);
+  await expect(fresh.locator("[data-byoa-v2-state='PASS']")).toBeVisible();
+  const firstAdvance = await fresh.evaluate(
+    ({ remoteKey, resultKey, version }) => {
+      const remote = JSON.parse(sessionStorage.getItem(remoteKey) ?? "null") as {
+        runId: string;
+        contractDigest: string;
+      } | null;
+      const result = JSON.parse(sessionStorage.getItem(resultKey) ?? "null") as {
+        resultDigest: string;
+      } | null;
+      if (!remote || !result) throw new Error("The first result was not persisted.");
+      return {
+        version,
+        runId: remote.runId,
+        contractDigest: remote.contractDigest,
+        resultDigest: result.resultDigest
+      };
+    },
+    {
+      remoteKey: BYOA_REMOTE_SESSION_V2_STORAGE_KEY,
+      resultKey: BYOA_RESULT_V3_STORAGE_KEY,
+      version: BYOA_CONTINUOUS_JOURNEY_ADVANCE_VERSION
+    }
+  );
+  let interruptedNextRunId = "";
+  await fresh.route(
+    "**/api/demo/journey/advance",
+    async (route) => {
+      const response = await route.fetch();
+      expect(response.status()).toBe(200);
+      interruptedNextRunId = String(
+        ((await response.json()) as { session?: { runId?: string } }).session?.runId ?? ""
+      );
+      await route.abort("failed");
+    },
+    { times: 1 }
+  );
+  await fresh.getByRole("button", { name: "Continue to step 2" }).click();
+  await expect(fresh.locator(".agent-runner-recovery[role='alert']")).toContainText(
+    "Failed to fetch"
+  );
+  await fresh.getByRole("button", { name: "Continue to step 2" }).click();
+  await expect(fresh.getByText(/continuous journey 2 of \d+/iu)).toBeVisible();
+  expect(interruptedNextRunId).not.toBe("");
+  await expect
+    .poll(() =>
+      fresh.evaluate(
+        (key) =>
+          (JSON.parse(sessionStorage.getItem(key) ?? "null") as { runId?: string } | null)?.runId,
+        BYOA_REMOTE_SESSION_V2_STORAGE_KEY
+      )
+    )
+    .toBe(interruptedNextRunId);
+  const replay = await fresh.evaluate(
+    async ({ body, contextKey }) => {
+      const storedContext = JSON.parse(sessionStorage.getItem(contextKey) ?? "null") as {
+        freshContextId?: string;
+      } | null;
+      const freshContext = storedContext?.freshContextId;
+      if (!freshContext) throw new Error("Fresh context is unavailable.");
+      const response = await fetch("/api/demo/journey/advance", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Thurstone-Request": "byoa-handoff",
+          "X-Thurstone-Fresh-Context": freshContext
+        },
+        body: JSON.stringify(body),
+        cache: "no-store"
+      });
+      return { status: response.status, body: await response.json() };
+    },
+    { body: firstAdvance, contextKey: BYOA_FRESH_CONTEXT_V2_STORAGE_KEY }
+  );
+  expect(replay.status).toBe(200);
+  expect((replay.body as { session?: { runId?: string } }).session?.runId).toBe(
+    interruptedNextRunId
+  );
 
   await startNextJourneyStep(fresh);
   await invokeFreshV2(fresh, "cart_update", {
@@ -228,4 +311,34 @@ test("an early argument issue stops the journey and becomes actionable in the ow
   await owner.getByRole("button", { name: "Edit this test" }).click();
   await expect(owner.getByRole("heading", { name: "Update the selected case" })).toBeVisible();
   await expect(owner.getByLabel(/^Item ID/iu)).toHaveValue("stoneware-mug");
+});
+
+test("the owner tab stops polling and explains repeated durable-state failures", async ({
+  page: owner
+}) => {
+  await installEmulatedConsumer(owner);
+  await owner.goto("/demo");
+  await owner.getByRole("button", { name: "Choose the test catalog" }).click();
+  for (const toolName of ["cart_get", "order_review"]) {
+    await owner.getByRole("button", { name: new RegExp(toolName, "u") }).click();
+  }
+  await owner.getByRole("button", { name: "Build the contract suite" }).click();
+  for (const toolName of ["cart_get", "order_review"]) await addStarter(owner, toolName);
+  await owner.getByRole("radio", { name: /Regression suite/u }).check();
+  await owner.getByRole("button", { name: "Run contract · 2 requests" }).click();
+  await owner.route("**/api/demo/journey/status", async (route) => {
+    await route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "journey_state_unavailable" })
+    });
+  });
+  await owner.getByRole("button", { name: /Arm regression suite/u }).click();
+  await owner.waitForURL(/\/demo\/run#handoff-source-v2$/u);
+
+  await expect(owner.locator(".agent-runner-recovery[role='alert']")).toContainText(
+    "could not read the durable test state after three attempts",
+    { timeout: 8_000 }
+  );
+  await expect(owner.getByText("Durable status unavailable")).toBeVisible();
 });
