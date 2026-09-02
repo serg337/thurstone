@@ -1,5 +1,6 @@
 import styles from "@/components/demo/diagnostic-result-v3.module.css";
 import type { ByoaDemoResultV3 } from "@/lib/demo/result-v3";
+import Link from "next/link";
 import type { ReactNode } from "react";
 
 function verdictTitle(result: ByoaDemoResultV3): string {
@@ -316,10 +317,10 @@ export function DiagnosticResultV3({
             <strong>3-case Invocation Integrity</strong>
             <span>Privileged fields, nonexistent items, and replay/idempotency.</span>
           </a>
-          <a href="/workflow">
+          <Link href="/#thurstone-today">
             <strong>Release workflow</strong>
             <span>Where Thurstone fits before launch and after WebMCP changes.</span>
-          </a>
+          </Link>
           <a href="/research">
             <strong>Research foundations</strong>
             <span>LIP, CSR, and related Invarra work behind semantic contract testing.</span>

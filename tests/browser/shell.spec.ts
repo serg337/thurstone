@@ -18,10 +18,9 @@ test("judge shell is honest, navigable, and keeps simulation notices contextual"
   await expect(page.getByRole("link", { name: "Thurstone home" })).toHaveAttribute("href", "/");
 
   const navigation = page.getByRole("navigation", { name: "Primary navigation" });
-  await expect(navigation.getByRole("link")).toHaveCount(3);
+  await expect(navigation.getByRole("link")).toHaveCount(2);
   for (const [label, href] of [
     ["Demo", "/demo"],
-    ["Workflow", "/workflow"],
     ["Research", "/research"]
   ] as const) {
     await expect(navigation.getByRole("link", { name: label, exact: true })).toHaveAttribute(
@@ -42,11 +41,11 @@ test("judge shell is honest, navigable, and keeps simulation notices contextual"
     page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: "Demo" })
   ).toHaveAttribute("aria-current", "page");
 
-  await page.getByRole("link", { name: "Workflow" }).click();
-  await expect(page).toHaveURL(/\/workflow$/u);
   await expect(
-    page.getByRole("heading", { name: "From human intent to a release decision." })
-  ).toBeVisible();
+    page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", {
+      name: "Workflow"
+    })
+  ).toHaveCount(0);
 
   await page.goto("/results");
   await expect(page).toHaveURL(/\/results$/u);

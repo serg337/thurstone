@@ -12,18 +12,14 @@ vi.mock("next/navigation", () => ({ usePathname: () => "/results" }));
 afterEach(cleanup);
 
 describe("Thurstone judge frontend primitives", () => {
-  it("presents the three-item judge navigation until contextual results exist", () => {
+  it("presents the two-item judge navigation until contextual results exist", () => {
     const { container } = render(SiteHeader({}));
 
     const navigation = screen.getByRole("navigation", { name: "Primary navigation" });
     const links = within(navigation).getAllByRole("link");
-    expect(links).toHaveLength(3);
-    expect(links.map((link) => link.textContent)).toEqual(["Demo", "Workflow", "Research"]);
-    expect(links.map((link) => link.getAttribute("href"))).toEqual([
-      "/demo",
-      "/workflow",
-      "/research"
-    ]);
+    expect(links).toHaveLength(2);
+    expect(links.map((link) => link.textContent)).toEqual(["Demo", "Research"]);
+    expect(links.map((link) => link.getAttribute("href"))).toEqual(["/demo", "/research"]);
     expect(within(navigation).queryByRole("link", { name: /Results/u })).not.toBeInTheDocument();
     expect(within(navigation).getByRole("link", { name: "Demo" })).not.toHaveAttribute(
       "aria-current"

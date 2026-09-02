@@ -28,13 +28,12 @@ test("primary copy tells one coherent semantic-release story at readable sizes",
   ).toBeVisible();
   await expect(page.locator(".demo-mode-nav, .demo-readiness")).toHaveCount(0);
 
-  await page.goto("/workflow");
-  await expect(
-    page.getByText("Product direction — not in the challenge release", { exact: true })
-  ).toBeVisible();
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Thurstone today" })).toBeVisible();
 
   await page.goto("/research");
-  await expect(page.locator(".research-equations, .research-boundary")).toHaveCount(0);
+  await expect(page.locator(".research-equation-canvas")).toHaveCount(2);
+  await expect(page.locator(".research-boundary")).toHaveCount(0);
   const paperHeadingSizes = await page
     .locator(".research-paper h3")
     .evaluateAll((elements) =>

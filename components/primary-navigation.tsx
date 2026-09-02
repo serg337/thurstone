@@ -10,7 +10,6 @@ import {
 
 export const PRIMARY_NAVIGATION = Object.freeze([
   { href: "/demo", label: "Demo" },
-  { href: "/workflow", label: "Workflow" },
   { href: "/research", label: "Research" }
 ] as const);
 

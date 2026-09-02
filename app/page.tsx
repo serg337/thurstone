@@ -1,4 +1,5 @@
 import { HeroSignalBackdrop } from "@/components/hero-signal-backdrop";
+import { HomeWorkflowOrbit } from "@/components/home-workflow-orbit";
 import { BrowserEntryGuide } from "@/components/demo/browser-entry-guide";
 import { ReferenceEvidenceDisclosures } from "@/components/results/reference-evidence-disclosures";
 import { StatusPill } from "@/components/status-pill";
@@ -146,6 +147,15 @@ export default function HomePage() {
         </div>
       </section>
 
+      <section
+        className="intro-section home-workflow-section"
+        id="thurstone-today"
+        aria-labelledby="thurstone-today-title"
+      >
+        <h2 id="thurstone-today-title">Thurstone today</h2>
+        <HomeWorkflowOrbit />
+      </section>
+
       <section className="intro-section" aria-labelledby="lifecycle-title">
         <div className="intro-section-heading">
           <p className="eyebrow">Semantic regression</p>
@@ -205,11 +215,6 @@ export default function HomePage() {
           </article>
         </div>
         <ReferenceEvidenceDisclosures />
-        <div className="button-row proof-actions">
-          <a className="button button-primary" href="/workflow">
-            See the workflow
-          </a>
-        </div>
       </section>
     </div>
   );

@@ -8,7 +8,7 @@ test("Research connects the two papers to Thurstone without duplicating the cano
 
   await expect(page).toHaveTitle("Research · Thurstone");
   await expect(
-    page.getByRole("heading", { name: "The measurement research behind Thurstone." })
+    page.getByRole("heading", { name: "Meaning is the unit. Behavior is the evidence." })
   ).toBeVisible();
   await expect(
     page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", {
@@ -22,9 +22,11 @@ test("Research connects the two papers to Thurstone without duplicating the cano
     page.getByRole("heading", { name: "The Latent Invariance Principle" })
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: "Canonical Semantic Realization" })).toBeVisible();
-  await expect(page.getByText("Why it matters to Thurstone", { exact: true })).toHaveCount(2);
+  await expect(page.getByText("In Thurstone", { exact: true })).toHaveCount(2);
+  await expect(page.getByText("r = g(Φ, c, ε)", { exact: true })).toBeVisible();
+  await expect(page.getByText("p₁ ≡ₛₑₘ p₂", { exact: true })).toBeVisible();
 
-  await expect(page.getByRole("link", { name: "Open Invarra Research" })).toHaveAttribute(
+  await expect(page.getByRole("link", { name: "Read the full papers" })).toHaveAttribute(
     "href",
     "https://invarra.ai/research"
   );
@@ -47,7 +49,7 @@ test("Research connects the two papers to Thurstone without duplicating the cano
 
   const phalanx = page.getByRole("complementary", { name: "Thurstone tests. Phalanx governs." });
   await expect(phalanx).toContainText(
-    "controls which instructions may influence protected AI actions"
+    "controls which written instructions may influence protected AI actions"
   );
   await expect(phalanx.getByRole("link", { name: "Explore Phalanx" })).toHaveAttribute(
     "href",

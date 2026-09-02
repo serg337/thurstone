@@ -37,18 +37,19 @@ test("homepage sells the semantic release problem, mechanism, and action", async
   );
   await expect(page.getByText("24/24", { exact: true })).toBeVisible();
   await expect(page.getByText("3/3", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Thurstone today" })).toBeVisible();
+  await expect(page.getByRole("img", { name: /seven-step semantic release loop/iu })).toBeVisible();
   await expect(page.getByText(/27\s*\/\s*27/u)).toHaveCount(0);
 });
 
 test("primary navigation keeps Results contextual until an owner journey exists", async ({
   page
 }) => {
-  await page.goto("/workflow");
+  await page.goto("/");
   const navigation = page.getByRole("navigation", { name: "Primary navigation" });
-  await expect(navigation.getByRole("link")).toHaveCount(3);
+  await expect(navigation.getByRole("link")).toHaveCount(2);
   for (const [label, href] of [
     ["Demo", "/demo"],
-    ["Workflow", "/workflow"],
     ["Research", "/research"]
   ] as const) {
     await expect(navigation.getByRole("link", { name: label, exact: true })).toHaveAttribute(
@@ -57,37 +58,14 @@ test("primary navigation keeps Results contextual until an owner journey exists"
     );
   }
   await expect(navigation.getByRole("link", { name: /Results/u })).toHaveCount(0);
-  await expect(navigation.getByRole("link", { name: "Workflow" })).toHaveAttribute(
-    "aria-current",
-    "page"
-  );
+  await expect(navigation.getByRole("link", { name: "Workflow" })).toHaveCount(0);
 });
 
-test("Workflow separates the working challenge product from product direction", async ({
-  page
-}) => {
+test("the retired Workflow route redirects to the Home workflow cards", async ({ page }) => {
   await page.goto("/workflow");
-  await expect(
-    page.getByRole("heading", { name: "From human intent to a release decision." })
-  ).toBeVisible();
-  for (const stage of [
-    "Define",
-    "Arm",
-    "Test with an agent",
-    "Verify reality",
-    "Diagnose",
-    "Save",
-    "Rerun"
-  ]) {
-    await expect(page.getByRole("heading", { name: stage, exact: true })).toBeVisible();
-  }
-  await expect(page.getByRole("heading", { name: "Challenge release" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Not yet" })).toBeVisible();
-  await expect(page.getByText("Arbitrary customer-site connection", { exact: true })).toBeVisible();
-  await expect(
-    page.getByText("Product direction — not in the challenge release", { exact: true })
-  ).toBeVisible();
-  await expect(page.getByText(/directions, not current capabilities or promises/iu)).toBeVisible();
+  await expect(page).toHaveURL(/\/#thurstone-today$/u);
+  await expect(page.getByRole("heading", { name: "Thurstone today" })).toBeVisible();
+  await expect(page.getByText("Current boundary", { exact: true })).toHaveCount(0);
 });
 
 test("Results is reserved for Demo runs while reference evidence remains on Home", async ({
@@ -105,8 +83,12 @@ test("Results is reserved for Demo runs while reference evidence remains on Home
 
 test("new judge pages reflow without horizontal page overflow", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  for (const route of ["/", "/workflow", "/results"]) {
+  for (const route of ["/", "/results"]) {
     await page.goto(route);
+    if (route === "/") {
+      await expect(page.locator(".workflow-path-mobile")).toBeVisible();
+      await expect(page.locator(".workflow-path-desktop")).toBeHidden();
+    }
     const width = await page.evaluate(() => ({
       scrollWidth: document.documentElement.scrollWidth,
       clientWidth: document.documentElement.clientWidth
