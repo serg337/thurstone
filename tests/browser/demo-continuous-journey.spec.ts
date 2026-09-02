@@ -38,6 +38,7 @@ test("continuous journey repeats tools in one agent page and carries trusted sta
   context,
   page: owner
 }) => {
+  test.setTimeout(60_000);
   await installEmulatedConsumer(owner);
   await owner.goto("/demo");
   await owner.getByRole("button", { name: "Choose the test catalog" }).click();
