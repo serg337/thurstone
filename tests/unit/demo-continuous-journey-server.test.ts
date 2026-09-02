@@ -226,6 +226,43 @@ describe("production Redis journey decoding", () => {
     });
   });
 
+  it("keeps the prior-step replay binding valid after the terminal result is appended", async () => {
+    const plan = await planFixture();
+    const first = plan.steps[0]!;
+    const second = plan.steps[1]!;
+    const firstDigest = "a".repeat(64);
+    const results = [
+      {
+        runId: first.runId,
+        verdict: "pass",
+        resultDigest: firstDigest,
+        ownerSummary: ownerSummary(plan, 0)
+      },
+      {
+        runId: second.runId,
+        verdict: "pass",
+        resultDigest: "b".repeat(64),
+        ownerSummary: ownerSummary(plan, 1)
+      }
+    ];
+    const parsed = parseContinuousJourneyRedisRecord(
+      redisReply(plan, {
+        position: 1,
+        results: results.map((result) => JSON.stringify(result)),
+        previousRunId: first.runId,
+        previousResultDigest: firstDigest,
+        currentToken: "tbh2.retry-token"
+      })
+    );
+
+    expect(parsed?.results).toEqual(results);
+    expect(parsed).toMatchObject({
+      position: 1,
+      previousRunId: first.runId,
+      previousResultDigest: firstDigest
+    });
+  });
+
   it("round-trips result and replay state through the production-shaped server API", async () => {
     const plan = await planFixture();
     const first = plan.steps[0]!;

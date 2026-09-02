@@ -195,8 +195,8 @@ export function parseContinuousJourneyRedisRecord(reply: unknown): ContinuousJou
     (hasAdvanceReplay &&
       (position < 1 ||
         plan.steps[position - 1]?.runId !== previousRunId ||
-        results.at(-1)?.runId !== previousRunId ||
-        results.at(-1)?.resultDigest !== previousResultDigest))
+        results[position - 1]?.runId !== previousRunId ||
+        results[position - 1]?.resultDigest !== previousResultDigest))
   ) {
     throw new Error("invalid journey replay binding");
   }
