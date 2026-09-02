@@ -98,22 +98,67 @@ function redis(environment: NodeJS.ProcessEnv): JourneyRedis {
   return createProbeRedis(environment) as unknown as JourneyRedis;
 }
 
-function parseRecord(reply: unknown): ContinuousJourneyRecord | null {
+function decodeRedisJson(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return value;
+  }
+}
+
+export function parseContinuousJourneyRedisRecord(reply: unknown): ContinuousJourneyRecord | null {
   if (!Array.isArray(reply) || reply.length < 2) throw new Error("invalid journey reply");
   if (Number(reply[0]) === 2) return null;
-  if (Number(reply[0]) !== 1 || reply.length < 9) throw new Error(String(reply[1]));
+  if (
+    Number(reply[0]) !== 1 ||
+    reply.length < 9 ||
+    String(reply[2]) !== BYOA_CONTINUOUS_JOURNEY_VERSION
+  ) {
+    throw new Error(String(reply[1]));
+  }
+  const journeyId = String(reply[1]);
+  const plan = byoaContinuousJourneyPlanSchema.parse(decodeRedisJson(reply[3]));
+  const position = Number(reply[4]);
+  const currentRunId = String(reply[5]);
+  const currentContractDigest = String(reply[6]);
+  const expiresAtMs = Number(reply[7]);
+  const rawResults = decodeRedisJson(reply[8] ?? []);
+  if (
+    plan.journeyId !== journeyId ||
+    !Number.isInteger(position) ||
+    position < 0 ||
+    position >= plan.steps.length ||
+    plan.steps[position]?.runId !== currentRunId ||
+    plan.steps[position]?.contractDigest !== currentContractDigest ||
+    !Number.isSafeInteger(expiresAtMs) ||
+    expiresAtMs <= 0 ||
+    !Array.isArray(rawResults)
+  ) {
+    throw new Error("invalid journey record binding");
+  }
   return Object.freeze({
-    plan: byoaContinuousJourneyPlanSchema.parse(JSON.parse(String(reply[3])) as unknown),
-    position: Number(reply[4]),
-    currentRunId: String(reply[5]),
-    currentContractDigest: String(reply[6]),
-    expiresAtMs: Number(reply[7]),
-    results: (JSON.parse(String(reply[8] ?? "[]")) as unknown[]).map((result) => {
+    plan,
+    position,
+    currentRunId,
+    currentContractDigest,
+    expiresAtMs,
+    results: rawResults.map((result, index) => {
       const value = result as Record<string, unknown>;
+      const runId = String(value.runId);
+      const verdict = String(value.verdict);
+      const resultDigest = String(value.resultDigest);
+      if (
+        plan.steps[index]?.runId !== runId ||
+        !["pass", "issue", "incomplete", "unavailable"].includes(verdict) ||
+        !/^[a-f0-9]{64}$/u.test(resultDigest)
+      ) {
+        throw new Error("invalid journey result binding");
+      }
       return {
-        runId: String(value.runId),
-        verdict: String(value.verdict) as ContinuousJourneyRecord["results"][number]["verdict"],
-        resultDigest: String(value.resultDigest),
+        runId,
+        verdict: verdict as ContinuousJourneyRecord["results"][number]["verdict"],
+        resultDigest,
         ownerSummary: byoaHandoffReportRequestV2Schema.shape.ownerSummary.parse(value.ownerSummary)
       };
     })
@@ -171,7 +216,7 @@ export async function readContinuousJourneyByRun(
   );
   if (!Array.isArray(indexReply) || Number(indexReply[0]) === 2) return null;
   const journeyId = String(indexReply[1]);
-  return parseRecord(
+  return parseContinuousJourneyRedisRecord(
     await redis(environment).evalRo(GET_SCRIPT, [journeyKey(journeyId)], [journeyId])
   );
 }

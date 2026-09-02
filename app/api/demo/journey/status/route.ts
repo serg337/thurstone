@@ -76,7 +76,15 @@ export async function POST(request: Request) {
       { headers: { "Cache-Control": "no-store" } }
     );
   } catch (caught) {
-    const status = caught instanceof ByoaHandoffHttpError ? caught.status : 400;
-    return NextResponse.json({ error: "journey_status_denied" }, { status });
+    const status =
+      caught instanceof ByoaHandoffHttpError
+        ? caught.status
+        : caught instanceof Error && caught.name === "ZodError"
+          ? 400
+          : 503;
+    return NextResponse.json(
+      { error: status === 503 ? "journey_state_unavailable" : "journey_status_denied" },
+      { status }
+    );
   }
 }

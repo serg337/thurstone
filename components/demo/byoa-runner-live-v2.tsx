@@ -495,7 +495,22 @@ export function ByoaRunnerV2() {
             headers: byoaHandoffV2ContextHeaders(freshContextId()),
             cache: "no-store"
           });
-          if (!response.ok) throw new Error("No valid fresh-agent handoff exists in this task.");
+          if (!response.ok) {
+            const failure = (await response.json().catch(() => null)) as {
+              readonly error?: string;
+            } | null;
+            if (failure?.error === "handoff_build_mismatch") {
+              throw new Error(
+                "Thurstone was updated after this handoff was created. Return to the owner tab and create a fresh handoff."
+              );
+            }
+            if (failure?.error === "handoff_state_unavailable") {
+              throw new Error(
+                "Thurstone could not restore the server-side test state. Return to the owner tab and create a fresh handoff."
+              );
+            }
+            throw new Error("No valid fresh-agent handoff exists in this task.");
+          }
           const raw = await response.json();
           if (raw?.version !== BYOA_HANDOFF_BOOTSTRAP_V2_VERSION) {
             throw new Error("This task contains a legacy handoff. Reopen its original link.");

@@ -10,7 +10,11 @@ import {
 } from "@/lib/demo/agent-handoff-v2";
 import { agentVisibleRunProjectionV2 } from "@/lib/demo/agent-session-v2";
 import { BYOA_HANDOFF_COOKIE, openByoaHandoff } from "@/lib/demo/agent-handoff-token.server";
-import { isByoaHandoffV2Token, openByoaHandoffV2 } from "@/lib/demo/agent-handoff-token-v2.server";
+import {
+  ByoaHandoffTokenV2Error,
+  isByoaHandoffV2Token,
+  openByoaHandoffV2
+} from "@/lib/demo/agent-handoff-token-v2.server";
 import { resolveDeploymentCommit } from "@/lib/deployment/commit";
 import {
   createByoaHandoffLedgerV2Redis,
@@ -21,9 +25,11 @@ import { readContinuousJourneyByRun } from "@/lib/demo/continuous-journey.server
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
+  const token = (await cookies()).get(BYOA_HANDOFF_COOKIE)?.value;
+  if (!token) {
+    return NextResponse.json({ error: "handoff_unavailable" }, { status: 404 });
+  }
   try {
-    const token = (await cookies()).get(BYOA_HANDOFF_COOKIE)?.value;
-    if (!token) throw new Error("missing");
     if (isByoaHandoffV2Token(token)) {
       const envelope = openByoaHandoffV2(token);
       const freshContextId = parseByoaFreshContextV2Header(request.headers);
@@ -76,7 +82,11 @@ export async function GET(request: Request) {
       },
       { headers: { "Cache-Control": "no-store" } }
     );
-  } catch {
-    return NextResponse.json({ error: "handoff_unavailable" }, { status: 404 });
+  } catch (caught) {
+    const invalidToken = caught instanceof ByoaHandoffTokenV2Error;
+    return NextResponse.json(
+      { error: invalidToken ? "handoff_token_invalid" : "handoff_state_unavailable" },
+      { status: invalidToken ? 410 : 503 }
+    );
   }
 }
