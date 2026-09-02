@@ -2,15 +2,7 @@ import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 
-const mandatoryIgnoreEntries = [
-  "/docs/csr.md",
-  "/docs/lip.md",
-  "/docs/ToolProof_Project_Brief_v2.md",
-  "/docs/ToolProof_WebMCP_Challenge_Winning_Brief.md",
-  "/.toolproof-local/",
-  "/ToolProof_Master_Codex_Goal_Prompt.md",
-  "/docs/ToolProof_Master_Codex_Goal_Prompt.md"
-];
+const mandatoryIgnoreEntries = ["/.toolproof-local/"];
 
 const mandatoryDeploymentIgnoreEntries = [...mandatoryIgnoreEntries];
 

@@ -1,12 +1,6 @@
-# Private/local Thurstone source-of-truth and control records — never deploy
-/docs/csr.md
-/docs/lip.md
-/docs/ToolProof_Project_Brief_v2.md
-/docs/ToolProof_WebMCP_Challenge_Winning_Brief.md
+# Local release control state — never deploy
 /.toolproof-local/
 /.toolproof-local
-/ToolProof_Master_Codex_Goal_Prompt.md
-/docs/ToolProof_Master_Codex_Goal_Prompt.md
 
 # Local credentials, provider state, and repository metadata
 /.env*
