@@ -163,15 +163,19 @@ function argumentAssessment(
 }
 
 function independentEffect(before: CheckoutState, after: CheckoutState): LedgerDiffV3["effect"] {
-  const quantities = before.lines.map((beforeLine) => {
-    const afterLine = after.lines.find(({ itemId }) => itemId === beforeLine.itemId);
+  const itemIds = [...new Set([...before.lines, ...after.lines].map(({ itemId }) => itemId))];
+  const quantities = itemIds.map((itemId) => {
+    const beforeLine = before.lines.find((line) => line.itemId === itemId);
+    const afterLine = after.lines.find((line) => line.itemId === itemId);
+    const beforeQuantity = beforeLine?.quantity ?? null;
     const afterQuantity = afterLine?.quantity ?? null;
     return {
-      itemId: beforeLine.itemId,
-      beforeQuantity: beforeLine.quantity,
+      itemId,
+      beforeQuantity,
       afterQuantity,
-      delta: afterQuantity === null ? null : afterQuantity - beforeLine.quantity,
-      changed: afterQuantity !== beforeLine.quantity
+      delta:
+        beforeQuantity === null || afterQuantity === null ? null : afterQuantity - beforeQuantity,
+      changed: afterQuantity !== beforeQuantity
     };
   });
   const revisionDelta = after.revision - before.revision;
@@ -181,7 +185,7 @@ function independentEffect(before: CheckoutState, after: CheckoutState): LedgerD
   const withoutModeledFields = (state: CheckoutState) => ({
     ...state,
     revision: 0,
-    lines: state.lines.map((line) => ({ ...line, quantity: 0 })),
+    lines: [],
     pendingCheckout: null
   });
   return {
@@ -238,7 +242,9 @@ function requiredEffectAssessment(
     const target = effect.quantities.find(({ itemId }) => itemId === predicate.itemId);
     const passed =
       changed.length === 1 &&
-      target?.afterQuantity === predicate.quantity &&
+      (predicate.quantity === 0
+        ? target?.afterQuantity === null
+        : target?.afterQuantity === predicate.quantity) &&
       effect.revision.delta === 1 &&
       !effect.pendingCheckout.changed &&
       ledgerDiff.stateTransitionCount === 1 &&
@@ -252,7 +258,9 @@ function requiredEffectAssessment(
         stateTransitions: 1
       }),
       detail: passed
-        ? "Exactly the contracted cart quantity changed in one committed transition."
+        ? predicate.quantity === 0
+          ? "Exactly the contracted cart line was removed in one committed transition."
+          : "Exactly the contracted cart quantity changed in one committed transition."
         : "Trusted state and ledger did not contain the exact contracted cart transition."
     };
   }
@@ -369,9 +377,9 @@ export async function evaluateByoaEnvironmentV3(input: {
     eventCountAfter: ledger.current.length,
     eventCountDelta: ledger.current.length - initialEventCount,
     stateTransitionCount,
-    operationLedgerCountBefore: 0,
+    operationLedgerCountBefore: environment.initialOperationCount,
     operationLedgerCountAfter: inspection.currentOperationCount,
-    operationLedgerCountDelta: inspection.currentOperationCount,
+    operationLedgerCountDelta: inspection.currentOperationCount - environment.initialOperationCount,
     rejectedAdditionalAttempts: gate.rejectedAdditionalAttempts,
     effect
   };
@@ -708,9 +716,10 @@ export async function createNoInvocationResultV3(input: {
       eventCountAfter: ledger.current.length,
       eventCountDelta: ledger.current.length - input.environment.initialLedger.current.length,
       stateTransitionCount: Math.max(0, effect.revision.delta),
-      operationLedgerCountBefore: 0,
+      operationLedgerCountBefore: input.environment.initialOperationCount,
       operationLedgerCountAfter: inspection.currentOperationCount,
-      operationLedgerCountDelta: inspection.currentOperationCount,
+      operationLedgerCountDelta:
+        inspection.currentOperationCount - input.environment.initialOperationCount,
       rejectedAdditionalAttempts: gate.rejectedAdditionalAttempts,
       effect
     },

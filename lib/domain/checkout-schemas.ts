@@ -14,7 +14,7 @@ export const cartUpdateInputSchema = z
     operationId: operationIdSchema,
     operation: z.literal("set_quantity"),
     itemId: z.string().min(1).max(64).regex(new RegExp(CART_ITEM_ID_PATTERN, "u")),
-    quantity: z.number().int().min(1).max(10)
+    quantity: z.number().int().min(0).max(10)
   })
   .strict();
 
@@ -57,9 +57,9 @@ export const CART_UPDATE_JSON_SCHEMA = {
     },
     quantity: {
       type: "integer",
-      minimum: 1,
+      minimum: 0,
       maximum: 10,
-      description: "Desired quantity from 1 through 10."
+      description: "Desired quantity from 0 through 10; 0 removes the cart line."
     }
   },
   required: ["operationId", "operation", "itemId", "quantity"],

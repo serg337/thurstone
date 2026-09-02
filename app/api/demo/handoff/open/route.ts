@@ -7,12 +7,20 @@ import {
   byoaHandoffCookieOptions,
   openByoaHandoff
 } from "@/lib/demo/agent-handoff-token.server";
-import { isByoaHandoffV2Token, openByoaHandoffV2 } from "@/lib/demo/agent-handoff-token-v2.server";
+import {
+  ByoaHandoffTokenV2Error,
+  isByoaHandoffV2Token,
+  openByoaHandoffV2
+} from "@/lib/demo/agent-handoff-token-v2.server";
 import {
   ByoaHandoffLedgerV2Error,
   claimByoaHandoffV2,
   createByoaHandoffLedgerV2Redis
 } from "@/lib/demo/handoff-ledger-v2.server";
+import {
+  recordHandoffClaimFailure,
+  type HandoffClaimFailureReason
+} from "@/lib/demo/handoff-claim-receipt.server";
 
 import {
   ByoaHandoffHttpError,
@@ -21,6 +29,40 @@ import {
 } from "@/lib/demo/agent-handoff-http.server";
 
 export const dynamic = "force-dynamic";
+
+async function claimFailureResponse(
+  token: string,
+  reason: HandoffClaimFailureReason,
+  status: number
+) {
+  let receipt = null;
+  try {
+    receipt = await recordHandoffClaimFailure(token, reason);
+  } catch {
+    if (reason !== "ledger_unavailable") {
+      reason = "ledger_unavailable";
+      try {
+        receipt = await recordHandoffClaimFailure(token, reason);
+      } catch {
+        receipt = null;
+      }
+    }
+  }
+  return NextResponse.json(
+    { error: "handoff_claim_denied", reason, claimFailure: receipt },
+    { status, headers: { "Cache-Control": "no-store" } }
+  );
+}
+
+function ledgerFailureReason(error: ByoaHandoffLedgerV2Error): HandoffClaimFailureReason {
+  if (error.code === "HANDOFF_EXPIRED") return "expired";
+  if (error.code === "HANDOFF_MISSING") return "ledger_record_missing";
+  if (error.code === "HANDOFF_BINDING_MISMATCH") return "binding_mismatch";
+  if (error.code === "HANDOFF_ALREADY_CLAIMED") {
+    return error.details[0] === "REVOKED" ? "revoked" : "already_claimed";
+  }
+  return "ledger_unavailable";
+}
 
 export async function POST(request: Request) {
   if (!isTrustedHandoffRequest(request)) {
@@ -35,7 +77,13 @@ export async function POST(request: Request) {
     const usesV2 = isByoaHandoffV2Token(token);
     if (usesV2) {
       const body = byoaHandoffOpenRequestV2Schema.parse(value);
-      const envelope = openByoaHandoffV2(body.token);
+      let envelope: ReturnType<typeof openByoaHandoffV2>;
+      try {
+        envelope = openByoaHandoffV2(body.token);
+      } catch (caught) {
+        const reason = caught instanceof ByoaHandoffTokenV2Error ? caught.code : "invalid_token";
+        return claimFailureResponse(body.token, reason, 410);
+      }
       try {
         await claimByoaHandoffV2(createByoaHandoffLedgerV2Redis(), {
           runId: envelope.session.runId,
@@ -44,6 +92,10 @@ export async function POST(request: Request) {
           freshContextId: body.freshContextId
         });
       } catch (caught) {
+        const reason =
+          caught instanceof ByoaHandoffLedgerV2Error
+            ? ledgerFailureReason(caught)
+            : "ledger_unavailable";
         const status =
           caught instanceof ByoaHandoffLedgerV2Error && caught.code === "HANDOFF_ALREADY_CLAIMED"
             ? 409
@@ -54,7 +106,7 @@ export async function POST(request: Request) {
                   caught.code === "HANDOFF_BINDING_MISMATCH"
                 ? 409
                 : 503;
-        return NextResponse.json({ error: "handoff_claim_denied" }, { status });
+        return claimFailureResponse(body.token, reason, status);
       }
       const response = NextResponse.json(
         { ok: true, redirect: "/demo/run" },

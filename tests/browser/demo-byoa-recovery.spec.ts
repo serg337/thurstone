@@ -24,6 +24,8 @@ test("canceling an unclaimed handoff revokes it and preserves the owner suite", 
   await expect(
     revoked.getByRole("heading", { name: "Open a genuinely fresh handoff." })
   ).toBeVisible();
+  await expect(revoked.getByText(/owner revoked this handoff/iu)).toBeVisible();
+  await expect(revoked.getByLabel("Handoff claim failure receipt")).toContainText("revoked");
   await expect
     .poll(() =>
       revoked.evaluate(async () => (await document.modelContext?.getTools?.())?.length ?? 0)

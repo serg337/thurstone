@@ -1,6 +1,7 @@
 .catalog {
   display: grid;
   gap: 1rem;
+  overflow-anchor: none;
 }
 
 .heading,
@@ -18,18 +19,16 @@
   margin: 0;
 }
 
+.heading h2 {
+  font-size: clamp(2rem, 3vw, 2.7rem);
+  line-height: 1.05;
+}
+
 .heading p:not(:global(.eyebrow)),
 .library p,
 .preview p {
   color: var(--ts-text-muted);
   line-height: 1.55;
-}
-
-.privacyNotice {
-  padding: 0.6rem 0.7rem;
-  color: var(--ts-orange) !important;
-  background: rgba(255, 153, 0, 0.055);
-  border-left: 2px solid var(--ts-orange);
 }
 
 .count,
@@ -53,9 +52,101 @@
   border-radius: var(--radius-small);
 }
 
+.picker {
+  display: grid;
+  gap: 0.8rem;
+  padding: 1rem;
+  background: rgba(4, 18, 25, 0.76);
+  border: 1px solid var(--ts-line);
+  border-radius: var(--radius);
+}
+
+.pickerInstruction {
+  margin: 0;
+  color: var(--ts-text-muted);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.toolChoices {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.toolChoice {
+  min-width: 0;
+  padding: 0.85rem;
+  text-align: left;
+  background: rgba(201, 223, 235, 0.035);
+  border: 1px solid var(--ts-line);
+  border-radius: var(--radius-small);
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    transform 150ms ease;
+}
+
+.toolChoice:hover,
+.toolChoice:focus-visible {
+  border-color: rgba(54, 236, 255, 0.46);
+  transform: translateY(-1px);
+}
+
+.toolChoice code,
+.toolChoice small {
+  display: block;
+}
+
+.toolChoice code {
+  color: var(--ts-ice);
+  font-size: 0.82rem;
+}
+
+.toolChoice small {
+  margin-top: 0.35rem;
+  color: var(--ts-text-muted);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.toolChoice:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+  transform: none;
+}
+
+.allSelected {
+  margin: 0;
+  padding: 0.75rem;
+  color: var(--ts-cyan-bright);
+  background: rgba(0, 217, 255, 0.06);
+  border: 1px solid rgba(54, 236, 255, 0.2);
+  border-radius: var(--radius-small);
+  font-weight: 720;
+}
+
 .toolList {
   display: grid;
   gap: 0.85rem;
+}
+
+.emptySelection {
+  padding: 1.2rem;
+  text-align: center;
+  background: rgba(201, 223, 235, 0.025);
+  border: 1px dashed var(--ts-line);
+  border-radius: var(--radius);
+}
+
+.emptySelection strong {
+  color: var(--ts-ice);
+}
+
+.emptySelection p {
+  margin: 0.35rem 0 0;
+  color: var(--ts-text-muted);
 }
 
 .tool,
@@ -68,25 +159,100 @@
   border-radius: var(--radius);
 }
 
-.toolHeader > div > span {
-  display: inline-flex;
-  color: var(--ts-cyan-bright);
-  font-size: 0.66rem;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+.toolHeader h3 {
+  margin: 0;
 }
 
-.toolHeader > div > span[data-classification="consequential"] {
+.toolIdentity {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.saveStatus {
+  color: var(--ts-text-faint);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.saveStatus[data-state="saved"] {
+  color: var(--ts-cyan-bright);
+}
+
+.saveStatus[data-state="error"] {
   color: var(--ts-orange);
 }
 
-.toolHeader h3 {
+.toolActions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.55rem;
-  align-items: baseline;
-  margin: 0.35rem 0 0;
+  gap: 0.8rem;
+  align-items: center;
+}
+
+.processEndingControl {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  color: var(--ts-text-muted);
+  font-size: 0.76rem;
+  font-weight: 720;
+  cursor: pointer;
+}
+
+.processEndingControl:has(input:checked) {
+  color: var(--ts-cyan-bright);
+}
+
+.processEndingControl input {
+  margin: 0;
+  accent-color: var(--ts-cyan-bright);
+}
+
+.resetAction {
+  padding: 0;
+  color: var(--ts-text-muted);
+  background: transparent;
+  border: 0;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 760;
+  cursor: pointer;
+}
+
+.removeAction {
+  padding: 0;
+  color: var(--ts-text-muted);
+  background: transparent;
+  border: 0;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 760;
+  cursor: pointer;
+}
+
+.resetAction:hover,
+.resetAction:focus-visible {
+  color: var(--ts-cyan-bright);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.removeAction:hover,
+.removeAction:focus-visible {
+  color: var(--ts-orange);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.removeAction:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.resetAction:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .toolHeader h3 code {
@@ -94,21 +260,35 @@
   font-size: 1.1rem;
 }
 
-.toolHeader h3 small {
-  color: var(--ts-text-faint);
-  font-size: 0.68rem;
-  font-weight: 500;
-}
-
 .fields {
   display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 7fr);
   gap: 0.8rem;
   margin-top: 1rem;
 }
 
 .fields label {
   display: grid;
+  grid-template-rows: auto 1fr;
   gap: 0.35rem;
+}
+
+.fields input,
+.fields textarea {
+  box-sizing: border-box;
+  width: 100%;
+  height: 7.5rem;
+  min-height: 7.5rem;
+  padding: 0.9rem 1rem;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.5;
+  letter-spacing: 0;
+}
+
+.fields textarea {
+  resize: none;
 }
 
 .fieldHeading {
@@ -124,17 +304,9 @@
   font-size: 0.68rem;
 }
 
-.wordingActions,
-.libraryActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.55rem;
-  margin-top: 0.75rem;
-}
-
 .fixedContract {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.65rem;
   margin-top: 0.9rem;
 }
@@ -177,7 +349,7 @@
 }
 
 .fixedContract pre,
-.registration pre {
+.technicalDetails pre {
   max-width: 100%;
   margin-bottom: 0;
   overflow: auto;
@@ -185,11 +357,13 @@
   overflow-wrap: anywhere;
 }
 
-.registration {
+.technicalDetails {
   margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--ts-line);
 }
 
-.registration summary {
+.technicalDetails summary {
   cursor: pointer;
   color: var(--ts-cyan-bright);
   font-size: 0.78rem;
@@ -271,8 +445,23 @@
     justify-self: start;
   }
 
+  .toolChoices {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .fields,
   .fixedContract,
   .preview > div {
+    grid-template-columns: 1fr;
+  }
+
+  .toolActions {
+    justify-self: start;
+  }
+}
+
+@media (max-width: 420px) {
+  .toolChoices {
     grid-template-columns: 1fr;
   }
 }

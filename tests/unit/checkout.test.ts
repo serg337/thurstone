@@ -137,6 +137,30 @@ describe("checkout fixture", () => {
     expect(Object.isFrozen(transition.state.lines)).toBe(true);
   });
 
+  it("removes one cart line when its desired quantity is zero", () => {
+    const state = createCheckoutFixture();
+    const transition = cartUpdate(state, {
+      operationId: "remove_notebook_0001",
+      operation: "set_quantity",
+      itemId: "field-notebook",
+      quantity: 0
+    });
+
+    expect(transition.effectApplied).toBe(true);
+    expect(transition.result).toMatchObject({
+      ok: true,
+      code: "updated",
+      itemId: "field-notebook",
+      previousQuantity: 1,
+      quantity: 0,
+      stateRevision: 1
+    });
+    expect(transition.state.lines).toEqual([
+      expect.objectContaining({ itemId: "stoneware-mug", quantity: 2 })
+    ]);
+    expect(state.lines).toHaveLength(2);
+  });
+
   it.each([
     ["field-notebook", 10, "stoneware-mug", 2],
     ["stoneware-mug", 1, "field-notebook", 1]

@@ -42,7 +42,7 @@ export type ReferenceArgumentContract =
       readonly operationId: "valid_unique";
       readonly operation: "set_quantity";
       readonly itemIds: readonly ["field-notebook", "stoneware-mug"];
-      readonly quantity: { readonly minimum: 1; readonly maximum: 10 };
+      readonly quantity: { readonly minimum: 0; readonly maximum: 10 };
     }
   | { readonly kind: "checkout_request"; readonly operationId: "valid_unique" }
   | { readonly kind: "checkout_cancel"; readonly operationId: "valid_unique" };
@@ -123,7 +123,7 @@ const cartUpdate = {
       operationId: "valid_unique",
       operation: "set_quantity",
       itemIds: ["field-notebook", "stoneware-mug"],
-      quantity: { minimum: 1, maximum: 10 }
+      quantity: { minimum: 0, maximum: 10 }
     }
   ],
   allowedEffectTemplates: [{ kind: "cart_quantity", binds: "itemId_and_quantity_arguments" }],
@@ -134,7 +134,7 @@ const cartUpdate = {
   cancellationBehavior: commonCancellation,
   resetBehavior: "reset_exact_fixture_before_each_case",
   handlerEffectSummary:
-    "Sets one existing reference-cart quantity and records exactly one replay-safe transition."
+    "Sets one existing reference-cart quantity, removes it at zero, and records exactly one replay-safe transition."
 } as const satisfies ThurstoneReferenceToolTemplate;
 
 const orderReview = {

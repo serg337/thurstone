@@ -86,7 +86,7 @@ export const thurstoneDemoCatalogSnapshotSchema = z
     toolsetVersion: z.literal(THURSTONE_DEMO_TOOLSET_VERSION),
     fixtureId: z.literal(THURSTONE_DEMO_FIXTURE_ID),
     trustedStateSource: z.literal(THURSTONE_DEMO_TRUSTED_STATE_SOURCE),
-    tools: z.array(thurstoneDemoCatalogToolSchema).min(2).max(4)
+    tools: z.array(thurstoneDemoCatalogToolSchema).max(4)
   })
   .strict()
   .superRefine((snapshot, context) => {

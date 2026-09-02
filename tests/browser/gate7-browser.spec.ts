@@ -115,21 +115,21 @@ test("pre-unlock Lab DOM, transport, console, and storage omit frozen truth", as
 });
 
 // thurstone-impact-execution:acceptance-start
-test("current Results survive navigation and reload without exposing superseded evidence", async ({
+test("empty Demo Results survive navigation and reload without exposing reference evidence", async ({
   page
 }) => {
   await page.goto("/results");
   await expect(
-    page.getByRole("heading", { name: "Every approved reference behavior passed." })
+    page.getByRole("heading", { name: "Run a Demo test to create a results report." })
   ).toBeVisible();
   await expect(page.getByText(/23\s*\/\s*24/u)).toHaveCount(0);
   await page.goto("/");
   await page.goBack();
   await expect(page).toHaveURL(/\/results$/u);
   await expect(
-    page.getByRole("heading", { name: "Every approved reference behavior passed." })
+    page.getByRole("heading", { name: "Run a Demo test to create a results report." })
   ).toBeVisible();
   await page.reload();
-  await expect(page.getByLabel("Current evaluation summary")).toContainText("24");
+  await expect(page.getByText(/24\/24|3\/3/u)).toHaveCount(0);
 });
 // thurstone-impact-execution:acceptance-end

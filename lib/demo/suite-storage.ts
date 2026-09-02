@@ -10,8 +10,8 @@ import {
 import { canonicalJson } from "@/lib/evidence/digest";
 
 export const THURSTONE_SUITE_STORAGE_ENVELOPE_VERSION =
-  "thurstone-contract-suite-storage@1" as const;
-export const THURSTONE_SUITE_STORAGE_KEY = "thurstone:contract-suite@1" as const;
+  "thurstone-contract-suite-storage@3" as const;
+export const THURSTONE_SUITE_STORAGE_KEY = "thurstone:contract-suite@3" as const;
 export const THURSTONE_SUITE_STORAGE_MAX_BYTES = 192 * 1024;
 
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/u);

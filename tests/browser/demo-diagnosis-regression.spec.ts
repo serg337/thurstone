@@ -18,6 +18,7 @@ test("PASS explains trusted facts, replay scope, and saves/exports Result v3", a
   page: owner
 }) => {
   const fresh = await passingResult(context, owner);
+  await fresh.getByText("View technical evidence and assertion details").click();
   await expect(
     fresh.getByRole("heading", { name: "Why Thurstone reached this verdict" })
   ).toBeVisible();
@@ -58,7 +59,11 @@ test("Edit a copy reconstructs one selected case in a new owner suite", async ({
   await fresh.getByRole("button", { name: "Choose the test catalog" }).click();
   await fresh.getByRole("button", { name: "Build the contract suite" }).click();
   await expect(fresh.getByRole("heading", { name: "Request checkout" })).toBeVisible();
-  await expect(fresh.getByText("I am ready—request checkout for this cart.")).toBeVisible();
+  await expect(
+    fresh
+      .getByLabel("Visible regression suite")
+      .getByText("“I am ready—request checkout for this cart.”")
+  ).toBeVisible();
   await fresh.close();
 });
 
@@ -74,7 +79,7 @@ test("Rerun creates a fresh linked handoff instead of overwriting the terminal r
   await fresh.getByRole("button", { name: "Rerun in a fresh agent" }).click();
   await fresh.waitForURL(/\/demo\/run\?source=[^#]+#handoff-source-v2$/u);
   await expect(
-    fresh.getByRole("heading", { name: "Send this case to a genuinely fresh agent." })
+    fresh.getByRole("heading", { name: "Run your request with your agent." })
   ).toBeVisible();
   const link = await fresh.evaluate(() => {
     const bytes = sessionStorage.getItem("thurstone:byoa-session@2");

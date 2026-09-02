@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 
-import { BrowserEntryGuide } from "@/components/demo/browser-entry-guide";
 import { DemoClient } from "@/components/demo/demo-client";
 
 export const metadata: Metadata = {
@@ -12,28 +11,21 @@ export const metadata: Metadata = {
 export default function DemoPage() {
   return (
     <div className="page-shell demo-page">
-      <header className="demo-hero" aria-labelledby="demo-title">
-        <div>
-          <p className="eyebrow">Bring your own agent · safe reference checkout</p>
-          <h1 id="demo-title">Test Thurstone as a WebMCP owner.</h1>
-          <p>
-            Define what a request should mean, ask your own supported agent to use the live site,
-            and see whether the resulting action and state match your contract.
-          </p>
-          <span className="demo-safety-note">
-            No account · no purchase or payment · one admitted agent invocation per test
-          </span>
-        </div>
-      </header>
-      <BrowserEntryGuide />
-      <aside className="demo-scope-note" aria-label="Demo scope">
-        <strong>A safe reference environment</strong>
-        <p>
-          This demo uses a synthetic checkout sandbox. Real teams connect Thurstone to their own
-          WebMCP catalog and test environment before release. Thurstone tests releases; it does not
-          monitor live shoppers.
-        </p>
-      </aside>
+      <div className="demo-aligned-grid">
+        <header className="demo-hero" aria-labelledby="demo-title">
+          <div>
+            <p className="eyebrow">Bring your own agent · safe reference checkout</p>
+            <h1 id="demo-title">Test Thurstone as a WebMCP owner.</h1>
+            <p>
+              Define what a request should mean, ask your own supported agent to use the live site,
+              and see whether the resulting action and state match your contract.
+            </p>
+            <span className="demo-safety-note">
+              No account · no purchase or payment · one admitted agent invocation per test
+            </span>
+          </div>
+        </header>
+      </div>
       <DemoClient />
     </div>
   );

@@ -29,17 +29,13 @@ for (const route of [
 }
 
 // thurstone-impact-execution:acceptance-start
-test("current Results exposes one accessible summary and three distinct boundary articles", async ({
+test("Demo Results exposes one accessible summary and an ordered result table", async ({
   page
 }) => {
-  await page.goto("/results");
+  await page.goto("/results?qa=journey");
   await expect(page.locator("main h1")).toHaveCount(1);
-  await expect(page.getByLabel("Current evaluation summary")).toHaveCount(1);
-  await expect(
-    page.getByRole("heading", { name: "Every approved reference behavior passed." })
-  ).toHaveCount(1);
-  await expect(page.getByRole("article")).toHaveCount(3);
-  await expect(page.getByText("Approved behaviors passed", { exact: true })).toHaveCount(1);
-  await expect(page.getByText("Contract mismatches", { exact: true })).toHaveCount(1);
+  await expect(page.getByRole("heading", { name: "7 of 7 tests passed." })).toHaveCount(1);
+  await expect(page.getByLabel("Latest journey totals")).toHaveCount(1);
+  await expect(page.getByRole("table", { name: "Continuous journey Demo results" })).toHaveCount(1);
 });
 // thurstone-impact-execution:acceptance-end

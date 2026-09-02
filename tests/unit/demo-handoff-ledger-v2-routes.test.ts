@@ -14,6 +14,7 @@ import {
   type ByoaHandoffLedgerV2Redis
 } from "@/lib/demo/handoff-ledger-v2.server";
 import { BYOA_HANDOFF_CONTROL_MAX_BODY_BYTES } from "@/lib/demo/agent-handoff-http.server";
+import { resetHandoffClaimReceiptsForTests } from "@/lib/demo/handoff-claim-receipt.server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocked = vi.hoisted(() => ({
@@ -29,18 +30,30 @@ vi.mock("next/headers", () => ({
   })
 }));
 
-vi.mock("@/lib/demo/agent-handoff-token-v2.server", () => ({
-  isByoaHandoffV2Token: (token: string) => token.startsWith("tbh2."),
-  openByoaHandoffV2: () => ({
-    expiresAt: mocked.expiresAt,
-    session: {
-      runId: mocked.runId,
-      contractDigest: mocked.contractDigest,
-      contract: { marker: "hidden-contract" },
-      lineage: { marker: "digest-only-lineage" }
+vi.mock("@/lib/demo/agent-handoff-token-v2.server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/demo/agent-handoff-token-v2.server")>();
+  return {
+    ...actual,
+    isByoaHandoffV2Token: (token: string) => token.startsWith("tbh2."),
+    openByoaHandoffV2: (token: string) => {
+      if (token.includes("invalid-token")) {
+        throw new actual.ByoaHandoffTokenV2Error("invalid_token");
+      }
+      if (token.includes("expired-token")) {
+        throw new actual.ByoaHandoffTokenV2Error("expired");
+      }
+      return {
+        expiresAt: mocked.expiresAt,
+        session: {
+          runId: mocked.runId,
+          contractDigest: mocked.contractDigest,
+          contract: { marker: "hidden-contract" },
+          lineage: { marker: "digest-only-lineage" }
+        }
+      };
     }
-  })
-}));
+  };
+});
 
 import { POST as control } from "@/app/api/demo/handoff/control/route";
 import { POST as open } from "@/app/api/demo/handoff/open/route";
@@ -91,6 +104,7 @@ describe("Handoff v2 route atomicity", () => {
     vi.stubEnv("NODE_ENV", "test");
     vi.stubEnv("TOOLPROOF_BROWSER_FAKE_PROBE", "1");
     resetByoaHandoffLedgerV2FakeForTests({ NODE_ENV: "test" } as NodeJS.ProcessEnv);
+    resetHandoffClaimReceiptsForTests({ NODE_ENV: "test" } as NodeJS.ProcessEnv);
     mocked.runId = `byoa_run_aaaaaaaa-aaaa-4aaa-8aaa-${Math.floor(Math.random() * 1e12)
       .toString()
       .padStart(12, "0")}`;
@@ -111,16 +125,74 @@ describe("Handoff v2 route atomicity", () => {
     const body = { token: mocked.token, freshContextId: CONTEXT };
     expect((await open(request("/api/demo/handoff/open", body))).status).toBe(200);
     expect((await open(request("/api/demo/handoff/open", body))).status).toBe(200);
-    expect(
-      (
-        await open(
-          request("/api/demo/handoff/open", {
-            token: mocked.token,
-            freshContextId: OTHER_CONTEXT
-          })
-        )
-      ).status
-    ).toBe(409);
+    const denied = await open(
+      request("/api/demo/handoff/open", {
+        token: mocked.token,
+        freshContextId: OTHER_CONTEXT
+      })
+    );
+    expect(denied.status).toBe(409);
+    await expect(denied.json()).resolves.toMatchObject({
+      reason: "already_claimed",
+      claimFailure: {
+        reason: "already_claimed",
+        requestRevealed: false,
+        toolsRegistered: false,
+        nativeInvocationCount: 0
+      }
+    });
+  });
+
+  it("returns bounded categories for invalid, missing, expired, revoked, binding, and unavailable claims", async () => {
+    const baseBody = { token: mocked.token, freshContextId: CONTEXT };
+
+    mocked.token = "tbh2.invalid-token-material-00000000000000000001";
+    let response = await open(
+      request("/api/demo/handoff/open", { ...baseBody, token: mocked.token })
+    );
+    expect(response.status).toBe(410);
+    await expect(response.json()).resolves.toMatchObject({ reason: "invalid_token" });
+
+    mocked.token = `tbh2.missing-${mocked.contractDigest.slice(0, 32)}`;
+    response = await open(request("/api/demo/handoff/open", { ...baseBody, token: mocked.token }));
+    expect(response.status).toBe(410);
+    await expect(response.json()).resolves.toMatchObject({ reason: "ledger_record_missing" });
+
+    mocked.token = `tbh2.expired-token-${mocked.contractDigest.slice(0, 32)}`;
+    response = await open(request("/api/demo/handoff/open", { ...baseBody, token: mocked.token }));
+    expect(response.status).toBe(410);
+    await expect(response.json()).resolves.toMatchObject({ reason: "expired" });
+
+    mocked.runId = mocked.runId.replace(/a(?=[^a]*$)/u, "e");
+    mocked.contractDigest = `e${mocked.contractDigest.slice(1)}`;
+    mocked.token = `tbh2.revoked-${mocked.contractDigest.slice(0, 32)}`;
+    await issue();
+    await revoke(
+      request("/api/demo/handoff/revoke", {
+        version: BYOA_HANDOFF_REVOKE_V2_VERSION,
+        token: mocked.token
+      })
+    );
+    response = await open(request("/api/demo/handoff/open", { ...baseBody, token: mocked.token }));
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ reason: "revoked" });
+
+    mocked.runId = mocked.runId.replace(/e(?=[^e]*$)/u, "f");
+    mocked.contractDigest = `f${mocked.contractDigest.slice(1)}`;
+    mocked.token = `tbh2.binding-${mocked.contractDigest.slice(0, 32)}`;
+    await issue();
+    mocked.contractDigest = `b${mocked.contractDigest.slice(1)}`;
+    response = await open(request("/api/demo/handoff/open", { ...baseBody, token: mocked.token }));
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ reason: "binding_mismatch" });
+
+    vi.stubEnv("TOOLPROOF_BROWSER_FAKE_PROBE", "0");
+    mocked.runId = mocked.runId.replace(/f(?=[^f]*$)/u, "9");
+    mocked.contractDigest = `9${mocked.contractDigest.slice(1)}`;
+    mocked.token = `tbh2.unavailable-${mocked.contractDigest.slice(0, 32)}`;
+    response = await open(request("/api/demo/handoff/open", { ...baseBody, token: mocked.token }));
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({ reason: "ledger_unavailable" });
   });
 
   it("blocks early reveal and second start, then reveals only after settlement", async () => {

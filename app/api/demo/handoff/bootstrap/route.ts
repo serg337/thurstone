@@ -16,6 +16,7 @@ import {
   createByoaHandoffLedgerV2Redis,
   receiveByoaHandoffV2
 } from "@/lib/demo/handoff-ledger-v2.server";
+import { readContinuousJourneyByRun } from "@/lib/demo/continuous-journey.server";
 
 export const dynamic = "force-dynamic";
 
@@ -38,11 +39,22 @@ export async function GET(request: Request) {
       });
       const projection = agentVisibleRunProjectionV2(envelope.session);
       const receivedAt = byoaHandoffV2ReceivedAt(envelope.session.updatedAt, receipt.serverTimeMs);
+      const journey = await readContinuousJourneyByRun(envelope.session.runId);
       return NextResponse.json(
         {
           version: BYOA_HANDOFF_BOOTSTRAP_V2_VERSION,
           session: receiveAndRedactByoaSessionV2(envelope.session, receivedAt),
-          projection
+          projection,
+          ...(journey
+            ? {
+                journey: {
+                  journeyId: journey.plan.journeyId,
+                  mode: journey.plan.mode,
+                  position: journey.position + 1,
+                  total: journey.plan.steps.length
+                }
+              }
+            : {})
         },
         { headers: { "Cache-Control": "no-store" } }
       );

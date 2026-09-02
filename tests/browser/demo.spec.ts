@@ -4,19 +4,22 @@ import { installEmulatedConsumer } from "./support/emulated-consumer";
 
 async function advanceToContract(page: import("@playwright/test").Page) {
   await page.getByRole("button", { name: "Choose the test catalog" }).click();
+  await page.getByRole("button", { name: /order_review/u }).click();
+  await page.getByRole("button", { name: /checkout_request/u }).click();
   await page.getByRole("button", { name: "Build the contract suite" }).click();
 }
 
 async function advanceToReview(page: import("@playwright/test").Page) {
   await advanceToContract(page);
-  await page.getByLabel("Test-case name").fill("Request checkout");
   await page
-    .getByLabel("Representative user request")
-    .fill("I am ready—request checkout for this cart.");
-  await page.getByLabel("What should the agent do?").selectOption("checkout_request");
+    .getByRole("region", { name: "Start with a curated Demo case." })
+    .getByRole("button", { name: /checkout_request/u })
+    .click();
+  await page.getByLabel("Test-case name").fill("Request checkout");
+  await page.getByLabel("Request 1").fill("I am ready—request checkout for this cart.");
   await page.getByRole("button", { name: "Add test case" }).click();
-  await page.getByRole("button", { name: "Review and arm selected case" }).click();
-  await expect(page.getByRole("dialog", { name: /Arm “Request checkout”/u })).toBeVisible();
+  await page.getByRole("button", { name: /Run contract/u }).click();
+  await expect(page.getByRole("dialog", { name: "Arm 1-request suite" })).toBeVisible();
 }
 
 test("Demo presents one five-stage WebMCP-owner workflow without a model call", async ({
@@ -34,7 +37,7 @@ test("Demo presents one five-stage WebMCP-owner workflow without a model call", 
   await expect(
     page.getByRole("heading", { name: "Test Thurstone as a WebMCP owner." })
   ).toBeVisible();
-  await expect(page.getByText("Stage 1 of 5", { exact: true })).toBeVisible();
+  await expect(page.getByText(/^Stage 1 of 5/u)).toHaveCount(0);
   for (const label of [
     "Understand the semantic boundary",
     "Choose the real WebMCP test catalog",
@@ -46,26 +49,23 @@ test("Demo presents one five-stage WebMCP-owner workflow without a model call", 
   }
   await expect(page.getByText(/website owner preparing a WebMCP release/iu)).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "The meaning boundary Thurstone will test" })
+    page.getByRole("heading", { name: "Two shopper prompts. Two intended outcomes." })
   ).toBeVisible();
+  await expect(page.getByText(/shopper might ask their own agent/iu)).toBeVisible();
   await expect(page.getByText("order_review", { exact: true })).toBeVisible();
   await expect(page.getByText("checkout_request", { exact: true })).toBeVisible();
   await expect(
-    page.getByText(/known starting state lets Thurstone prove exactly what changed/iu)
+    page.getByText(/fictional two-item cart as a safe, visible test environment/iu)
   ).toBeVisible();
-  await expect(
-    page.getByText(/deliberate minimum isolates one consequential meaning boundary/iu)
-  ).toBeVisible();
+  await expect(page.getByText(/Why start with two tools/iu)).toHaveCount(0);
   await expect(page.getByText(/Field notebook/iu)).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Open Thurstone in ChatGPT's Browser" })
+    page.getByRole("heading", { name: "Open Thurstone in ChatGPT's In-App Browser" })
   ).toBeVisible();
-  await expect(
-    page.getByText("@Browser Open https://thurstone.invarra.ai/demo", { exact: true })
-  ).toBeVisible();
-  await expect(page.getByText(/enter this exact command in the chat/iu)).toBeVisible();
-  await expect(page.getByLabel("Demo scope")).toBeVisible();
-  await expect(page.getByText(/does not monitor live shoppers/iu)).toBeVisible();
+  await page.getByRole("button", { name: "Copy Demo launch command" }).click();
+  await expect(page.getByRole("button", { name: "Demo launch command copied" })).toBeVisible();
+  await expect(page.getByText(/Paste it into the fresh ChatGPT chat/iu)).toBeVisible();
+  await expect(page.getByLabel("Demo scope")).toHaveCount(0);
   await expect(page.getByText("Flagged Chrome compatibility", { exact: true })).toHaveCount(0);
   expect(inferenceRequests).toEqual([]);
 });
@@ -88,7 +88,9 @@ test("Demo does not register target tools even when a consumer is available", as
 test("owner can edit and reset the exact two agent-visible descriptions", async ({ page }) => {
   await page.goto("/demo");
   await page.getByRole("button", { name: "Choose the test catalog" }).click();
-  await expect(page.getByText("Stage 2 of 5", { exact: true })).toBeVisible();
+  await expect(page.getByText(/^Stage 2 of 5/u)).toHaveCount(0);
+  await page.getByRole("button", { name: /order_review/u }).click();
+  await page.getByRole("button", { name: /checkout_request/u }).click();
 
   const descriptions = page.getByLabel(/Agent-visible description/iu);
   await expect(descriptions).toHaveCount(2);
@@ -99,49 +101,62 @@ test("owner can edit and reset the exact two agent-visible descriptions", async 
     "Return a read-only order summary and never create checkout state."
   );
   const reviewRow = page.locator('[data-tool-name="order_review"]');
-  await reviewRow.getByRole("button", { name: "Apply agent wording" }).click();
-  await reviewRow.getByRole("button", { name: "Reset to verified default" }).click();
+  await descriptions.first().press("Tab");
+  await expect(reviewRow.getByText("Saved", { exact: true })).toBeVisible();
+  await reviewRow.getByRole("button", { name: "Reset" }).click();
   await expect(descriptions.first()).toHaveValue(/current final read-only order summary/iu);
-  await expect(page.getByText("order_review", { exact: true })).toHaveCount(2);
-  await expect(page.getByText("checkout_request", { exact: true })).toHaveCount(2);
+  await expect(page.getByText("order_review", { exact: true })).toHaveCount(1);
+  await expect(page.getByText("checkout_request", { exact: true })).toHaveCount(1);
 });
 
 test("contract authoring teaches tool, arguments, effects, and replay", async ({ page }) => {
   await page.goto("/demo");
   await advanceToContract(page);
 
-  await expect(page.getByText("Stage 3 of 5", { exact: true })).toBeVisible();
-  await page.getByLabel("Test-case name").fill("Checkout authorization");
+  await expect(page.getByText(/^Stage 3 of 5/u)).toHaveCount(0);
   await page
-    .getByLabel("Representative user request")
-    .fill("I am ready—request checkout for this cart.");
-  await page.getByLabel("What should the agent do?").selectOption("checkout_request");
-  await expect(page.getByText(/One operation ID that is valid and unique/iu)).toBeVisible();
+    .getByRole("region", { name: "Start with a curated Demo case." })
+    .getByRole("button", { name: /checkout_request/u })
+    .click();
+  await page.getByLabel("Test-case name").fill("Checkout authorization");
+  await page.getByLabel("Request 1").fill("I am ready—request checkout for this cart.");
+  await expect(page.getByText(/Generated automatically at runtime/iu)).toBeVisible();
   await expect(page.getByText("pending checkout", { exact: true })).toBeVisible();
   await expect(page.getByText(/Exactly-once policy/iu)).toBeVisible();
   await page.getByRole("button", { name: "Add test case" }).click();
   await expect(page.getByRole("heading", { name: "Checkout authorization" })).toBeVisible();
+  await expect(page.getByText(/Every case runs even if another fails/iu)).toBeVisible();
+  await expect(
+    page.getByText(/incorrect state would make later verdicts unreliable/iu)
+  ).toBeVisible();
 });
 
 test("invalid agent-visible descriptor fails closed before review", async ({ page }) => {
   await page.goto("/demo");
   await page.getByRole("button", { name: "Choose the test catalog" }).click();
+  await page.getByRole("button", { name: /order_review/u }).click();
   await page
     .getByLabel(/Agent-visible description/iu)
     .first()
     .fill("https://example.com unsafe");
-  await page.getByRole("button", { name: "Apply agent wording" }).first().click();
+  await page
+    .getByLabel(/Agent-visible description/iu)
+    .first()
+    .press("Tab");
   await expect(page.getByText(/plain synthetic text/iu)).toBeVisible();
-  await expect(page.getByText("Stage 2 of 5", { exact: true })).toBeVisible();
+  await expect(page.getByText(/^Stage 2 of 5/u)).toHaveCount(0);
 });
 
-test("review separates the hidden owner contract from the agent projection", async ({ page }) => {
+test("review confirms the run boundary without repeating the catalog", async ({ page }) => {
   await page.goto("/demo");
   await advanceToReview(page);
 
-  await expect(page.getByText("Owner expects · hidden rubric")).toBeVisible();
-  await expect(page.getByText("Agent receives · no answer key")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Request plus the exact catalog" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Run order" })).toBeVisible();
+  await expect(
+    page.getByText("One agent chat · clean state per case · continue after failures")
+  ).toBeVisible();
+  await expect(page.getByText("Withheld until verification")).toBeVisible();
+  await expect(page.getByText(/Return current cart line-item identities/iu)).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Arm live test" })).toBeEnabled();
 });
 
@@ -154,7 +169,7 @@ test("arming uses a hard navigation and stores a bounded isolated projection", a
     page.getByRole("button", { name: "Arm live test" }).click()
   ]);
   await expect(page.locator("[data-byoa-v2-state='HANDOFF_SOURCE']")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Copy @Browser command" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Copy fresh-chat command" })).toBeVisible();
   await expect(page.getByRole("button", { name: /Run in this tab/iu })).toHaveCount(0);
   await expect(page.getByText(/Owner expects|Expected action|Allowed effects/iu)).toHaveCount(0);
 

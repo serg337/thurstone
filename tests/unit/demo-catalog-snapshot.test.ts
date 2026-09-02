@@ -17,7 +17,13 @@ describe("Thurstone Demo catalog snapshot", () => {
     expect(Object.isFrozen(snapshot.tools[0]?.inputSchema)).toBe(true);
   });
 
-  it("accepts two through four unique real tools and canonicalizes library order", () => {
+  it("accepts an empty draft through four unique real tools and canonicalizes library order", () => {
+    const empty = createThurstoneDemoCatalogSnapshot({ selectedToolNames: [] });
+    expect(empty.tools).toEqual([]);
+
+    const one = createThurstoneDemoCatalogSnapshot({ selectedToolNames: ["cart_get"] });
+    expect(one.tools.map(({ name }) => name)).toEqual(["cart_get"]);
+
     const two = createThurstoneDemoCatalogSnapshot({
       selectedToolNames: ["checkout_request", "cart_get"]
     });
@@ -33,7 +39,6 @@ describe("Thurstone Demo catalog snapshot", () => {
       "checkout_request"
     ]);
 
-    expect(() => createThurstoneDemoCatalogSnapshot({ selectedToolNames: ["cart_get"] })).toThrow();
     expect(() =>
       createThurstoneDemoCatalogSnapshot({
         selectedToolNames: ["cart_get", "cart_get", "order_review"]

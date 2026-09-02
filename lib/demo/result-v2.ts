@@ -48,7 +48,7 @@ const checkoutStateValueSchema = z
           })
           .strict()
       )
-      .length(2),
+      .max(2),
     fulfillment: z
       .object({
         shippingMethod: z.literal("standard"),
@@ -73,21 +73,27 @@ const checkoutStateValueSchema = z
   .strict()
   .superRefine((value, context) => {
     const names = value.lines.map(({ itemId }) => itemId);
-    if (canonicalJson(names) !== canonicalJson(["field-notebook", "stoneware-mug"])) {
+    const expectedOrder = (["field-notebook", "stoneware-mug"] as const).filter((itemId) =>
+      names.includes(itemId)
+    );
+    if (
+      new Set(names).size !== names.length ||
+      canonicalJson(names) !== canonicalJson(expectedOrder)
+    ) {
       context.addIssue({
         code: "custom",
         path: ["lines"],
-        message: "Trusted state must retain the complete frozen line order."
+        message: "Trusted state lines must be a unique ordered subset of the frozen fixture."
       });
     }
     const expectedLines = [
       { itemId: "field-notebook", name: "Field notebook", unitPriceCents: 1800 },
       { itemId: "stoneware-mug", name: "Stoneware mug", unitPriceCents: 2400 }
     ] as const;
-    for (const [index, expected] of expectedLines.entries()) {
-      const actual = value.lines[index];
+    for (const [index, actual] of value.lines.entries()) {
+      const expected = expectedLines.find(({ itemId }) => itemId === actual.itemId);
       if (
-        !actual ||
+        !expected ||
         actual.itemId !== expected.itemId ||
         actual.name !== expected.name ||
         actual.unitPriceCents !== expected.unitPriceCents
@@ -95,7 +101,7 @@ const checkoutStateValueSchema = z
         context.addIssue({
           code: "custom",
           path: ["lines", index],
-          message: "Trusted state must retain the complete frozen fixture identity."
+          message: "Trusted state must retain the frozen identity of every present line."
         });
       }
     }

@@ -16,12 +16,33 @@
 .diagnosis,
 .evidence,
 .deeper,
+.technicalEvidence,
 .raw {
   min-width: 0;
   padding: clamp(1rem, 2.4vw, 1.45rem);
   background: rgba(4, 18, 25, 0.86);
   border: 1px solid var(--ts-line);
   border-radius: var(--radius);
+}
+
+.technicalEvidence > summary,
+.evidence > summary,
+.raw > summary {
+  color: var(--ts-cyan-bright);
+  font-weight: 780;
+  cursor: pointer;
+}
+
+.technicalEvidence > div {
+  display: grid;
+  gap: 0.8rem;
+  margin-top: 0.9rem;
+}
+
+.evidence[open] > summary,
+.raw[open] > summary,
+.technicalEvidence[open] > summary {
+  margin-bottom: 0.8rem;
 }
 
 .hero {

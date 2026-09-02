@@ -277,7 +277,7 @@ function validationMessage(code: CheckoutErrorCode): string {
     case "invalid_operation":
       return "operation must be set_quantity.";
     case "invalid_quantity":
-      return "quantity must be an integer from 1 through 10.";
+      return "quantity must be an integer from 0 through 10; 0 removes the cart line.";
     default:
       return "Arguments do not match the tool's closed input schema.";
   }

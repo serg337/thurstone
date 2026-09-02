@@ -33,9 +33,6 @@ export default function HomePage() {
             <a className="button button-primary" href="/demo">
               Test with your agent
             </a>
-            <a className="button button-secondary" href="/results">
-              See verified reference results
-            </a>
           </div>
           <BrowserEntryGuide compact />
         </div>
@@ -209,10 +206,7 @@ export default function HomePage() {
         </div>
         <ReferenceEvidenceDisclosures />
         <div className="button-row proof-actions">
-          <a className="button button-primary" href="/results">
-            View complete evidence
-          </a>
-          <a className="button button-secondary" href="/workflow">
+          <a className="button button-primary" href="/workflow">
             See the workflow
           </a>
         </div>

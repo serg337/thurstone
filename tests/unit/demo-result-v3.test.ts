@@ -101,7 +101,8 @@ function caseInput(tool: ThurstoneDemoSelectableToolName): ThurstoneContractCase
 async function evaluatingSession(
   tool: ThurstoneDemoSelectableToolName,
   index: number,
-  targetState: "PREPARING" | "PROVIDER_READY" | "ARMED" | "OBSERVING" | "EVALUATING" = "EVALUATING"
+  targetState: "PREPARING" | "PROVIDER_READY" | "ARMED" | "OBSERVING" | "EVALUATING" = "EVALUATING",
+  caseOverride?: ThurstoneContractCaseInput
 ): Promise<ByoaAgentSessionV2> {
   let suite = await createThurstoneContractSuite({
     suiteId: `suite_${uuid(index * 3 + 1)}`,
@@ -112,7 +113,10 @@ async function evaluatingSession(
     createdAt: at(0)
   });
   const caseId = `case_${uuid(index * 3 + 2)}`;
-  suite = addContractSuiteCase(suite, caseInput(tool), { caseId, updatedAt: at(1) });
+  suite = addContractSuiteCase(suite, caseOverride ?? caseInput(tool), {
+    caseId,
+    updatedAt: at(1)
+  });
   suite = selectContractSuiteCase(suite, caseId, { updatedAt: at(2) });
   const lineage = await expectedLineageForThurstoneSuite(suite);
   const contract = await createByoaContractV3({
@@ -245,6 +249,44 @@ describe("BYOA Result v3 and dynamic evaluator", () => {
       expect(result.diagnostic.status).toBe("not-needed");
       await expect(verifyByoaDemoResultV3(result)).resolves.toEqual(result);
     }
+  });
+
+  it("treats quantity zero as a verified cart-line removal", async () => {
+    const removalCase: ThurstoneContractCaseInput = {
+      ...caseInput("cart_update"),
+      name: "Remove notebook",
+      request: "Remove the field notebook from my cart.",
+      argumentPredicate: {
+        kind: "cart_update",
+        operationId: "valid_unique",
+        operation: "set_quantity",
+        itemId: "field-notebook",
+        quantity: 0
+      },
+      allowedEffects: [{ kind: "cart_quantity", itemId: "field-notebook", quantity: 0 }]
+    };
+    const session = await evaluatingSession("cart_update", 9, "EVALUATING", removalCase);
+    const environment = await createByoaAgentEnvironmentV2(session.contract, buildCommit);
+    await invoke(environment, "cart_update", {
+      operationId: "result_v3_remove_0001",
+      operation: "set_quantity",
+      itemId: "field-notebook",
+      quantity: 0
+    });
+    const result = await evaluateContextContaminated(session, environment);
+
+    expect(result.verdict).toBe("pass");
+    expect(result.trustedStateAfter.value.lines).toEqual([
+      expect.objectContaining({ itemId: "stoneware-mug", quantity: 2 })
+    ]);
+    expect(result.ledgerDiff.effect.quantities).toContainEqual(
+      expect.objectContaining({
+        itemId: "field-notebook",
+        beforeQuantity: 1,
+        afterQuantity: null,
+        changed: true
+      })
+    );
   });
 
   it("records a wrong first tool as ISSUE without inventing a state transition", async () => {

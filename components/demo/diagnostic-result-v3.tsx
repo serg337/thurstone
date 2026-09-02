@@ -27,6 +27,24 @@ function pretty(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
 
+function readableItem(value: unknown): string {
+  if (value === "field-notebook") return "Field notebook";
+  if (value === "stoneware-mug") return "Stoneware mug";
+  return typeof value === "string" ? value : "unspecified item";
+}
+
+function argumentSummary(value: unknown): string {
+  if (value === null) return "No arguments observed";
+  if (typeof value !== "object" || Array.isArray(value)) return pretty(value);
+  const record = value as Record<string, unknown>;
+  if (record.itemId !== undefined && typeof record.quantity === "number") {
+    return `Set ${readableItem(record.itemId)} quantity to ${record.quantity}`;
+  }
+  if (record.kind === "empty" || Object.keys(record).length === 0) return "No arguments";
+  if (record.kind === "checkout_request") return "One valid, unique operation ID";
+  return pretty(value);
+}
+
 export function DiagnosticResultV3({
   result,
   actions
@@ -71,7 +89,7 @@ export function DiagnosticResultV3({
             <strong>
               Call <code>{result.selectedExpectedTool}</code>
             </strong>
-            <p>{result.contract.title}</p>
+            <p>{argumentSummary(result.contract.argumentPredicate)}</p>
           </article>
           <article data-observed={result.observedTool === result.selectedExpectedTool}>
             <span>What the agent actually did</span>
@@ -84,110 +102,119 @@ export function DiagnosticResultV3({
                 "No native invocation observed"
               )}
             </strong>
-            <p>{result.handlerOutcome?.status ?? "No handler outcome"}</p>
-          </article>
-        </div>
-      </section>
-
-      <section className={styles.arguments} aria-labelledby="arguments-title">
-        <div>
-          <h2 id="arguments-title">Arguments the site received</h2>
-          <p>Raw transport and canonical contract comparison are shown separately.</p>
-        </div>
-        <div>
-          <article>
-            <span>Raw</span>
-            <pre>{pretty(result.rawArguments)}</pre>
-          </article>
-          <article>
-            <span>Canonical</span>
-            <pre>{pretty(result.canonicalArguments)}</pre>
-          </article>
-        </div>
-      </section>
-
-      <section className={styles.state} aria-labelledby="trusted-state-title">
-        <header>
-          <div>
-            <h2 id="trusted-state-title">Trusted before-and-after state</h2>
             <p>
-              The verdict uses site-owned state and ledger evidence, not the tool response alone.
+              {argumentSummary(result.canonicalArguments)} ·{" "}
+              {result.handlerOutcome?.status ?? "No handler outcome"}
             </p>
-          </div>
-          <span>{result.sourceTruth.stateAuthority.replaceAll("-", " ")}</span>
-        </header>
-        <div className={styles.stateColumns}>
-          {[
-            ["Before", result.trustedStateBefore.value],
-            ["After", result.trustedStateAfter.value]
-          ].map(([label, state]) => {
-            const snapshot = state as ByoaDemoResultV3["trustedStateBefore"]["value"];
-            return (
-              <article key={label as string}>
-                <span>{label as string}</span>
-                <strong>Revision {snapshot.revision}</strong>
-                <ul>
-                  {snapshot.lines.map((line) => (
-                    <li key={line.itemId}>
-                      {line.name}: {line.quantity}
-                    </li>
-                  ))}
-                </ul>
-                <small>{pendingLabel(snapshot.pendingCheckout)}</small>
+          </article>
+        </div>
+      </section>
+
+      <details className={styles.technicalEvidence}>
+        <summary>View technical evidence and assertion details</summary>
+        <div>
+          <section className={styles.arguments} aria-labelledby="arguments-title">
+            <div>
+              <h2 id="arguments-title">Arguments the site received</h2>
+              <p>Raw transport and canonical contract comparison are shown separately.</p>
+            </div>
+            <div>
+              <article>
+                <span>Raw</span>
+                <pre>{pretty(result.rawArguments)}</pre>
               </article>
-            );
-          })}
-        </div>
-        <div className={styles.ledger}>
-          <article>
-            <span>Native events</span>
-            <strong>{result.ledgerDiff.eventCountDelta}</strong>
-          </article>
-          <article>
-            <span>State transitions</span>
-            <strong>{result.ledgerDiff.stateTransitionCount}</strong>
-          </article>
-          <article>
-            <span>Revision delta</span>
-            <strong>{result.ledgerDiff.effect.revision.delta}</strong>
-          </article>
-          <article>
-            <span>Later calls rejected</span>
-            <strong>{result.ledgerDiff.rejectedAdditionalAttempts}</strong>
-          </article>
-        </div>
-        <p className={styles.replayBoundary}>
-          Replay was not measured in this one-call trial. Replay/idempotency remains a separate
-          Invocation Integrity test.
-        </p>
-      </section>
+              <article>
+                <span>Canonical</span>
+                <pre>{pretty(result.canonicalArguments)}</pre>
+              </article>
+            </div>
+          </section>
 
-      <section className={styles.assertions} aria-labelledby="assertions-title">
-        <header>
-          <div>
-            <h2 id="assertions-title">Why Thurstone reached this verdict</h2>
-            <p>
-              {failedAssertions.length === 0
-                ? "Every measured assertion passed."
-                : `${failedAssertions.length} measured assertion(s) failed.`}
-            </p>
-          </div>
-          <strong>
-            {result.assertions.filter(({ passed }) => passed).length}/{result.assertions.length}
-          </strong>
-        </header>
-        <ul>
-          {result.assertions.map((assertion) => (
-            <li key={assertion.assertionId} data-passed={assertion.passed}>
-              <span aria-hidden="true">{assertion.passed ? "✓" : "×"}</span>
+          <section className={styles.state} aria-labelledby="trusted-state-title">
+            <header>
               <div>
-                <strong>{assertion.label}</strong>
-                <p>{assertion.detail}</p>
+                <h2 id="trusted-state-title">Trusted before-and-after state</h2>
+                <p>
+                  The verdict uses site-owned state and ledger evidence, not the tool response
+                  alone.
+                </p>
               </div>
-            </li>
-          ))}
-        </ul>
-      </section>
+              <span>{result.sourceTruth.stateAuthority.replaceAll("-", " ")}</span>
+            </header>
+            <div className={styles.stateColumns}>
+              {[
+                ["Before", result.trustedStateBefore.value],
+                ["After", result.trustedStateAfter.value]
+              ].map(([label, state]) => {
+                const snapshot = state as ByoaDemoResultV3["trustedStateBefore"]["value"];
+                return (
+                  <article key={label as string}>
+                    <span>{label as string}</span>
+                    <strong>Revision {snapshot.revision}</strong>
+                    <ul>
+                      {snapshot.lines.map((line) => (
+                        <li key={line.itemId}>
+                          {line.name}: {line.quantity}
+                        </li>
+                      ))}
+                    </ul>
+                    <small>{pendingLabel(snapshot.pendingCheckout)}</small>
+                  </article>
+                );
+              })}
+            </div>
+            <div className={styles.ledger}>
+              <article>
+                <span>Native events</span>
+                <strong>{result.ledgerDiff.eventCountDelta}</strong>
+              </article>
+              <article>
+                <span>State transitions</span>
+                <strong>{result.ledgerDiff.stateTransitionCount}</strong>
+              </article>
+              <article>
+                <span>Revision delta</span>
+                <strong>{result.ledgerDiff.effect.revision.delta}</strong>
+              </article>
+              <article>
+                <span>Later calls rejected</span>
+                <strong>{result.ledgerDiff.rejectedAdditionalAttempts}</strong>
+              </article>
+            </div>
+            <p className={styles.replayBoundary}>
+              Replay was not measured in this one-call trial. Replay/idempotency remains a separate
+              Invocation Integrity test.
+            </p>
+          </section>
+
+          <section className={styles.assertions} aria-labelledby="assertions-title">
+            <header>
+              <div>
+                <h2 id="assertions-title">Why Thurstone reached this verdict</h2>
+                <p>
+                  {failedAssertions.length === 0
+                    ? "Every measured assertion passed."
+                    : `${failedAssertions.length} measured assertion(s) failed.`}
+                </p>
+              </div>
+              <strong>
+                {result.assertions.filter(({ passed }) => passed).length}/{result.assertions.length}
+              </strong>
+            </header>
+            <ul>
+              {result.assertions.map((assertion) => (
+                <li key={assertion.assertionId} data-passed={assertion.passed}>
+                  <span aria-hidden="true">{assertion.passed ? "✓" : "×"}</span>
+                  <div>
+                    <strong>{assertion.label}</strong>
+                    <p>{assertion.detail}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        </div>
+      </details>
 
       <section className={styles.diagnosis} aria-labelledby="diagnosis-title-v3">
         <p className="eyebrow">Deterministic diagnosis</p>
@@ -232,8 +259,8 @@ export function DiagnosticResultV3({
         </p>
       </section>
 
-      <section className={styles.evidence} aria-labelledby="evidence-boundary-title">
-        <h2 id="evidence-boundary-title">What this receipt proves—and what it does not</h2>
+      <details className={styles.evidence}>
+        <summary>What this receipt proves—and what it does not</summary>
         <dl>
           <div>
             <dt>Launch</dt>
@@ -259,7 +286,7 @@ export function DiagnosticResultV3({
             <li key={limitation}>{limitation}</li>
           ))}
         </ul>
-      </section>
+      </details>
 
       <section className={styles.controlled} aria-labelledby="controlled-mismatch-title">
         <p className="eyebrow">Controlled example — no model call</p>

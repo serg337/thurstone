@@ -515,17 +515,18 @@ function lineQuantities(state: CheckoutState): Map<string, number> {
   return new Map(state.lines.map(({ itemId, quantity }) => [itemId, quantity]));
 }
 
-function stateWithoutModeledEffects(state: CheckoutState): JsonSafeValue {
+function stateWithoutModeledEffects(
+  state: CheckoutState,
+  retainedItemIds: ReadonlySet<string>
+): JsonSafeValue {
   return normalizeJsonSafe({
     fixtureId: state.fixtureId,
     fixtureVersion: state.fixtureVersion,
     seed: state.seed,
     currency: state.currency,
-    lines: state.lines.map(({ itemId, name, unitPriceCents }) => ({
-      itemId,
-      name,
-      unitPriceCents
-    })),
+    lines: state.lines
+      .filter(({ itemId }) => retainedItemIds.has(itemId))
+      .map(({ itemId, name, unitPriceCents }) => ({ itemId, name, unitPriceCents })),
     fulfillment: state.fulfillment
   });
 }
@@ -537,6 +538,9 @@ export function checkoutEffectDiff(
   const beforeQuantities = lineQuantities(before);
   const afterQuantities = lineQuantities(after);
   const itemIds = [...new Set([...beforeQuantities.keys(), ...afterQuantities.keys()])].sort();
+  const retainedItemIds = new Set(
+    itemIds.filter((itemId) => beforeQuantities.has(itemId) && afterQuantities.has(itemId))
+  );
   const quantities = itemIds.map((itemId): QuantityEffect => {
     const beforeQuantity = beforeQuantities.get(itemId) ?? null;
     const afterQuantity = afterQuantities.get(itemId) ?? null;
@@ -553,8 +557,8 @@ export function checkoutEffectDiff(
   const afterPending = pendingSnapshot(after.pendingCheckout);
   const beforeStateBytes = canonicalJson(normalizeJsonSafe(before));
   const afterStateBytes = canonicalJson(normalizeJsonSafe(after));
-  const beforeRemainder = canonicalJson(stateWithoutModeledEffects(before));
-  const afterRemainder = canonicalJson(stateWithoutModeledEffects(after));
+  const beforeRemainder = canonicalJson(stateWithoutModeledEffects(before, retainedItemIds));
+  const afterRemainder = canonicalJson(stateWithoutModeledEffects(after, retainedItemIds));
 
   return Object.freeze({
     stateChanged: beforeStateBytes !== afterStateBytes,

@@ -19,6 +19,7 @@ import {
   issueByoaHandoffV2
 } from "@/lib/demo/handoff-ledger-v2.server";
 import { resolveDeploymentCommit } from "@/lib/deployment/commit";
+import { storeContinuousJourney } from "@/lib/demo/continuous-journey.server";
 
 import {
   BYOA_HANDOFF_PREPARE_MAX_BODY_BYTES,
@@ -34,6 +35,7 @@ export async function POST(request: Request) {
   if (!isTrustedHandoffRequest(request)) {
     return NextResponse.json({ error: "handoff_origin_invalid" }, { status: 403 });
   }
+  let failureStage = "parse";
   try {
     const value = await readBoundedHandoffJson(request, BYOA_HANDOFF_PREPARE_MAX_BODY_BYTES);
     if (
@@ -42,6 +44,7 @@ export async function POST(request: Request) {
       Reflect.get(value, "version") === BYOA_HANDOFF_PREPARE_V2_VERSION
     ) {
       const body = byoaHandoffPrepareRequestV2Schema.parse(value);
+      failureStage = "deployment";
       const activeCommit = resolveDeploymentCommit(process.env);
       if (
         body.session.contract.buildCommit !== activeCommit ||
@@ -53,18 +56,25 @@ export async function POST(request: Request) {
       if (!origin) {
         return NextResponse.json({ error: "handoff_client_origin_invalid" }, { status: 403 });
       }
+      failureStage = "envelope";
       const envelope = createByoaHandoffEnvelopeV2({
         session: body.session,
         projection: body.projection
       });
+      failureStage = "seal";
       const token = sealByoaHandoffV2(envelope);
       try {
+        failureStage = "ledger";
         await issueByoaHandoffV2(createByoaHandoffLedgerV2Redis(), {
           runId: envelope.session.runId,
           contractDigest: envelope.session.contractDigest,
           token,
           expiresAtMs: Date.parse(envelope.expiresAt)
         });
+        if (body.journey !== undefined) {
+          failureStage = "journey";
+          await storeContinuousJourney(body.journey, Date.parse(body.journey.steps[0]!.expiresAt));
+        }
       } catch (caught) {
         if (
           caught instanceof ByoaHandoffLedgerV2Error &&
@@ -126,6 +136,13 @@ export async function POST(request: Request) {
         { status: caught.status, headers: { "Cache-Control": "no-store" } }
       );
     }
-    return NextResponse.json({ error: "handoff_prepare_invalid" }, { status: 400 });
+    const controlledReason =
+      caught instanceof Error && /^HANDOFF_[A-Z_]+$/u.test(caught.message)
+        ? `_${caught.message.toLowerCase()}`
+        : "";
+    return NextResponse.json(
+      { error: `handoff_prepare_invalid_${failureStage}${controlledReason}` },
+      { status: 400 }
+    );
   }
 }

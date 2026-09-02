@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("judge shell is honest, navigable, and marks the simulation where it is used", async ({
+test("judge shell is honest, navigable, and keeps simulation notices contextual", async ({
   page
 }) => {
   const pageErrors: string[] = [];
@@ -14,14 +14,13 @@ test("judge shell is honest, navigable, and marks the simulation where it is use
   await expect(page.getByRole("heading", { level: 1 })).toContainText(
     "Your WebMCP code can be correct."
   );
-  await expect(page.getByText("Synthetic checkout. No purchase occurs.")).toBeHidden();
+  await expect(page.getByText("Synthetic checkout. No purchase occurs.")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Thurstone home" })).toHaveAttribute("href", "/");
 
   const navigation = page.getByRole("navigation", { name: "Primary navigation" });
-  await expect(navigation.getByRole("link")).toHaveCount(4);
+  await expect(navigation.getByRole("link")).toHaveCount(3);
   for (const [label, href] of [
     ["Demo", "/demo"],
-    ["Results", "/results"],
     ["Workflow", "/workflow"],
     ["Research", "/research"]
   ] as const) {
@@ -30,6 +29,7 @@ test("judge shell is honest, navigable, and marks the simulation where it is use
       href
     );
   }
+  await expect(navigation.getByRole("link", { name: /Results/u })).toHaveCount(0);
   await expect(navigation.locator('a[aria-current="page"]')).toHaveCount(0);
 
   await navigation.getByRole("link", { name: "Demo" }).click();
@@ -37,7 +37,7 @@ test("judge shell is honest, navigable, and marks the simulation where it is use
   await expect(
     page.getByRole("heading", { name: "Test Thurstone as a WebMCP owner." })
   ).toBeVisible();
-  await expect(page.getByText("Synthetic checkout. No purchase occurs.")).toBeVisible();
+  await expect(page.getByText("Synthetic checkout. No purchase occurs.")).toHaveCount(0);
   await expect(
     page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: "Demo" })
   ).toHaveAttribute("aria-current", "page");
@@ -48,13 +48,12 @@ test("judge shell is honest, navigable, and marks the simulation where it is use
     page.getByRole("heading", { name: "From human intent to a release decision." })
   ).toBeVisible();
 
-  await page.getByRole("link", { name: "Results" }).click();
+  await page.goto("/results");
   await expect(page).toHaveURL(/\/results$/u);
   await expect(
-    page.getByRole("heading", { name: "Every approved reference behavior passed." })
+    page.getByRole("heading", { name: "Run a Demo test to create a results report." })
   ).toBeVisible();
-  await expect(page.getByLabel("Current evaluation summary")).toContainText("24");
-  await expect(page.getByText(/23\s*\/\s*24/u)).toHaveCount(0);
+  await expect(page.getByText(/24\/24|3\/3/u)).toHaveCount(0);
   expect(pageErrors).toEqual([]);
 });
 
@@ -122,16 +121,10 @@ test("home makes WebMCP, trusted reality, and both judge paths explicit", async 
     "href",
     "/demo"
   );
-  await expect(page.getByRole("link", { name: "See verified reference results" })).toHaveAttribute(
-    "href",
-    "/results"
-  );
+  await expect(page.getByRole("link", { name: /Results/u })).toHaveCount(0);
   const viewport = page.viewportSize();
   expect(viewport).not.toBeNull();
-  for (const link of [
-    page.getByRole("link", { name: "Test with your agent" }),
-    page.getByRole("link", { name: "See verified reference results" })
-  ]) {
+  for (const link of [page.getByRole("link", { name: "Test with your agent" })]) {
     const box = await link.boundingBox();
     expect(box).not.toBeNull();
     expect(box!.y + box!.height).toBeLessThanOrEqual(viewport!.height);

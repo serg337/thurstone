@@ -653,7 +653,7 @@ test("normal UI shares deterministic state, pending policy, and verified reset",
   await mug.getByRole("button", { name: "Set" }).click();
   await expect(page.getByText("checkout-seed-v1 · r1", { exact: true })).toBeVisible();
 
-  await page.getByRole("link", { name: "Results", exact: true }).click();
+  await page.goto("/results");
   await expect(page).toHaveURL(/\/results$/u);
   await page.goBack();
   await expect(page).toHaveURL(/\/lab$/u);
@@ -680,7 +680,7 @@ test("normal UI shares deterministic state, pending policy, and verified reset",
   await expect(resetArticle).toContainText('"currentTrajectoryCount": 0');
   await expect(page.getByText("checkout-seed-v1 · r0", { exact: true })).toBeVisible();
 
-  await page.getByRole("link", { name: "Results", exact: true }).click();
+  await page.goto("/results");
   await expect(page).toHaveURL(/\/results$/u);
   await page.goBack();
   await expect(page).toHaveURL(/\/lab$/u);
@@ -703,7 +703,7 @@ test("cross-surface navigation destroys Lab state and opens a clean document", a
   await expect(page.getByText("checkout-seed-v1 · r1", { exact: true })).toBeVisible();
   await expect(quantityEditor).toHaveValue("3");
 
-  await page.getByRole("link", { name: "Results", exact: true }).click();
+  await page.goto("/results");
   await expect(page).toHaveURL(/\/results$/u);
   await expect(quantityEditor).toHaveCount(0);
   await expect

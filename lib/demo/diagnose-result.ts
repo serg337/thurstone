@@ -76,7 +76,7 @@ const TEMPLATES: Readonly<Record<DiagnosticFindingCode, FindingTemplate>> = {
       "The unchanged case produces one admitted native invocation or an explicitly supported structured decision."
   },
   forbidden_effect_observed: {
-    order: 50,
+    order: 145,
     category: "invariant",
     severity: "critical",
     title: "A forbidden effect occurred",
@@ -184,13 +184,13 @@ const TEMPLATES: Readonly<Record<DiagnosticFindingCode, FindingTemplate>> = {
     order: 130,
     category: "arguments",
     severity: "high",
-    title: "Argument value mismatch",
-    summary: "A canonical argument differs from the contract predicate.",
+    title: "The request and contract arguments diverged",
+    summary: "The agent used an argument value that differs from the owner contract.",
     hypothesis:
-      "The evidence places the mismatch at argument construction or field interpretation.",
-    target: "input-schema",
+      "First compare the request wording with the expected argument values. If they agree, then inspect schema descriptions and the context available to the agent.",
+    target: "owner-contract",
     instruction:
-      "Inspect enums, ranges, field descriptions, and the context used to construct this argument.",
+      "Align the request and expected arguments, or clarify the schema wording if the contract already represents the intended request.",
     successCriterion:
       "The same case produces canonical arguments that satisfy the unchanged predicate."
   },
@@ -351,10 +351,14 @@ export async function createDiagnosticEnvelope(
     const findingId = findingIds.get(signal.code);
     if (!findingId) throw new Error("Diagnostic finding identity was not assigned.");
     const factId = `${findingId}_fact_01`;
-    const consequenceFindingIds =
-      signal.code === "wrong_tool_selected"
-        ? ([findingIds.get("required_effect_missing")].filter(Boolean) as string[])
-        : [];
+    const consequenceFindingIds = [
+      ...(signal.code === "wrong_tool_selected" ||
+      signal.code === "required_argument_missing" ||
+      signal.code === "argument_value_mismatch" ||
+      signal.code === "unexpected_argument"
+        ? [findingIds.get("required_effect_missing"), findingIds.get("forbidden_effect_observed")]
+        : [])
+    ].filter(Boolean) as string[];
     return {
       findingId,
       code: signal.code,

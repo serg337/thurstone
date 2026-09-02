@@ -103,7 +103,7 @@ export const agentVisibleRunProjectionV2Schema = z
         summary: z.string().trim().min(1).max(240)
       })
       .strict(),
-    descriptors: z.array(agentVisibleDescriptorV2Schema).min(2).max(4),
+    descriptors: z.array(agentVisibleDescriptorV2Schema).min(1).max(4),
     catalogDigest: z.string().regex(/^[a-f0-9]{64}$/u),
     buildCommit: z.string().regex(/^[a-f0-9]{40}$/u),
     expiresAt: z.string().datetime({ offset: false })

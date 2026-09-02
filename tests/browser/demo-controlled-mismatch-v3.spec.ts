@@ -8,15 +8,17 @@ import { handoffUrlFromCommand } from "./support/demo-v2-flow";
 async function prepareFreshCheckoutCase(owner: Page): Promise<string> {
   await owner.goto("/demo");
   await owner.getByRole("button", { name: "Choose the test catalog" }).click();
+  await owner.getByRole("button", { name: /order_review/u }).click();
+  await owner.getByRole("button", { name: /checkout_request/u }).click();
   await owner.getByRole("button", { name: "Build the contract suite" }).click();
-  await owner.getByLabel("Test-case name").fill("Request checkout");
   await owner
-    .getByLabel("Representative user request")
-    .fill("I am ready—request checkout for this cart.");
-  await owner.getByLabel("What should the agent do?").selectOption("checkout_request");
+    .getByRole("region", { name: "Start with a curated Demo case." })
+    .getByRole("button", { name: /checkout_request/u })
+    .click();
+  await owner.getByLabel("Test-case name").fill("Request checkout");
+  await owner.getByLabel("Request 1").fill("I am ready—request checkout for this cart.");
   await owner.getByRole("button", { name: "Add test case" }).click();
-  await owner.getByRole("radio", { name: "Select for live test" }).check();
-  await owner.getByRole("button", { name: "Review and arm selected case" }).click();
+  await owner.getByRole("button", { name: /Run contract/u }).click();
   await owner.getByRole("button", { name: "Arm live test" }).click();
   await owner.waitForURL(/\/demo\/run#handoff-source-v2$/u);
   return handoffUrlFromCommand(await owner.getByLabel("Exact fresh-agent command").inputValue());

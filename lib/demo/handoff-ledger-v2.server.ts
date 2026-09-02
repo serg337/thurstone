@@ -68,6 +68,8 @@ export interface ByoaHandoffLedgerV2Status {
   readonly terminalAtMs: number | null;
   readonly expiresAtMs: number;
   readonly ttlMs: number;
+  readonly verdict: "pass" | "issue" | "incomplete" | "unavailable" | null;
+  readonly resultDigest: string | null;
 }
 
 export class ByoaHandoffLedgerV2Error extends Error {
@@ -318,7 +320,39 @@ return {1, "FOUND",
   redis.call("HGET", KEYS[1], "a") or "0",
   redis.call("HGET", KEYS[1], "z") or "0",
   redis.call("HGET", KEYS[1], "x") or "0",
-  redis.call("PTTL", KEYS[1])}
+  redis.call("PTTL", KEYS[1]),
+  redis.call("HGET", KEYS[1], "q") or "",
+  redis.call("HGET", KEYS[1], "d") or ""}
+`;
+
+const REPORT_SCRIPT = `
+-- thurstone:demo-handoff-v2:report
+local now = redis.call("TIME")
+local now_ms = tonumber(now[1]) * 1000 + math.floor(tonumber(now[2]) / 1000)
+if redis.call("EXISTS", KEYS[1]) ~= 1 then return {0, "HANDOFF_MISSING"} end
+if redis.call("HGET", KEYS[1], "v") ~= ARGV[1]
+  or redis.call("HGET", KEYS[1], "c") ~= ARGV[2]
+  or redis.call("HGET", KEYS[1], "t") ~= ARGV[3]
+  or redis.call("HGET", KEYS[1], "f") ~= ARGV[4]
+then return {0, "HANDOFF_BINDING_MISMATCH"} end
+local state = redis.call("HGET", KEYS[1], "s")
+local verdict = ARGV[5]
+if (state == "SETTLED" and verdict ~= "pass" and verdict ~= "issue")
+  or (state == "TIMED_OUT" and verdict ~= "incomplete")
+  or (state == "UNAVAILABLE" and verdict ~= "unavailable")
+then return {0, "HANDOFF_RESULT_STATE_MISMATCH", state or "MISSING"} end
+local existing_verdict = redis.call("HGET", KEYS[1], "q")
+local existing_digest = redis.call("HGET", KEYS[1], "d")
+if existing_verdict then
+  if existing_verdict == verdict and existing_digest == ARGV[6] then
+    return {2, "RESULT_EXISTING", state, now_ms, tonumber(redis.call("HGET", KEYS[1], "x") or "0"),
+      tonumber(redis.call("HGET", KEYS[1], "a") or "0")}
+  end
+  return {0, "HANDOFF_RESULT_CONFLICT"}
+end
+redis.call("HSET", KEYS[1], "q", verdict, "d", ARGV[6])
+return {1, "RESULT_RECORDED", state, now_ms, tonumber(redis.call("HGET", KEYS[1], "x") or "0"),
+  tonumber(redis.call("HGET", KEYS[1], "a") or "0")}
 `;
 
 export const BYOA_HANDOFF_LEDGER_V2_SCRIPTS = Object.freeze({
@@ -330,7 +364,8 @@ export const BYOA_HANDOFF_LEDGER_V2_SCRIPTS = Object.freeze({
   timeout: TIMEOUT_SCRIPT,
   reveal: REVEAL_SCRIPT,
   revoke: REVOKE_SCRIPT,
-  read: READ_SCRIPT
+  read: READ_SCRIPT,
+  report: REPORT_SCRIPT
 });
 
 function digestSecret(kind: "token" | "context", value: string): string {
@@ -375,6 +410,8 @@ interface BrowserFakeRecord {
   startedAtMs: number | null;
   terminalAtMs: number | null;
   expiresAtMs: number;
+  verdict: "pass" | "issue" | "incomplete" | "unavailable" | null;
+  resultDigest: string | null;
 }
 
 const browserFakeGlobal = globalThis as typeof globalThis & {
@@ -470,7 +507,9 @@ class BrowserFakeByoaHandoffLedgerV2Redis implements ByoaHandoffLedgerV2Redis {
         receivedAtMs: null,
         startedAtMs: null,
         terminalAtMs: null,
-        expiresAtMs
+        expiresAtMs,
+        verdict: null,
+        resultDigest: null
       });
       this.issuanceRate.set(args[2]!, now);
       this.active.set(args[2]!, expiresAtMs);
@@ -494,7 +533,9 @@ class BrowserFakeByoaHandoffLedgerV2Redis implements ByoaHandoffLedgerV2Redis {
         record.startedAtMs ?? 0,
         record.terminalAtMs ?? 0,
         record.expiresAtMs,
-        Math.max(0, record.expiresAtMs - now)
+        Math.max(0, record.expiresAtMs - now),
+        record.verdict ?? "",
+        record.resultDigest ?? ""
       ];
     }
     const contextBound =
@@ -529,6 +570,23 @@ class BrowserFakeByoaHandoffLedgerV2Redis implements ByoaHandoffLedgerV2Redis {
         : [0, "HANDOFF_ALREADY_CLAIMED", record.state];
     }
     if (record.freshContextDigest !== context) return [0, "HANDOFF_BINDING_MISMATCH"];
+    if (script === BYOA_HANDOFF_LEDGER_V2_SCRIPTS.report) {
+      const verdict = args[4] as BrowserFakeRecord["verdict"];
+      const digest = args[5]!;
+      const valid =
+        (record.state === "SETTLED" && (verdict === "pass" || verdict === "issue")) ||
+        (record.state === "TIMED_OUT" && verdict === "incomplete") ||
+        (record.state === "UNAVAILABLE" && verdict === "unavailable");
+      if (!valid) return [0, "HANDOFF_RESULT_STATE_MISMATCH", record.state];
+      if (record.verdict !== null) {
+        return record.verdict === verdict && record.resultDigest === digest
+          ? [2, "RESULT_EXISTING", record.state, now, record.expiresAtMs, record.startedAtMs ?? 0]
+          : [0, "HANDOFF_RESULT_CONFLICT"];
+      }
+      record.verdict = verdict;
+      record.resultDigest = digest;
+      return [1, "RESULT_RECORDED", record.state, now, record.expiresAtMs, record.startedAtMs ?? 0];
+    }
     if (script === BYOA_HANDOFF_LEDGER_V2_SCRIPTS.receive) {
       if (record.state === "CLAIMED") {
         record.state = "RECEIVED";
@@ -762,6 +820,23 @@ export async function timeoutByoaHandoffV2(
   );
 }
 
+export async function reportByoaHandoffV2Result(
+  redis: ByoaHandoffLedgerV2Redis,
+  input: ByoaHandoffLedgerV2ContextBinding & {
+    readonly verdict: "pass" | "issue" | "incomplete" | "unavailable";
+    readonly resultDigest: string;
+  }
+): Promise<ByoaHandoffLedgerV2Receipt> {
+  assertDigest(input.resultDigest, "RESULT_DIGEST");
+  return parseReply(
+    await redis.eval(
+      BYOA_HANDOFF_LEDGER_V2_SCRIPTS.report,
+      [byoaHandoffLedgerV2Key(input.runId)],
+      [...bindingArguments(input), input.verdict, input.resultDigest]
+    )
+  );
+}
+
 export async function grantByoaHandoffV2Reveal(
   redis: ByoaHandoffLedgerV2Redis,
   input: ByoaHandoffLedgerV2ContextBinding
@@ -807,6 +882,7 @@ export async function readByoaHandoffV2Status(
     throw new ByoaHandoffLedgerV2Error("INVALID_LEDGER_REPLY");
   }
   if (Number(reply[0]) === 2 && String(reply[1]) === "MISSING") return null;
+  if (reply.length < 15) throw new ByoaHandoffLedgerV2Error("INVALID_LEDGER_REPLY");
   if (Number(reply[0]) !== 1 || String(reply[1]) !== "FOUND") {
     throw new ByoaHandoffLedgerV2Error(String(reply[1] ?? "INVALID_LEDGER_REPLY"));
   }
@@ -816,6 +892,15 @@ export async function readByoaHandoffV2Status(
   }
   const context = String(reply[5] ?? "");
   if (context !== "" && !digestPattern.test(context)) {
+    throw new ByoaHandoffLedgerV2Error("INVALID_LEDGER_REPLY");
+  }
+  const verdict = String(reply[13] ?? "");
+  const resultDigest = String(reply[14] ?? "");
+  if (
+    (verdict !== "" && !["pass", "issue", "incomplete", "unavailable"].includes(verdict)) ||
+    (resultDigest !== "" && !digestPattern.test(resultDigest)) ||
+    (verdict === "") !== (resultDigest === "")
+  ) {
     throw new ByoaHandoffLedgerV2Error("INVALID_LEDGER_REPLY");
   }
   return Object.freeze({
@@ -829,6 +914,8 @@ export async function readByoaHandoffV2Status(
     startedAtMs: nullableInteger(reply[9]),
     terminalAtMs: nullableInteger(reply[10]),
     expiresAtMs: parseInteger(reply[11]),
-    ttlMs: parseInteger(reply[12])
+    ttlMs: parseInteger(reply[12]),
+    verdict: verdict === "" ? null : (verdict as ByoaHandoffLedgerV2Status["verdict"]),
+    resultDigest: resultDigest === "" ? null : resultDigest
   });
 }

@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { cookies } from "next/headers";
 
-import { SimulationNotice } from "@/components/simulation-notice";
 import { SiteHeader } from "@/components/site-header";
 import { PRODUCT_NAME, PRODUCT_ORIGIN } from "@/lib/brand";
 import { PROBE_RESULTS_COOKIE, PROBE_SESSION_COOKIE } from "@/lib/probe/session";
@@ -58,7 +57,6 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           Skip to content
         </a>
         <SiteHeader isolated={isolated} />
-        <SimulationNotice />
         <main id="main-content">{children}</main>
         <footer className="site-footer">
           <span>Thurstone by Invarra</span>

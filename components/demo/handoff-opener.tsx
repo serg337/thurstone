@@ -10,7 +10,11 @@ import {
 import {
   BYOA_RUNNER_V2_MARKER_KEY,
   byoaHandoffOpenRequestV2Schema,
-  clearRemoteByoaSessionV2
+  clearRemoteByoaSessionV2,
+  handoffClaimFailureReasonSchema,
+  handoffClaimFailureReceiptSchema,
+  type HandoffClaimFailureReceiptV1,
+  type HandoffClaimFailureReasonV1
 } from "@/lib/demo/agent-handoff-v2";
 import { freshContextForByoaHandoffV2 } from "@/lib/demo/handoff-context-v2";
 import {
@@ -28,6 +32,20 @@ export function HandoffOpener() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [contaminated, setContaminated] = useState(false);
+  const [claimFailure, setClaimFailure] = useState<HandoffClaimFailureReceiptV1 | null>(null);
+
+  function failureMessage(reason: HandoffClaimFailureReasonV1): string {
+    if (reason === "expired") return "This handoff expired before it was received.";
+    if (reason === "already_claimed")
+      return "This handoff was already claimed by another browser context.";
+    if (reason === "binding_mismatch")
+      return "This handoff did not match its durable claim binding.";
+    if (reason === "ledger_record_missing") return "The durable handoff record was missing.";
+    if (reason === "revoked") return "The owner revoked this handoff before receipt.";
+    if (reason === "invalid_token")
+      return "This handoff token was malformed or failed integrity verification.";
+    return "The durable handoff ledger was unavailable.";
+  }
 
   useEffect(() => {
     queueMicrotask(() =>
@@ -62,8 +80,14 @@ export function HandoffOpener() {
         body: JSON.stringify(body),
         cache: "no-store"
       });
-      if (!response.ok)
-        throw new Error("This handoff link is invalid, claimed, revoked, or expired.");
+      if (!response.ok) {
+        const raw = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+        const reasonResult = handoffClaimFailureReasonSchema.safeParse(raw?.reason);
+        const receiptResult = handoffClaimFailureReceiptSchema.safeParse(raw?.claimFailure);
+        const reason = reasonResult.success ? reasonResult.data : "ledger_unavailable";
+        setClaimFailure(receiptResult.success ? receiptResult.data : null);
+        throw new Error(failureMessage(reason));
+      }
 
       clearByoaAgentSession(window.sessionStorage);
       clearByoaAgentSessionV2(window.sessionStorage);
@@ -103,11 +127,29 @@ export function HandoffOpener() {
         and use the complete <code>@Browser</code> command in a fresh ChatGPT task.
       </strong>
       {error || contaminated ? (
-        <p className="agent-runner-recovery">
-          {error ??
-            "This task contains owner-side suite data. It cannot qualify as an answer-isolated fresh context."}{" "}
-          Close this task and return to the owner tab; this page does not link to the builder.
-        </p>
+        <div className="agent-runner-recovery">
+          <p>
+            {error ??
+              "This task contains owner-side suite data. It cannot qualify as an answer-isolated fresh context."}{" "}
+            Close this task and return to the owner tab; this page does not link to the builder.
+          </p>
+          {claimFailure ? (
+            <dl aria-label="Handoff claim failure receipt">
+              <div>
+                <dt>Verified category</dt>
+                <dd>{claimFailure.reason.replaceAll("_", " ")}</dd>
+              </div>
+              <div>
+                <dt>Observed</dt>
+                <dd>{new Date(claimFailure.observedAtMs).toLocaleTimeString()}</dd>
+              </div>
+              <div>
+                <dt>Exposure</dt>
+                <dd>No request, tools, or invocation</dd>
+              </div>
+            </dl>
+          ) : null}
+        </div>
       ) : (
         <button
           className="button button-primary"

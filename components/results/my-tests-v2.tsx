@@ -81,7 +81,7 @@ function ResultCard({
   );
 }
 
-export function MyTestsV2() {
+export function MyTestsV2({ hideWhenEmpty = false }: { readonly hideWhenEmpty?: boolean }) {
   const [current, setCurrent] = useState<ByoaDemoResultV3 | null>(null);
   const [store, setStore] = useState<MyTestsV2 | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -152,6 +152,7 @@ export function MyTestsV2() {
   }
 
   const entries = store?.entries ?? [];
+  if (hideWhenEmpty && !current && entries.length === 0) return null;
   return (
     <section
       className="my-tests"

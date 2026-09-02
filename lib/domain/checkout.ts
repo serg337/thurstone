@@ -293,9 +293,12 @@ export function cartUpdate(
     };
   }
 
-  const lines = state.lines.map((candidate, index) =>
-    index === lineIndex ? { ...candidate, quantity: command.quantity } : { ...candidate }
-  );
+  const lines =
+    command.quantity === 0
+      ? state.lines.filter((_, index) => index !== lineIndex).map((candidate) => ({ ...candidate }))
+      : state.lines.map((candidate, index) =>
+          index === lineIndex ? { ...candidate, quantity: command.quantity } : { ...candidate }
+        );
   const nextState = freezeState({
     ...state,
     revision: state.revision + 1,

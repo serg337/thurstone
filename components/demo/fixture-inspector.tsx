@@ -4,17 +4,13 @@ export function FixtureInspector({ compact = false }: { readonly compact?: boole
       <details open={!compact}>
         <summary>
           <span>
-            <span className="eyebrow">Safe test environment</span>
-            <strong id="owner-fixture-title">Reference checkout</strong>
+            <span className="eyebrow">Demo example only</span>
+            <strong id="owner-fixture-title">Demo fixture</strong>
           </span>
-          <span className="owner-fixture-summary">Fixture · 2 items · $73 · View details</span>
         </summary>
         <div className="owner-fixture-content">
-          <p>Two synthetic lines. Every test starts clean. No purchase can occur.</p>
           <p>
-            A known starting state lets Thurstone prove exactly what changed. A customer deployment
-            would use the owner&apos;s safe test environment; this challenge demo uses one
-            reproducible fixture.
+            This challenge demo uses a fictional two-item cart as a safe, visible test environment.
           </p>
           <dl>
             <div>
@@ -35,15 +31,10 @@ export function FixtureInspector({ compact = false }: { readonly compact?: boole
             </div>
           </dl>
           {!compact ? (
-            <>
-              <div className="owner-fixture-boundary">
-                <strong>Boundary under test</strong>
-                <span>Read-only order review versus explicit checkout request</span>
-              </div>
-              <a className="owner-fixture-advanced" href="/lab">
-                Advanced: experiment with the mutable-cart technical Lab
-              </a>
-            </>
+            <div className="owner-fixture-boundary">
+              <strong>Example boundary</strong>
+              <span>Review the order versus begin checkout</span>
+            </div>
           ) : null}
         </div>
       </details>

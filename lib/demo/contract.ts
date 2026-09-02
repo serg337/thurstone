@@ -26,7 +26,7 @@ export const workshopEffectPredicateSchema = z
   .object({
     kind: effectKindSchema,
     itemId: z.enum(["field-notebook", "stoneware-mug"]).optional(),
-    quantity: z.number().int().min(1).max(10).optional()
+    quantity: z.number().int().min(0).max(10).optional()
   })
   .strict()
   .superRefine((effect, context) => {

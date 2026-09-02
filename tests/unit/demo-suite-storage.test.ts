@@ -123,7 +123,7 @@ describe("Thurstone contract-suite session storage", () => {
       status: "rejected",
       reason: "unsupported_version"
     });
-    expect(THURSTONE_SUITE_STORAGE_ENVELOPE_VERSION).toBe("thurstone-contract-suite-storage@1");
+    expect(THURSTONE_SUITE_STORAGE_ENVELOPE_VERSION).toBe("thurstone-contract-suite-storage@3");
   });
 
   it("rejects duplicated or caller-bound identity mismatches", async () => {

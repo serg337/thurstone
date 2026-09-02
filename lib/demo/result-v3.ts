@@ -92,7 +92,7 @@ export const byoaEnvironmentManifestV2Schema = z
           })
           .strict()
       )
-      .min(2)
+      .min(1)
       .max(4),
     handlerVersions: z
       .array(
@@ -103,7 +103,7 @@ export const byoaEnvironmentManifestV2Schema = z
           })
           .strict()
       )
-      .min(2)
+      .min(1)
       .max(4)
   })
   .strict();
@@ -145,7 +145,7 @@ export const ledgerDiffV3Schema = z
       .object({
         stateChanged: z.boolean(),
         revision: revisionEffectSchema,
-        quantities: z.array(quantityEffectSchema).length(2),
+        quantities: z.array(quantityEffectSchema).max(2),
         pendingCheckout: pendingCheckoutEffectSchema,
         unmodeledStateChanged: z.boolean()
       })

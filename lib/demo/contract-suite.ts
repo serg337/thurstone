@@ -13,7 +13,7 @@ import { workshopEffectPredicateSchema, type WorkshopEffectPredicate } from "@/l
 import { canonicalJson, canonicalSha256 } from "@/lib/evidence/digest";
 
 export const THURSTONE_CONTRACT_SUITE_VERSION = "thurstone-contract-suite@1" as const;
-export const THURSTONE_CONTRACT_SUITE_MAX_CASES = 6 as const;
+export const THURSTONE_CONTRACT_SUITE_MAX_CASES = 64 as const;
 export const THURSTONE_CONTRACT_SUITE_MAX_ISSUED_CASE_IDS = 128 as const;
 
 const idSuffixPattern = "[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
@@ -55,7 +55,7 @@ export const thurstoneContractCaseArgumentPredicateSchema = z.discriminatedUnion
       operationId: z.literal("valid_unique"),
       operation: z.literal("set_quantity"),
       itemId: z.enum(["field-notebook", "stoneware-mug"]),
-      quantity: z.number().int().min(1).max(10)
+      quantity: z.number().int().min(0).max(10)
     })
     .strict(),
   z
@@ -234,6 +234,10 @@ export const thurstoneContractSuiteSchema = z
     name: boundedPlainText(1, 80, "Contract-suite name"),
     catalogSnapshot: thurstoneDemoCatalogSnapshotSchema,
     catalogDigest: sha256Schema,
+    processEndingToolNames: z
+      .array(z.enum(THURSTONE_DEMO_SELECTABLE_TOOL_NAMES))
+      .max(THURSTONE_DEMO_SELECTABLE_TOOL_NAMES.length)
+      .default([]),
     cases: z.array(thurstoneContractCaseSchema).max(THURSTONE_CONTRACT_SUITE_MAX_CASES),
     selectedCaseId: caseIdSchema.nullable(),
     issuedCaseIds: z.array(caseIdSchema).max(THURSTONE_CONTRACT_SUITE_MAX_ISSUED_CASE_IDS),
@@ -285,6 +289,22 @@ export const thurstoneContractSuiteSchema = z
     }
 
     const catalogNames = new Set(suite.catalogSnapshot.tools.map(({ name }) => name));
+    if (new Set(suite.processEndingToolNames).size !== suite.processEndingToolNames.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["processEndingToolNames"],
+        message: "Process-ending tool names must be unique."
+      });
+    }
+    for (const [index, toolName] of suite.processEndingToolNames.entries()) {
+      if (!catalogNames.has(toolName)) {
+        context.addIssue({
+          code: "custom",
+          path: ["processEndingToolNames", index],
+          message: "A process-ending tool must exist in the selected catalog."
+        });
+      }
+    }
     const semanticSignatures = new Set<string>();
     for (const [index, testCase] of suite.cases.entries()) {
       if (!catalogNames.has(testCase.expectedTool)) {
@@ -409,6 +429,7 @@ export async function createThurstoneContractSuite(
     name: input.name,
     catalogSnapshot,
     catalogDigest,
+    processEndingToolNames: [],
     cases: [],
     selectedCaseId: null,
     issuedCaseIds: [],
@@ -483,6 +504,30 @@ export function renameContractSuite(
   const suite = parseThurstoneContractSuite(value);
   assertTimestampAdvances(suite, options.updatedAt);
   return parseThurstoneContractSuite({ ...suite, name, updatedAt: options.updatedAt });
+}
+
+export function setContractSuiteProcessEndingTool(
+  value: unknown,
+  toolName: ThurstoneDemoSelectableToolName,
+  processEnding: boolean,
+  options: { readonly updatedAt: string }
+): ThurstoneContractSuiteV1 {
+  const suite = parseThurstoneContractSuite(value);
+  assertTimestampAdvances(suite, options.updatedAt);
+  if (!suite.catalogSnapshot.tools.some(({ name }) => name === toolName)) {
+    throw new ContractSuiteOperationError(
+      "case_not_found",
+      "Only a tool in the selected catalog may receive Thurstone journey metadata."
+    );
+  }
+  const names = new Set(suite.processEndingToolNames);
+  if (processEnding) names.add(toolName);
+  else names.delete(toolName);
+  return parseThurstoneContractSuite({
+    ...suite,
+    processEndingToolNames: [...names],
+    updatedAt: options.updatedAt
+  });
 }
 
 export function addContractSuiteCase(
@@ -614,6 +659,7 @@ export async function updateContractSuiteCatalog(
     ...suite,
     catalogSnapshot,
     catalogDigest,
+    processEndingToolNames: suite.processEndingToolNames.filter((toolName) => names.has(toolName)),
     cases: suite.cases.map((testCase) => ({
       ...testCase,
       trustedStateSource: catalogSnapshot.trustedStateSource,

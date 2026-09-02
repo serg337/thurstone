@@ -42,6 +42,7 @@ test("external native checkout produces trusted Result v3 PASS and retires the c
   await expect(
     fresh.getByRole("heading", { name: "Your selected contract case held." })
   ).toBeVisible();
+  await fresh.getByText("View technical evidence and assertion details").click();
   const trustedState = fresh
     .getByRole("heading", { name: "Trusted before-and-after state" })
     .locator("xpath=ancestor::section");
@@ -66,6 +67,7 @@ test("wrong first native tool remains an honest ISSUE with deterministic diagnos
   await expect(
     fresh.getByRole("heading", { name: "Thurstone found a semantic mismatch before release." })
   ).toBeVisible();
+  await fresh.getByText("View technical evidence and assertion details").click();
   await expect(
     fresh.getByText("Expected checkout_request; observed order_review.", { exact: true })
   ).toBeVisible();

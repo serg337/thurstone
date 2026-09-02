@@ -721,7 +721,7 @@ test("a duplicate retired-probe tab cannot hide the current public Results", asy
   await page.goto("/results");
   await expect(page).toHaveURL(/\/results$/u);
   await expect(
-    page.getByRole("heading", { name: "Every approved reference behavior passed." })
+    page.getByRole("heading", { name: "Run a Demo test to create a results report." })
   ).toBeVisible();
   await expect(page.getByText(/probe_document_not_owner/u)).toHaveCount(0);
 });

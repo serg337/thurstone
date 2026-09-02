@@ -20,10 +20,7 @@ test("Home presents the semantic release product before technical detail", async
     "href",
     "/demo"
   );
-  await expect(page.getByRole("link", { name: "See verified reference results" })).toHaveAttribute(
-    "href",
-    "/results"
-  );
+  await expect(page.getByRole("link", { name: /Results/u })).toHaveCount(0);
   await expect(page.getByText(/uncover semantic mistakes in their WebMCP catalog/iu)).toBeVisible();
   await expect(page.getByLabel("Simulation notice")).toBeHidden();
   const backdrop = page.locator(".hero-signal-backdrop");
@@ -31,12 +28,11 @@ test("Home presents the semantic release product before technical detail", async
   await expect(backdrop).toHaveAttribute("aria-hidden", "true");
   await expect(backdrop.locator(".hero-input-nodes > *")).toHaveCount(5);
   await expect(
-    page.getByRole("heading", { name: "Open Thurstone in ChatGPT's Browser" })
+    page.getByRole("heading", { name: "Open Thurstone in ChatGPT's In-App Browser" })
   ).toBeVisible();
-  await expect(
-    page.getByText("@Browser Open https://thurstone.invarra.ai/demo", { exact: true })
-  ).toBeVisible();
-  await expect(page.getByText(/enter this exact command in the chat/iu)).toBeVisible();
+  await page.getByRole("button", { name: "Copy Demo launch command" }).click();
+  await expect(page.getByRole("button", { name: "Demo launch command copied" })).toBeVisible();
+  await expect(page.getByText(/Paste it into the fresh ChatGPT chat/iu)).toBeVisible();
   await expect(page.getByText("Flagged Chrome compatibility", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Open the technical Lab" })).toHaveCount(0);
   const footer = page.locator("footer");
@@ -104,9 +100,10 @@ test("Demo owns the reference-sandbox scope instead of the sales homepage", asyn
   await expect(page.getByRole("textbox", { name: /website url/iu })).toHaveCount(0);
   await expect(page.getByText(/23\s*\/\s*24/u)).toHaveCount(0);
   await page.goto("/demo");
-  await expect(page.getByLabel("Demo scope")).toBeVisible();
-  await expect(page.getByText(/synthetic checkout sandbox/iu)).toBeVisible();
-  await expect(page.getByText(/does not monitor live shoppers/iu)).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Demo guidance" })).toBeVisible();
+  await expect(
+    page.getByText(/fictional two-item cart as a safe, visible test environment/iu)
+  ).toBeVisible();
 });
 
 test("Home answers the complete cold-review product contract", async ({ page }) => {
@@ -129,14 +126,11 @@ test("Home answers the complete cold-review product contract", async ({ page }) 
   expect(answers).toHaveLength(12);
 });
 
-test("Home keeps both primary judge actions inside the first viewport", async ({ page }) => {
+test("Home keeps its primary judge action inside the first viewport", async ({ page }) => {
   await page.goto("/");
   const viewport = page.viewportSize();
   expect(viewport).not.toBeNull();
-  for (const link of [
-    page.getByRole("link", { name: "Test with your agent" }),
-    page.getByRole("link", { name: "See verified reference results" })
-  ]) {
+  for (const link of [page.getByRole("link", { name: "Test with your agent" })]) {
     const box = await link.boundingBox();
     expect(box).not.toBeNull();
     expect(box!.y + box!.height).toBeLessThanOrEqual(viewport!.height);

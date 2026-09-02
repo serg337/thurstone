@@ -1,4 +1,8 @@
-import { CHECKOUT_DOMAIN_VERSION, type CheckoutState } from "@/lib/domain/checkout";
+import {
+  CHECKOUT_DOMAIN_VERSION,
+  createCheckoutFixture,
+  type CheckoutState
+} from "@/lib/domain/checkout";
 import { CheckoutSessionStore } from "@/lib/domain/checkout-session";
 import {
   createThurstoneDemoCatalogSnapshot,
@@ -62,6 +66,7 @@ function thrownSummary(error: unknown) {
 export class ByoaInvocationGateV2 {
   private claim: ByoaInvocationClaimV2 | null = null;
   private rejectedAdditionalAttempts = 0;
+  private active = true;
   private readonly listeners = new Set<() => void>();
 
   snapshot = (): ByoaAdmissionSnapshotV2 =>
@@ -76,6 +81,12 @@ export class ByoaInvocationGateV2 {
   }
 
   claimFirst(toolName: ThurstoneDemoSelectableToolName, rawInput: unknown): ByoaInvocationClaimV2 {
+    if (!this.active) {
+      throw new DOMException(
+        "This Thurstone journey is between verified steps.",
+        "InvalidStateError"
+      );
+    }
     if (this.claim) {
       this.rejectedAdditionalAttempts += 1;
       this.publish();
@@ -108,6 +119,20 @@ export class ByoaInvocationGateV2 {
       settledAt: new Date().toISOString(),
       error: error === undefined ? null : thrownSummary(error)
     });
+    this.publish();
+  }
+
+  deactivate(): void {
+    this.active = false;
+  }
+
+  beginNextStep(): void {
+    if (this.active || this.claim?.disposition === "in-flight") {
+      throw new Error("The prior journey step has not reached a terminal boundary.");
+    }
+    this.claim = null;
+    this.rejectedAdditionalAttempts = 0;
+    this.active = true;
     this.publish();
   }
 
@@ -146,6 +171,7 @@ export interface ByoaAgentEnvironmentV2 {
   readonly tools: readonly WebMCP.ModelContextTool[];
   readonly initialState: CheckoutState;
   readonly initialLedger: CheckoutTraceLedgerSnapshot;
+  readonly initialOperationCount: number;
 }
 
 function assertBuildCommit(appCommit: string, frozenBuildCommit: string): void {
@@ -174,7 +200,8 @@ async function createEnvironment(
   expectedCatalogDigest: string,
   appCommit: string,
   contract: ByoaContractV3 | null,
-  projection: AgentVisibleRunProjectionV2 | null
+  projection: AgentVisibleRunProjectionV2 | null,
+  carried?: Pick<ByoaAgentEnvironmentV2, "store" | "ledger">
 ): Promise<ByoaAgentEnvironmentV2> {
   const catalogSnapshot = parseThurstoneDemoCatalogSnapshot(catalogValue);
   const catalogDigest = await thurstoneDemoCatalogDigest(catalogSnapshot);
@@ -199,13 +226,15 @@ async function createEnvironment(
     )
   }) satisfies ByoaAgentEnvironmentManifestV2;
   const manifestHash = await canonicalSha256(manifest);
-  const ledger = new CheckoutTraceLedger({
-    getRegistryHash: () => manifestHash,
-    getArgumentMode: () => webMcpRuntime.argumentMode ?? "unverified",
-    appCommit,
-    toolsetVersion: BYOA_DEMO_TOOLSET_V2_VERSION
-  });
-  const store = new CheckoutSessionStore({ traceSink: ledger });
+  const ledger =
+    carried?.ledger ??
+    new CheckoutTraceLedger({
+      getRegistryHash: () => manifestHash,
+      getArgumentMode: () => webMcpRuntime.argumentMode ?? "unverified",
+      appCommit,
+      toolsetVersion: BYOA_DEMO_TOOLSET_V2_VERSION
+    });
+  const store = carried?.store ?? new CheckoutSessionStore({ traceSink: ledger });
   const canonical = createCheckoutTools(store);
   const gate = new ByoaInvocationGateV2();
   const tools = Object.freeze(
@@ -249,7 +278,8 @@ async function createEnvironment(
     gate,
     tools,
     initialState: store.getSnapshot().state,
-    initialLedger: ledger.snapshot()
+    initialLedger: ledger.snapshot(),
+    initialOperationCount: store.inspect().currentOperationCount
   });
 }
 
@@ -281,4 +311,55 @@ export async function createByoaAgentEnvironmentV2FromProjection(
     )
   });
   return createEnvironment(catalogSnapshot, projection.catalogDigest, appCommit, null, projection);
+}
+
+export async function createCarriedByoaAgentEnvironmentV2FromProjection(
+  value: unknown,
+  appCommit: string,
+  prior: ByoaAgentEnvironmentV2
+): Promise<ByoaAgentEnvironmentV2> {
+  const projection = parseAgentVisibleRunProjectionV2(value);
+  assertBuildCommit(appCommit, projection.buildCommit);
+  if (prior.appCommit !== appCommit || prior.catalogDigest !== projection.catalogDigest) {
+    throw new Error("A continuous journey cannot change build or catalog between steps.");
+  }
+  const catalogSnapshot = createThurstoneDemoCatalogSnapshot({
+    selectedToolNames: projection.descriptors.map(({ name }) => name),
+    descriptorOverrides: Object.fromEntries(
+      projection.descriptors.map(({ name, title, description }) => [name, { title, description }])
+    )
+  });
+  if (canonicalJson(catalogSnapshot.tools) !== canonicalJson(prior.catalogSnapshot.tools)) {
+    throw new Error("A continuous journey cannot replace its live tool descriptors.");
+  }
+  return Object.freeze({
+    ...prior,
+    projection,
+    initialState: prior.store.getSnapshot().state,
+    initialLedger: prior.ledger.snapshot(),
+    initialOperationCount: prior.store.inspect().currentOperationCount
+  });
+}
+
+export async function createResetByoaAgentEnvironmentV2FromProjection(
+  value: unknown,
+  appCommit: string,
+  prior: ByoaAgentEnvironmentV2
+): Promise<ByoaAgentEnvironmentV2> {
+  const compatible = await createCarriedByoaAgentEnvironmentV2FromProjection(
+    value,
+    appCommit,
+    prior
+  );
+  await prior.store.hardReset();
+  const state = prior.store.getSnapshot().state;
+  if (canonicalJson(state) !== canonicalJson(createCheckoutFixture())) {
+    throw new Error("A regression case could not restore the exact clean fixture.");
+  }
+  return Object.freeze({
+    ...compatible,
+    initialState: state,
+    initialLedger: prior.ledger.snapshot(),
+    initialOperationCount: prior.store.inspect().currentOperationCount
+  });
 }

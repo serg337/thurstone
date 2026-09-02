@@ -225,6 +225,34 @@ describe("checkout effect diff", () => {
     expect(diff.quantities.every(({ changed }) => !changed)).toBe(true);
     expect(diff.unmodeledStateChanged).toBe(false);
   });
+
+  it("treats a quantity-zero line removal as modeled while retaining metadata checks", () => {
+    const before = createCheckoutFixture();
+    const removed = cartUpdate(before, {
+      operationId: "remove_0123456789",
+      operation: "set_quantity",
+      itemId: "field-notebook",
+      quantity: 0
+    }).state;
+    const removalDiff = checkoutEffectDiff(before, removed);
+
+    expect(removalDiff.quantities).toContainEqual({
+      itemId: "field-notebook",
+      beforeQuantity: 1,
+      afterQuantity: null,
+      delta: null,
+      changed: true
+    });
+    expect(removalDiff.unmodeledStateChanged).toBe(false);
+
+    const metadataChanged = {
+      ...before,
+      lines: before.lines.map((line) =>
+        line.itemId === "stoneware-mug" ? { ...line, unitPriceCents: 1 } : { ...line }
+      )
+    };
+    expect(checkoutEffectDiff(before, metadataChanged).unmodeledStateChanged).toBe(true);
+  });
 });
 
 describe("operation traces", () => {

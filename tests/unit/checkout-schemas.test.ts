@@ -44,7 +44,7 @@ describe("checkout tool schemas", () => {
   });
 
   it("accepts the exact cart_update boundary values", () => {
-    for (const quantity of [1, 10]) {
+    for (const quantity of [0, 10]) {
       expect(
         cartUpdateInputSchema.safeParse({
           operationId,
@@ -83,10 +83,6 @@ describe("checkout tool schemas", () => {
     [
       "item above maximum length",
       { operationId, operation: "set_quantity", itemId: "a".repeat(65), quantity: 2 }
-    ],
-    [
-      "zero quantity",
-      { operationId, operation: "set_quantity", itemId: "field-notebook", quantity: 0 }
     ],
     [
       "quantity above maximum",
@@ -141,7 +137,7 @@ describe("checkout tool schemas", () => {
     ]);
     expect(CART_UPDATE_JSON_SCHEMA.properties.quantity).toMatchObject({
       type: "integer",
-      minimum: 1,
+      minimum: 0,
       maximum: 10
     });
     expect(CART_UPDATE_JSON_SCHEMA.properties.itemId).toMatchObject({

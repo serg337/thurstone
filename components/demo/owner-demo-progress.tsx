@@ -6,19 +6,26 @@ const steps = [
   "Inspect, diagnose, and preserve"
 ] as const;
 
-export function OwnerDemoProgress({ current }: { readonly current: number }) {
+interface OwnerDemoProgressProps {
+  readonly current: number;
+  readonly availableStages?: readonly number[];
+  readonly onNavigate?: (stage: 1 | 2 | 3) => void;
+}
+
+export function OwnerDemoProgress({
+  current,
+  availableStages = [],
+  onNavigate
+}: OwnerDemoProgressProps) {
   const primaryStage = current === 4 ? 3 : Math.min(current, steps.length);
-  const progressLabel =
-    current === 4
-      ? `Stage ${primaryStage} of ${steps.length} · Review and arm selected case`
-      : `Stage ${primaryStage} of ${steps.length}`;
 
   return (
     <nav className="owner-progress" aria-label="Demo progress">
-      <p>{progressLabel}</p>
       <ol>
         {steps.map((label, index) => {
           const number = index + 1;
+          const navigable =
+            onNavigate !== undefined && number <= 3 && availableStages.includes(number);
           return (
             <li
               key={label}
@@ -27,8 +34,18 @@ export function OwnerDemoProgress({ current }: { readonly current: number }) {
               }
               aria-current={number === primaryStage ? "step" : undefined}
             >
-              <span aria-hidden="true">{number < primaryStage ? "✓" : number}</span>
-              <strong>{label}</strong>
+              <button
+                type="button"
+                disabled={!navigable}
+                aria-label={navigable ? `Open stage ${number}` : `Stage ${number} locked`}
+                title={label}
+                onClick={() => {
+                  if (navigable) onNavigate(number as 1 | 2 | 3);
+                }}
+              >
+                <span aria-hidden="true">{number < primaryStage ? "✓" : number}</span>
+                <strong>{label}</strong>
+              </button>
             </li>
           );
         })}

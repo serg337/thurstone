@@ -83,12 +83,26 @@ describe("deterministic BYOA diagnosis", () => {
   });
 
   it("uses immutable precedence independent of signal order", () => {
-    expect(diagnosticPrecedence("forbidden_effect_observed")).toBeLessThan(
-      diagnosticPrecedence("wrong_tool_selected")
-    );
     expect(diagnosticPrecedence("wrong_tool_selected")).toBeLessThan(
       diagnosticPrecedence("argument_value_mismatch")
     );
+    expect(diagnosticPrecedence("argument_value_mismatch")).toBeLessThan(
+      diagnosticPrecedence("forbidden_effect_observed")
+    );
+  });
+
+  it("makes an argument mismatch primary and treats resulting state differences as consequences", async () => {
+    const diagnostic = await createDiagnosticEnvelope({
+      ...base,
+      signals: [
+        signal("forbidden_effect_observed"),
+        signal("required_effect_missing"),
+        signal("argument_value_mismatch")
+      ]
+    });
+    expect(diagnostic.primaryFindingId).toContain("argument_value_mismatch");
+    expect(diagnostic.findings[0]?.nextStep.target).toBe("owner-contract");
+    expect(diagnostic.findings[0]?.consequenceFindingIds).toHaveLength(2);
   });
 
   it("produces byte-identical diagnosis for identical evidence", async () => {

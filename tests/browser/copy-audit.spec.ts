@@ -22,7 +22,10 @@ test("primary copy tells one coherent semantic-release story at readable sizes",
   await expect(
     page.getByRole("heading", { name: "Test Thurstone as a WebMCP owner." })
   ).toBeVisible();
-  await expect(page.getByLabel("Demo scope")).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Demo guidance" })).toBeVisible();
+  await expect(
+    page.getByText(/fictional two-item cart as a safe, visible test environment/iu)
+  ).toBeVisible();
   await expect(page.locator(".demo-mode-nav, .demo-readiness")).toHaveCount(0);
 
   await page.goto("/workflow");
@@ -45,11 +48,11 @@ test("results and expert routes lead with conclusions before setup detail", asyn
   await expect(
     page.getByRole("heading", {
       level: 1,
-      name: "See what the contract required—and what actually happened."
+      name: "Results from your latest Demo run."
     })
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Fresh-agent results and regression cases." })
+    page.getByRole("heading", { name: "Run a Demo test to create a results report." })
   ).toBeVisible();
 
   await page.goto("/lab");

@@ -1,6 +1,12 @@
 import "server-only";
 
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  randomBytes,
+  type CipherGCM
+} from "node:crypto";
 import { brotliCompressSync, brotliDecompressSync, constants as zlibConstants } from "node:zlib";
 
 import {
@@ -28,6 +34,17 @@ import {
 import { canonicalJson } from "@/lib/evidence/digest";
 
 export const BYOA_HANDOFF_V2_TOKEN_VERSION = "tbh2" as const;
+
+export type ByoaHandoffTokenV2ErrorCode = "invalid_token" | "expired";
+
+export class ByoaHandoffTokenV2Error extends Error {
+  constructor(readonly code: ByoaHandoffTokenV2ErrorCode) {
+    super(
+      code === "expired" ? "BYOA handoff v2 token expired." : "BYOA handoff v2 token is invalid."
+    );
+    this.name = "ByoaHandoffTokenV2Error";
+  }
+}
 
 const AAD = Buffer.from("thurstone-byoa-handoff-token@2", "utf8");
 const itemIds = ["field-notebook", "stoneware-mug"] as const;
@@ -357,18 +374,39 @@ export function sealByoaHandoffV2(
   value: unknown,
   environment: NodeJS.ProcessEnv = process.env
 ): string {
-  const payload = Buffer.from(canonicalJson(compactEnvelope(value)), "utf8");
+  let compacted: CompactHandoffV2;
+  try {
+    compacted = compactEnvelope(value);
+  } catch {
+    throw new Error("HANDOFF_COMPACT_INVALID");
+  }
+  let payload: Buffer;
+  try {
+    payload = Buffer.from(canonicalJson(compacted), "utf8");
+  } catch {
+    throw new Error("HANDOFF_PAYLOAD_INVALID");
+  }
   if (payload.byteLength > BYOA_HANDOFF_MAX_BYTES) {
     throw new Error("BYOA handoff v2 is too large.");
   }
-  const compressed = brotliCompressSync(payload, {
-    params: {
-      [zlibConstants.BROTLI_PARAM_MODE]: zlibConstants.BROTLI_MODE_TEXT,
-      [zlibConstants.BROTLI_PARAM_QUALITY]: 11
-    }
-  });
+  let compressed: Buffer;
+  try {
+    compressed = brotliCompressSync(payload, {
+      params: {
+        [zlibConstants.BROTLI_PARAM_MODE]: zlibConstants.BROTLI_MODE_TEXT,
+        [zlibConstants.BROTLI_PARAM_QUALITY]: 11
+      }
+    });
+  } catch {
+    throw new Error("HANDOFF_COMPRESSION_FAILED");
+  }
   const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", handoffKey(environment), iv);
+  let cipher: CipherGCM;
+  try {
+    cipher = createCipheriv("aes-256-gcm", handoffKey(environment), iv);
+  } catch {
+    throw new Error("HANDOFF_ENCRYPTION_FAILED");
+  }
   cipher.setAAD(AAD);
   const ciphertext = Buffer.concat([cipher.update(compressed), cipher.final()]);
   const token = [
@@ -378,7 +416,7 @@ export function sealByoaHandoffV2(
     cipher.getAuthTag().toString("base64url")
   ].join(".");
   if (Buffer.byteLength(token, "utf8") > BYOA_HANDOFF_TOKEN_MAX_BYTES) {
-    throw new Error("BYOA handoff v2 token is too large for a cookie.");
+    throw new Error("HANDOFF_TOKEN_TOO_LARGE");
   }
   return token;
 }
@@ -388,7 +426,7 @@ export function openByoaHandoffV2(
   input: { readonly environment?: NodeJS.ProcessEnv; readonly now?: Date } = {}
 ): ByoaHandoffEnvelopeV2 {
   if (Buffer.byteLength(token, "utf8") > BYOA_HANDOFF_TOKEN_MAX_BYTES) {
-    throw new Error("BYOA handoff v2 token is invalid.");
+    throw new ByoaHandoffTokenV2Error("invalid_token");
   }
   const [version, ivEncoded, ciphertextEncoded, tagEncoded, extra] = token.split(".");
   if (
@@ -398,8 +436,9 @@ export function openByoaHandoffV2(
     !tagEncoded ||
     extra !== undefined
   ) {
-    throw new Error("BYOA handoff v2 token is invalid.");
+    throw new ByoaHandoffTokenV2Error("invalid_token");
   }
+  let envelope: ByoaHandoffEnvelopeV2;
   try {
     const iv = decodeBase64Url(ivEncoded);
     const ciphertext = decodeBase64Url(ciphertextEncoded);
@@ -419,12 +458,12 @@ export function openByoaHandoffV2(
       maxOutputLength: BYOA_HANDOFF_MAX_BYTES + 1
     });
     if (plaintext.byteLength > BYOA_HANDOFF_MAX_BYTES) throw new Error("oversized payload");
-    const envelope = expandEnvelope(JSON.parse(plaintext.toString("utf8")) as unknown);
-    if (Date.parse(envelope.expiresAt) <= (input.now ?? new Date()).getTime()) {
-      throw new Error("expired");
-    }
-    return envelope;
+    envelope = expandEnvelope(JSON.parse(plaintext.toString("utf8")) as unknown);
   } catch {
-    throw new Error("BYOA handoff v2 token is invalid or expired.");
+    throw new ByoaHandoffTokenV2Error("invalid_token");
   }
+  if (Date.parse(envelope.expiresAt) <= (input.now ?? new Date()).getTime()) {
+    throw new ByoaHandoffTokenV2Error("expired");
+  }
+  return envelope;
 }

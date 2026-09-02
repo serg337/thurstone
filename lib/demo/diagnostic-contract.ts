@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const DEMO_DIAGNOSTIC_VERSION = "thurstone-demo-diagnostic@1" as const;
-export const DEMO_DIAGNOSER_VERSION = "thurstone-demo-diagnoser@1" as const;
+export const DEMO_DIAGNOSER_VERSION = "thurstone-demo-diagnoser@2" as const;
 
 export type JsonValue =
   null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue };
@@ -124,6 +124,7 @@ export const recommendedNextStepSchema = z
     target: z.enum([
       "tool-descriptions",
       "input-schema",
+      "owner-contract",
       "agent-instructions",
       "handler",
       "trusted-state-adapter",

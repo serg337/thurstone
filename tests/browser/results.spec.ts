@@ -1,87 +1,91 @@
 import { expect, test } from "@playwright/test";
 
-test("Results presents the current verified run without superseded comparison evidence", async ({
+test("development QA preview renders the production Demo report without storing evidence", async ({
   page
 }) => {
-  await page.goto("/results");
+  await page.goto("/results?qa=journey");
   await expect(
-    page.getByRole("heading", { name: "Fresh-agent results and regression cases." })
+    page.getByRole("heading", { level: 1, name: "Results from your latest Demo run." })
   ).toBeVisible();
+  const preview = page.locator('[data-results-level="owner-journey"][data-qa-preview="true"]');
+  await expect(preview.getByRole("heading", { name: "7 of 7 tests passed." })).toBeVisible();
+  await expect(preview.getByText(/QA preview|Development-only synthetic preview/iu)).toHaveCount(0);
   await expect(
-    page.getByRole("heading", { name: "Every approved reference behavior passed." })
+    preview.getByRole("table", { name: "Continuous journey Demo results" }).getByRole("row")
+  ).toHaveCount(8);
+  await expect(
+    preview.getByText(/Thurstone matched the returned line items to site-owned state/iu)
   ).toBeVisible();
-  const summary = page.getByLabel("Current evaluation summary");
-  await expect(summary).toContainText("24");
-  await expect(summary).toContainText("Approved behaviors passed");
-  await expect(summary).toContainText("0");
-  await expect(summary).toContainText("Contract mismatches");
-  await expect(summary).toContainText("20");
-  await expect(summary).toContainText("Native WebMCP calls verified");
-  await expect(summary).toContainText("4");
-  await expect(summary).toContainText("Requests correctly clarified");
-
-  const boundary = page
-    .getByRole("heading", { name: "Tentative intent stayed tentative." })
-    .locator("..");
-  await expect(boundary).toContainText(
-    "I’m still considering whether to move this cart to checkout."
-  );
-  await expect(boundary).toContainText("Asked for confirmation");
-  await expect(boundary).toContainText("Pass.");
-
-  await expect(page.getByText(/23\s*\/\s*24/u)).toHaveCount(0);
-  await expect(page.getByText(/No measured improvement/iu)).toHaveCount(0);
-  await expect(page.getByRole("link", { name: /expert evidence/iu })).toHaveCount(0);
-  expect((await page.request.get("/api/evidence/reference")).status()).toBe(404);
+  const receiptDigests = preview.locator(".latest-journey-receipts code");
+  await expect(receiptDigests).toHaveCount(8);
+  for (const digest of await receiptDigests.allTextContents()) {
+    expect(digest).toMatch(/^[a-f0-9]{64}$/u);
+    expect(new Set(digest).size).toBeGreaterThan(8);
+  }
+  await expect(preview.getByRole("button", { name: "Clear results" })).toHaveCount(0);
+  expect(
+    await page.evaluate(() => sessionStorage.getItem("thurstone:owner-journey-report@3"))
+  ).toBeNull();
 });
 
-test("Results exposes all 24 current cases only on request", async ({ page }) => {
-  await page.goto("/results?view=full");
-  const details = page.getByText("See all 24 cases", { exact: true });
-  await expect(details).toBeVisible();
-  const matrix = page.getByRole("table", { name: "Verified 24-case semantic matrix" });
-  await expect(matrix).toBeHidden();
-  await details.focus();
-  await page.keyboard.press("Enter");
-  await expect(matrix).toBeVisible();
-  await expect(matrix.getByRole("row")).toHaveCount(25);
+test("development issue preview explains the mismatch and unexecuted remainder", async ({
+  page
+}) => {
+  await page.goto("/results?qa=issue");
+  const preview = page.locator('[data-results-level="owner-journey"][data-qa-preview="true"]');
+  await expect(
+    preview.getByRole("heading", { name: "3 passed, 1 failed, and 3 not run." })
+  ).toBeVisible();
+  await expect(preview.getByText("Fail", { exact: true })).toBeVisible();
+  await expect(
+    preview
+      .locator(".latest-journey-metrics article")
+      .filter({ hasText: "Passed" })
+      .locator("strong")
+  ).toHaveText("3");
+  await expect(
+    preview
+      .locator(".latest-journey-metrics article")
+      .filter({ hasText: "Not run" })
+      .locator("strong")
+  ).toHaveText("3");
+  await expect(
+    preview.getByText(/supplied Stoneware mug where the contract required Field notebook/iu)
+  ).toBeVisible();
+  await expect(
+    preview.getByText(/stopped before downstream results became unreliable/iu)
+  ).toBeVisible();
+  const notRunRows = preview.locator('tr[data-verdict="not-run"]');
+  await expect(notRunRows).toHaveCount(3);
+  await expect(notRunRows.first().getByText("Not run", { exact: true })).toBeVisible();
+  await expect(
+    notRunRows
+      .first()
+      .getByText(/continuing from an unverified state could produce unreliable results/iu)
+  ).toBeVisible();
+  await expect(
+    preview.getByRole("table", { name: "Continuous journey Demo results" }).getByRole("row")
+  ).toHaveCount(8);
 });
 
-test("Results orders My Tests before separate 24/24 and 3/3 evidence", async ({ page }) => {
+test("Results is an empty Demo report before this tab runs a test", async ({ page }) => {
   await page.goto("/results");
-  const levels = await page
-    .locator("[data-results-level]")
-    .evaluateAll((elements) =>
-      elements.map((element) => element.getAttribute("data-results-level"))
-    );
-  expect(levels).toEqual(["session-v2", "reference", "integrity"]);
-  await expect(page.getByText("24/24 semantic behaviors", { exact: true })).toBeVisible();
-  await expect(page.getByText("3/3 integrity cases", { exact: true })).toBeVisible();
-  await expect(page.getByText(/27\s*\/\s*27/u)).toHaveCount(0);
+  await expect(page.getByText("Demo test results", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Run a Demo test to create a results report." })
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open the Demo" })).toHaveAttribute("href", "/demo");
+  await expect(page.getByText(/24\/24 semantic behaviors|3\/3 integrity/iu)).toHaveCount(0);
+  await expect(
+    page.getByText(/Potential impact|missing testing layer|before release/iu)
+  ).toHaveCount(0);
+});
+
+test("Results contains no expanded technical material by default", async ({ page }) => {
+  await page.goto("/results?qa=journey");
+  await expect(page.getByText("Technical receipt digests")).toBeVisible();
   await expect(page.locator("details[open]")).toHaveCount(0);
-});
-
-test("invalid My Tests data fails closed without hiding verified reference results", async ({
-  page
-}) => {
-  await page.goto("/demo");
-  await page.evaluate(() => {
-    sessionStorage.setItem(
-      "thurstone:my-tests@1",
-      JSON.stringify({ version: "thurstone-my-tests@1", entries: [], unexpected: true })
-    );
-    sessionStorage.setItem("unrelated-test-key", "preserve");
-  });
-  await page.goto("/results");
-  await expect(
-    page.getByRole("heading", { name: "Stored local test data could not be verified." })
-  ).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "Every approved reference behavior passed." })
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Clear invalid local data" }).click();
-  await expect(
-    page.getByRole("heading", { name: "No Contract v3 result in this browser session yet." })
-  ).toBeVisible();
-  expect(await page.evaluate(() => sessionStorage.getItem("unrelated-test-key"))).toBe("preserve");
+  await expect(page.getByRole("button", { name: "Download results" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Run another Demo test" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Edit Demo contract" })).toBeVisible();
 });

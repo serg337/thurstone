@@ -148,7 +148,7 @@ describe("BYOA Agent Session v2", () => {
     expect(() => parseByoaAgentSessionV2({ ...session, unknown: true })).toThrow();
   });
 
-  it("projects the exact 2–4 tool catalog without the owner rubric", async () => {
+  it("projects the exact 1–4 tool catalog without the owner rubric", async () => {
     const { session } = await fixture();
     const projection = agentVisibleRunProjectionV2(session);
     expect(projection.descriptors.map(({ name }) => name)).toEqual([
@@ -290,12 +290,12 @@ describe("BYOA fresh-agent Handoff v2", () => {
         environment,
         now: new Date(at(7))
       })
-    ).toThrow(/invalid or expired/iu);
+    ).toThrow(/token is invalid/iu);
     expect(() =>
       openByoaHandoffV2(token, {
         environment,
         now: new Date("2026-09-01T00:21:00.000Z")
       })
-    ).toThrow(/invalid or expired/iu);
+    ).toThrow(/token expired/iu);
   });
 });

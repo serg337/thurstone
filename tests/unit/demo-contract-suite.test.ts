@@ -12,6 +12,7 @@ import {
   removeContractSuiteCase,
   renameContractSuite,
   selectContractSuiteCase,
+  setContractSuiteProcessEndingTool,
   thurstoneContractSuiteDigest,
   updateContractSuiteCatalog,
   verifyThurstoneContractSuite,
@@ -25,10 +26,10 @@ import {
 
 const suiteId = "suite_11111111-1111-4111-8111-111111111111";
 const caseIds = Array.from(
-  { length: 8 },
+  { length: THURSTONE_CONTRACT_SUITE_MAX_CASES + 1 },
   (_, index) => `case_00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`
 );
-const at = (second: number) => `2026-09-01T00:00:${String(second).padStart(2, "0")}.000Z`;
+const at = (second: number) => new Date(Date.UTC(2026, 8, 1, 0, 0, second)).toISOString();
 
 function reviewInput(
   overrides: Partial<ThurstoneContractCaseInput> = {}
@@ -130,6 +131,7 @@ describe("Thurstone contract suite", () => {
       version: "thurstone-contract-suite@1",
       suiteId,
       cases: [],
+      processEndingToolNames: [],
       selectedCaseId: null,
       issuedCaseIds: []
     });
@@ -142,6 +144,22 @@ describe("Thurstone contract suite", () => {
     await expect(
       verifyThurstoneContractSuite({ ...suite, catalogDigest: "0".repeat(64) })
     ).rejects.toMatchObject({ code: "catalog_digest_mismatch" });
+  });
+
+  it("keeps every tool standard unless the owner explicitly marks it process-ending", async () => {
+    const suite = await emptySuite(["order_review", "checkout_request"]);
+    expect(suite.processEndingToolNames).toEqual([]);
+    const marked = setContractSuiteProcessEndingTool(suite, "checkout_request", true, {
+      updatedAt: at(1)
+    });
+    expect(marked.processEndingToolNames).toEqual(["checkout_request"]);
+    const unmarked = setContractSuiteProcessEndingTool(marked, "checkout_request", false, {
+      updatedAt: at(2)
+    });
+    expect(unmarked.processEndingToolNames).toEqual([]);
+    expect(() =>
+      setContractSuiteProcessEndingTool(suite, "cart_update", true, { updatedAt: at(1) })
+    ).toThrow(/selected catalog/iu);
   });
 
   it("normalizes names and rejects unsafe or regressing updates", async () => {
@@ -327,7 +345,7 @@ describe("Thurstone contract suite", () => {
     expect(cleared.issuedCaseIds).toEqual([caseIds[0], caseIds[1]]);
   });
 
-  it("bounds suites to six cases and preserves an explicit empty/unselected arm state", async () => {
+  it("uses a high defensive suite ceiling and preserves an explicit empty arm state", async () => {
     const empty = await emptySuite();
     await expect(getArmableContractSuiteSelection(empty)).rejects.toMatchObject({
       code: "suite_empty"
@@ -343,12 +361,15 @@ describe("Thurstone contract suite", () => {
         { caseId: caseIds[index]!, updatedAt: at(index + 1) }
       );
     }
-    expect(suite.cases).toHaveLength(6);
+    expect(suite.cases).toHaveLength(THURSTONE_CONTRACT_SUITE_MAX_CASES);
     expect(() =>
       addContractSuiteCase(
         suite,
-        reviewInput({ name: "Seventh", request: "Show me a seventh wording." }),
-        { caseId: caseIds[6]!, updatedAt: at(7) }
+        reviewInput({ name: "Overflow", request: "Show me one extra wording." }),
+        {
+          caseId: caseIds[THURSTONE_CONTRACT_SUITE_MAX_CASES]!,
+          updatedAt: at(THURSTONE_CONTRACT_SUITE_MAX_CASES + 1)
+        }
       )
     ).toThrowError(expect.objectContaining({ code: "case_limit_reached" }));
     await expect(getArmableContractSuiteSelection(suite)).rejects.toMatchObject({

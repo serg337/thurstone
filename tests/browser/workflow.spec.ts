@@ -1,6 +1,4 @@
-import { expect, test, type BrowserContext, type Page } from "@playwright/test";
-
-import { invokeFreshV2, openFreshV2, prepareV2Handoff, startFreshV2 } from "./support/demo-v2-flow";
+import { expect, test } from "@playwright/test";
 
 test("homepage sells the semantic release problem, mechanism, and action", async ({ page }) => {
   await page.goto("/");
@@ -42,15 +40,14 @@ test("homepage sells the semantic release problem, mechanism, and action", async
   await expect(page.getByText(/27\s*\/\s*27/u)).toHaveCount(0);
 });
 
-test("primary navigation exposes Demo, Results, Workflow, Research with exact active state", async ({
+test("primary navigation keeps Results contextual until an owner journey exists", async ({
   page
 }) => {
   await page.goto("/workflow");
   const navigation = page.getByRole("navigation", { name: "Primary navigation" });
-  await expect(navigation.getByRole("link")).toHaveCount(4);
+  await expect(navigation.getByRole("link")).toHaveCount(3);
   for (const [label, href] of [
     ["Demo", "/demo"],
-    ["Results", "/results"],
     ["Workflow", "/workflow"],
     ["Research", "/research"]
   ] as const) {
@@ -59,6 +56,7 @@ test("primary navigation exposes Demo, Results, Workflow, Research with exact ac
       href
     );
   }
+  await expect(navigation.getByRole("link", { name: /Results/u })).toHaveCount(0);
   await expect(navigation.getByRole("link", { name: "Workflow" })).toHaveAttribute(
     "aria-current",
     "page"
@@ -92,38 +90,17 @@ test("Workflow separates the working challenge product from product direction", 
   await expect(page.getByText(/directions, not current capabilities or promises/iu)).toBeVisible();
 });
 
-async function createCurrentResult(context: BrowserContext, owner: Page) {
-  const fresh = await openFreshV2(context, await prepareV2Handoff(owner));
-  await startFreshV2(fresh);
-  await invokeFreshV2(fresh, "checkout_request", {
-    operationId: "byoa_results_checkout_0001"
-  });
-  await expect(fresh.locator("[data-byoa-v2-state='PASS']")).toBeVisible();
-  return fresh;
-}
-
-test("Results orders My Tests before unchanged 24/24 and separate 3/3", async ({
-  context,
+test("Results is reserved for Demo runs while reference evidence remains on Home", async ({
   page
 }) => {
-  const fresh = await createCurrentResult(context, page);
-  await fresh.goto("/results");
+  await page.goto("/");
+  await expect(page.getByText("24/24", { exact: true })).toBeVisible();
+  await expect(page.getByText("3/3", { exact: true })).toBeVisible();
+  await page.goto("/results");
   await expect(
-    fresh.getByRole("heading", { name: "Fresh-agent results and regression cases." })
+    page.getByRole("heading", { name: "Run a Demo test to create a results report." })
   ).toBeVisible();
-  await expect(fresh.getByText("Current Result v3 run", { exact: true })).toBeVisible();
-  await expect(
-    fresh.locator(".my-test-decision").getByText(/Required.*checkout_request/iu)
-  ).toBeVisible();
-  const levels = await fresh
-    .locator("[data-results-level]")
-    .evaluateAll((elements) =>
-      elements.map((element) => element.getAttribute("data-results-level"))
-    );
-  expect(levels).toEqual(["session-v2", "reference", "integrity"]);
-  await expect(fresh.getByText("24/24 semantic behaviors", { exact: true })).toBeVisible();
-  await expect(fresh.getByText("3/3 integrity cases", { exact: true })).toBeVisible();
-  await fresh.close();
+  await expect(page.getByText(/24\/24|3\/3/u)).toHaveCount(0);
 });
 
 test("new judge pages reflow without horizontal page overflow", async ({ page }) => {

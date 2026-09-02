@@ -5,13 +5,13 @@ import type { RuntimeModelContext } from "@/lib/webmcp/runtime";
 import { installEmulatedConsumer } from "./emulated-consumer";
 
 const HANDOFF_COMMAND_PREFIX = "@Browser Open ";
-const HANDOFF_COMMAND_SUFFIX = ", then follow the request shown on the page.";
 
 export function handoffUrlFromCommand(command: string): string {
-  if (!command.startsWith(HANDOFF_COMMAND_PREFIX) || !command.endsWith(HANDOFF_COMMAND_SUFFIX)) {
+  const firstLine = command.split("\n", 1)[0] ?? "";
+  if (!firstLine.startsWith(HANDOFF_COMMAND_PREFIX)) {
     throw new Error("The fresh-agent command does not match the frozen complete-command format.");
   }
-  return command.slice(HANDOFF_COMMAND_PREFIX.length, -HANDOFF_COMMAND_SUFFIX.length);
+  return firstLine.slice(HANDOFF_COMMAND_PREFIX.length);
 }
 
 export async function prepareV2Handoff(
@@ -27,13 +27,17 @@ export async function prepareV2Handoff(
   const expectedTool = input.expectedTool ?? "checkout_request";
   await owner.goto("/demo");
   await owner.getByRole("button", { name: "Choose the test catalog" }).click();
+  await owner.getByRole("button", { name: /order_review/u }).click();
+  await owner.getByRole("button", { name: /checkout_request/u }).click();
   await owner.getByRole("button", { name: "Build the contract suite" }).click();
+  await owner
+    .getByRole("region", { name: "Start with a curated Demo case." })
+    .getByRole("button", { name: new RegExp(expectedTool, "u") })
+    .click();
   await owner.getByLabel("Test-case name").fill(name);
-  await owner.getByLabel("Representative user request").fill(request);
-  await owner.getByLabel("What should the agent do?").selectOption(expectedTool);
+  await owner.getByLabel("Request 1").fill(request);
   await owner.getByRole("button", { name: "Add test case" }).click();
-  await owner.getByRole("radio", { name: "Select for live test" }).check();
-  await owner.getByRole("button", { name: "Review and arm selected case" }).click();
+  await owner.getByRole("button", { name: /Run contract/u }).click();
   await owner.getByRole("button", { name: "Arm live test" }).click();
   await owner.waitForURL(/\/demo\/run#handoff-source-v2$/u);
   return handoffUrlFromCommand(await owner.getByLabel("Exact fresh-agent command").inputValue());
@@ -64,6 +68,7 @@ export async function startFreshV2(
 ): Promise<void> {
   await fresh.getByRole("button", { name: "Continue to readiness" }).click();
   await fresh.getByRole("button", { name: "Start live observation" }).click();
+  await expect(fresh.locator("[data-byoa-v2-state='ARMED']")).toBeVisible();
   await expect
     .poll(() =>
       fresh.evaluate(async () =>
@@ -75,7 +80,7 @@ export async function startFreshV2(
 
 export async function invokeFreshV2(
   fresh: Page,
-  toolName: "order_review" | "checkout_request",
+  toolName: "cart_get" | "cart_update" | "order_review" | "checkout_request",
   input: Record<string, unknown>
 ): Promise<void> {
   await fresh.evaluate(
