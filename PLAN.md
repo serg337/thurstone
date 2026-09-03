@@ -65,11 +65,11 @@
    - Commit explicit paths, push both private branches, deploy exact SHA, wait for terminal CI,
      verify signed-out Production, and record the release identity.
 
-10. **Judge quick-start successor — QUALIFIED; RELEASE PENDING**
-    - Add `/judge` with one preloaded real four-tool `cart_update` contract and no authoring.
+10. **Three-case Judge Quick Start — QUALIFIED; RELEASE PENDING**
+    - Add `/judge` with a preloaded live baseline, disclosed site-side fault, and authentic semantic
+      collision; no authoring required.
     - Preserve answer isolation in the fresh agent document.
-    - Synchronize observed tool, arguments, trusted state, ledger, assertions, and verdict to the
-      owner page without JSON or refresh.
+    - Track progress without JSON or refresh, then automatically open the full Judge Results report.
     - Add one-minute consumer guidance, clean re-arm, controlled-issue fallback, homepage entry,
       responsive/accessibility coverage, and current testing/submission instructions.
     - Run the complete non-billable release suite, deploy the exact successor, wait for terminal CI,

@@ -85,8 +85,26 @@ interface CompactHandoffV2 {
     string,
     string,
     string,
-    readonly CompactTool[]
+    readonly CompactTool[],
+    (null | 0 | 1 | 2)?
   ];
+}
+
+function compactRuntimeVariant(
+  value: ByoaHandoffEnvelopeV2["session"]["contract"]["runtimeVariant"]
+): null | 0 | 1 | 2 {
+  if (value === undefined) return null;
+  if (value === "standard") return 0;
+  if (value === "planted-cart-update-noop") return 1;
+  return 2;
+}
+
+function expandRuntimeVariant(value: null | 0 | 1 | 2 | undefined) {
+  if (value === null || value === undefined) return undefined;
+  if (value === 0) return "standard" as const;
+  if (value === 1) return "planted-cart-update-noop" as const;
+  if (value === 2) return "semantic-collision" as const;
+  throw new Error("invalid compact runtime variant");
 }
 
 function handoffKey(environment: NodeJS.ProcessEnv = process.env): Buffer {
@@ -236,7 +254,8 @@ function compactEnvelope(value: unknown): CompactHandoffV2 {
         toolIndex(name),
         title,
         description
-      ])
+      ]),
+      compactRuntimeVariant(contract.runtimeVariant)
     ]
   };
 }
@@ -263,7 +282,8 @@ function expandEnvelope(value: unknown): ByoaHandoffEnvelopeV2 {
     catalogDigest,
     buildCommit,
     contractCreatedAt,
-    compactTools
+    compactTools,
+    runtimeVariantIndex
   ] = compact.c;
   const selectedToolNames = compactTools.map(([index]) => toolName(index));
   const descriptorOverrides = Object.fromEntries(
@@ -301,6 +321,9 @@ function expandEnvelope(value: unknown): ByoaHandoffEnvelopeV2 {
     approvalClass: approvalClass === 0 ? "read_only" : "consequential",
     catalogSnapshot,
     catalogDigest: expandedCatalogDigest,
+    ...(expandRuntimeVariant(runtimeVariantIndex) !== undefined
+      ? { runtimeVariant: expandRuntimeVariant(runtimeVariantIndex) }
+      : {}),
     buildCommit: expandHex(buildCommit, 20),
     createdAt: contractCreatedAt
   } as const;

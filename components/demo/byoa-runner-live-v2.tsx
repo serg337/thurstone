@@ -128,15 +128,6 @@ function ownerSummaryFor(result: ByoaDemoResultV3): ByoaOwnerResultSummaryV1 {
     primaryFindingCode: primary?.code ?? null,
     primaryFindingTitle: primary?.title ?? null,
     recommendedNextStep: primary?.nextStep.instruction ?? null,
-    trustedStateBefore: {
-      revision: result.trustedStateBefore.value.revision,
-      lines: result.trustedStateBefore.value.lines.map(({ itemId, name, quantity }) => ({
-        itemId,
-        name,
-        quantity
-      })),
-      pendingCheckoutStatus: result.trustedStateBefore.value.pendingCheckout?.status ?? null
-    },
     trustedStateAfter: {
       revision: result.trustedStateAfter.value.revision,
       lines: result.trustedStateAfter.value.lines.map(({ itemId, name, quantity }) => ({
@@ -146,19 +137,7 @@ function ownerSummaryFor(result: ByoaDemoResultV3): ByoaOwnerResultSummaryV1 {
       })),
       pendingCheckoutStatus: result.trustedStateAfter.value.pendingCheckout?.status ?? null
     },
-    ledger: {
-      eventCountDelta: result.ledgerDiff.eventCountDelta,
-      stateTransitionCount: result.ledgerDiff.stateTransitionCount,
-      operationLedgerCountDelta: result.ledgerDiff.operationLedgerCountDelta,
-      rejectedAdditionalAttempts: result.ledgerDiff.rejectedAdditionalAttempts
-    },
-    assertions: {
-      passed: passedAssertions,
-      total: result.assertions.length,
-      failed: result.assertions
-        .filter(({ passed }) => !passed)
-        .map(({ label, detail }) => ({ label, detail }))
-    }
+    testVariant: result.contract.runtimeVariant ?? "standard"
   };
 }
 

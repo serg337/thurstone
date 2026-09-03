@@ -5,7 +5,7 @@ import { JudgeQuickStart } from "@/components/judge/judge-quick-start";
 export const metadata: Metadata = {
   title: "Judge quick start",
   description:
-    "Run one preloaded Thurstone WebMCP contract from owner intent to a live, independently verified verdict."
+    "Run three preloaded Thurstone WebMCP cases: a healthy baseline, disclosed site fault, and authentic semantic collision."
 };
 
 export default function JudgeQuickStartPage() {

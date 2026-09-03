@@ -92,22 +92,27 @@ artifacts and fail if canonical bytes drift or denominators are combined.
 ## Manual judge quick start
 
 1. Open `https://thurstone.invarra.ai/judge` in a clean browser tab.
-2. Confirm the preloaded owner contract visibly expects `cart_update`, Stoneware mug quantity 3,
-   revision `0 → 1`, one ledger transition, and no unrelated effects.
-3. Choose **Arm quick test** once. Confirm `Armed. Clean revision 0. Awaiting one agent action.`
+2. Confirm the preloaded owner contract shows exactly three cases:
+   - live baseline: Stoneware mug quantity 3 through normal `cart_update`;
+   - planted site fault: Field notebook quantity 2 through the session-only successful no-op;
+   - semantic collision: `Show me my current order.` against overlapping `cart_get` and
+     `order_review` wording.
+3. Choose **Arm Judge Quick Start** once. Confirm `Armed. Three clean cases. 0 of 3 results received.`
 4. Copy the generated command into a genuinely fresh GPT-5.6 Sol or Terra Work or Codex chat in the
    latest ChatGPT desktop app using its built-in Browser—not the Chrome extension side panel.
-5. Confirm the fresh agent document contains the request and four live tool descriptors but none of
-   the owner's expected tool, arguments, effects, or assertions.
-6. Invoke `cart_update` with a unique operation ID, `stoneware-mug`, and quantity 3.
-7. Without refreshing the owner page, confirm it renders a visual verdict with:
-   - observed tool and readable arguments;
-   - mug quantity `2 → 3` and revision `0 → 1` from trusted state;
-   - one operation-ledger entry and one state transition;
-   - assertion totals and any failed checks;
-   - a PASS, ISSUE, INCOMPLETE, or UNAVAILABLE result rather than raw JSON.
-8. Confirm the page offers a clean rerun. If no action appears after approximately one minute,
-   confirm the consumer hint and re-arm action appear.
+5. Confirm each fresh-agent step contains only its request and the four live tool descriptors—not
+   expected tools, effects, assertions, planted-fault implementation, or verdict.
+6. Process all three requests in the same agent chat and continue after each result.
+7. Confirm Test 1 passes when the mug becomes 3.
+8. Confirm Test 2 records an ISSUE when the correct schema-valid call returns success but the Field
+   notebook stays at 1. Confirm the result identifies the planted site-side variant.
+9. For Test 3, invoke `order_review` to verify the pass path and repeat separately with `cart_get` to
+   verify an authentic selection ISSUE. Never require either outcome from a real agent.
+10. Confirm the owner page automatically opens `/results?judge=latest` after all three cases.
+11. Confirm **Judge Results** uses the normal Results presentation, labels all three evidence
+    classes, includes Pass/Fail explanations, and provides **Download results**.
+12. If no new result appears after approximately one minute, confirm the consumer hint and clean
+    re-arm action appear.
 
 ### Controlled issue fallback
 

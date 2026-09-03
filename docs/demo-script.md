@@ -10,8 +10,8 @@ English narration, no music, 1920×1080, 16:9, 30 fps, and readable browser zoom
 The main script uses:
 
 1. the deterministic `/demo/controlled` mismatch, explicitly labeled **no model call**;
-2. the preloaded `/judge` contract and one authentic fresh ChatGPT desktop Browser PASS through
-   native WebMCP;
+2. the preloaded `/judge` three-case contract: live baseline, disclosed site fault, and authentic
+   semantic collision through native WebMCP;
 3. trusted before/after state, ledger, assertions, and diagnosis;
 4. bounded reference evidence at the end.
 
@@ -75,18 +75,15 @@ checkout request, observed `order_review`, unchanged pending-checkout state, and
 
 ### 0:58–1:20 — See and arm the preloaded contract
 
-**Shot:** `/judge`. Show the preloaded mug-quantity request, expected `cart_update` arguments,
-allowed effect, prohibited effects, and **Arm quick test**.
+**Shot:** `/judge`. Show all three cards and **Arm Judge Quick Start**.
 
 **Narration:**
 
-> For a judge, this contract is already loaded. The request asks to set the mug quantity to three.
-> The owner expects cart update with that item and quantity, one exact state transition, and no
-> checkout or unrelated change. I arm it once; the expected answer remains outside the fresh
-> agent's document.
+> For a judge, three cases are already loaded: a healthy live baseline, a disclosed session-only
+> site fault, and a real semantic collision whose outcome is not predetermined. I arm them once;
+> every expected answer remains outside the fresh agent's document.
 
-**Cursor:** Move through request, expected tool, arguments, effect, and prohibited changes. Click
-**Arm quick test** once.
+**Cursor:** Move through the three evidence labels and requests. Click **Arm Judge Quick Start** once.
 
 ### 1:20–1:42 — A real agent acts
 
@@ -96,24 +93,23 @@ built-in Browser.
 
 **Narration:**
 
-> I paste the one-time command into a fresh ChatGPT desktop Browser task. The agent receives the
-> customer's request and exact four-tool catalog, but not my expected action or effects. It chooses
-> and invokes the page through native WebMCP while this owner page waits for the result.
+> I paste one command into a fresh ChatGPT desktop Browser task. For each case, the agent receives
+> only the customer's request and four-tool catalog. It chooses and invokes through native WebMCP
+> while the owner page tracks all three results.
 
 **Cursor:** Show the owner **Arm** action, then the fresh chat and native tool activity. Never reveal
 the opaque URL, cookie, or storage.
 
 ### 1:42–2:04 — Verify reality
 
-**Shot:** Authentic PASS synchronized onto `/judge`. Highlight `cart_update`, readable arguments,
-mug quantity `2 → 3`, revision `0 → 1`, one ledger transition, and all passed contract checks.
+**Shot:** **Judge Results**. Highlight the baseline PASS, planted-fault FAIL, and semantic-collision
+row. Show the planted row's correct `cart_update`, unchanged state, and explanation.
 
 **Narration:**
 
-> Thurstone does not trust the agent's explanation or the tool's success response. It compares the
-> native call and arguments with site-owned state before and after and the append-only ledger. Here
-> the mug changed from two to three, revision advanced once, nothing else changed, and the contract
-> passed.
+> The baseline passes. In the planted case, the agent sends the correct schema-valid cart update and
+> the handler returns success—but trusted state does not change. Thurstone reports the missing
+> effect. The semantic collision records whichever choice the real agent actually made.
 
 **Cursor:** Expected action → observed action → before/after → ledger → assertion count.
 
@@ -163,8 +159,8 @@ Prepare before pressing Record:
 
 1. Clean production homepage.
 2. Controlled mismatch already completed in a supported WebMCP consumer.
-3. Judge quick start clean and ready to arm.
-4. Fresh judge quick-start handoff ready to generate once.
+3. Three-case Judge Quick Start clean and ready to arm.
+4. Fresh judge handoff ready to generate once.
 5. Fresh ChatGPT desktop Work/Codex task ready with GPT-5.6 Sol or Terra.
 6. Authentic PASS result available or a rehearsed safe path to produce it once.
 7. Results reference sections collapsed to the exact views needed.
@@ -174,7 +170,7 @@ Record short source clips rather than one fragile take:
 
 1. homepage collaboration and loop;
 2. controlled mismatch;
-3. preloaded judge contract and arm;
+3. preloaded three-case judge contract and arm;
 4. arm and fresh-agent native execution;
 5. authentic result;
 6. bounded evidence and closing URL.
@@ -193,6 +189,9 @@ Prepared assets:
 - Thurstone binds intended meaning, external-agent decision, native invocation, canonical arguments,
   trusted state, prohibited effects, and verdict.
 - The controlled mismatch is deterministic and uses no model call.
+- The Judge Quick Start's planted site fault is disclosed, session-scoped, and never enabled in the
+  ordinary Demo or production tool catalog.
+- The semantic-collision outcome is authentic and never predetermined.
 - The fresh-agent PASS is authentic only when the actual supported Browser invocation is shown.
 - Current `24/24` is bounded reference regression coverage, one trial per case.
 - Invocation Integrity is separate `3/3`, using zero model calls.

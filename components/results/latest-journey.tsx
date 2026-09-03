@@ -26,10 +26,36 @@ function verdictLabel(verdict: OwnerJourneyReport["results"][number]["verdict"])
   return "Unavailable";
 }
 
+function plantedAgentMatchedContract(result: OwnerJourneyReport["results"][number]): boolean {
+  if (
+    result.ownerSummary.testVariant !== "planted-cart-update-noop" ||
+    result.ownerSummary.observedTool !== result.ownerSummary.expectedTool ||
+    typeof result.ownerSummary.expectedArguments !== "object" ||
+    result.ownerSummary.expectedArguments === null ||
+    Array.isArray(result.ownerSummary.expectedArguments) ||
+    typeof result.ownerSummary.actualArguments !== "object" ||
+    result.ownerSummary.actualArguments === null ||
+    Array.isArray(result.ownerSummary.actualArguments)
+  ) {
+    return false;
+  }
+  const expected = result.ownerSummary.expectedArguments as Record<string, unknown>;
+  const actual = result.ownerSummary.actualArguments as Record<string, unknown>;
+  return (
+    expected.itemId === actual.itemId &&
+    expected.quantity === actual.quantity &&
+    expected.operation === actual.operation &&
+    typeof actual.operationId === "string" &&
+    /^[A-Za-z0-9][A-Za-z0-9_-]{15,63}$/u.test(actual.operationId)
+  );
+}
+
 export function LatestJourney({
-  qaPreviewReport
+  qaPreviewReport,
+  judgeMode = false
 }: {
   readonly qaPreviewReport?: OwnerJourneyReport;
+  readonly judgeMode?: boolean;
 }) {
   const [report, setReport] = useState<OwnerJourneyReport | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -61,14 +87,16 @@ export function LatestJourney({
   if (!loaded) {
     return (
       <section className="latest-journey panel" aria-busy="true">
-        <p>Loading the latest Demo results…</p>
+        <p>Loading the latest {judgeMode ? "Judge Results" : "Demo results"}…</p>
       </section>
     );
   }
   if (invalid) {
     return (
       <section className="latest-journey panel" role="alert">
-        <p className="eyebrow">Demo results unavailable</p>
+        <p className="eyebrow">
+          {judgeMode ? "Judge Results unavailable" : "Demo results unavailable"}
+        </p>
         <h2>The saved Demo report could not be verified.</h2>
         <p>The local report was rejected because its stored data did not pass verification.</p>
         <button
@@ -88,13 +116,17 @@ export function LatestJourney({
   if (report === null) {
     return (
       <section className="latest-journey latest-journey-empty">
-        <p className="eyebrow">No Demo results</p>
-        <h2>Run a Demo test to create a results report.</h2>
+        <p className="eyebrow">{judgeMode ? "No Judge Results" : "No Demo results"}</p>
+        <h2>
+          {judgeMode
+            ? "Run Judge Quick Start to create this report."
+            : "Run a Demo test to create a results report."}
+        </h2>
         <p>
           Completed regression suites and continuous journeys will appear here in this browser tab.
         </p>
-        <a className="button button-primary" href="/demo">
-          Open the Demo
+        <a className="button button-primary" href={judgeMode ? "/judge" : "/demo"}>
+          {judgeMode ? "Open Judge Quick Start" : "Open the Demo"}
         </a>
       </section>
     );
@@ -111,15 +143,18 @@ export function LatestJourney({
     >
       <div className="results-level-heading">
         <div>
-          <p className="eyebrow">Latest Demo run · {runLabel}</p>
+          <p className="eyebrow">
+            {judgeMode ? "Judge Results" : "Latest Demo run"} · {runLabel}
+          </p>
           <h2 id="latest-journey-title">
             {allPassed
               ? `${report.counts.passed} of ${report.total} tests passed.`
               : `${report.counts.passed} passed, ${report.counts.issues} failed, and ${report.counts.notRun} not run.`}
           </h2>
           <p>
-            Results for each request are listed in execution order. Expected behavior comes from
-            your Demo contract; observed behavior and effects come from the completed test.
+            {judgeMode
+              ? "Test 1 is the live baseline. Test 2 contains the disclosed session-only site fault. Test 3 is the live semantic collision; its outcome was never predetermined."
+              : "Results for each request are listed in execution order. Expected behavior comes from your Demo contract; observed behavior and effects come from the completed test."}
           </p>
           {!qaPreview ? (
             <small className="latest-journey-retention">
@@ -154,7 +189,10 @@ export function LatestJourney({
         aria-label="Scrollable latest journey results"
         tabIndex={0}
       >
-        <table className="latest-journey-table" aria-label={`${runLabel} Demo results`}>
+        <table
+          className="latest-journey-table"
+          aria-label={judgeMode ? "Judge Quick Start results" : `${runLabel} Demo results`}
+        >
           <thead>
             <tr>
               <th scope="col">Test</th>
@@ -167,8 +205,23 @@ export function LatestJourney({
           </thead>
           <tbody>
             {report.results.map((result) => (
-              <tr key={result.caseId} data-verdict={result.verdict}>
-                <td>{result.position}</td>
+              <tr
+                key={result.caseId}
+                data-verdict={result.verdict}
+                data-test-variant={result.ownerSummary.testVariant ?? "standard"}
+              >
+                <td>
+                  <span>{result.position}</span>
+                  {judgeMode ? (
+                    <small className="judge-result-class">
+                      {result.ownerSummary.testVariant === "planted-cart-update-noop"
+                        ? "Planted site fault"
+                        : result.ownerSummary.testVariant === "semantic-collision"
+                          ? "Semantic collision"
+                          : "Live baseline"}
+                    </small>
+                  ) : null}
+                </td>
                 <td>{result.ownerSummary.request}</td>
                 <td>
                   <code>{result.ownerSummary.expectedTool}</code>
@@ -179,6 +232,12 @@ export function LatestJourney({
                 <td>{result.ownerSummary.verifiedEffect}</td>
                 <td>
                   <strong>{verdictLabel(result.verdict)}</strong>
+                  {judgeMode && plantedAgentMatchedContract(result) ? (
+                    <b className="judge-planted-finding">
+                      The agent did everything right. The site did not. The handler returned
+                      success.
+                    </b>
+                  ) : null}
                   <p>{result.ownerSummary.resultExplanation}</p>
                 </td>
               </tr>
@@ -229,11 +288,11 @@ export function LatestJourney({
       </section>
 
       <div className="button-row latest-journey-actions">
-        <a className="button button-primary" href="/demo">
-          Run another Demo test
+        <a className="button button-primary" href={judgeMode ? "/judge" : "/demo"}>
+          {judgeMode ? "Run Judge Quick Start again" : "Run another Demo test"}
         </a>
-        <a className="button button-secondary" href="/demo?contract-run=rerun">
-          Edit Demo contract
+        <a className="button button-secondary" href="/demo">
+          {judgeMode ? "Build your own contract" : "Edit Demo contract"}
         </a>
         <button
           className="button button-secondary"

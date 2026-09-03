@@ -30,7 +30,7 @@ export const BYOA_HANDOFF_REVEAL_V2_VERSION = "thurstone-byoa-handoff-reveal@2" 
 export const BYOA_HANDOFF_CONTROL_V2_VERSION = "thurstone-byoa-handoff-control@2" as const;
 export const BYOA_HANDOFF_REVOKE_V2_VERSION = "thurstone-byoa-handoff-revoke@2" as const;
 export const BYOA_HANDOFF_REPORT_V2_VERSION = "thurstone-byoa-handoff-report@5" as const;
-export const BYOA_HANDOFF_STATUS_V2_VERSION = "thurstone-byoa-handoff-status@3" as const;
+export const BYOA_HANDOFF_STATUS_V2_VERSION = "thurstone-byoa-handoff-status@2" as const;
 export const BYOA_CONTINUOUS_JOURNEY_VERSION = "thurstone-batched-run@2" as const;
 export const BYOA_CONTINUOUS_JOURNEY_ADVANCE_VERSION = "thurstone-batched-run-advance@2" as const;
 export const BYOA_CONTINUOUS_JOURNEY_STATUS_VERSION = "thurstone-batched-run-status@5" as const;
@@ -113,32 +113,6 @@ const ownerTrustedStateSummarySchema = z
   })
   .strict();
 
-const ownerLedgerSummarySchema = z
-  .object({
-    eventCountDelta: z.number().int().min(0),
-    stateTransitionCount: z.number().int().min(0),
-    operationLedgerCountDelta: z.number().int().min(0),
-    rejectedAdditionalAttempts: z.number().int().min(0)
-  })
-  .strict();
-
-const ownerAssertionSummarySchema = z
-  .object({
-    passed: z.number().int().min(0).max(32),
-    total: z.number().int().min(1).max(32),
-    failed: z
-      .array(
-        z
-          .object({
-            label: z.string().min(1).max(200),
-            detail: z.string().min(1).max(600)
-          })
-          .strict()
-      )
-      .max(32)
-  })
-  .strict();
-
 export const byoaHandoffReportRequestV2Schema = z
   .object({
     version: z.literal(BYOA_HANDOFF_REPORT_V2_VERSION),
@@ -159,10 +133,10 @@ export const byoaHandoffReportRequestV2Schema = z
         primaryFindingCode: diagnosticFindingCodeSchema.nullable(),
         primaryFindingTitle: z.string().min(1).max(160).nullable(),
         recommendedNextStep: z.string().min(1).max(600).nullable(),
-        trustedStateBefore: ownerTrustedStateSummarySchema.optional(),
         trustedStateAfter: ownerTrustedStateSummarySchema,
-        ledger: ownerLedgerSummarySchema.optional(),
-        assertions: ownerAssertionSummarySchema.optional()
+        testVariant: z
+          .enum(["standard", "planted-cart-update-noop", "semantic-collision"])
+          .optional()
       })
       .strict()
   })
@@ -198,7 +172,6 @@ export const byoaHandoffStatusResponseV2Schema = z
       .nullable(),
     verdict: z.enum(["pass", "issue", "incomplete", "unavailable"]).nullable(),
     resultDigest: sha256Schema.nullable(),
-    ownerSummary: byoaHandoffReportRequestV2Schema.shape.ownerSummary.nullable(),
     claimFailure: handoffClaimFailureReceiptSchema.nullable()
   })
   .strict();
@@ -438,6 +411,8 @@ export const byoaHandoffPrepareRequestV2Schema = z
       value.session.contract.request !== value.projection.request ||
       value.session.contract.catalogDigest !== value.projection.catalogDigest ||
       value.session.contract.buildCommit !== value.projection.buildCommit ||
+      (value.session.contract.runtimeVariant ?? "standard") !==
+        (value.projection.runtimeVariant ?? "standard") ||
       value.session.expiresAt !== value.projection.expiresAt ||
       canonicalJson(catalogProjection) !== canonicalJson(value.projection.descriptors)
     ) {

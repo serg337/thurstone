@@ -16,6 +16,7 @@ import {
   type ThurstoneContractCaseV1,
   type ThurstoneContractSuiteV1
 } from "@/lib/demo/contract-suite";
+import { byoaRuntimeVariantSchema, type ByoaRuntimeVariant } from "@/lib/demo/agent-projection";
 import { workshopEffectPredicateSchema } from "@/lib/demo/contract";
 import {
   THURSTONE_DEMO_FIXTURE_ID,
@@ -55,6 +56,7 @@ export const byoaContractV3Schema = z
     approvalClass: z.enum(["read_only", "consequential"]),
     catalogSnapshot: thurstoneDemoCatalogSnapshotSchema,
     catalogDigest: sha256Schema,
+    runtimeVariant: byoaRuntimeVariantSchema.optional(),
     buildCommit: z.string().regex(/^[a-f0-9]{40}$/u),
     createdAt: z.string().datetime({ offset: false })
   })
@@ -101,6 +103,7 @@ export interface CreateByoaContractV3Input {
   readonly suite: ThurstoneContractSuiteV1;
   readonly buildCommit: string;
   readonly createdAt: string;
+  readonly runtimeVariant?: ByoaRuntimeVariant;
 }
 
 export interface ByoaContractV3ExpectedLineage {
@@ -186,6 +189,7 @@ export async function createByoaContractV3(
     approvalClass: selectedCase.approvalClass,
     catalogSnapshot: suite.catalogSnapshot,
     catalogDigest: suite.catalogDigest,
+    ...(input.runtimeVariant ? { runtimeVariant: input.runtimeVariant } : {}),
     buildCommit: input.buildCommit,
     createdAt: input.createdAt
   });

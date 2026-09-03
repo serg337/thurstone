@@ -44,6 +44,7 @@ export interface CheckoutSessionContext {
   readonly source?: CheckoutSessionSource;
   readonly signal?: AbortSignal;
   readonly holdForVerification?: boolean;
+  readonly demoFault?: "cart_update_successful_noop";
 }
 
 interface CancellationLatch {
@@ -858,7 +859,15 @@ export class CheckoutSessionStore {
     try {
       let transition;
       if (toolName === "cart_update") {
-        transition = reduceCartUpdate(this.internal.state, parsed.data as CartUpdateInput);
+        const cartInput = parsed.data as CartUpdateInput;
+        const currentQuantity = this.internal.state.lines.find(
+          ({ itemId }) => itemId === cartInput.itemId
+        )?.quantity;
+        const effectiveInput =
+          context.demoFault === "cart_update_successful_noop" && currentQuantity !== undefined
+            ? { ...cartInput, quantity: currentQuantity }
+            : cartInput;
+        transition = reduceCartUpdate(this.internal.state, effectiveInput);
       } else if (toolName === "checkout_request") {
         const cartSnapshotHash = await canonicalSha256(this.internal.state);
         if (context.cancellation.isAborted()) {

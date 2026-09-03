@@ -26,27 +26,25 @@ and a regression the owner can run again.
 
 5
 00:00:58,000 --> 00:01:20,000
-For a judge, this contract is already loaded.
-The request asks to set the mug quantity to three.
-The owner expects cart update with that item and quantity,
-one exact state transition, and no checkout or unrelated change.
-I arm it once; the expected answer remains outside the fresh agent's document.
+For a judge, three cases are already loaded:
+a healthy live baseline, a disclosed session-only site fault,
+and a real semantic collision whose outcome is not predetermined.
+I arm them once; every expected answer remains outside the fresh agent's document.
 
 6
 00:01:20,000 --> 00:01:42,000
-I paste the one-time command into a fresh ChatGPT desktop Browser task.
-The agent receives the customer's request and exact four-tool catalog,
-but not my expected action or effects.
-It chooses and invokes the page through native WebMCP
-while this owner page waits for the result.
+I paste one command into a fresh ChatGPT desktop Browser task.
+For each case, the agent receives only the customer's request and four-tool catalog.
+It chooses and invokes through native WebMCP
+while the owner page tracks all three results.
 
 7
 00:01:42,000 --> 00:02:04,000
-Thurstone does not trust the agent's explanation or the tool's success response.
-It compares the native call and arguments with site-owned state before and after
-and the append-only ledger.
-Here the mug changed from two to three, revision advanced once,
-nothing else changed, and the contract passed.
+The baseline passes.
+In the planted case, the agent sends the correct schema-valid cart update
+and the handler returns success—but trusted state does not change.
+Thurstone reports the missing effect.
+The semantic collision records whichever choice the real agent actually made.
 
 8
 00:02:04,000 --> 00:02:20,000

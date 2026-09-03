@@ -16,7 +16,6 @@ import {
   readByoaHandoffV2Status
 } from "@/lib/demo/handoff-ledger-v2.server";
 import { readHandoffClaimFailure } from "@/lib/demo/handoff-claim-receipt.server";
-import { readByoaOwnerSummary } from "@/lib/demo/handoff-owner-summary.server";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +44,6 @@ export async function POST(request: Request) {
           state: null,
           verdict: null,
           resultDigest: null,
-          ownerSummary: null,
           claimFailure
         },
         { headers: { "Cache-Control": "no-store" } }
@@ -58,21 +56,12 @@ export async function POST(request: Request) {
     ) {
       return NextResponse.json({ error: "handoff_status_unavailable" }, { status: 404 });
     }
-    const ownerRecord = status.resultDigest ? await readByoaOwnerSummary(input.runId) : null;
-    if (
-      ownerRecord !== null &&
-      (ownerRecord.contractDigest !== input.contractDigest ||
-        ownerRecord.resultDigest !== status.resultDigest)
-    ) {
-      return NextResponse.json({ error: "handoff_result_identity_mismatch" }, { status: 409 });
-    }
     return NextResponse.json(
       {
         version: BYOA_HANDOFF_STATUS_V2_VERSION,
         state: status.state,
         verdict: status.verdict,
         resultDigest: status.resultDigest,
-        ownerSummary: ownerRecord?.ownerSummary ?? null,
         claimFailure
       },
       { headers: { "Cache-Control": "no-store" } }

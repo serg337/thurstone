@@ -2,15 +2,20 @@ import { describe, expect, it } from "vitest";
 
 import {
   createJudgeQuickStartSuite,
-  JUDGE_QUICK_START_REQUEST
+  JUDGE_QUICK_START_REQUESTS,
+  JUDGE_QUICK_START_RUNTIME_VARIANTS
 } from "@/lib/demo/judge-quick-start";
 import { verifyThurstoneContractSuite } from "@/lib/demo/contract-suite";
 
 describe("judge quick start contract", () => {
-  it("freezes one visible cart mutation against the complete real reference catalog", async () => {
-    const { suite, selectedCase } = await createJudgeQuickStartSuite({
+  it("freezes baseline, planted-fault, and semantic-collision cases", async () => {
+    const { suite, cases } = await createJudgeQuickStartSuite({
       suiteId: "suite_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-      caseId: "case_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      caseIds: [
+        "case_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "case_cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "case_dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+      ],
       createdAt: "2026-09-03T08:00:00.000Z"
     });
 
@@ -21,10 +26,14 @@ describe("judge quick start contract", () => {
       "order_review",
       "checkout_request"
     ]);
-    expect(suite.cases).toHaveLength(1);
-    expect(suite.selectedCaseId).toBe(selectedCase.caseId);
-    expect(selectedCase).toMatchObject({
-      request: JUDGE_QUICK_START_REQUEST,
+    expect(suite.catalogSnapshot.tools[0]).toMatchObject({
+      name: "cart_get",
+      title: "View cart or current order"
+    });
+    expect(suite.cases).toHaveLength(3);
+    expect(suite.selectedCaseId).toBe(cases[0].caseId);
+    expect(cases[0]).toMatchObject({
+      request: JUDGE_QUICK_START_REQUESTS.baseline,
       expectedTool: "cart_update",
       argumentPredicate: {
         kind: "cart_update",
@@ -37,5 +46,26 @@ describe("judge quick start contract", () => {
       replayPolicy: "exactly_once",
       approvalClass: "consequential"
     });
+    expect(cases[1]).toMatchObject({
+      request: JUDGE_QUICK_START_REQUESTS.planted,
+      expectedTool: "cart_update",
+      argumentPredicate: {
+        kind: "cart_update",
+        itemId: "field-notebook",
+        quantity: 2
+      }
+    });
+    expect(cases[2]).toMatchObject({
+      request: JUDGE_QUICK_START_REQUESTS.collision,
+      expectedTool: "order_review",
+      argumentPredicate: { kind: "empty" },
+      allowedEffects: [],
+      replayPolicy: "read_only"
+    });
+    expect(JUDGE_QUICK_START_RUNTIME_VARIANTS).toEqual([
+      "standard",
+      "planted-cart-update-noop",
+      "semantic-collision"
+    ]);
   });
 });

@@ -14,9 +14,11 @@ export const metadata: Metadata = {
 export default async function ResultsPage({
   searchParams
 }: {
-  readonly searchParams: Promise<{ readonly qa?: string }>;
+  readonly searchParams: Promise<{ readonly qa?: string; readonly judge?: string }>;
 }) {
-  const qaMode = (await searchParams).qa;
+  const parameters = await searchParams;
+  const qaMode = parameters.qa;
+  const judgeMode = parameters.judge === "latest";
   const qaPreview =
     process.env.NODE_ENV === "development" && (qaMode === "journey" || qaMode === "issue");
   const qaPreviewReport = qaPreview
@@ -27,16 +29,21 @@ export default async function ResultsPage({
     <div className="page-shell route-page results-page demo-results-page">
       <header className="route-hero" aria-labelledby="results-title">
         <div>
-          <p className="eyebrow">Demo test results</p>
-          <h1 id="results-title">Results from your latest Demo run.</h1>
+          <p className="eyebrow">{judgeMode ? "Judge Results" : "Demo test results"}</p>
+          <h1 id="results-title">
+            {judgeMode
+              ? "Results from your three preloaded tests."
+              : "Results from your latest Demo run."}
+          </h1>
           <p>
-            Review every test request, the behavior your contract required, the action the agent
-            took, and the site effect Thurstone verified.
+            {judgeMode
+              ? "Compare the healthy baseline, disclosed site-side fault, and real semantic collision. Every row shows what the contract required, what happened, and what Thurstone verified."
+              : "Review every test request, the behavior your contract required, the action the agent took, and the site effect Thurstone verified."}
           </p>
         </div>
       </header>
 
-      <LatestJourney {...(qaPreviewReport ? { qaPreviewReport } : {})} />
+      <LatestJourney {...(qaPreviewReport ? { qaPreviewReport } : {})} judgeMode={judgeMode} />
       <MyTestsV2 hideWhenEmpty />
       <MyTests hideWhenEmpty />
     </div>

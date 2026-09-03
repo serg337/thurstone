@@ -233,14 +233,16 @@ No Thurstone account or credentials are required. Start at
 ### Judge quick start — no authoring required
 
 1. Open `https://thurstone.invarra.ai/judge` in any browser.
-2. Review the preloaded mug-quantity contract and choose **Arm quick test**.
-3. Copy the exact command into a fresh GPT-5.6 Sol or Terra Work or Codex chat in the latest
+2. Review the three preloaded cases: a healthy live baseline, a disclosed session-only site fault,
+   and a real-agent semantic collision whose outcome is not predetermined.
+3. Choose **Arm Judge Quick Start**.
+4. Copy the exact command into a fresh GPT-5.6 Sol or Terra Work or Codex chat in the latest
    ChatGPT desktop app using its built-in Browser—not the Chrome extension side panel.
-4. Keep the owner page open. It updates automatically with the observed tool and arguments, trusted
-   before-and-after state, ledger transition, contract checks, and verdict.
+5. Continue all three cases in that same chat. Keep the owner page open; it tracks progress and
+   automatically opens **Judge Results** with one row per request and a downloadable report.
 
 If nothing is observed after approximately one minute, confirm the fresh chat is using ChatGPT
-Desktop's built-in Browser and use **Re-arm a clean test**. The handoff is single use and expires
+Desktop's built-in Browser and use **Re-arm three clean cases**. The handoff is single use and expires
 after ten minutes.
 
 ### Controlled issue without an agent

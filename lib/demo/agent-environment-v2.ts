@@ -12,7 +12,8 @@ import {
 } from "@/lib/demo/catalog-snapshot";
 import {
   parseAgentVisibleRunProjectionV2,
-  type AgentVisibleRunProjectionV2
+  type AgentVisibleRunProjectionV2,
+  type ByoaRuntimeVariant
 } from "@/lib/demo/agent-projection";
 import {
   BYOA_DEMO_TOOLSET_V2_VERSION,
@@ -168,6 +169,7 @@ export interface ByoaAgentEnvironmentV2 {
   readonly store: CheckoutSessionStore;
   readonly ledger: CheckoutTraceLedger;
   readonly gate: ByoaInvocationGateV2;
+  readonly runtimeVariantState: { current: ByoaRuntimeVariant };
   readonly tools: readonly WebMCP.ModelContextTool[];
   readonly initialState: CheckoutState;
   readonly initialLedger: CheckoutTraceLedgerSnapshot;
@@ -201,13 +203,18 @@ async function createEnvironment(
   appCommit: string,
   contract: ByoaContractV3 | null,
   projection: AgentVisibleRunProjectionV2 | null,
-  carried?: Pick<ByoaAgentEnvironmentV2, "store" | "ledger">
+  carried?: Pick<ByoaAgentEnvironmentV2, "store" | "ledger" | "runtimeVariantState">
 ): Promise<ByoaAgentEnvironmentV2> {
   const catalogSnapshot = parseThurstoneDemoCatalogSnapshot(catalogValue);
   const catalogDigest = await thurstoneDemoCatalogDigest(catalogSnapshot);
   if (catalogDigest !== expectedCatalogDigest) {
     throw new Error("The BYOA environment catalog digest does not match its frozen snapshot.");
   }
+  const runtimeVariantState = carried?.runtimeVariantState ?? {
+    current: projection?.runtimeVariant ?? contract?.runtimeVariant ?? "standard"
+  };
+  runtimeVariantState.current =
+    projection?.runtimeVariant ?? contract?.runtimeVariant ?? "standard";
 
   const manifest = Object.freeze({
     version: "thurstone-byoa-agent-environment-manifest@2" as const,
@@ -251,9 +258,17 @@ async function createEnvironment(
         ) => {
           const claim = gate.claimFirst(descriptor.name, input);
           try {
-            const result = await source.execute(input, {
-              signal: context?.signal ?? new AbortController().signal
-            });
+            const plantedNoop =
+              runtimeVariantState.current === "planted-cart-update-noop" &&
+              descriptor.name === "cart_update";
+            const signal = context?.signal ?? new AbortController().signal;
+            const result = plantedNoop
+              ? await store.cartUpdate(input, {
+                  source: "native",
+                  signal,
+                  demoFault: "cart_update_successful_noop"
+                })
+              : await source.execute(input, { signal });
             gate.settle(claim.claimId);
             return result;
           } catch (error) {
@@ -276,6 +291,7 @@ async function createEnvironment(
     store,
     ledger,
     gate,
+    runtimeVariantState,
     tools,
     initialState: store.getSnapshot().state,
     initialLedger: ledger.snapshot(),
@@ -332,6 +348,7 @@ export async function createCarriedByoaAgentEnvironmentV2FromProjection(
   if (canonicalJson(catalogSnapshot.tools) !== canonicalJson(prior.catalogSnapshot.tools)) {
     throw new Error("A continuous journey cannot replace its live tool descriptors.");
   }
+  prior.runtimeVariantState.current = projection.runtimeVariant ?? "standard";
   return Object.freeze({
     ...prior,
     projection,

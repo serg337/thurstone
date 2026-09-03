@@ -61,16 +61,22 @@ authoritative effects. None of those can replace the others.
 
 ### Judge quick start
 
-The preloaded path needs no contract authoring and keeps the owner answer out of the fresh agent's
-document:
+The preloaded path needs no contract authoring and keeps every owner answer out of the fresh agent's
+document. It runs three evidence classes in one regression queue:
+
+- a normal live-agent baseline expected to pass;
+- a disclosed session-only site adapter that returns a successful no-op, producing a deterministic
+  missing-effect issue when the agent calls the expected tool;
+- an authentic semantic stress test with deliberately overlapping `cart_get` and `order_review`
+  wording whose agent outcome is not predetermined.
 
 1. Open [Judge quick start](https://thurstone.invarra.ai/judge) in any browser.
-2. Review the preloaded request, expected tool, arguments, effect, and prohibited changes.
-3. Choose **Arm quick test**, copy the exact command, and paste it into a fresh GPT-5.6 Sol or Terra
+2. Review the three preloaded requests and what each is designed to prove.
+3. Choose **Arm Judge Quick Start**, copy the exact command, and paste it into a fresh GPT-5.6 Sol or Terra
    Work or Codex chat in the latest ChatGPT desktop app.
 4. Use ChatGPT's built-in Browser—not the Chrome side panel—and keep the owner page open.
-5. Watch the visual verdict update automatically with observed action, trusted state, ledger, and
-   contract checks.
+5. Continue all three cases in that chat. The owner page tracks progress and automatically opens a
+   full **Judge Results** report with every observed action, verified effect, and verdict.
 
 No JSON is required. If no native action appears after one minute, the page gives consumer guidance
 and a clean re-arm action. The handoff remains single use and expires after ten minutes.

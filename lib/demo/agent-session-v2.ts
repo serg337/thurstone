@@ -295,6 +295,7 @@ export function agentVisibleRunProjectionV2(value: unknown): AgentVisibleRunProj
       })
     ),
     catalogDigest: contract.catalogDigest,
+    ...(contract.runtimeVariant ? { runtimeVariant: contract.runtimeVariant } : {}),
     buildCommit: contract.buildCommit,
     expiresAt: session.expiresAt
   });

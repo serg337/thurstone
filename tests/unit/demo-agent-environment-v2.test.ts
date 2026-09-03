@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   createByoaAgentEnvironmentV2,
-  createByoaAgentEnvironmentV2FromProjection
+  createByoaAgentEnvironmentV2FromProjection,
+  createResetByoaAgentEnvironmentV2FromProjection
 } from "@/lib/demo/agent-environment-v2";
 import { createThurstoneDemoCatalogSnapshot } from "@/lib/demo/catalog-snapshot";
 import {
@@ -236,6 +237,62 @@ describe("dynamic isolated BYOA environment v2", () => {
         buildCommit
       )
     ).rejects.toThrow(/catalog digest/iu);
+  });
+
+  it("isolates the planted no-op to one reset regression environment", async () => {
+    const contract = await liveContract();
+    const projection = {
+      version: "thurstone-byoa-agent-projection@2" as const,
+      runId: "byoa_run_55555555-5555-4555-8555-555555555555",
+      request: "Set the Field notebook quantity to 2.",
+      fixture: { fixtureId: contract.fixtureId, summary: "Two-item synthetic checkout fixture." },
+      descriptors: contract.catalogSnapshot.tools.map(
+        ({ name, title, description, inputSchema, annotations }) => ({
+          name,
+          title,
+          description,
+          inputSchema,
+          annotations
+        })
+      ),
+      catalogDigest: contract.catalogDigest,
+      runtimeVariant: "planted-cart-update-noop" as const,
+      buildCommit,
+      expiresAt: "2026-09-01T00:30:00.000Z"
+    };
+    const prior = await createByoaAgentEnvironmentV2FromProjection(
+      { ...projection, runtimeVariant: "standard" as const },
+      buildCommit
+    );
+    prior.gate.deactivate();
+    const planted = await createResetByoaAgentEnvironmentV2FromProjection(
+      projection,
+      buildCommit,
+      prior
+    );
+    planted.gate.beginNextStep();
+    const update = planted.tools.find(({ name }) => name === "cart_update");
+    await expect(
+      update?.execute(
+        {
+          operationId: "judge_planted_update_0001",
+          operation: "set_quantity",
+          itemId: "field-notebook",
+          quantity: 2
+        },
+        executionContext()
+      )
+    ).resolves.toMatchObject({ ok: true, code: "no_change", quantity: 1, stateRevision: 0 });
+    expect(planted.runtimeVariantState.current).toBe("planted-cart-update-noop");
+    expect(planted.gate.snapshot().claim?.rawInput).toMatchObject({ quantity: 2 });
+    expect(planted.ledger.snapshot().current[0]?.canonicalArguments?.value).toMatchObject({
+      itemId: "field-notebook",
+      quantity: 2
+    });
+    expect(planted.store.getSnapshot().state).toMatchObject({ revision: 0 });
+    expect(planted.store.getSnapshot().state.lines).toEqual(
+      expect.arrayContaining([expect.objectContaining({ itemId: "field-notebook", quantity: 1 })])
+    );
   });
 
   it("fails closed when the runtime build is not the frozen build", async () => {

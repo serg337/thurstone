@@ -11,6 +11,12 @@ export const BYOA_AGENT_PROJECTION_V2_VERSION = "thurstone-byoa-agent-projection
 export const BYOA_AGENT_PROJECTION_STORAGE_KEY = "thurstone:byoa-agent-projection@1" as const;
 export const BYOA_AGENT_PROJECTION_V2_STORAGE_KEY = "thurstone:byoa-agent-projection@2" as const;
 export const BYOA_AGENT_PROJECTION_MAX_BYTES = 24 * 1024;
+export const byoaRuntimeVariantSchema = z.enum([
+  "standard",
+  "planted-cart-update-noop",
+  "semantic-collision"
+]);
+export type ByoaRuntimeVariant = z.infer<typeof byoaRuntimeVariantSchema>;
 
 type ProjectionJson =
   | null
@@ -105,6 +111,7 @@ export const agentVisibleRunProjectionV2Schema = z
       .strict(),
     descriptors: z.array(agentVisibleDescriptorV2Schema).min(1).max(4),
     catalogDigest: z.string().regex(/^[a-f0-9]{64}$/u),
+    runtimeVariant: byoaRuntimeVariantSchema.optional(),
     buildCommit: z.string().regex(/^[a-f0-9]{40}$/u),
     expiresAt: z.string().datetime({ offset: false })
   })

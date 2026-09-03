@@ -6720,6 +6720,26 @@ textarea::placeholder {
   color: var(--ts-cyan-bright);
 }
 
+.judge-result-class {
+  display: block;
+  max-width: 9rem;
+  margin-top: 0.35rem;
+  color: var(--ts-text-faint);
+  font-size: 0.67rem;
+  font-weight: 760;
+  line-height: 1.35;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.judge-planted-finding {
+  display: block;
+  margin-top: 0.55rem;
+  color: var(--ts-amber-bright);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
 .latest-journey-table td:last-child {
   min-width: 300px;
 }

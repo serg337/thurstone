@@ -16,8 +16,8 @@ site state match the owner's contract.
 
 ## What is included
 
-- No-authoring judge quick start with one preloaded four-tool contract and synchronized visual
-  verdict
+- No-authoring three-case Judge Quick Start with a normal live baseline, disclosed deterministic
+  site fault, authentic semantic collision, and full Judge Results report
 - One-to-four-tool live reference catalog
 - JSON-Schema-derived contract authoring
 - Independent regression queues that continue after issues
