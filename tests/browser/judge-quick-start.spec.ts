@@ -19,6 +19,9 @@ async function armJudgeQuickStart(owner: Page, context: BrowserContext): Promise
     .filter({ hasText: "Preview the exact command" })
     .locator("pre")
     .textContent();
+  expect(command).toMatch(
+    /^@Browser Open https?:\/\/[^\s]+\/demo\/handoff#ths2_[A-Za-z0-9_-]{24}\n/u
+  );
   expect(command).toContain("1. Set the Stoneware mug quantity to 3.");
   expect(command).toContain("2. Set the Field notebook quantity to 2.");
   expect(command).toContain("3. Show me my current order.");
@@ -46,6 +49,7 @@ test("homepage exposes a styled three-case quick start with no authoring", async
   await expect(page.getByText("Test 2 · Controlled planted site fault")).toBeVisible();
   await expect(page.getByText("Test 3 · Live agent semantic stress test")).toBeVisible();
   await expect(page.getByRole("button", { name: "Arm Judge Quick Start" })).toBeVisible();
+  await expect(page.getByText(/Type @ and select Browser/iu)).toHaveCount(0);
   await expect(page.getByText(/JSON/iu)).toHaveCount(0);
 });
 
