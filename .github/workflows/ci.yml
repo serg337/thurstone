@@ -47,6 +47,10 @@ jobs:
         run: npm run typecheck
       - name: Run deterministic tests
         run: npm run test
+      - name: Verify public evidence and sample
+        run: npm run verify:evidence
+      - name: Verify semantic evidence preservation
+        run: npm run verify:semantic-preservation
       - name: Verify Gate 7 adversarial matrix
         run: npm run gate7:verify-adversarial
       - name: Verify Direct Site Tools evidence

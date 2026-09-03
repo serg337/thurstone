@@ -1,6 +1,24 @@
 # Architecture
 
-Thurstone separates authoring, execution, and results into three top-level documents so expected answers and repair hints do not share the active Lab trust surface.
+The current self-service product separates owner authoring, fresh-agent execution, and results so
+the owner's expected actions and effects do not enter the agent-facing document.
+
+```text
+/demo          owner selects the live catalog and builds regression or journey contracts
+/demo/handoff  non-consuming single-use handoff landing
+/demo/run      isolated agent-facing catalog, one admitted native action per case
+/results       synchronized owner report, exports, and saved regression cases
+```
+
+Regression queues use one agent chat but reset the trusted fixture for every independent request,
+so the queue continues after an issue. Continuous journeys carry verified state in one agent
+context and stop after the first issue. The command contains every owner-authorized request but no
+expected actions, effects, assertions, or diagnosis.
+
+## Reference evaluation architecture
+
+The frozen reference evaluation separately uses three top-level documents so expected answers and
+repair hints never share the active Lab trust surface.
 
 ```text
 /studio   draft, human review, freeze, phase-specific meta-tools

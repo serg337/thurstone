@@ -1,15 +1,16 @@
-# Testing
+# Testing Thurstone
 
-## Local verification
+## Local release verification
+
+Run on Linux with the pinned Node/npm versions:
 
 ```bash
 npm ci
+npm run install:check
 npm run format:check
 npm run lint
 npm run typecheck
 npm test
-npm run test:browser:safe
-npm run build
 npm run verify:evidence
 npm run verify:semantic-preservation
 npm run verify:direct-site-tools
@@ -19,83 +20,156 @@ npm run verify:publication
 npm run verify:probe-no-leakage
 npm run gate7:verify-adversarial
 npm audit --audit-level=high
+npm audit --omit=dev --audit-level=high
+npm run build
+npm run test:browser:safe
 ```
 
-## Verification layers
+Paid model calls are never part of ordinary tests or CI.
 
-- Unit tests cover schemas, domain behavior, replay, cancellation, registry lifecycle, guard logic,
-  evidence boundaries, catalog/suite referential integrity, Result v3, regression lineage, atomic
-  handoff state, and deterministic evaluation.
-- Browser tests cover navigation, responsive layout, accessibility, ordinary UI behavior, WebMCP
-  support messaging, the five-stage owner workflow, two-to-four-tool catalog selection,
-  multi-case suite operations, the nested arm confirmation, explicit observation start, all four
-  verdict classes, and fail-closed controls.
-- Native Chrome verification confirms real Site Tools discovery and execution.
-- The primary `/demo` → `/demo/handoff` → `/demo/run` BYOA check confirms that the owner contract
-  remains outside the agent projection, the exact selected two-to-four-tool catalog registers only
-  after explicit start, one external native call is admitted, browser-local site-owned state and
-  ledger evidence decide the Result v3 verdict, and the catalog retires after terminal evidence.
-- `/demo/controlled` executes one deterministic wrong native invocation through a real adapter and
-  evaluator. Its `deterministic-controlled-example` evidence remains separate from the visitor's
-  result and from both reference denominators.
-- **My Tests v2** accepts only PASS/ISSUE Result v3 artifacts, keeps immutable predecessor/successor
-  lineage for reruns, and rejects transient opaque handoff data from export.
-- The semantic evaluator independently checks each model decision and resulting page effect.
-- Invocation Integrity uses deterministic direct calls and a separate denominator.
-- CI scans complete reachable Git history for secrets.
+## What the layers prove
 
-The one-call BYOA trial checks single admission, tool selection, arguments, and effect. It does not
-measure replay. Replay/idempotency is measured only by the separate Invocation Integrity lane.
+### Deterministic and integration tests
 
-The challenge reference state, suite, Result v3, and My Tests v2 artifacts are bounded and
-browser-local. Redis is used only as an expiring atomic handoff/admission ledger; those short-lived
-digest-bound records are not customer state and do not form a customer database.
+The Vitest suite covers:
 
-Paid model calls are never part of ordinary tests or CI. They require a temporary disabled-by-default
-operator lane and remain subject to the Redis lifetime guard.
+- tool schemas, handlers, reducer effects, invalid inputs, replay, cancellation, and reset;
+- WebMCP registration, discovery, argument-mode calibration, execution-ID consumption, and registry
+  lifecycle;
+- contract suite referential integrity and JSON-Schema-derived argument forms;
+- regression queues and continuous journeys;
+- one eligible native action per case and rejection of later/concurrent attempts;
+- trusted before/after state, operation-ledger diff, assertions, verdict, and diagnosis;
+- secure handoff issue, claim, start, settlement, synchronization, expiry, and recovery;
+- evidence namespaces, hashes, presentation, and preservation;
+- durable provider call/spend guards.
 
-## Manual production BYOA verification
+### Browser and accessibility tests
 
-1. Verify `/api/health` reports the exact release SHA. In a genuinely fresh GPT-5.6 Sol or Terra
-   ChatGPT Work or Codex task, use the latest ChatGPT desktop app's built-in Browser and send
-   `@Browser Open https://thurstone.invarra.ai/demo`. Do not use Chrome extension side chat.
-2. **Stage 1 — Understand the semantic boundary:** confirm the read-only versus explicit-checkout
-   examples and fixed-fixture explanation are visible.
-3. **Stage 2 — Choose the real WebMCP test catalog:** keep the default pair or select two to four
-   real reference tools. Confirm the agent preview equals the chosen names, descriptors, schemas,
-   and annotations, and that `/demo` registers zero target tools.
-4. **Stage 3 — Build the contract suite:** create at least two cases, select exactly one live case,
-   and open **Review and arm selected case**. Confirm **Owner expects** and **Agent receives** are
-   separate, the selected case is explicit, and the technical preflight is ready.
-5. Choose **Arm live test**. On the owner-only prepared screen, copy the complete `@Browser`
-   command, including `then follow the request shown on the page.` Keep the opaque URL out of
-   recordings, screenshots, logs, exports, and public text. It expires after ten minutes, and the
-   owner surface registers no target tools or timer.
-6. Paste the command in a new supported task that does not share, fork, reference, or resume the
-   owner task. Confirm the opaque link opens the non-consuming `/demo/handoff` landing without
-   registering tools or starting the timer. Choose **Receive isolated test** exactly once and
-   confirm the claimed task enters `/demo/run`.
-7. At **Test received**, confirm only the request, selected catalog, and fixture are visible. The
-   expected action, arguments, effects, replay policy, approval class, and scoring assertions must
-   be absent from DOM, accessibility tree, URL, storage, transport, logs, and client-visible errors.
-8. Choose **Continue to readiness**, then **Start live observation**. Confirm the timer and exact
-   selected catalog begin only at that explicit boundary. Let the fresh agent follow the frozen
-   request and admit one native Site Tools call.
-9. Confirm Result v3 contains the exact build and manifest, launch mode and evidence tier,
-   canonical arguments, browser-local site-owned state, ledger diff, assertions, diagnosis, and an
-   honest PASS, ISSUE, INCOMPLETE, or UNAVAILABLE verdict. A wrong first eligible call must close as
-   ISSUE; no-call must remain INCOMPLETE.
-10. Confirm the catalog retires, later/concurrent attempts reject before domain execution, no
-    Thurstone-paid model request occurred, and only PASS/ISSUE can save to **My Tests v2**. Export
-    once and confirm no opaque capability appears.
-11. Open **See how Thurstone catches a mismatch**. Confirm `/demo/controlled` is labeled
-    **Controlled example — no model call**, uses a separate result, and changes neither 24/24 nor
-    the separate 3/3 score.
-12. Open **Results** and confirm **My Tests v2** appears before the unchanged 24/24 semantic
-    reference and separate 3/3 Invocation Integrity matrix.
+The safe Playwright suite covers desktop and mobile:
 
-The app proves withholding inside its own projection and atomic handoff. It cannot certify the
-hidden context or identity of every consumer surface. Count a run as `independent-agent-native`
-only when an actually fresh supported built-in Browser task and the authentic native invocation
-are observed. Verify flagged Chrome separately as direct compatibility evidence, never as an
-independent agent-selection result.
+- primary navigation, responsive layout, keyboard behavior, reduced motion, forced colors, and
+  serious/critical Axe findings;
+- Stage 1 boundary explanation;
+- Stage 2 selection of one to four real catalog tools without automatic scrolling;
+- Stage 3 multi-request contracts and schema-derived arguments;
+- independent regression execution using one agent chat and a clean fixture per case;
+- continuous journeys with repeated tools, carried state, process-ending placement, and stop on the
+  first issue;
+- review, arm, secure command, single-use handoff, owner synchronization, and result routing;
+- PASS, ISSUE, INCOMPLETE, UNAVAILABLE, and NOT RUN presentation;
+- controlled no-model mismatch;
+- Results export and regression preservation;
+- Lab native compatibility and fail-closed unsupported-browser states.
+
+Four calibration/model-dependent cases are intentionally excluded from the safe browser command and
+are not silently counted as passes.
+
+### Native WebMCP evidence
+
+- Chrome verification confirms real Site Tools discovery and execution through
+  `getTools()`/`executeTool()`.
+- Direct Site Tools observations document fresh-context supported-consumer behavior separately.
+- The controlled example invokes one deliberately wrong real tool through the native adapter with no
+  model call.
+- Invocation Integrity uses deterministic direct native calls and a denominator separate from
+  semantic behavior.
+
+### Semantic evidence
+
+Evidence classes must remain distinct:
+
+- historical paired experiment: `23/24 → 23/24`, no measured improvement;
+- current separately frozen successor snapshot: `24/24`, one trial per case;
+- Invocation Integrity: separate `3/3`, zero model calls;
+- Direct Site Tools observations;
+- visitor-created Demo results;
+- controlled mismatch.
+
+`npm run verify:evidence` and `npm run verify:semantic-preservation` recompute the current public
+artifacts and fail if canonical bytes drift or denominators are combined.
+
+## Manual 60-second orientation
+
+Use ChatGPT's built-in Browser or Chrome 149+ with
+`chrome://flags/#enable-webmcp-testing`:
+
+1. Open `https://thurstone.invarra.ai/demo/controlled`.
+2. Choose **Run controlled mismatch**.
+3. Confirm the result is labeled **Controlled example — no model call**.
+4. Confirm:
+   - the contract expects `checkout_request`;
+   - the observed native call is `order_review`;
+   - the handler completed but no pending checkout was created;
+   - trusted state and ledger show no checkout transition;
+   - the required-effect assertion fails;
+   - the diagnosis recommends investigation without claiming model causality.
+5. Confirm the controlled result does not alter visitor results, `24/24`, or the separate `3/3`.
+
+This verifies the verdict mechanism, not agent performance.
+
+## Manual full Demo verification
+
+### Owner workflow
+
+1. Confirm `/api/health` reports the exact candidate SHA.
+2. Open `https://thurstone.invarra.ai/demo` in any browser.
+3. In Stage 2, select between one and four real tools. Confirm no target tool is registered on the
+   owner page and no tool is selected by default on a clean workspace.
+4. Confirm only title and description are editable; names, schemas, annotations, handlers, and
+   effects remain fixed. Mark a process-ending tool only when desired.
+5. In Stage 3, add multiple representative requests. Confirm every request has its own
+   schema-derived argument values.
+6. Choose a run mode:
+   - **Regression suite:** every request is queued, one agent chat is used, the fixture resets before
+     each case, and the queue continues after an ISSUE.
+   - **Continuous journey:** choose at least two ordered requests, allow repeated tools, carry
+     verified state, place any process-ending tool last, and stop on the first ISSUE.
+7. Review the queue. Confirm the owner sees expected actions/effects while the generated agent
+   command contains authorized requests but no answer key.
+8. Arm once and copy the complete secure command. Keep its opaque URL out of screenshots, logs,
+   evidence, and public text.
+
+### Fresh-agent workflow
+
+1. Paste the command into a genuinely fresh GPT-5.6 Sol or Terra Work or Codex chat in the latest
+   ChatGPT desktop app using its built-in Browser. Do not use the Chrome extension side panel.
+2. If ChatGPT asks once for permission to open the token-bearing Thurstone URL, confirm only the
+   exact `thurstone.invarra.ai` command.
+3. Confirm the single-use handoff is claimed within ten minutes. An expired, claimed, revoked, or
+   invalid link must be re-armed; never reused.
+4. Confirm the isolated page exposes the authorized request queue and exact catalog but not expected
+   actions, arguments, effects, assertions, or diagnosis.
+5. Process one request at a time. Confirm Thurstone admits at most one eligible native action per
+   case and verifies it before the next request.
+6. For regression mode, confirm the site fixture resets and the queue continues after an independent
+   issue.
+7. For continuous mode, confirm trusted state carries forward and the journey stops after an issue.
+
+### Owner result
+
+1. Keep the original owner tab open and confirm progress synchronizes there.
+2. At terminal completion, confirm the owner page routes to the Results report.
+3. Verify every row records:
+   - request;
+   - expected and observed action;
+   - expected and canonical arguments;
+   - actual outcome;
+   - trusted state before and after;
+   - ledger and effect diff;
+   - assertions;
+   - build identity and timestamp;
+   - verdict and diagnosis.
+4. Confirm regression results show PASS or ISSUE for every executed case. Continuous results show
+   NOT RUN for the remainder after an issue.
+5. Export the report and confirm no opaque capability or secret is present.
+
+## Limitations of verification
+
+Thurstone proves what its own isolated page exposes and what the tested site state records. It
+cannot certify every consumer's hidden context, identity, or future behavior. Count a result as
+answer-isolated external-agent evidence only when a genuinely fresh supported task and authentic
+native invocation are observed.
+
+Chrome direct compatibility, controlled examples, reference evaluations, and visitor-created
+results remain separate. None is a substitute for another.

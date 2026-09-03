@@ -101,3 +101,17 @@ test("controlled mismatch uses one real JSON-string call and remains separate fr
 
   await fresh.close();
 });
+
+test("controlled mismatch uses one real object-mode call", async ({ page }) => {
+  await installEmulatedConsumer(page, "object");
+  await page.goto("/demo/controlled");
+  await page.getByRole("button", { name: "Run controlled mismatch" }).click();
+
+  const comparison = page.locator("[data-controlled-verdict='issue']");
+  await expect(comparison).toBeVisible();
+  await expect(comparison.getByText("order_review · completed", { exact: true })).toBeVisible();
+  await expect(comparison.getByText(/failed contract assertions/iu)).toBeVisible();
+  await expect
+    .poll(() => page.evaluate(async () => (await document.modelContext?.getTools?.())?.length ?? 0))
+    .toBe(0);
+});

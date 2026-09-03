@@ -178,8 +178,8 @@ export function MyTestsV2({ hideWhenEmpty = false }: { readonly hideWhenEmpty?: 
           <div>
             <h3>No Contract v3 result in this browser session yet.</h3>
             <p>
-              Build a suite, send one selected case to a fresh agent, and inspect the verified
-              effect.
+              Build a suite, send its authorized request queue to a fresh agent, and inspect every
+              verified effect.
             </p>
             <a className="button button-primary" href="/demo">
               Build a contract suite

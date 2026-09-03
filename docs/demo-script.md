@@ -1,149 +1,263 @@
-# Thurstone judge video script
+# Thurstone judge video package
 
-Target duration: **2:50–2:55**. Record the exact production release at
-`https://thurstone.invarra.ai` in a clean supported agent session. The native call shown in the
-video must be the single authentic R8 fresh-agent result. Do not substitute an internal button,
-rehearsed animation, controlled example, or fabricated receipt for that call.
+Target: **2:40–2:50**. Hard limit: **under 3:00**.
 
-## 0:00–0:12 — Product and problem
+Record the exact frozen pre-recording deployment at `https://thurstone.invarra.ai`. Use original
+English narration, no music, 1920×1080, 16:9, 30 fps, and readable browser zoom.
 
-Show the homepage product statement and say:
+## Evidence choice
 
-> AI agents can operate websites. Thurstone verifies that they do what the website owner
-> intended—and nothing the owner prohibited. A working WebMCP handler alone cannot prove that.
+The main script uses:
 
-Click **Test with your agent** within the first 10–15 seconds.
+1. the deterministic `/demo/controlled` mismatch, explicitly labeled **no model call**;
+2. one authentic fresh ChatGPT desktop Browser PASS through native WebMCP;
+3. trusted before/after state, ledger, assertions, and diagnosis;
+4. bounded reference evidence at the end.
 
-## 0:12–0:28 — From hidden failure to verified fix
+Replace the controlled opening with an authentic agent ISSUE only if its exported result proves the
+request, catalog, expected action, observed native call, canonical arguments, trusted effect, build,
+and timestamp. Never use the Field notebook/Stoneware mug contract disagreement as an agent error.
 
-Show the homepage progression and say:
+Do not imply the controlled forced call was fixed by editing a description. Do not claim a repair
+improved model behavior unless an authentic before/after pair with one description change and the
+same contract is preserved.
 
-> Thurstone follows the full chain: request, owner contract, fresh-agent decision, native call,
-> trusted verdict, and a concrete next step. It does not stop at failed; it shows where observed
-> behavior diverged and preserves the case for rerun.
+## Timed narration and shot list
 
-## 0:28–0:47 — Stage 1: meaning and known state
+### 0:00–0:12 — Human and agent collaboration
 
-Show **The meaning boundary Thurstone will test** and the fixed fixture explanation.
+**Shot:** Homepage hero. Hold on the title and primary Demo action.
 
-> Both tools can work correctly in isolation. The release risk is meaning: “show the order” must
-> read without changing state, while “request checkout” must create one simulated pending approval.
-> A known starting state lets Thurstone prove exactly what changed.
+**Narration:**
 
-## 0:47–1:08 — Stage 2: real WebMCP catalog
+> The owner defines what a request should mean. A visitor's agent uses the live WebMCP tools.
+> Thurstone checks whether the action and page state match that meaning.
 
-Show the default tools, briefly add one optional real reference tool, and show **What the agent
-receives** plus one fixed schema/annotation disclosure.
+**Cursor:** Move once from the headline to **Test with your agent**. Do not click yet.
 
-> This demo begins after WebMCP exists. I can select two to four preconfigured reference tools and
-> edit only their agent-visible wording. Every option has a real schema, handler, and independently
-> verifiable effect; there are no fake executable tools.
+### 0:12–0:30 — A successful call with the wrong effect
 
-Return to the catalog intended for the authentic run before continuing.
+**Shot:** Cut to `/demo/controlled`. Show **Controlled example — no model call**, the explicit
+checkout request, observed `order_review`, unchanged pending-checkout state, and ISSUE.
 
-## 1:08–1:32 — Stage 3: contract suite and selected case
+**Narration:**
 
-Show two independent cases in **Visible regression suite**, select the case used for R8, and choose
-**Review and arm selected case**.
+> Here checkout was requested, but a controlled wrong native call only reviewed the order. The
+> handler succeeded, yet no pending checkout appeared. This is not a model failure. It demonstrates
+> that Thurstone catches a plausible successful call with the wrong effect.
 
-> Website owners write representative intent examples, not every possible phrase. This suite can
-> hold several regression cases, but only the selected case enters this one-call live run. The
-> nested review separates what the owner expects from what the agent receives.
+**Cursor:** Highlight expected action, observed action, then trusted state. Do not expand raw JSON.
 
-Show the clean-fixture and answer-key-isolation checks, then choose **Arm live test**. Never reveal
-the opaque URL in the recording.
+### 0:30–0:45 — The WebMCP release gap
 
-## 1:32–1:53 — Stage 4: genuinely fresh agent
+**Shot:** Homepage split path, then a quick view of the live catalog.
 
-Show **Send this case to a genuinely fresh agent**, but crop or blur the command and token. In a
-fresh GPT-5.6 Sol or Terra ChatGPT Work or Codex task in the latest ChatGPT desktop app, use its
-built-in Browser to open the prepared handoff. Do not share, fork, reference, or resume the owner
-task. Do not use Chrome extension side chat.
+**Narration:**
 
-Show the non-consuming handoff landing, choose **Receive isolated test**, then show **Test
-received**, **Continue to readiness**, and **Start live observation**.
+> WebMCP makes website tools callable. It does not make tool choice correct or guarantee permitted
+> effects. Chrome already maps probabilistic agent evals and deterministic app tests. Thurstone
+> binds those halves into one inspectable live contract.
 
-> Before explicit start, no target tools or countdown exist. Starting registers only the frozen
-> catalog. The fresh page has the request, fixture, and live tool descriptions—not the owner's
-> answer key.
+**Cursor:** Follow the “with semantic release check” lane once.
 
-Let the fresh agent follow the frozen request and keep the authentic native invocation readable.
+### 0:45–0:58 — What Thurstone adds
 
-## 1:53–2:20 — Stage 5: verify reality
+**Shot:** Homepage seven-step loop.
 
-Show the authentic Result v3 in this order:
+**Narration:**
 
-- request, expected action, and observed action;
-- canonical arguments;
-- browser-local site-owned before/after state;
-- ledger diff and assertion list;
-- actual terminal verdict and evidence tier.
+> That contract joins intended meaning, an external-agent decision, native WebMCP, canonical
+> arguments, trusted site state, prohibited effects, a verdict, and a regression the owner can run
+> again.
 
-Say only what the preserved result proves. For a PASS:
+**Cursor:** Move through Define, Test, Verify, Diagnose, Save, and Rerun without opening panels.
 
-> The selected action, arguments, trusted effect, and measured invariants matched this contract.
-> Thurstone did not trust the tool response alone; the independent state and ledger determined the
-> verdict.
+### 0:58–1:20 — Build the owner contract
 
-If the authentic outcome is ISSUE, INCOMPLETE, or UNAVAILABLE, use its exact terminal wording and
-do not rerun, relabel, or imply a pass. Do not claim replay was tested: this trial admits one call;
-replay/idempotency remains a separate Invocation Integrity test.
+**Shot:** Demo Stage 2 and Stage 3. Select the real `order_review` and `checkout_request` tools, show
+agent-visible wording, then add the explicit checkout request and its derived contract.
 
-## 2:20–2:34 — Diagnosis and regression
+**Narration:**
 
-Show **Deterministic diagnosis**, **Recommended next step**, **Export result JSON**, and **Save as
-regression test** if the authentic result is PASS or ISSUE.
+> In the Demo, I act as a WebMCP owner. Thurstone reads the live catalog. I choose real tools, write
+> a representative customer request, and declare the expected action, arguments, allowed effects,
+> prohibited effects, and replay policy. Larger suites can run as independent regressions or one
+> stateful customer journey.
 
-> Thurstone separates verified facts from investigation hypotheses. A verified pass or issue can
-> be saved in My Tests v2 and rerun later with immutable lineage; the original result is never
-> overwritten.
+**Cursor:** One click per tool. Scroll once to the case. Show the contract summary; do not edit
+anything during recording.
 
-INCOMPLETE and UNAVAILABLE cannot be saved as verified regressions; do not show that action if the
-authentic result has either status.
+### 1:20–1:42 — A real agent acts
 
-## 2:34–2:45 — Controlled mismatch
+**Shot:** Review and arm the explicit checkout case. Crop or blur the entire token-bearing command.
+Cut to a fresh GPT-5.6 Sol or Terra Work/Codex task in the latest ChatGPT desktop app using its
+built-in Browser. Include the action-time human confirmation.
 
-Open **See how Thurstone catches a mismatch** and show the two-column `/demo/controlled` result.
+**Narration:**
 
-> This labeled controlled example makes one deliberately wrong real native call with no model
-> call. Without verification the action can look plausible. With Thurstone the contract, trusted
-> state, failed assertion, and release guidance expose the mismatch. Thurstone did not improve the
-> agent or fabricate a model failure.
+> I arm an explicit checkout case and open its one-time command in a fresh ChatGPT desktop Browser
+> task. The agent receives the customer request and exact live catalog, but not my expected action
+> or effects. After I approve the simulated action, it invokes the page through native WebMCP.
 
-## 2:45–2:55 — Evidence and close
+**Cursor:** Show the owner **Arm** action, then the fresh chat and native tool activity. Never reveal
+the opaque URL, cookie, or storage.
 
-Open **Results**. Show **My Tests v2** first, then **24/24 semantic behaviors** and the separate
-**3/3 Invocation Integrity Matrix**.
+### 1:42–2:04 — Verify reality
 
-> Run Thurstone before launch and after tools, descriptions, schemas, models, browsers, or sites
-> change. It is the missing testing layer for WebMCP—not runtime enforcement or certification.
+**Shot:** Authentic PASS result. Highlight `checkout_request`, canonical operation ID, revision
+change, one pending human-approval record, ledger event, and all passed assertions.
 
-Finish on the Thurstone URL and Invarra attribution.
+**Narration:**
 
-## Required capture checklist
+> Thurstone does not trust the agent's explanation or the tool's success response. It compares the
+> native call and canonical arguments with site-owned state before and after and the append-only
+> ledger. Here one pending human-approval checkout was created, nothing else changed, and the
+> contract passed. No purchase or payment occurred.
 
-- Final exact Production SHA and `https://thurstone.invarra.ai` are visible or verifiable.
-- The first 10–15 seconds state the product and show WebMCP-specific value.
-- Five-stage flow, real two-to-four-tool library, multi-case suite, selected-case arm, and explicit
-  observation start are visible.
-- One authentic answer-isolated external-agent Site Tools invocation is shown; no internal or
-  deterministic substitute is presented as that invocation.
-- The fresh task sees no owner expected tool, argument predicate, effects, replay policy, approval
-  class, or scoring rubric before acting.
-- Exact request, selected descriptors, canonical arguments, trusted state, ledger diff, actual
-  verdict, diagnosis, and evidence tier are readable.
-- The separate controlled mismatch is labeled **Controlled example — no model call**.
-- Synthetic checkout disclosure remains visible; no purchase, payment, shipment, or external
-  transaction occurs.
-- Record at 16:9 with readable zoom, original narration, captions, and no credentials or personal
-  tabs.
-- Browser console has zero warning/error attributable to Thurstone.
-- No Thurstone-paid model call or hosted fallback occurs; the user brings the fresh agent.
-- No secret, cookie, capability, opaque handoff URL, private evidence, or raw provider output
-  appears.
-- Supported-client limitation remains honest: the app verifies its withheld projection but cannot
-  certify every consumer's hidden context or identity.
-- Chrome compatibility evidence is separate from the built-in Browser agent-selection result.
-- Reference scores remain `24/24` and separate `3/3`; no combined score.
-- Uploaded public YouTube video has audio, captions, is under three minutes, and matches the exact
-  deployed functionality.
+**Cursor:** Expected action → observed action → before/after → ledger → assertion count.
+
+### 2:04–2:20 — Diagnose and preserve
+
+**Shot:** Controlled ISSUE diagnosis, then return to the authentic result's export/save controls.
+
+**Narration:**
+
+> When behavior diverges, Thurstone identifies the failed contract layer and where to investigate
+> without claiming to read the model's private reasoning. A verified pass or issue can be exported,
+> preserved as a regression, and rerun after the owner changes the catalog.
+
+**Cursor:** Highlight one failed assertion and **Recommended next step**, then **Export** or **Save
+as regression**. Do not imply the controlled result was repaired.
+
+### 2:20–2:36 — Stateful journey and bounded evidence
+
+**Shot:** Use the authentic seven-request report only if `evidence/sample-run.json` verifies it.
+Otherwise show the regression/journey selector followed by current `24/24` and separate `3/3`.
+
+**Narration with verified seven-request sample:**
+
+> Thurstone also preserved a seven-request journey in one agent context, carrying trusted state and
+> stopping rules across native actions. Separately, a frozen twenty-four-case semantic snapshot and
+> three invocation-integrity cases provide bounded reference regression coverage.
+
+**Fallback narration without that sample:**
+
+> Thurstone supports independent regression queues and stateful journeys with explicit stop rules.
+> Separately, a frozen twenty-four-case semantic snapshot and three invocation-integrity cases
+> provide bounded reference regression coverage.
+
+### 2:36–2:47 — Close
+
+**Shot:** Homepage with live URL, then repository URL text. Do not show a private GitHub page before
+public release; add the public-repository shot only after release verification.
+
+**Narration:**
+
+> These results are not a benchmark or certification. Thurstone gives WebMCP owners a repeatable
+> release test for whether agent actions meant, and did, what they intended.
+
+## Recording sequence
+
+Prepare before pressing Record:
+
+1. Clean production homepage.
+2. Controlled mismatch already completed in a supported WebMCP consumer.
+3. Demo owner workspace ready at Stage 2.
+4. Explicit checkout contract ready to review.
+5. Fresh ChatGPT desktop Work/Codex task ready with GPT-5.6 Sol or Terra.
+6. Authentic PASS result available or a rehearsed safe path to produce it once.
+7. Results reference sections collapsed to the exact views needed.
+8. No unrelated tabs, emails, bookmarks, notifications, or personal information.
+
+Record short source clips rather than one fragile take:
+
+1. homepage collaboration and loop;
+2. controlled mismatch;
+3. catalog and contract;
+4. arm and fresh-agent native execution;
+5. authentic result;
+6. bounded evidence and closing URL.
+
+Accelerate or cut waiting time. Never simulate a tool action or reconstruct a result.
+
+Prepared assets:
+
+- captions: [`submission/captions.srt`](../submission/captions.srt);
+- gallery and upload captions: [`submission/media/GALLERY.md`](../submission/media/GALLERY.md);
+- 16:9 video thumbnail: `submission/media/thurstone-video-thumbnail.png`.
+
+## Approved claims
+
+- WebMCP makes tools callable but does not guarantee correct tool choice or permitted effects.
+- Thurstone binds intended meaning, external-agent decision, native invocation, canonical arguments,
+  trusted state, prohibited effects, and verdict.
+- The controlled mismatch is deterministic and uses no model call.
+- The fresh-agent PASS is authentic only when the actual supported Browser invocation is shown.
+- Current `24/24` is bounded reference regression coverage, one trial per case.
+- Invocation Integrity is separate `3/3`, using zero model calls.
+- Historical `23/24 → 23/24` measured no improvement under a different protocol.
+- The checkout is simulated and creates no purchase or payment.
+
+## Prohibited claims
+
+- The Field notebook/Stoneware mug contract disagreement was an agent error.
+- The controlled mismatch was an authentic model failure.
+- Editing a description repaired the controlled forced call.
+- The current `24/24` improved the historical paired result.
+- `24/24` is an independent benchmark or statistical proof.
+- `24/24 + 3/3 = 27/27`.
+- Thurstone certifies security, enforces runtime behavior, proves model understanding, or verifies
+  arbitrary sites.
+- Chrome tests only tool names or ignores arguments and application behavior.
+- OpenAI, Google, Chrome, Devpost, or WebMCP authors endorse Thurstone.
+
+## Privacy and rights checklist
+
+- Crop or blur the full opaque handoff command and URL.
+- Show no API key, cookie, environment value, DevTools storage, raw provider output, email, local
+  path, or browsing history.
+- Use only project-owned visuals and original narration.
+- Use no music.
+- Necessary ChatGPT/Chrome UI must follow applicable brand guidance and remain secondary to
+  Thurstone.
+- Keep **Controlled example — no model call** readable.
+- State the simulated checkout/no-payment boundary in narration.
+- Verify every video frame against [`rights-review.md`](rights-review.md).
+
+## Retake conditions
+
+Retake if:
+
+- duration reaches 3:00;
+- audio clips or becomes unclear;
+- a secret, token, personal datum, or unrelated tab appears;
+- the wrong browser surface is described as Site Tools;
+- a controlled result is presented as agent evidence or repaired;
+- an unsupported result or score is claimed;
+- the final video no longer matches the exact deployed candidate.
+
+## YouTube package
+
+**Title:** `Thurstone: Semantic Release Testing for WebMCP`
+
+**Description:**
+
+```text
+WebMCP makes website tools callable. It does not guarantee correct tool choice or permitted effects.
+
+The owner defines what a request should mean. A visitor's agent uses the live WebMCP tools. Thurstone checks whether the action and page state match that meaning.
+
+Live: https://thurstone.invarra.ai
+Demo: https://thurstone.invarra.ai/demo
+Source: https://github.com/serg337/thurstone
+
+Thurstone is a pre-release testing and audit system for WebMCP. It binds intended meaning, an external-agent decision, native invocation, canonical arguments, trusted site state, prohibited effects, and a verdict into one inspectable live contract.
+
+The checkout shown is fictional and simulated. No purchase, payment, shipment, or external transaction occurs.
+
+Created by Sergio Valencia. Presented as Thurstone by Invarra.
+```
+
+Upload as Unlisted for review, then Public before final Devpost submission. Verify signed-out
+playback, 1080p, audible narration, reviewed English captions, accurate links, and duration under
+three minutes.

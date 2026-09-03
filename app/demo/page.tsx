@@ -21,7 +21,7 @@ export default function DemoPage() {
               and see whether the resulting action and state match your contract.
             </p>
             <span className="demo-safety-note">
-              No account · no purchase or payment · one admitted agent invocation per test
+              No Thurstone account · no purchase or payment · one admitted native action per case
             </span>
           </div>
         </header>

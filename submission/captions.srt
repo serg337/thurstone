@@ -1,0 +1,71 @@
+1
+00:00:00,000 --> 00:00:12,000
+The owner defines what a request should mean.
+A visitor's agent uses the live WebMCP tools.
+Thurstone checks whether the action and page state match that meaning.
+
+2
+00:00:12,000 --> 00:00:30,000
+Here checkout was requested, but a controlled wrong native call only reviewed the order.
+The handler succeeded, yet no pending checkout appeared.
+This is not a model failure.
+It demonstrates that Thurstone catches a plausible successful call with the wrong effect.
+
+3
+00:00:30,000 --> 00:00:45,000
+WebMCP makes website tools callable.
+It does not make tool choice correct or guarantee permitted effects.
+Chrome already maps probabilistic agent evals and deterministic app tests.
+Thurstone binds those halves into one inspectable live contract.
+
+4
+00:00:45,000 --> 00:00:58,000
+That contract joins intended meaning, an external-agent decision, native WebMCP,
+canonical arguments, trusted site state, prohibited effects, a verdict,
+and a regression the owner can run again.
+
+5
+00:00:58,000 --> 00:01:20,000
+In the Demo, I act as a WebMCP owner.
+Thurstone reads the live catalog.
+I choose real tools, write a representative customer request,
+and declare the expected action, arguments, allowed effects,
+prohibited effects, and replay policy.
+Larger suites can run as independent regressions or one stateful customer journey.
+
+6
+00:01:20,000 --> 00:01:42,000
+I arm an explicit checkout case and open its one-time command
+in a fresh ChatGPT desktop Browser task.
+The agent receives the customer request and exact live catalog,
+but not my expected action or effects.
+After I approve the simulated action, it invokes the page through native WebMCP.
+
+7
+00:01:42,000 --> 00:02:04,000
+Thurstone does not trust the agent's explanation or the tool's success response.
+It compares the native call and canonical arguments with site-owned state before and after
+and the append-only ledger.
+Here one pending human-approval checkout was created, nothing else changed,
+and the contract passed.
+No purchase or payment occurred.
+
+8
+00:02:04,000 --> 00:02:20,000
+When behavior diverges, Thurstone identifies the failed contract layer
+and where to investigate without claiming to read the model's private reasoning.
+A verified pass or issue can be exported, preserved as a regression,
+and rerun after the owner changes the catalog.
+
+9
+00:02:20,000 --> 00:02:36,000
+Thurstone supports independent regression queues and stateful journeys
+with explicit stop rules.
+Separately, a frozen twenty-four-case semantic snapshot
+and three invocation-integrity cases provide bounded reference regression coverage.
+
+10
+00:02:36,000 --> 00:02:47,000
+These results are not a benchmark or certification.
+Thurstone gives WebMCP owners a repeatable release test
+for whether agent actions meant, and did, what they intended.

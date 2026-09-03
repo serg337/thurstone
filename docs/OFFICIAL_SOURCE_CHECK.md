@@ -1,7 +1,29 @@
 # Official source check
 
-Initial check: **2026-08-26**; Chrome 151 runtime clarification: **2026-08-27**; full pre-evidence-build primary-source recheck: **2026-08-29**; walkthrough-implementation recheck: **2026-09-01**; Demo-successor release recheck: **2026-09-02**
+Initial check: **2026-08-26**; Chrome 151 runtime clarification: **2026-08-27**; full pre-evidence-build primary-source recheck: **2026-08-29**; walkthrough-implementation recheck: **2026-09-01**; Demo-successor release recheck: **2026-09-02**; pre-recording submission recheck: **2026-09-03**
 Scope: current primary official WebMCP Challenge, OpenAI Site Tools, WebMCP draft, and Chrome implementation guidance only.
+
+## Pre-recording submission recheck · 2026-09-03
+
+The live Devpost Overview, Official Rules, and Resources pages were retrieved again at 01:46 CEST.
+No material deadline, deliverable, browser-support, judging, eligibility, ownership, or
+testing-availability requirement changed. The deadline remains September 3, 2026 at 1:00 p.m. PDT
+/ 20:00 UTC / 22:00 CEST. Judging access remains required without charge or restriction through
+September 21 at 5:00 p.m. PDT / September 22 at 02:00 CEST.
+
+The required submission remains: a working live URL accessible through ChatGPT's in-app Browser or
+WebMCP-enabled Chrome; an English description covering WebMCP fit, user experience, human-agent
+collaboration, and implementation; a public repository containing functional source, assets,
+instructions, a detectable open-source license, and checked-in `registerTool()` implementation;
+and a public YouTube demo with audio that is strictly under three minutes. Final legal acceptance,
+video publication, repository publication, and Devpost Submit remain reserved human/release
+actions.
+
+The recheck also reconfirmed that judges may evaluate from text, images, and video without running
+the app. Submission collateral therefore leads with the owner/visitor-agent collaboration and live
+effect verification rather than research or internal evidence machinery. Chrome's official eval
+guidance remains complementary: it covers probabilistic agent evaluation and deterministic
+application tests; Thurstone claims only to bind those layers into an owner-facing live contract.
 
 The authenticated Devpost draft form was inventoried read-only on 2026-08-26. Required fields cover project name/elevator pitch, public project story and technology tags, try-it links/media/video, entrant/status/country, live URL and optional private testing instructions, public licensed repository, tested WebMCP clients, AI development tools, and learning/career-value questions. The 2026-08-29 public-source recheck did not reopen, edit, certify, or submit that authenticated form. Its known inventory remains valid as a preparation aid, while dynamic choices, final acknowledgments, and the actual receipt require the reserved Gate 9 authenticated recheck.
 

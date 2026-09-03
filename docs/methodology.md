@@ -16,11 +16,19 @@ A case passes only when its complete approved behavior passes. Call-required cas
 arguments, result, state, and effect. Clarification cases require an explicit structured
 clarification and prohibit target execution.
 
-The current contract contains 24 cases covering equivalent phrasing and meaning-changing
-boundaries. The current run passed all 24.
+The current successor contract contains 24 cases covering equivalent phrasing and meaning-changing
+boundaries. Its separately frozen one-trial-per-case snapshot passed all 24. This is bounded
+reference regression coverage, not an independent benchmark or stability estimate.
+
+A historical paired experiment remains a different record: one description changed, the complete
+24-case suite reran, and the result remained `23/24 → 23/24`, so the measured conclusion was no
+improvement. It is not presented as the predecessor of the current successor snapshot.
+
+Invocation Integrity is a separate `3/3` deterministic direct-call matrix with zero model calls.
+Its denominator is never combined with semantic behavior.
 
 ## Scope
 
 The current result uses one provider model, one synthetic checkout domain, and one trial per case.
-It is a product demonstration, not a stability estimate, safety certification, or general result for
-arbitrary websites.
+It is a product demonstration, not a stability estimate, safety certification, proof of model
+understanding, or general result for arbitrary websites.

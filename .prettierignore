@@ -10,3 +10,4 @@ package-lock.json
 third_party/npm-transitive-inventory.json
 third_party/licenses/
 /evidence/
+submission/captions.srt

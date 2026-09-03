@@ -47,14 +47,7 @@ test("Research connects the two papers to Thurstone without duplicating the cano
     "https://zenodo.org/records/21203393"
   );
 
-  const phalanx = page.getByRole("complementary", { name: "Thurstone tests. Phalanx governs." });
-  await expect(phalanx).toContainText(
-    "controls which written instructions may influence protected AI actions"
-  );
-  await expect(phalanx.getByRole("link", { name: "Explore Phalanx" })).toHaveAttribute(
-    "href",
-    "https://invarra.ai/phalanx"
-  );
+  await expect(page.getByText("Related Invarra work", { exact: true })).toHaveCount(0);
   await expect(page.getByText(/23\s*\/\s*24/u)).toHaveCount(0);
 
   const width = await page.evaluate(() => ({
@@ -67,7 +60,7 @@ test("Research connects the two papers to Thurstone without duplicating the cano
 test("Research is accessible and keeps external publication links explicit", async ({ page }) => {
   await page.goto("/research");
   const externalLinks = page.locator('a[target="_blank"]');
-  expect(await externalLinks.count()).toBeGreaterThanOrEqual(8);
+  expect(await externalLinks.count()).toBeGreaterThanOrEqual(7);
   for (const link of await externalLinks.all()) {
     await expect(link).toHaveAttribute("rel", "noreferrer");
   }

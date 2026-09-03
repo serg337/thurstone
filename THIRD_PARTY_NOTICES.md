@@ -131,5 +131,10 @@ Valencia supplied and owns the original Thurstone artwork used by the submission
 social derivative is `public/thurstone-og.png`, SHA-256
 `7248961c16b51a1a558e973c3a2b05060fd67b87a760489ba34b4db4a45a4089`. Both derivatives
 were generated deterministically with ImageMagick from the unchanged project-owned master. No
-third-party logo, stock image, remote font, music, video, sound, or dataset is used. The narrowly
-adapted runner source is disclosed above.
+third-party logo, stock image, remote font, music, video, sound, or dataset is used. The
+project-owned header/favicon mark is `public/thurstone-mark.png`, SHA-256
+`28cf41136f776e023a72e2408e4e47dd68da3fddd5752afbbc87aa014fd79396`. No unrelated Invarra
+product logo or promotional asset is part of the candidate. Project-owned gallery captures and the
+16:9 video-thumbnail derivative are inventoried with hashes in
+[`submission/media/GALLERY.md`](submission/media/GALLERY.md). The narrowly adapted runner source
+is disclosed above.

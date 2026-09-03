@@ -234,9 +234,23 @@ export async function runControlledMismatchV3(input: {
     }
 
     releaseConsumerCall = manager.holdConsumerCall(selected.name, generation);
-    const rawConsumerResult = await context.executeTool(selected, JSON.stringify({}), {
+    let coercionCount = 0;
+    const dualRepresentationInput = Object.create(null) as Record<string, never>;
+    Object.defineProperty(dualRepresentationInput, Symbol.toPrimitive, {
+      configurable: false,
+      enumerable: false,
+      writable: false,
+      value: () => {
+        coercionCount += 1;
+        return "{}";
+      }
+    });
+    const rawConsumerResult = await context.executeTool(selected, dualRepresentationInput, {
       signal: new AbortController().signal
     });
+    if (coercionCount !== 0 && coercionCount !== 1) {
+      throw new Error("The controlled native argument representation was not deterministic.");
+    }
     releaseConsumerCall();
     releaseConsumerCall = () => undefined;
 

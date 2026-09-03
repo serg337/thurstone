@@ -1,163 +1,240 @@
 # Thurstone
 
-> Verify that AI agents do what your WebMCP tools promise.
+> **WebMCP makes website tools callable. It does not guarantee correct tool choice or permitted
+> effects.**
 
-**Thurstone by Invarra — created by Sergio Valencia.**
+**The owner defines what a request should mean. A visitor's agent uses the live WebMCP tools.
+Thurstone checks whether the action and page state match that meaning.**
 
-[Live product](https://thurstone.invarra.ai) ·
-[Live demo](https://thurstone.invarra.ai/demo) ·
-[Current results](https://thurstone.invarra.ai/results)
+Thurstone is a pre-release semantic testing system for WebMCP. It joins the owner's contract, an
+external agent's decision, the browser-native invocation, canonical arguments, trusted site state,
+prohibited effects, and a deterministic verdict in one inspectable run.
 
-Thurstone is a pre-release testing system for agent-callable websites. A human declares the
-approved behavior, an agent acts through the page's real WebMCP catalog, and Thurstone independently
-checks the selected action, canonical arguments, handler trace, and observable before/after effect.
+**Thurstone by Invarra. Created and owned by Sergio Valencia.**
 
-**Simulated checkout — no purchase occurs.** The challenge application has no payment, inventory,
-account, messaging, shipment, or external-transaction path.
+[Live application](https://thurstone.invarra.ai) ·
+[Test Thurstone](https://thurstone.invarra.ai/demo) ·
+[Research](https://thurstone.invarra.ai/research) ·
+[Source](https://github.com/serg337/thurstone) ·
+[Current semantic evidence](evidence/thurstone-current-result.json) ·
+[Invocation Integrity](evidence/thurstone-invocation-integrity.md) ·
+[Public sample run](evidence/sample-report.md)
 
-## Why it exists
+Public release: pending final challenge release · Video: pending final public YouTube URL
 
-Ordinary handler tests answer “can this tool run?” They do not answer:
+**The reference checkout is simulated. No purchase, payment, shipment, inventory change, message,
+or external transaction occurs.**
 
-- Did equivalent requests produce equivalent actions?
-- Did a small change in intent produce the required action difference?
-- Did the agent ask for missing intent instead of silently acting—or silently doing nothing?
-- Did the page state actually change exactly as represented?
-- Did replay, invalid identifiers, or privileged input preserve the site's invariants?
+## The failure ordinary tests miss
 
-Thurstone tests those questions against the live page rather than a detached mock.
+A WebMCP handler can accept schema-valid arguments, execute correctly, and return success while the
+agent still chose the wrong action for the person's meaning—or while the page changed something the
+owner prohibited.
 
-## Current verified result
+Unit tests prove that a handler works. Model-only evals can test the function and arguments a model
+intends to call. Thurstone binds those layers to the live site:
 
-The current checkout contract contains 24 cases covering equivalent wording, missing arguments,
-explicit versus tentative checkout, negation, read-only review, cart updates, and consequential
-boundaries.
+**intended meaning → agent decision → native WebMCP → canonical arguments → trusted state and
+ledger → verdict → saved regression**
 
-- **24 approved behaviors passed**
-- **0 contract mismatches**
-- **20 native WebMCP calls verified**
-- **4 requests correctly clarified without a target call**
+Chrome's [WebMCP eval guidance](https://developer.chrome.com/docs/ai/webmcp/evals) recommends both
+probabilistic agent evaluations and classic deterministic application tests. Thurstone complements
+that guidance by making one owner-facing live contract out of both halves, including what must not
+happen.
 
-One representative boundary:
+## What the human and agent do together
 
-> “I’m still considering whether to move this cart to checkout.”
+- **Website owner:** selects the real catalog, supplies representative user requests, declares the
+  expected action and arguments, and defines allowed and prohibited effects.
+- **Visitor's agent:** interprets those requests and independently uses the live WebMCP tools
+  without receiving Thurstone's expected actions or effects.
+- **Thurstone:** observes each native invocation and verifies its actual effect against site-owned
+  state and the append-only ledger.
+- **Human reviewer:** decides whether a result permits release and approves consequential actions,
+  such as the simulated pending checkout.
 
-The approved behavior is to ask whether the user wants to proceed. The current agent did exactly
-that, made no checkout call, and left state unchanged.
-
-The separate Invocation Integrity lane passed three deterministic cases covering privileged-field
-injection, a nonexistent item, and replay/idempotency. It is a testing result—not runtime
-enforcement or security certification.
+The owner knows product policy, the agent supplies real consumer behavior, and the site supplies
+authoritative effects. None of those can replace the others.
 
 ## Try it
 
-### Bring your own supported agent
+### 60-second controlled orientation
 
-1. In a fresh GPT-5.6 Sol or Terra ChatGPT Work or Codex task, use the latest ChatGPT desktop
-   app's built-in Browser and send:
+This shows the verdict mechanism without making a model call:
 
-   `@Browser Open https://thurstone.invarra.ai/demo`
+1. Open [the controlled example](https://thurstone.invarra.ai/demo/controlled) in ChatGPT's built-in
+   Browser or Chrome 149+ with `chrome://flags/#enable-webmcp-testing`.
+2. Choose **Run controlled mismatch**.
+3. Inspect the declared checkout intent, observed native read-only call, unchanged trusted state,
+   failed assertions, and recommended investigation.
 
-   The Chrome extension side chat is not the Site Tools consumer.
+This route deliberately invokes the wrong real tool. It is labeled **Controlled example — no model
+call** and is never presented as an authentic agent failure.
 
-2. In **Stage 1**, review the meaning boundary and why every test starts from the same safe,
-   synthetic checkout fixture.
-3. In **Stage 2**, choose two to four real tools from the preconfigured reference library. You may
-   edit only their session-local agent-visible wording; schemas, annotations, handlers, and effects
-   stay fixed and executable.
-4. In **Stage 3**, name a contract suite, add one to six independent request/action cases, select
-   one live case, then choose **Review and arm selected case**. The nested confirmation keeps the
-   owner's answer key separate from **What the agent receives**.
-5. Choose **Arm live test**. From the owner-only prepared screen, copy the complete `@Browser`
-   command. Do not publish the opaque URL or include it in evidence, logs, screenshots, or video.
-6. Paste that command into a genuinely fresh supported task—not a share, fork, reference, or
-   continuation of the owner task. The non-consuming landing registers nothing; choose **Receive
-   isolated test** once to claim it and enter `/demo/run`. Advance from received to ready before
-   **Start live observation** registers the exact selected catalog and starts the timer.
-7. Let the fresh agent follow the frozen request. The first eligible native callback is the only
-   invocation admitted to domain execution; a wrong first call is still measured honestly.
-8. In **Stage 5**, inspect Result v3: expected versus observed action, canonical arguments,
-   browser-local site-owned state, ledger diff, assertions, evidence tier, diagnosis, and next
-   step. Save a PASS or ISSUE to **My Tests v2**, export it, or create a linked rerun without
-   overwriting the original result.
-9. Open **See how Thurstone catches a mismatch** for a separate deterministic controlled example,
-   then use **Explore deeper** for the Lab, 24-case semantic reference, separate 3-case Invocation
-   Integrity matrix, Workflow, and Research.
+### Full bring-your-own-agent Demo
 
-One live BYOA case measures one admitted invocation. It does **not** measure replay. Replay and
-idempotency remain separate deterministic Invocation Integrity tests.
+1. Open [the Demo](https://thurstone.invarra.ai/demo) in any browser and review the fictional
+   checkout boundary.
+2. Select one to four real tools from the live reference catalog. Keep the verified wording or edit
+   only its session-local agent-visible title and description.
+3. Add representative requests and choose:
+   - **Regression suite:** every request runs in one agent chat against a clean fixture; independent
+     issues do not prevent later cases from running.
+   - **Continuous journey:** two or more ordered requests run in one agent context with verified
+     state carried forward; the journey stops on the first issue so later cases never inherit
+     untrusted state.
+4. Review, arm, and copy the generated secure command into a fresh GPT-5.6 Sol or Terra Work or
+   Codex chat in the latest ChatGPT desktop app. Use ChatGPT's built-in Browser—not the Chrome
+   extension side panel.
+5. Keep the owner page open while Thurstone admits and verifies one native action per case, then
+   inspect or download the synchronized results.
 
-### Chrome
+The handoff is single use and expires after ten minutes. Its command contains the owner's authorized
+request queue but never the expected actions, effects, assertions, or diagnosis. If ChatGPT asks
+once for permission to open the token-bearing `thurstone.invarra.ai` URL, confirm only when the
+displayed domain and command are exact.
 
-Use Chrome 149 or later, enable `chrome://flags/#enable-webmcp-testing`, relaunch Chrome, and open
-the technical Lab with a WebMCP-enabled consumer. This is a separate native compatibility path,
-not answer-isolated agent-selection evidence. The ChatGPT Chrome extension side chat is not the
-Site Tools consumer. The expert `/lab` route remains available for direct catalog and invariant
-testing.
+## Reference WebMCP catalog
 
-The reference library contains:
+The challenge Demo uses four real tools:
 
-- `cart_get`
-- `cart_update`
-- `checkout_request`
-- `order_review`
+- `cart_get` — return item identities and quantities without changing state;
+- `cart_update` — set one current cart line's quantity, including zero to remove it;
+- `order_review` — return the priced order summary without changing state;
+- `checkout_request` — create exactly one simulated pending approval when checkout is explicitly
+  authorized.
 
-The primary Demo selects two to four of those real tools. `checkout_cancel` appears only while a
-simulated checkout request is pending and therefore remains in the advanced Lab.
+`checkout_cancel` appears only while a pending simulated checkout exists and remains available in
+the technical Lab.
 
-## How it works
+The reference catalog is intentionally bounded. Connecting arbitrary external sites is a future
+direction, not a challenge claim.
 
-1. **Declare meaning.** A human-approved contract defines actions, arguments, allowed effects,
-   forbidden effects, and intent boundaries.
-2. **Run the live interface.** Fresh model contexts select from the WebMCP tools registered by the
-   deployed page.
-3. **Capture real effects.** Thurstone records the native call, canonical arguments, handler
-   lifecycle, and trusted state before and after.
-4. **Score outside the model.** A deterministic evaluator compares the observation with the
-   contract.
-5. **Review before release.** Product, QA, safety, or release teams decide whether the behavior is
-   ready to ship.
+## How Thurstone works
 
-The challenge build provides self-service contract authoring, native external-agent execution,
-deterministic diagnosis, and browser-local regression preservation inside a fixed synthetic
-checkout reference environment. Connecting arbitrary external sites is a future product direction,
-not a current claim.
+1. **Define:** translate product policy into a contract covering action, arguments, allowed effects,
+   prohibited effects, replay, and trusted state.
+2. **Arm:** freeze the contract, catalog, fixture, and build while keeping the answer key outside the
+   fresh-agent projection.
+3. **Test:** let a supported external agent use the live browser-native WebMCP catalog.
+4. **Verify:** compare native calls and canonical arguments with independent before/after state and
+   ledger evidence.
+5. **Diagnose:** identify the failed assertion and an evidence-backed place to investigate without
+   claiming to read the model's private reasoning.
+6. **Save:** preserve a PASS or ISSUE as an immutable browser-local regression.
+7. **Rerun:** retest the same boundary after descriptions, schemas, handlers, models, browsers, or
+   site behavior change.
 
-## WebMCP implementation
+Regression cases reset trusted state and continue after independent issues. Stateful journeys stop
+after the first issue because later results would otherwise be scored against poisoned state.
 
-Thurstone uses top-level `document.modelContext.registerTool()` registrations and verifies the
-consumer-discovered catalog before execution. Human controls and Site Tools share one serialized,
-replay-safe checkout store.
+## Where the WebMCP is
 
-The native adapter supports current JSON and JSON-string argument representations, propagates
-cancellation, limits each trial to one model decision and at most one target call, and records
-append-only state/effect traces. The challenge reference checkout, contract suites, results, and
-saved regressions use bounded browser-local, site-owned storage. A short-lived Redis ledger stores
-only the state and digests needed to atomically issue, claim, start, and settle an opaque handoff;
-it expires automatically and is not a customer database.
+- [Native registration and lifecycle](lib/webmcp/registry-manager.ts#L657-L677) — the central
+  registry calls `ModelContext.registerTool()` and binds cancellation to each registration.
+- [Consumer execution adapter](lib/webmcp/runtime.ts#L500-L574) — validates manifest identity,
+  consumes each execution ID once, and invokes the consumer-discovered tool.
+- [Shared checkout state and operation ledger](lib/domain/checkout-session.ts#L324-L386) — serializes
+  state transitions and retains native operation evidence.
+- [Independent effect evaluation](lib/demo/evaluator-v3.ts#L338-L650) — derives canonical arguments,
+  state change, ledger diff, assertions, and verdict.
+- [Deterministic diagnosis](lib/demo/diagnose-result.ts#L330-L425) — separates verified facts from
+  investigation hypotheses.
+- [Frozen reference tool contracts](lib/demo/reference-tool-templates.ts) — defines expected
+  arguments, effects, replay policy, and trusted-state assertions.
 
-## Safety and cost controls
+The checked-in registration path is equivalent to:
 
-- Synthetic checkout only; no external transaction is possible.
-- Stateless provider requests with `store: false`.
-- One-call-per-trial admission; replay/idempotency tested separately.
-- Durable Redis lifetime guard: 160 calls and USD $10 maximum.
-- Conservative settlement for uncertain provider outcomes.
-- Strict origin, body-size, schema, and capability boundaries.
-- Expiring one-time handoffs with no target-tool registration or timer before explicit start.
-- No production source maps; pinned dependencies and complete license inventory.
+```ts
+await document.modelContext.registerTool(
+  {
+    name,
+    title,
+    description,
+    inputSchema,
+    annotations,
+    execute: async (input, { signal } = {}) => execute(input, signal)
+  },
+  { signal: registrationController.signal }
+);
+```
+
+The implementation registers the complete tool object—including name, title, description,
+`inputSchema`, annotations, and `execute`—from checked-in source. The registry verifies the exact
+consumer-discovered catalog before execution.
+
+## Architecture
+
+```text
+Owner contract ──freeze──▶ private handoff ledger
+       │                         │
+       │ expected behavior       │ authorized request queue
+       ▼                         ▼
+Deterministic evaluator ◀── native WebMCP ◀── fresh external agent
+       ▲                         │
+       └──── trusted state + append-only operation ledger
+```
+
+- Next.js and React provide the owner workspace, isolated agent document, and results.
+- A deterministic checkout reducer is shared by human controls and WebMCP handlers.
+- Browser-local site-owned storage contains the Demo contract, checkout state, and results.
+- Upstash Redis stores only expiring digest-bound handoff/admission records; it is not a customer
+  database.
+- The judge-facing BYOA path uses the visitor's supported agent and makes no Thurstone-paid model
+  call.
+
+## Evidence hierarchy
+
+Evidence classes remain separate:
+
+1. **Current successor semantic snapshot:** `24/24` frozen cases, one trial per case, 20 native calls
+   and four correct clarifications. This is bounded reference regression coverage, not an
+   independent benchmark or proof of general model behavior.
+2. **Historical paired experiment:** `23/24 → 23/24` after one description change, with the honest
+   conclusion **no measured improvement**. It uses a different frozen protocol and is not the
+   predecessor of the current snapshot.
+3. **Invocation Integrity:** separate `3/3`, using four deterministic native calls and zero model
+   calls for privileged-field injection, nonexistent item, and replay/idempotency.
+4. **Direct Site Tools observations:** four fresh-context observations kept separate from scored
+   reference evidence.
+5. **Controlled mismatch:** a provider-free product demonstration; it enters no score.
+
+The [public sample run](evidence/sample-report.md) preserves an authentic Chrome 152 native
+checkout PASS with complete contract, canonical arguments, trusted state, ledger diff, and seven
+assertions. It is labeled direct compatibility evidence—not answer-isolated model selection.
+
+Hashes bind internal artifacts and release lineage. They are integrity checks, not independent
+attestation or certification.
+
+## Built during the challenge
+
+Thurstone product work began on **August 26, 2026**, during the challenge period. The application,
+reference WebMCP catalog, contract system, supported-agent path, native invocation capture,
+trusted-effect verifier, diagnostic results, evidence pipeline, Demo, and judge UX are
+challenge-period work documented by the repository history.
+
+Two Invarra measurement notes—LIP and CSR—were published on **June 28, 2026** and predate the
+challenge. They supplied conceptual background only: hold intended meaning fixed, vary how someone
+expresses it, and measure the resulting behavior. No Thurstone software, catalog, or agent path
+existed before the challenge.
 
 ## Local development
 
-Requirements: Node `22.23.2` and npm `10.9.8` on Linux.
+Requirements: Linux, Node `22.23.2`, and npm `10.9.8`.
 
 ```bash
+git clone https://github.com/serg337/thurstone.git
+cd thurstone
 npm ci
 npx playwright install --with-deps chromium
 npm run dev
 ```
 
-Core checks:
+Open `http://127.0.0.1:3000`. The deterministic UI and tests run with all values in
+[`.env.example`](.env.example) absent. Production secrets belong only in the deployment provider's
+server-side environment store; never put real values into `.env.example`.
+
+Core verification:
 
 ```bash
 npm run format:check
@@ -166,22 +243,36 @@ npm run typecheck
 npm test
 npm run test:browser:safe
 npm run build
+npm run verify:evidence
+npm run verify:publication
 ```
 
-## Scope
+## Safety and operating boundaries
 
-The current reference result covers one provider model, one synthetic checkout domain, and one
-trial per case. The self-service Demo is limited to a two-to-four-tool reference catalog and a
-supported fresh-agent client. Thurstone can prove that the owner answer was withheld from its own
-fresh page and handoff projection, but it cannot certify every client's hidden context or identity;
-an independent-agent claim therefore requires an actually fresh supported task and authentic
-capture. Thurstone does not prove model understanding, guarantee safety, certify a website,
-enforce runtime behavior, or establish results for arbitrary sites.
+- No real commerce or external mutation exists.
+- Consequential checkout creates only a simulated pending-human-approval record.
+- Closed schemas reject server-authoritative fields and nonexistent items.
+- Per-case native admission rejects later or concurrent calls before domain execution.
+- Replay/idempotency is verified separately through direct native calls.
+- Provider-backed historical evaluations used `store: false` and remain behind a permanent
+  160-call / USD `$10` lifetime guard.
+- Opaque handoffs are origin-bound, single-use, and short-lived.
+- Production source maps are disabled; dependencies and required notices are pinned and inventoried.
 
-WebMCP remains an evolving draft. No affiliation with or endorsement by OpenAI, Google, Chrome,
-Devpost, or the WebMCP authors is implied.
+## Limitations
+
+The self-service challenge experience uses one fictional reference checkout and one supported
+external-agent path. It does not connect to arbitrary sites. Thurstone can verify what its own
+fresh-agent page exposes, but it cannot certify every consumer's hidden context or identity.
+Chrome's direct compatibility path is separate from answer-isolated agent-selection evidence.
+
+Thurstone is a pre-release testing and audit system—not runtime enforcement, certification,
+guaranteed security, statistical proof of model understanding, or proof that a malicious website
+will behave identically after testing. Every result applies only to its declared contract, agent
+observation, fixture, and tested build.
 
 ## License
 
-Released under the [MIT License](LICENSE). Third-party notices are in
+Unless otherwise stated, original Thurstone repository material is MIT-licensed by Sergio
+Valencia. Third-party components and assets remain under the licenses recorded in
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

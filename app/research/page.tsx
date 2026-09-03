@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 
 export const metadata: Metadata = {
   title: "Research",
@@ -216,32 +215,6 @@ export default function ResearchPage() {
           </div>
         </div>
       </section>
-
-      <aside className="phalanx-bridge" aria-labelledby="phalanx-bridge-title">
-        <Image
-          className="phalanx-bridge-logo"
-          src="/invarra-phalanx-mark.png"
-          width={64}
-          height={64}
-          alt="Invarra"
-        />
-        <div>
-          <p className="eyebrow">Related Invarra work</p>
-          <h2 id="phalanx-bridge-title">Thurstone tests. Phalanx governs.</h2>
-          <p>
-            Thurstone measures whether behavior matched a declared contract before release. Phalanx
-            controls which written instructions may influence protected AI actions at runtime.
-          </p>
-        </div>
-        <a
-          className="button button-secondary"
-          href="https://invarra.ai/phalanx"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Explore Phalanx
-        </a>
-      </aside>
     </div>
   );
 }
