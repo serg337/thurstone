@@ -40,6 +40,7 @@ export const BYOA_FRESH_CONTEXT_V2_STORAGE_KEY = "thurstone:byoa-fresh-context@2
 export const BYOA_FRESH_CONTEXT_V2_HEADER = "X-Thurstone-Fresh-Context" as const;
 export const BYOA_REMOTE_SESSION_V2_MAX_BYTES = 96 * 1024;
 export const BYOA_RUNNER_V2_MARKER_KEY = "thurstone:byoa-runner-version" as const;
+export const BYOA_JUDGE_AUTO_RUNNER_V2_MARKER_KEY = "thurstone:judge-auto-runner-v2@1" as const;
 const BYOA_CONTINUOUS_JOURNEY_MAX_STEPS = 12;
 
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/u);

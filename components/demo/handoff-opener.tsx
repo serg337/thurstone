@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   byoaHandoffOpenRequestSchema,
@@ -8,6 +8,7 @@ import {
   clearRemoteByoaSession
 } from "@/lib/demo/agent-handoff";
 import {
+  BYOA_JUDGE_AUTO_RUNNER_V2_MARKER_KEY,
   BYOA_RUNNER_V2_MARKER_KEY,
   byoaHandoffOpenRequestV2Schema,
   clearRemoteByoaSessionV2,
@@ -33,6 +34,7 @@ export function HandoffOpener() {
   const [error, setError] = useState<string>();
   const [contaminated, setContaminated] = useState(false);
   const [claimFailure, setClaimFailure] = useState<HandoffClaimFailureReceiptV1 | null>(null);
+  const automaticReceiveStartedRef = useRef(false);
 
   function failureMessage(reason: HandoffClaimFailureReasonV1): string {
     if (reason === "expired") return "This handoff expired before it was received.";
@@ -53,7 +55,7 @@ export function HandoffOpener() {
     );
   }, []);
 
-  async function receive() {
+  const receive = useCallback(async () => {
     if (busy) return;
     setBusy(true);
     setError(undefined);
@@ -99,15 +101,35 @@ export function HandoffOpener() {
       clearRemoteByoaSession(window.sessionStorage);
       clearRemoteByoaSessionV2(window.sessionStorage);
       clearByoaHandoffUrl(window.sessionStorage);
-      if (usesV2) window.sessionStorage.setItem(BYOA_RUNNER_V2_MARKER_KEY, "2");
-      else window.sessionStorage.removeItem(BYOA_RUNNER_V2_MARKER_KEY);
+      if (usesV2) {
+        window.sessionStorage.setItem(BYOA_RUNNER_V2_MARKER_KEY, "2");
+        if (new URLSearchParams(window.location.search).get("auto") === "judge") {
+          window.sessionStorage.setItem(BYOA_JUDGE_AUTO_RUNNER_V2_MARKER_KEY, "1");
+        } else {
+          window.sessionStorage.removeItem(BYOA_JUDGE_AUTO_RUNNER_V2_MARKER_KEY);
+        }
+      } else {
+        window.sessionStorage.removeItem(BYOA_RUNNER_V2_MARKER_KEY);
+        window.sessionStorage.removeItem(BYOA_JUDGE_AUTO_RUNNER_V2_MARKER_KEY);
+      }
       window.history.replaceState(null, "", "/demo/handoff");
       window.location.replace("/demo/run");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The handoff could not be opened.");
       setBusy(false);
     }
-  }
+  }, [busy]);
+
+  useEffect(() => {
+    if (
+      new URLSearchParams(window.location.search).get("auto") !== "judge" ||
+      automaticReceiveStartedRef.current
+    ) {
+      return;
+    }
+    automaticReceiveStartedRef.current = true;
+    void receive();
+  }, [receive]);
 
   return (
     <section className="agent-runner-loading" aria-live="polite">

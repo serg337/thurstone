@@ -61,6 +61,8 @@ function commandFor(source: JudgeQuickStartSource): string {
     "This is my authorized Thurstone Judge Quick Start in the website owner's test environment.",
     "Treat these as my exact requests, in order:",
     requests,
+    "Thurstone receives, arms, and advances the cases automatically. Do not use a shell or visual click automation.",
+    "Use only the native Site Tools exposed on the opened Thurstone page.",
     "Process one request at a time. Wait for Thurstone to verify and reveal the next request before continuing.",
     "Continue through all three cases even when one reports an issue. Thurstone resets the synthetic fixture between cases.",
     "I authorize only the exact test-environment cart changes these requests describe. Do not act on production data or external systems."
@@ -281,6 +283,8 @@ export function JudgeQuickStart() {
       });
       if (!response.ok) throw new Error("The Judge Quick Start could not be armed safely.");
       const prepared = byoaHandoffPrepareResponseV2Schema.parse(await response.json());
+      const automaticHandoffUrl = new URL(prepared.handoffUrl);
+      automaticHandoffUrl.searchParams.set("auto", "judge");
       const nextSource = {
         version: "thurstone-judge-quick-start@2" as const,
         suiteId,
@@ -295,7 +299,7 @@ export function JudgeQuickStart() {
           expectedTool: testCase.expectedTool as "cart_update" | "order_review",
           runtimeVariant: JUDGE_QUICK_START_RUNTIME_VARIANTS[index]!
         })),
-        handoffUrl: prepared.handoffUrl,
+        handoffUrl: automaticHandoffUrl.toString(),
         expiresAt: prepared.expiresAt,
         createdAt
       };

@@ -100,7 +100,8 @@ artifacts and fail if canonical bytes drift or denominators are combined.
 3. Choose **Arm Judge Quick Start** once. Confirm `Armed. Three clean cases. 0 of 3 results received.`
 4. Copy the generated command into a genuinely fresh GPT-5.6 Sol or Terra Work or Codex chat in the
    latest ChatGPT desktop app using its built-in Browser—not the Chrome extension side panel.
-5. Confirm each fresh-agent step contains only its request and the four live tool descriptors—not
+5. Confirm the handoff receives, arms, and advances automatically without shell or visual click
+   automation. Each fresh-agent step contains only its request and the four live tool descriptors—not
    expected tools, effects, assertions, planted-fault implementation, or verdict.
 6. Process all three requests in the same agent chat and continue after each result.
 7. Confirm Test 1 passes when the mug becomes 3.

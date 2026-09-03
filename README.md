@@ -75,8 +75,9 @@ document. It runs three evidence classes in one regression queue:
 3. Choose **Arm Judge Quick Start**, copy the exact command, and paste it into a fresh GPT-5.6 Sol or Terra
    Work or Codex chat in the latest ChatGPT desktop app.
 4. Use ChatGPT's built-in Browser—not the Chrome side panel—and keep the owner page open.
-5. Continue all three cases in that chat. The owner page tracks progress and automatically opens a
-   full **Judge Results** report with every observed action, verified effect, and verdict.
+5. Thurstone receives, arms, and advances each case automatically; no visual browser-control clicks
+   are required. Continue all three native Site Tools cases in that chat. The owner page tracks
+   progress and automatically opens a full **Judge Results** report.
 
 No JSON is required. If no native action appears after one minute, the page gives consumer guidance
 and a clean re-arm action. The handoff remains single use and expires after ten minutes.

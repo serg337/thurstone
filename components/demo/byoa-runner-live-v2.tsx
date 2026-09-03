@@ -18,6 +18,7 @@ import {
   BYOA_HANDOFF_REVOKE_V2_VERSION,
   BYOA_HANDOFF_REVEAL_V2_VERSION,
   BYOA_HANDOFF_STATUS_V2_VERSION,
+  BYOA_JUDGE_AUTO_RUNNER_V2_MARKER_KEY,
   BYOA_RUNNER_V2_MARKER_KEY,
   byoaHandoffBootstrapResponseV2Schema,
   byoaContinuousJourneyStatusResponseSchema,
@@ -228,6 +229,7 @@ export function ByoaRunnerV2() {
   const [existingRegressionCaseDigest, setExistingRegressionCaseDigest] = useState<string | null>(
     null
   );
+  const [automaticJudgeRun, setAutomaticJudgeRun] = useState(false);
   const sessionRef = useRef<RemoteByoaSessionV2 | undefined>(undefined);
   const releaseRef = useRef<() => void>(() => undefined);
   const unsubscribeGateRef = useRef<() => void>(() => undefined);
@@ -237,6 +239,10 @@ export function ByoaRunnerV2() {
   const sourceStatusFailureCountRef = useRef(0);
   const armedAtRef = useRef<string | null>(null);
   const environmentRef = useRef<ByoaAgentEnvironmentV2 | undefined>(undefined);
+  const automaticReadyButtonRef = useRef<HTMLButtonElement | null>(null);
+  const automaticStartButtonRef = useRef<HTMLButtonElement | null>(null);
+  const automaticContinueButtonRef = useRef<HTMLButtonElement | null>(null);
+  const automaticContinuationDigestRef = useRef<string | null>(null);
 
   function freshContextId(): string {
     return readFreshContextForByoaHandoffV2(window.sessionStorage);
@@ -439,6 +445,9 @@ export function ByoaRunnerV2() {
     let disposed = false;
     void (async () => {
       try {
+        setAutomaticJudgeRun(
+          window.sessionStorage.getItem(BYOA_JUDGE_AUTO_RUNNER_V2_MARKER_KEY) === "1"
+        );
         const localSession = readByoaAgentSessionV2(window.sessionStorage);
         const localProjection = readAgentVisibleRunProjectionV2(window.sessionStorage);
         const sourceUrl = readByoaHandoffUrl(window.sessionStorage);
@@ -668,6 +677,15 @@ export function ByoaRunnerV2() {
     setProgress("Ready for explicit start");
   }
 
+  useEffect(() => {
+    if (!automaticJudgeRun || error || !projection) return;
+    if (sessionState === "RECEIVED") {
+      automaticReadyButtonRef.current?.click();
+      return;
+    }
+    if (sessionState === "READY_TO_ARM") automaticStartButtonRef.current?.click();
+  }, [automaticJudgeRun, error, projection, sessionState]);
+
   async function startLiveObservation() {
     if (!projection || sessionRef.current?.state !== "READY_TO_ARM") return;
     setError(undefined);
@@ -869,6 +887,21 @@ export function ByoaRunnerV2() {
       setError(caught instanceof Error ? caught.message : "The journey could not continue.");
     }
   }
+
+  useEffect(() => {
+    if (
+      !automaticJudgeRun ||
+      !result ||
+      journey === undefined ||
+      journey.position >= journey.total ||
+      (journey.mode === "continuous" && result.verdict !== "pass") ||
+      automaticContinuationDigestRef.current === result.resultDigest
+    ) {
+      return;
+    }
+    automaticContinuationDigestRef.current = result.resultDigest;
+    automaticContinueButtonRef.current?.click();
+  }, [automaticJudgeRun, journey, result]);
 
   async function continueContractRun() {
     if (!source || !sourceResult) return;
@@ -1361,6 +1394,7 @@ export function ByoaRunnerV2() {
             {journey.position < journey.total &&
             (journey.mode === "regression" || result.verdict === "pass") ? (
               <button
+                ref={automaticContinueButtonRef}
                 className="button button-primary"
                 type="button"
                 onClick={() => void continueContinuousJourney()}
@@ -1418,12 +1452,18 @@ export function ByoaRunnerV2() {
           ))}
         </ul>
         {sessionState === "RECEIVED" ? (
-          <button className="button button-primary" type="button" onClick={markReady}>
+          <button
+            ref={automaticReadyButtonRef}
+            className="button button-primary"
+            type="button"
+            onClick={markReady}
+          >
             Continue to readiness
           </button>
         ) : null}
         {sessionState === "READY_TO_ARM" ? (
           <button
+            ref={automaticStartButtonRef}
             className="button button-primary"
             type="button"
             onClick={() => void startLiveObservation()}

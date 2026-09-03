@@ -95,7 +95,8 @@ built-in Browser.
 
 > I paste one command into a fresh ChatGPT desktop Browser task. For each case, the agent receives
 > only the customer's request and four-tool catalog. It chooses and invokes through native WebMCP
-> while the owner page tracks all three results.
+> while the owner page tracks all three results. Thurstone receives, arms, and advances the queue
+> automatically, so no visual browser-control clicks are required.
 
 **Cursor:** Show the owner **Arm** action, then the fresh chat and native tool activity. Never reveal
 the opaque URL, cookie, or storage.

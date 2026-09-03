@@ -40,7 +40,8 @@ The official rules and challenge website control if this file conflicts with the
 - Canonical URL: `https://thurstone.invarra.ai`
 - Judge quick start: `/judge` preloads a normal baseline, disclosed deterministic site fault, and
   authentic semantic collision; one Arm action creates an answer-isolated three-case regression
-  handoff; the owner page tracks progress and automatically opens a full Judge Results report
+  handoff that receives, arms, and advances without visual browser-control clicks; the owner page
+  tracks progress and automatically opens a full Judge Results report
 - Owner workflow: understand the boundary → configure one to four real tools → build contract cases →
   choose regression suite or continuous journey → arm one secure queue → inspect synchronized results
 - Regression suite: one agent chat, clean fixture per request, every independent case runs even

@@ -238,8 +238,9 @@ No Thurstone account or credentials are required. Start at
 3. Choose **Arm Judge Quick Start**.
 4. Copy the exact command into a fresh GPT-5.6 Sol or Terra Work or Codex chat in the latest
    ChatGPT desktop app using its built-in Browser—not the Chrome extension side panel.
-5. Continue all three cases in that same chat. Keep the owner page open; it tracks progress and
-   automatically opens **Judge Results** with one row per request and a downloadable report.
+5. Thurstone receives, arms, and advances the queue automatically; no shell or visual browser-control
+   clicks are required. Continue all three native Site Tools cases in that same chat. Keep the owner
+   page open; it tracks progress and opens **Judge Results** with a downloadable report.
 
 If nothing is observed after approximately one minute, confirm the fresh chat is using ChatGPT
 Desktop's built-in Browser and use **Re-arm three clean cases**. The handoff is single use and expires
