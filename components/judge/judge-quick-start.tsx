@@ -372,9 +372,14 @@ export function JudgeQuickStart() {
               <li>Paste the command below and send it.</li>
               <li>Keep this page open; the verdict appears here automatically.</li>
             </ol>
-            <button className="button button-primary" type="button" onClick={copyCommand}>
-              {copied ? "Command copied" : "Copy exact ChatGPT command"}
-            </button>
+            <div className={styles.actions}>
+              <button className="button button-primary" type="button" onClick={copyCommand}>
+                {copied ? "Command copied" : "Copy exact ChatGPT command"}
+              </button>
+              <button className="button button-secondary" type="button" onClick={reset}>
+                Reset quick test
+              </button>
+            </div>
             <details className={styles.commandPreview}>
               <summary>Preview the exact command</summary>
               <pre>{command}</pre>

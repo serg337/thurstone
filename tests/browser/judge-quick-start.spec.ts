@@ -34,6 +34,8 @@ test("the owner quick-start page registers no target tools", async ({ page }) =>
   await expect
     .poll(() => page.evaluate(async () => (await document.modelContext?.getTools?.())?.length ?? 0))
     .toBe(0);
+  await page.getByRole("button", { name: "Reset quick test" }).click();
+  await expect(page.getByRole("button", { name: "Arm quick test" })).toBeVisible();
 });
 
 test("one arm action reaches a live visual verdict while the fresh agent stays answer-isolated", async ({
