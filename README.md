@@ -203,34 +203,31 @@ Deterministic evaluator ◀── native WebMCP ◀── fresh external agent
 - The judge-facing BYOA path uses the visitor's supported agent and makes no Thurstone-paid model
   call.
 
-## Evidence hierarchy
+## Evidence
 
-Evidence classes remain separate:
+Three real Thurstone runs cover 11 tests: **8 passes, 3 issues, 0 not run**. Two are ChatGPT-agent
+runs; the third is a disclosed provider-free control. Every result links to its receipt. An ISSUE
+means the declared agent/site contract diverged—not that Thurstone crashed.
 
-1. **Current successor semantic snapshot:** `24/24` frozen cases, one trial per case, 20 native calls
-   and four correct clarifications. This is bounded reference regression coverage, not an
-   independent benchmark or proof of general model behavior.
-2. **Historical paired experiment:** `23/24 → 23/24` after one description change, with the honest
-   conclusion **no measured improvement**. It uses a different frozen protocol and is not the
-   predecessor of the current snapshot.
-3. **Invocation Integrity:** separate `3/3`, using four deterministic native calls and zero model
-   calls for privileged-field injection, nonexistent item, and replay/idempotency.
-4. **Direct Site Tools observations:** four fresh-context observations kept separate from scored
-   reference evidence.
-5. **Seven-request ChatGPT journey:** a digest-bound owner export from one continuous Browser task;
-   seven observed native actions, seven passes, and one final pending checkout.
-6. **Controlled mismatch:** a provider-free product demonstration; it enters no score.
+- [**Three-case regression — 1 PASS, 2 ISSUES, 0 NOT RUN**](evidence/agent-regression-issue.json):
+  a planted site no-op missed the required cart effect, and the agent selected `cart_get` instead
+  of `order_review`; `effects.required-state-v3` and `selection.expected-tool-v3` diverged.
+- [**Seven-case continuous journey — 7 PASS, 0 ISSUES, 0 NOT RUN**](evidence/seven-request-journey.json):
+  one ChatGPT context made seven native calls; checkout moved revision `2 → 3`, leaving mug quantity
+  `3`, one pending approval, a `$79` total, and no unmodeled change.
+- [**Controlled mismatch — 0 PASS, 1 ISSUE, 0 NOT RUN**](evidence/controlled-mismatch.json):
+  the disclosed no-model control used `order_review` where the contract required
+  `checkout_request`; canonical arguments and the required checkout effect diverged.
 
-The [public sample run](evidence/sample-report.md) preserves an authentic Chrome 152 native
-checkout PASS with complete contract, canonical arguments, trusted state, ledger diff, and seven
-assertions. It is labeled direct compatibility evidence—not answer-isolated model selection.
+The separate [**24/24 reference regression**](evidence/thurstone-current-result.json) covers one
+trial per frozen semantic case. It is bounded reference coverage—not an independent benchmark.
+The historical `23/24 → 23/24` experiment and separate
+[**3/3 Invocation Integrity Matrix**](evidence/thurstone-invocation-integrity.md) retain their own
+protocols and denominators.
 
-The [seven-request journey](evidence/seven-request-journey.md) preserves Sergio's owner-exported
-continuous ChatGPT run and its [canonical JSON receipt](evidence/seven-request-journey.json). Its
-report digest was independently recomputed; the documented evidence boundary remains explicit.
-
-Hashes bind internal artifacts and release lineage. They are integrity checks, not independent
-attestation or certification.
+[**Chrome 152 compatibility**](evidence/sample-report.md): a native checkout passed all seven
+assertions covering the contract, arguments, before/after state, and ledger. Hashes provide internal
+integrity, not independent attestation or certification.
 
 ## Built during the challenge
 

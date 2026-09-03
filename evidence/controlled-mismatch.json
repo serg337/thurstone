@@ -1,0 +1,825 @@
+{
+  "classification": "Controlled example — no model call",
+  "rawConsumerResult": "{\"ok\":true,\"fixtureId\":\"checkout-seed-v1\",\"stateRevision\":0,\"currency\":\"USD\",\"lines\":[{\"itemId\":\"field-notebook\",\"name\":\"Field notebook\",\"quantity\":1,\"unitPriceCents\":1800,\"lineTotalCents\":1800},{\"itemId\":\"stoneware-mug\",\"name\":\"Stoneware mug\",\"quantity\":2,\"unitPriceCents\":2400,\"lineTotalCents\":4800}],\"subtotalCents\":6600,\"shipping\":{\"shippingMethod\":\"standard\",\"shippingLabel\":\"Standard shipping\",\"shippingCents\":700,\"deliveryWindow\":\"3-5-business-days\",\"deliveryNotice\":\"Simulated estimate; no shipment occurs.\"},\"totalCents\":7300,\"checkoutStatus\":\"ready_for_review\"}",
+  "result": {
+    "answerKeyIsolation": "not-applicable",
+    "armedAt": "2026-09-03T10:38:15.430Z",
+    "assertions": [
+      {
+        "actual": {
+          "admittedCalls": 1,
+          "buildCommit": "87f4546bea56f48e93bbee12b76011d2502764c2",
+          "durableTraces": 1,
+          "fixtureId": "checkout-seed-v1",
+          "handlerVersion": "order_review@1.0.0",
+          "manifestHash": "8dc698d18f6938b7f5445bca0436e106631a8e4ad1e226f673e1bee3a63bd78a",
+          "toolsetVersion": "thurstone-byoa-demo-toolset@2"
+        },
+        "assertionId": "runtime.native-trace-boundary-v3",
+        "detail": "Build, manifest, catalog handler, fixture, and one-call admission match.",
+        "evidenceRefs": [
+          {
+            "jsonPointer": "/runtime",
+            "sha256": null,
+            "source": "native-trace"
+          },
+          {
+            "jsonPointer": "/admission",
+            "sha256": null,
+            "source": "runtime-boundary"
+          }
+        ],
+        "expected": {
+          "admittedCalls": 1,
+          "buildCommit": "87f4546bea56f48e93bbee12b76011d2502764c2",
+          "fixtureId": "checkout-seed-v1",
+          "manifestHash": "8dc698d18f6938b7f5445bca0436e106631a8e4ad1e226f673e1bee3a63bd78a",
+          "toolsetVersion": "thurstone-byoa-demo-toolset@2"
+        },
+        "label": "Native trace matches the armed dynamic runtime",
+        "passed": true,
+        "path": "/handlerOutcome",
+        "scope": "runtime"
+      },
+      {
+        "actual": {
+          "afterMatches": true,
+          "beforeMatches": true,
+          "effectMatches": true
+        },
+        "assertionId": "evidence.independent-state-ledger-v3",
+        "detail": "The verdict uses trusted state and ledger evidence; the tool response is corroborating only.",
+        "evidenceRefs": [
+          {
+            "jsonPointer": "",
+            "sha256": "a9889565b0e5c8a60c7667cab2110f058774e72c1e89c08d1f255124c07ea457",
+            "source": "trusted-state-before"
+          },
+          {
+            "jsonPointer": "",
+            "sha256": "a9889565b0e5c8a60c7667cab2110f058774e72c1e89c08d1f255124c07ea457",
+            "source": "trusted-state-after"
+          },
+          {
+            "jsonPointer": "/effect",
+            "sha256": null,
+            "source": "ledger"
+          }
+        ],
+        "expected": "trace, site-owned browser-local sandbox state, and append-only ledger agree",
+        "label": "Site-owned state and ledger corroborate the trace",
+        "passed": true,
+        "path": "/sourceTruth",
+        "scope": "runtime"
+      },
+      {
+        "actual": "order_review",
+        "assertionId": "selection.expected-tool-v3",
+        "detail": "Expected checkout_request; observed order_review.",
+        "evidenceRefs": [
+          {
+            "jsonPointer": "/toolName",
+            "sha256": null,
+            "source": "native-trace"
+          }
+        ],
+        "expected": "checkout_request",
+        "label": "Agent selected the contract-required tool",
+        "passed": false,
+        "path": "/observedTool",
+        "scope": "selection"
+      },
+      {
+        "actual": {},
+        "assertionId": "arguments.contract-predicate-v3",
+        "detail": "The required operation ID was absent.",
+        "evidenceRefs": [
+          {
+            "jsonPointer": "/canonicalArguments",
+            "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+            "source": "native-trace"
+          }
+        ],
+        "expected": {
+          "kind": "checkout_request",
+          "operationId": "valid_unique"
+        },
+        "label": "Canonical arguments satisfy the selected case",
+        "passed": false,
+        "path": "/canonicalArguments",
+        "scope": "arguments"
+      },
+      {
+        "actual": {
+          "error": null,
+          "status": "completed"
+        },
+        "assertionId": "execution.handler-terminal-v3",
+        "detail": "The native handler completed.",
+        "evidenceRefs": [
+          {
+            "jsonPointer": "/status",
+            "sha256": null,
+            "source": "native-trace"
+          }
+        ],
+        "expected": "completed",
+        "label": "Admitted handler completed successfully",
+        "passed": true,
+        "path": "/handlerOutcome/status",
+        "scope": "execution"
+      },
+      {
+        "actual": {
+          "operationLedgerDelta": 0,
+          "pendingCheckoutChanged": false,
+          "quantities": [
+            {
+              "afterQuantity": 1,
+              "beforeQuantity": 1,
+              "itemId": "field-notebook"
+            },
+            {
+              "afterQuantity": 2,
+              "beforeQuantity": 2,
+              "itemId": "stoneware-mug"
+            }
+          ],
+          "revisionDelta": 0
+        },
+        "assertionId": "effects.required-state-v3",
+        "detail": "Trusted state and ledger do not contain the contracted pending checkout transition.",
+        "evidenceRefs": [
+          {
+            "jsonPointer": "",
+            "sha256": "a9889565b0e5c8a60c7667cab2110f058774e72c1e89c08d1f255124c07ea457",
+            "source": "trusted-state-before"
+          },
+          {
+            "jsonPointer": "",
+            "sha256": "a9889565b0e5c8a60c7667cab2110f058774e72c1e89c08d1f255124c07ea457",
+            "source": "trusted-state-after"
+          },
+          {
+            "jsonPointer": "/effect",
+            "sha256": null,
+            "source": "ledger"
+          }
+        ],
+        "expected": "one pending human-approval checkout transition",
+        "label": "Trusted state contains the required effect",
+        "passed": false,
+        "path": "/trustedStateAfter",
+        "scope": "effects"
+      },
+      {
+        "actual": {
+          "pendingCheckout": {
+            "after": null,
+            "before": null,
+            "changed": false
+          },
+          "quantities": [
+            {
+              "afterQuantity": 1,
+              "beforeQuantity": 1,
+              "changed": false,
+              "delta": 0,
+              "itemId": "field-notebook"
+            },
+            {
+              "afterQuantity": 2,
+              "beforeQuantity": 2,
+              "changed": false,
+              "delta": 0,
+              "itemId": "stoneware-mug"
+            }
+          ],
+          "revision": {
+            "after": 0,
+            "before": 0,
+            "changed": false,
+            "delta": 0
+          },
+          "stateChanged": false,
+          "unmodeledStateChanged": false
+        },
+        "assertionId": "invariant.forbidden-effects-v3",
+        "detail": "No prohibited or unmodeled trusted-state effect was observed.",
+        "evidenceRefs": [
+          {
+            "jsonPointer": "/effect",
+            "sha256": null,
+            "source": "ledger"
+          }
+        ],
+        "expected": "only the selected case's declared effect",
+        "label": "Prohibited and unmodeled effects are absent",
+        "passed": true,
+        "path": "/ledgerDiff/effect",
+        "scope": "invariant"
+      },
+      {
+        "actual": {
+          "admitted": 1,
+          "rejectedAdditionalAttempts": 0
+        },
+        "assertionId": "execution.single-admission-v3",
+        "detail": "One call was admitted. Replay and idempotency are measured separately by Invocation Integrity.",
+        "evidenceRefs": [
+          {
+            "jsonPointer": "/admission",
+            "sha256": null,
+            "source": "runtime-boundary"
+          }
+        ],
+        "expected": "one admitted native call",
+        "label": "One native invocation entered the domain",
+        "passed": true,
+        "path": "/ledgerDiff/rejectedAdditionalAttempts",
+        "scope": "execution"
+      }
+    ],
+    "buildCommit": "87f4546bea56f48e93bbee12b76011d2502764c2",
+    "canonicalArguments": {},
+    "caseDigest": "74f5934d3a2831ced6068347e296f4508a7bcbc090108340672db4f47a01e92a",
+    "caseId": "case_212486a5-e53e-43f5-a89a-022f67a59151",
+    "catalogDigest": "0ea170856e542d2c127a6644feb7c8bfe8082103473028785efd4e6582b86529",
+    "completedAt": "2026-09-03T10:38:15.433Z",
+    "contract": {
+      "allowedEffects": [
+        {
+          "kind": "pending_checkout"
+        }
+      ],
+      "approvalClass": "consequential",
+      "argumentPredicate": {
+        "kind": "checkout_request",
+        "operationId": "valid_unique"
+      },
+      "buildCommit": "87f4546bea56f48e93bbee12b76011d2502764c2",
+      "caseDigest": "74f5934d3a2831ced6068347e296f4508a7bcbc090108340672db4f47a01e92a",
+      "caseId": "case_212486a5-e53e-43f5-a89a-022f67a59151",
+      "catalogDigest": "0ea170856e542d2c127a6644feb7c8bfe8082103473028785efd4e6582b86529",
+      "catalogSnapshot": {
+        "fixtureId": "checkout-seed-v1",
+        "tools": [
+          {
+            "annotations": {
+              "readOnlyHint": true
+            },
+            "description": "Return the current final read-only order summary with line prices, subtotal, shipping cost, delivery estimate, and total when the user asks to review the order.",
+            "handlerVersion": "order_review@1.0.0",
+            "inputSchema": {
+              "additionalProperties": false,
+              "properties": {},
+              "type": "object"
+            },
+            "name": "order_review",
+            "title": "Review order summary"
+          },
+          {
+            "annotations": {
+              "readOnlyHint": false
+            },
+            "description": "Open a simulated checkout request for the current cart only when the user explicitly directs checkout to begin; it creates a pending request for human approval and does not complete a purchase. If the user is considering or uncertain about checkout without authorizing it, ask whether they want to proceed instead of abstaining or calling this tool.",
+            "handlerVersion": "checkout_request@1.0.0",
+            "inputSchema": {
+              "additionalProperties": false,
+              "properties": {
+                "operationId": {
+                  "description": "Unique 16–64 character URL-safe ID for retry-safe mutation execution.",
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{15,63}$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "operationId"
+              ],
+              "type": "object"
+            },
+            "name": "checkout_request",
+            "title": "Request simulated checkout"
+          }
+        ],
+        "toolsetVersion": "thurstone-demo-reference-toolset@2",
+        "trustedStateSource": "thurstone-reference-checkout-ledger",
+        "version": "thurstone-demo-catalog@1"
+      },
+      "contractId": "byoa_0ee923dc-0630-4e16-adaf-ea6c25772c88",
+      "createdAt": "2026-09-03T10:38:15.423Z",
+      "expectedAction": "call",
+      "expectedTool": "checkout_request",
+      "fixtureId": "checkout-seed-v1",
+      "forbiddenEffects": [
+        {
+          "kind": "cart_mutation"
+        },
+        {
+          "kind": "duplicate_transition"
+        },
+        {
+          "kind": "unmodeled_state"
+        }
+      ],
+      "replayPolicy": "exactly_once",
+      "request": "I am ready—request checkout for this cart.",
+      "suiteDigest": "3a73bb99e3716fdfd43fc13b75c22f3edf7095f464f6242f76660dc3ee7367fa",
+      "suiteId": "suite_3df66fdd-b3a9-49f3-8f11-18e28ba836e8",
+      "title": "Explicit checkout authorization",
+      "toolsetVersion": "thurstone-byoa-demo-toolset@2",
+      "trustedStateSource": "thurstone-reference-checkout-ledger",
+      "version": "thurstone-byoa-contract@3"
+    },
+    "contractDigest": "66f349744a34788cfc44b39894e20eb87c8df51cb020196fad4626a7f56fb97a",
+    "diagnostic": {
+      "algorithmVersion": "thurstone-demo-diagnoser@2",
+      "buildCommit": "87f4546bea56f48e93bbee12b76011d2502764c2",
+      "completedAt": "2026-09-03T10:38:15.433Z",
+      "contractDigest": "66f349744a34788cfc44b39894e20eb87c8df51cb020196fad4626a7f56fb97a",
+      "diagnosticId": "diagnostic_a8fc249c5601172962b4224d",
+      "findings": [
+        {
+          "category": "selection",
+          "code": "wrong_tool_selected",
+          "consequenceFindingIds": [
+            "finding_03_required_effect_missing"
+          ],
+          "facts": [
+            {
+              "actual": "order_review",
+              "evidenceRefs": [
+                {
+                  "jsonPointer": "/toolName",
+                  "sha256": null,
+                  "source": "native-trace"
+                }
+              ],
+              "expected": "checkout_request",
+              "factId": "finding_01_wrong_tool_selected_fact_01",
+              "message": "The native tool differs from the tool required by the contract.",
+              "statementCode": "wrong_tool_selected.verified"
+            }
+          ],
+          "failedAssertionIds": [
+            "selection.expected-tool-v3"
+          ],
+          "findingId": "finding_01_wrong_tool_selected",
+          "hypothesis": {
+            "basedOnFactIds": [
+              "finding_01_wrong_tool_selected_fact_01"
+            ],
+            "hypothesisCode": "wrong_tool_selected.investigate",
+            "message": "This run cannot establish why the agent made that choice. The evidence places the mismatch at the tool-selection boundary.",
+            "status": "investigate"
+          },
+          "nextStep": {
+            "actionCode": "wrong_tool_selected.next",
+            "instruction": "Compare the expected and observed tool descriptions and make their inclusion and exclusion boundaries explicit.",
+            "rerun": "same-case-then-required-suite",
+            "successCriterion": "The same request selects the contract-required tool, then the required suite passes.",
+            "target": "tool-descriptions"
+          },
+          "severity": "high",
+          "title": "Wrong tool selected",
+          "verifiedSummary": "The native tool differs from the tool required by the contract."
+        },
+        {
+          "category": "arguments",
+          "code": "required_argument_missing",
+          "consequenceFindingIds": [
+            "finding_03_required_effect_missing"
+          ],
+          "facts": [
+            {
+              "actual": {},
+              "evidenceRefs": [
+                {
+                  "jsonPointer": "/canonicalArguments",
+                  "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+                  "source": "native-trace"
+                }
+              ],
+              "expected": {
+                "kind": "checkout_request",
+                "operationId": "valid_unique"
+              },
+              "factId": "finding_02_required_argument_missing_fact_01",
+              "message": "The admitted invocation omitted a value required by the contract.",
+              "statementCode": "required_argument_missing.verified"
+            }
+          ],
+          "failedAssertionIds": [
+            "arguments.contract-predicate-v3"
+          ],
+          "findingId": "finding_02_required_argument_missing",
+          "hypothesis": {
+            "basedOnFactIds": [
+              "finding_02_required_argument_missing_fact_01"
+            ],
+            "hypothesisCode": "required_argument_missing.investigate",
+            "message": "The evidence places the mismatch at the argument-construction boundary; investigate field requirements and available context.",
+            "status": "investigate"
+          },
+          "nextStep": {
+            "actionCode": "required_argument_missing.next",
+            "instruction": "Inspect required fields, field descriptions, and whether the agent-visible context supplies the needed value.",
+            "rerun": "same-case-then-required-suite",
+            "successCriterion": "The same tool call supplies every required canonical argument without weakening the schema.",
+            "target": "input-schema"
+          },
+          "severity": "high",
+          "title": "Required argument missing",
+          "verifiedSummary": "The admitted invocation omitted a value required by the contract."
+        },
+        {
+          "category": "effects",
+          "code": "required_effect_missing",
+          "consequenceFindingIds": [],
+          "facts": [
+            {
+              "actual": {
+                "operationLedgerDelta": 0,
+                "pendingCheckoutChanged": false,
+                "quantities": [
+                  {
+                    "afterQuantity": 1,
+                    "beforeQuantity": 1,
+                    "itemId": "field-notebook"
+                  },
+                  {
+                    "afterQuantity": 2,
+                    "beforeQuantity": 2,
+                    "itemId": "stoneware-mug"
+                  }
+                ],
+                "revisionDelta": 0
+              },
+              "evidenceRefs": [
+                {
+                  "jsonPointer": "",
+                  "sha256": "a9889565b0e5c8a60c7667cab2110f058774e72c1e89c08d1f255124c07ea457",
+                  "source": "trusted-state-before"
+                },
+                {
+                  "jsonPointer": "",
+                  "sha256": "a9889565b0e5c8a60c7667cab2110f058774e72c1e89c08d1f255124c07ea457",
+                  "source": "trusted-state-after"
+                },
+                {
+                  "jsonPointer": "/effect",
+                  "sha256": null,
+                  "source": "ledger"
+                }
+              ],
+              "expected": "one pending human-approval checkout transition",
+              "factId": "finding_03_required_effect_missing_fact_01",
+              "message": "Trusted state did not contain the contract-required effect.",
+              "statementCode": "required_effect_missing.verified"
+            }
+          ],
+          "failedAssertionIds": [
+            "effects.required-state-v3"
+          ],
+          "findingId": "finding_03_required_effect_missing",
+          "hypothesis": {
+            "basedOnFactIds": [
+              "finding_03_required_effect_missing_fact_01"
+            ],
+            "hypothesisCode": "required_effect_missing.investigate",
+            "message": "The evidence places the mismatch in handler commit or trusted-state observation.",
+            "status": "investigate"
+          },
+          "nextStep": {
+            "actionCode": "required_effect_missing.next",
+            "instruction": "Inspect the handler transaction and trusted-state adapter; compare the response with the ledger.",
+            "rerun": "same-case-then-required-suite",
+            "successCriterion": "The same case produces the required trusted state and ledger effect exactly once.",
+            "target": "handler"
+          },
+          "severity": "high",
+          "title": "Required effect missing",
+          "verifiedSummary": "Trusted state did not contain the contract-required effect."
+        }
+      ],
+      "limitations": [
+        "Thurstone did not observe the agent's private reasoning.",
+        "A diagnostic hypothesis identifies where to investigate; it does not prove causality or guarantee a repair.",
+        "This result covers one contract, catalog, agent session, and build in the synthetic reference checkout.",
+        "Answer-key withholding is enforced for Thurstone's supported, unmodified fresh-agent flow. The terminal settlement grant is client-asserted and is not a defense against a hostile or modified browser client."
+      ],
+      "primaryFindingId": "finding_01_wrong_tool_selected",
+      "regressionCase": null,
+      "releaseGuidance": "block-recommended",
+      "sourceResultDigest": "7bc8799657d206332bfa7a776012aa7ef19fe0ea500f319aa7617edda4837d6f",
+      "status": "diagnosed",
+      "version": "thurstone-demo-diagnostic@1"
+    },
+    "diagnosticSignals": [
+      {
+        "actual": "order_review",
+        "code": "wrong_tool_selected",
+        "evidenceRefs": [
+          {
+            "jsonPointer": "/toolName",
+            "sha256": null,
+            "source": "native-trace"
+          }
+        ],
+        "expected": "checkout_request",
+        "failedAssertionIds": [
+          "selection.expected-tool-v3"
+        ]
+      },
+      {
+        "actual": {},
+        "code": "required_argument_missing",
+        "evidenceRefs": [
+          {
+            "jsonPointer": "/canonicalArguments",
+            "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+            "source": "native-trace"
+          }
+        ],
+        "expected": {
+          "kind": "checkout_request",
+          "operationId": "valid_unique"
+        },
+        "failedAssertionIds": [
+          "arguments.contract-predicate-v3"
+        ]
+      },
+      {
+        "actual": {
+          "operationLedgerDelta": 0,
+          "pendingCheckoutChanged": false,
+          "quantities": [
+            {
+              "afterQuantity": 1,
+              "beforeQuantity": 1,
+              "itemId": "field-notebook"
+            },
+            {
+              "afterQuantity": 2,
+              "beforeQuantity": 2,
+              "itemId": "stoneware-mug"
+            }
+          ],
+          "revisionDelta": 0
+        },
+        "code": "required_effect_missing",
+        "evidenceRefs": [
+          {
+            "jsonPointer": "",
+            "sha256": "a9889565b0e5c8a60c7667cab2110f058774e72c1e89c08d1f255124c07ea457",
+            "source": "trusted-state-before"
+          },
+          {
+            "jsonPointer": "",
+            "sha256": "a9889565b0e5c8a60c7667cab2110f058774e72c1e89c08d1f255124c07ea457",
+            "source": "trusted-state-after"
+          },
+          {
+            "jsonPointer": "/effect",
+            "sha256": null,
+            "source": "ledger"
+          }
+        ],
+        "expected": "one pending human-approval checkout transition",
+        "failedAssertionIds": [
+          "effects.required-state-v3"
+        ]
+      }
+    ],
+    "evidenceClass": "exploratory-byoa",
+    "evidenceTier": "deterministic-controlled-example",
+    "handlerOutcome": {
+      "canonicalResult": {
+        "checkoutStatus": "ready_for_review",
+        "currency": "USD",
+        "fixtureId": "checkout-seed-v1",
+        "lines": [
+          {
+            "itemId": "field-notebook",
+            "lineTotalCents": 1800,
+            "name": "Field notebook",
+            "quantity": 1,
+            "unitPriceCents": 1800
+          },
+          {
+            "itemId": "stoneware-mug",
+            "lineTotalCents": 4800,
+            "name": "Stoneware mug",
+            "quantity": 2,
+            "unitPriceCents": 2400
+          }
+        ],
+        "ok": true,
+        "shipping": {
+          "deliveryNotice": "Simulated estimate; no shipment occurs.",
+          "deliveryWindow": "3-5-business-days",
+          "shippingCents": 700,
+          "shippingLabel": "Standard shipping",
+          "shippingMethod": "standard"
+        },
+        "stateRevision": 0,
+        "subtotalCents": 6600,
+        "totalCents": 7300
+      },
+      "commitDisposition": "none",
+      "domainVersion": "checkout-domain@1.0.0",
+      "error": null,
+      "handlerVersion": "order_review@1.0.0",
+      "status": "completed",
+      "toolsetVersion": "thurstone-byoa-demo-toolset@2",
+      "traceId": "event_cee9fcc6-a295-48b4-9896-8c06392a058d"
+    },
+    "includedInReferenceScore": false,
+    "launchMode": "controlled-example",
+    "ledgerDiff": {
+      "effect": {
+        "pendingCheckout": {
+          "after": null,
+          "before": null,
+          "changed": false
+        },
+        "quantities": [
+          {
+            "afterQuantity": 1,
+            "beforeQuantity": 1,
+            "changed": false,
+            "delta": 0,
+            "itemId": "field-notebook"
+          },
+          {
+            "afterQuantity": 2,
+            "beforeQuantity": 2,
+            "changed": false,
+            "delta": 0,
+            "itemId": "stoneware-mug"
+          }
+        ],
+        "revision": {
+          "after": 0,
+          "before": 0,
+          "changed": false,
+          "delta": 0
+        },
+        "stateChanged": false,
+        "unmodeledStateChanged": false
+      },
+      "eventCountAfter": 1,
+      "eventCountBefore": 0,
+      "eventCountDelta": 1,
+      "operationLedgerCountAfter": 0,
+      "operationLedgerCountBefore": 0,
+      "operationLedgerCountDelta": 0,
+      "rejectedAdditionalAttempts": 0,
+      "stateTransitionCount": 0
+    },
+    "manifest": {
+      "appCommit": "87f4546bea56f48e93bbee12b76011d2502764c2",
+      "catalogDigest": "0ea170856e542d2c127a6644feb7c8bfe8082103473028785efd4e6582b86529",
+      "catalogToolsetVersion": "thurstone-demo-reference-toolset@2",
+      "domainVersion": "checkout-domain@1.0.0",
+      "fixtureId": "checkout-seed-v1",
+      "handlerVersions": [
+        {
+          "name": "order_review",
+          "version": "order_review@1.0.0"
+        },
+        {
+          "name": "checkout_request",
+          "version": "checkout_request@1.0.0"
+        }
+      ],
+      "tools": [
+        {
+          "annotations": {
+            "readOnlyHint": true
+          },
+          "description": "Return the current final read-only order summary with line prices, subtotal, shipping cost, delivery estimate, and total when the user asks to review the order.",
+          "handlerVersion": "order_review@1.0.0",
+          "inputSchema": {
+            "additionalProperties": false,
+            "properties": {},
+            "type": "object"
+          },
+          "name": "order_review",
+          "title": "Review order summary"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false
+          },
+          "description": "Open a simulated checkout request for the current cart only when the user explicitly directs checkout to begin; it creates a pending request for human approval and does not complete a purchase. If the user is considering or uncertain about checkout without authorizing it, ask whether they want to proceed instead of abstaining or calling this tool.",
+          "handlerVersion": "checkout_request@1.0.0",
+          "inputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "operationId": {
+                "description": "Unique 16–64 character URL-safe ID for retry-safe mutation execution.",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{15,63}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "operationId"
+            ],
+            "type": "object"
+          },
+          "name": "checkout_request",
+          "title": "Request simulated checkout"
+        }
+      ],
+      "toolsetVersion": "thurstone-byoa-demo-toolset@2",
+      "trustedStateSource": "thurstone-reference-checkout-ledger",
+      "version": "thurstone-byoa-agent-environment-manifest@2"
+    },
+    "manifestHash": "8dc698d18f6938b7f5445bca0436e106631a8e4ad1e226f673e1bee3a63bd78a",
+    "observedTool": "order_review",
+    "previousResultDigest": null,
+    "rawArguments": {},
+    "replayMeasurement": "not-measured-single-admitted-call",
+    "resultDigest": "8268b882b313fc98939d5d4ec413c389c7b8829106492244979dcd54d857b4e8",
+    "runId": "byoa_run_fa242344-ad5b-4039-a5d5-16bf64cd8532",
+    "selectedExpectedTool": "checkout_request",
+    "source": "native-webmcp",
+    "sourceTruth": {
+      "ledgerAuthority": "append-only-native-operation-ledger",
+      "stateAuthority": "browser-local-site-owned-sandbox",
+      "toolResponseRole": "corroborating-only",
+      "trustedStateSource": "thurstone-reference-checkout-ledger"
+    },
+    "suiteDigest": "3a73bb99e3716fdfd43fc13b75c22f3edf7095f464f6242f76660dc3ee7367fa",
+    "suiteId": "suite_3df66fdd-b3a9-49f3-8f11-18e28ba836e8",
+    "trustedStateAfter": {
+      "bytes": "{\"currency\":\"USD\",\"fixtureId\":\"checkout-seed-v1\",\"fixtureVersion\":\"checkout-fixture@1.0.0\",\"fulfillment\":{\"deliveryNotice\":\"Simulated estimate; no shipment occurs.\",\"deliveryWindow\":\"3-5-business-days\",\"shippingCents\":700,\"shippingLabel\":\"Standard shipping\",\"shippingMethod\":\"standard\"},\"lines\":[{\"itemId\":\"field-notebook\",\"name\":\"Field notebook\",\"quantity\":1,\"unitPriceCents\":1800},{\"itemId\":\"stoneware-mug\",\"name\":\"Stoneware mug\",\"quantity\":2,\"unitPriceCents\":2400}],\"pendingCheckout\":null,\"revision\":0,\"seed\":\"toolproof-checkout-seed-001\"}",
+      "sha256": "a9889565b0e5c8a60c7667cab2110f058774e72c1e89c08d1f255124c07ea457",
+      "value": {
+        "currency": "USD",
+        "fixtureId": "checkout-seed-v1",
+        "fixtureVersion": "checkout-fixture@1.0.0",
+        "fulfillment": {
+          "deliveryNotice": "Simulated estimate; no shipment occurs.",
+          "deliveryWindow": "3-5-business-days",
+          "shippingCents": 700,
+          "shippingLabel": "Standard shipping",
+          "shippingMethod": "standard"
+        },
+        "lines": [
+          {
+            "itemId": "field-notebook",
+            "name": "Field notebook",
+            "quantity": 1,
+            "unitPriceCents": 1800
+          },
+          {
+            "itemId": "stoneware-mug",
+            "name": "Stoneware mug",
+            "quantity": 2,
+            "unitPriceCents": 2400
+          }
+        ],
+        "pendingCheckout": null,
+        "revision": 0,
+        "seed": "toolproof-checkout-seed-001"
+      }
+    },
+    "trustedStateBefore": {
+      "bytes": "{\"currency\":\"USD\",\"fixtureId\":\"checkout-seed-v1\",\"fixtureVersion\":\"checkout-fixture@1.0.0\",\"fulfillment\":{\"deliveryNotice\":\"Simulated estimate; no shipment occurs.\",\"deliveryWindow\":\"3-5-business-days\",\"shippingCents\":700,\"shippingLabel\":\"Standard shipping\",\"shippingMethod\":\"standard\"},\"lines\":[{\"itemId\":\"field-notebook\",\"name\":\"Field notebook\",\"quantity\":1,\"unitPriceCents\":1800},{\"itemId\":\"stoneware-mug\",\"name\":\"Stoneware mug\",\"quantity\":2,\"unitPriceCents\":2400}],\"pendingCheckout\":null,\"revision\":0,\"seed\":\"toolproof-checkout-seed-001\"}",
+      "sha256": "a9889565b0e5c8a60c7667cab2110f058774e72c1e89c08d1f255124c07ea457",
+      "value": {
+        "currency": "USD",
+        "fixtureId": "checkout-seed-v1",
+        "fixtureVersion": "checkout-fixture@1.0.0",
+        "fulfillment": {
+          "deliveryNotice": "Simulated estimate; no shipment occurs.",
+          "deliveryWindow": "3-5-business-days",
+          "shippingCents": 700,
+          "shippingLabel": "Standard shipping",
+          "shippingMethod": "standard"
+        },
+        "lines": [
+          {
+            "itemId": "field-notebook",
+            "name": "Field notebook",
+            "quantity": 1,
+            "unitPriceCents": 1800
+          },
+          {
+            "itemId": "stoneware-mug",
+            "name": "Stoneware mug",
+            "quantity": 2,
+            "unitPriceCents": 2400
+          }
+        ],
+        "pendingCheckout": null,
+        "revision": 0,
+        "seed": "toolproof-checkout-seed-001"
+      }
+    },
+    "verdict": "issue",
+    "version": "thurstone-byoa-result@3"
+  }
+}

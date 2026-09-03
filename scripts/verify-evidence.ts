@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 
 import { canonicalSha256 } from "../lib/evidence/digest";
 import type { ByoaDemoResultV2 } from "../lib/demo/result-v2";
+import { verifyByoaDemoResultV3 } from "../lib/demo/result-v3";
 import { verifyOwnerJourneyReport } from "../lib/demo/owner-journey-report";
 
 const CURRENT_RESULT_PATH = "evidence/thurstone-current-result.json";
@@ -12,6 +13,8 @@ const SAMPLE_RUN_PATH = "evidence/sample-run.json";
 const SAMPLE_REPORT_PATH = "evidence/sample-report.md";
 const SEVEN_REQUEST_JOURNEY_PATH = "evidence/seven-request-journey.json";
 const SEVEN_REQUEST_REPORT_PATH = "evidence/seven-request-journey.md";
+const AGENT_REGRESSION_PATH = "evidence/agent-regression-issue.json";
+const CONTROLLED_MISMATCH_PATH = "evidence/controlled-mismatch.json";
 
 const EXPECTED = Object.freeze({
   currentResultSha256: "63151d60484b3cb12cc20c8640d66430cd938437ef86f115f622753f7760e26c",
@@ -24,6 +27,10 @@ const EXPECTED = Object.freeze({
   sevenRequestJourneySha256: "d179b7bf2d39bcdaf0792d3a55b613499e13aacd52832e06289550551e4bdaa6",
   sevenRequestReportSha256: "3c33109c3a719d322910ea39bec79c6efb2f755efbfc9efc432e75de7b6ab357",
   sevenRequestReportDigest: "f1cb49c66307cd72abc0aa7a22598e184c21547dfd8e00510c47162a7b0d947f",
+  agentRegressionSha256: "eb1365e5c9a836800ea726df84cf5f84bc01c8b7fa40fbc365c8ca8f7d30cf42",
+  agentRegressionDigest: "371b7c9cd49134334a3ca85562fa2710ed01b768b53d997c7c00580fafc42322",
+  controlledMismatchSha256: "5468c084725f4d62a73b661860d9c030349c0998e8ca23a19da974f1f50e2b60",
+  controlledMismatchDigest: "8268b882b313fc98939d5d4ec413c389c7b8829106492244979dcd54d857b4e8",
   sampleSourceRawSha256: "dcd8c3c06fae1fb9972a6b1ca7e6a1905497ca953d457f7bb4a0665625330bce",
   sampleSourceCanonicalSha256: "aa53dbc2ca12f53f252b5430ad363909a935e2ab4f326fd3d25f1334aadd0b13"
 });
@@ -43,7 +50,9 @@ const [
   sampleRunBytes,
   sampleReportBytes,
   sevenRequestJourneyBytes,
-  sevenRequestReportBytes
+  sevenRequestReportBytes,
+  agentRegressionBytes,
+  controlledMismatchBytes
 ] = await Promise.all([
   readFile(CURRENT_RESULT_PATH),
   readFile(INVOCATION_INTEGRITY_JSON_PATH),
@@ -51,7 +60,9 @@ const [
   readFile(SAMPLE_RUN_PATH),
   readFile(SAMPLE_REPORT_PATH),
   readFile(SEVEN_REQUEST_JOURNEY_PATH),
-  readFile(SEVEN_REQUEST_REPORT_PATH)
+  readFile(SEVEN_REQUEST_REPORT_PATH),
+  readFile(AGENT_REGRESSION_PATH),
+  readFile(CONTROLLED_MISMATCH_PATH)
 ]);
 
 if (sha256(currentBytes) !== EXPECTED.currentResultSha256) fail("semantic_file_hash");
@@ -66,6 +77,12 @@ if (sha256(sevenRequestJourneyBytes) !== EXPECTED.sevenRequestJourneySha256) {
 }
 if (sha256(sevenRequestReportBytes) !== EXPECTED.sevenRequestReportSha256) {
   fail("seven_request_report_hash");
+}
+if (sha256(agentRegressionBytes) !== EXPECTED.agentRegressionSha256) {
+  fail("agent_regression_hash");
+}
+if (sha256(controlledMismatchBytes) !== EXPECTED.controlledMismatchSha256) {
+  fail("controlled_mismatch_hash");
 }
 
 const current = JSON.parse(currentBytes.toString("utf8")) as {
@@ -249,6 +266,48 @@ if (
   fail("seven_request_journey_record");
 }
 
+const agentRegression = await verifyOwnerJourneyReport(
+  JSON.parse(agentRegressionBytes.toString("utf8")) as unknown
+);
+const expectedRegressionFindings = [null, "required_effect_missing", "wrong_tool_selected"];
+if (
+  agentRegression.reportDigest !== EXPECTED.agentRegressionDigest ||
+  agentRegression.mode !== "regression" ||
+  agentRegression.total !== 3 ||
+  agentRegression.counts.passed !== 1 ||
+  agentRegression.counts.issues !== 2 ||
+  agentRegression.counts.incomplete !== 0 ||
+  agentRegression.counts.unavailable !== 0 ||
+  agentRegression.counts.notRun !== 0 ||
+  agentRegression.notRun.length !== 0 ||
+  agentRegression.results.some(
+    ({ ownerSummary }, index) =>
+      ownerSummary.primaryFindingCode !== expectedRegressionFindings[index]
+  )
+) {
+  fail("agent_regression_record");
+}
+
+const controlledMismatchExport = JSON.parse(controlledMismatchBytes.toString("utf8")) as {
+  readonly classification?: unknown;
+  readonly result?: unknown;
+};
+const controlledMismatch = await verifyByoaDemoResultV3(controlledMismatchExport.result);
+const failedControlledAssertions = controlledMismatch.assertions
+  .filter(({ passed }) => !passed)
+  .map(({ assertionId }) => assertionId);
+if (
+  controlledMismatchExport.classification !== "Controlled example — no model call" ||
+  controlledMismatch.resultDigest !== EXPECTED.controlledMismatchDigest ||
+  controlledMismatch.verdict !== "issue" ||
+  controlledMismatch.contract.expectedTool !== "checkout_request" ||
+  controlledMismatch.observedTool !== "order_review" ||
+  failedControlledAssertions.join(",") !==
+    "selection.expected-tool-v3,arguments.contract-predicate-v3,effects.required-state-v3"
+) {
+  fail("controlled_mismatch_record");
+}
+
 process.stdout.write(
   `${JSON.stringify({
     status: "verified",
@@ -260,6 +319,10 @@ process.stdout.write(
     publicSampleSha256: EXPECTED.sampleRunSha256,
     sevenRequestJourney: "7/7",
     sevenRequestJourneySha256: EXPECTED.sevenRequestJourneySha256,
+    agentRegression: "1 pass / 2 issues / 0 not run",
+    agentRegressionSha256: EXPECTED.agentRegressionSha256,
+    controlledMismatch: "0 pass / 1 issue / 0 not run",
+    controlledMismatchSha256: EXPECTED.controlledMismatchSha256,
     denominatorsCombined: false,
     modelCallsAdded: 0
   })}\n`
