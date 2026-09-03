@@ -340,7 +340,7 @@ test("catalog and suite stages reflow at 320px without page-level overflow", asy
   }
 });
 
-test("fresh v2 command auto-arms while the manual handoff remains explicit", async ({
+test("fresh v2 handoff registers nothing before explicit start, then exposes exactly the frozen catalog", async ({
   context,
   page
 }) => {
@@ -356,8 +356,7 @@ test("fresh v2 command auto-arms while the manual handoff remains explicit", asy
   await page.waitForURL(/\/demo\/run#handoff-source-v2$/u);
 
   const command = await page.getByLabel("Exact fresh-agent command").inputValue();
-  expect(command).toMatch(/^Open https?:\/\/[^\s]+\/demo\/handoff\?auto=1#[^\s]+\n/u);
-  expect(command).toContain("Do not use a shell or visual click automation.");
+  expect(command).toMatch(/^Open https?:\/\/[^\s]+\/demo\/handoff#[^\s]+\n/u);
   expect(command).toContain("Treat this as my exact request:");
   expect(command).toContain("I authorize only the exact test-environment changes");
   expect(command).toContain("Do not act on production data or external systems.");
@@ -365,7 +364,6 @@ test("fresh v2 command auto-arms while the manual handoff remains explicit", asy
   expect(command).not.toContain("sub-agent");
   await expect(page.getByRole("radio", { name: /sub-agent/u })).toHaveCount(0);
   const handoffUrl = handoffUrlFromCommand(command);
-  expect(new URL(handoffUrl).searchParams.get("auto")).toBe("1");
   await expect(page.getByRole("button", { name: /Run in this tab/iu })).toHaveCount(0);
   await expect
     .poll(() => page.evaluate(async () => (await document.modelContext?.getTools?.())?.length ?? 0))
@@ -374,7 +372,7 @@ test("fresh v2 command auto-arms while the manual handoff remains explicit", asy
   const contaminatedPromise = context.waitForEvent("page");
   await page.evaluate((url) => window.open(url, "_blank"), handoffUrl);
   const contaminated = await contaminatedPromise;
-  await expect(contaminated.getByText(/inherited owner-side contract data/iu)).toBeVisible();
+  await expect(contaminated.getByText(/contains owner-side suite data/iu)).toBeVisible();
   await contaminated.close();
 
   const ordinary = await context.newPage();
@@ -382,9 +380,7 @@ test("fresh v2 command auto-arms while the manual handoff remains explicit", asy
   ordinary.on("request", (request) => {
     if (request.url().endsWith("/api/demo/handoff/open")) ordinaryOpenRequests += 1;
   });
-  const manualHandoffUrl = new URL(handoffUrl);
-  manualHandoffUrl.searchParams.delete("auto");
-  await ordinary.goto(manualHandoffUrl.toString());
+  await ordinary.goto(handoffUrl);
   await expect(
     ordinary.getByRole("heading", { name: "Receive this test in ChatGPT's Browser." })
   ).toBeVisible();
@@ -396,18 +392,19 @@ test("fresh v2 command auto-arms while the manual handoff remains explicit", asy
   const fresh = await context.newPage();
   await installEmulatedConsumer(fresh);
   await fresh.goto(handoffUrl);
+  await fresh.getByRole("button", { name: "Receive isolated test" }).click();
   await fresh.waitForURL(/\/demo\/run$/u);
-  await expect(fresh.locator("[data-byoa-v2-state='ARMED']")).toBeVisible();
+  await expect(
+    fresh.getByRole("heading", { name: "Review what this agent receives." })
+  ).toBeVisible();
   await expect(
     fresh.getByText(/owner answer key|required action|expected tool|allowed effects/iu)
   ).toHaveCount(0);
   await expect
     .poll(() =>
-      fresh.evaluate(async () =>
-        (await document.modelContext?.getTools?.())?.map(({ name }) => name)
-      )
+      fresh.evaluate(async () => (await document.modelContext?.getTools?.())?.length ?? 0)
     )
-    .toEqual(["order_review", "checkout_request"]);
+    .toBe(0);
 
   const earlyRevealStatus = await fresh.evaluate(async () => {
     const remoteBytes = sessionStorage.getItem("thurstone:byoa-remote-session@2");
@@ -435,6 +432,7 @@ test("fresh v2 command auto-arms while the manual handoff remains explicit", asy
   const secondFresh = await context.newPage();
   await installEmulatedConsumer(secondFresh);
   await secondFresh.goto(handoffUrl);
+  await secondFresh.getByRole("button", { name: "Receive isolated test" }).click();
   await expect(
     secondFresh.getByRole("heading", { name: "Open a genuinely fresh handoff." })
   ).toBeVisible();
@@ -451,6 +449,21 @@ test("fresh v2 command auto-arms while the manual handoff remains explicit", asy
     )
     .toBe(0);
   await secondFresh.close();
+
+  await fresh.getByRole("button", { name: "Continue to readiness" }).click();
+  await expect
+    .poll(() =>
+      fresh.evaluate(async () => (await document.modelContext?.getTools?.())?.length ?? 0)
+    )
+    .toBe(0);
+  await fresh.getByRole("button", { name: "Start live observation" }).click();
+  await expect
+    .poll(() =>
+      fresh.evaluate(async () =>
+        (await document.modelContext?.getTools?.())?.map(({ name }) => name)
+      )
+    )
+    .toEqual(["order_review", "checkout_request"]);
 
   await fresh.evaluate(async () => {
     const context = document.modelContext as RuntimeModelContext | undefined;

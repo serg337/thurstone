@@ -1,7 +1,14 @@
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
-import { handoffUrlFromCommand, invokeFreshV2 } from "./support/demo-v2-flow";
+import {
+  handoffUrlFromCommand,
+  invokeFreshV2,
+  openFreshV2,
+  startFreshV2
+} from "./support/demo-v2-flow";
 import { installEmulatedConsumer } from "./support/emulated-consumer";
+
+const toolNames = ["cart_get", "cart_update", "order_review", "checkout_request"] as const;
 
 async function armJudgeQuickStart(owner: Page, context: BrowserContext): Promise<Page> {
   await owner.goto("/judge");
@@ -15,24 +22,17 @@ async function armJudgeQuickStart(owner: Page, context: BrowserContext): Promise
   expect(command).toContain("1. Set the Stoneware mug quantity to 3.");
   expect(command).toContain("2. Set the Field notebook quantity to 2.");
   expect(command).toContain("3. Show me my current order.");
-  expect(command).toContain("Do not use a shell or visual click automation.");
-  const handoffUrl = handoffUrlFromCommand(command!);
-  expect(new URL(handoffUrl).searchParams.get("auto")).toBe("judge");
-  const fresh = await context.newPage();
-  await installEmulatedConsumer(fresh);
-  await fresh.goto(handoffUrl);
-  await fresh.waitForURL(/\/demo\/run$/u);
-  await expect(fresh.locator("[data-byoa-v2-state='ARMED']")).toBeVisible();
-  return fresh;
+  return openFreshV2(context, handoffUrlFromCommand(command!));
 }
 
 async function continueToCase(fresh: Page, number: 2 | 3): Promise<void> {
+  await fresh.getByRole("button", { name: `Continue to case ${number}` }).click();
   await expect(
     fresh.getByText(
       number === 2 ? "Set the Field notebook quantity to 2." : "Show me my current order."
     )
   ).toBeVisible();
-  await expect(fresh.locator("[data-byoa-v2-state='ARMED']")).toBeVisible();
+  await startFreshV2(fresh, toolNames);
 }
 
 test("homepage exposes a styled three-case quick start with no authoring", async ({ page }) => {
@@ -64,12 +64,14 @@ test("three isolated cases become full Judge Results with an authentic collision
     fresh.getByText(/expected tool|expected arguments|expected site effect/iu)
   ).toHaveCount(0);
 
+  await startFreshV2(fresh, toolNames);
   await invokeFreshV2(fresh, "cart_update", {
     operationId: "judge_baseline_update_0001",
     operation: "set_quantity",
     itemId: "stoneware-mug",
     quantity: 3
   });
+  await expect(fresh.locator("[data-byoa-v2-state='PASS']")).toBeVisible();
   await continueToCase(fresh, 2);
   await invokeFreshV2(fresh, "cart_update", {
     operationId: "judge_planted_update_0001",
@@ -77,6 +79,7 @@ test("three isolated cases become full Judge Results with an authentic collision
     itemId: "field-notebook",
     quantity: 2
   });
+  await expect(fresh.locator("[data-byoa-v2-state='ISSUE']")).toBeVisible();
   await continueToCase(fresh, 3);
   await invokeFreshV2(fresh, "cart_get", {});
   await expect(fresh.locator("[data-byoa-v2-state='ISSUE']")).toBeVisible();

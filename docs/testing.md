@@ -101,9 +101,9 @@ artifacts and fail if canonical bytes drift or denominators are combined.
 4. In a genuinely fresh GPT-5.6 Sol or Terra Work or Codex chat, type `@`, select **Browser** from
    the composer menu, then paste the generated `Open https://…` command after that structured
    mention. Do not use the Chrome extension side panel.
-5. Confirm the handoff receives, arms, and advances automatically without shell or visual click
-   automation. Each fresh-agent step contains only its request and the four live tool descriptors—not
-   expected tools, effects, assertions, planted-fault implementation, or verdict.
+5. Confirm opening the URL does not claim it. In the one visible fresh Browser page, choose
+   **Receive isolated test**, **Continue to readiness**, and **Start live observation** once. Each
+   step contains only its request and live descriptors—not expected behavior or verdict.
 6. Process all three requests in the same agent chat and continue after each result.
 7. Confirm Test 1 passes when the mug becomes 3.
 8. Confirm Test 2 records an ISSUE when the correct schema-valid call returns success but the Field
@@ -161,9 +161,9 @@ This fallback verifies the verdict mechanism, not agent performance.
    exact `thurstone.invarra.ai` command.
 3. Confirm the single-use handoff is claimed within ten minutes. An expired, claimed, revoked, or
    invalid link must be re-armed; never reused.
-4. Confirm Thurstone receives, reaches readiness, arms, and advances automatically without shell or
-   visual browser-control clicks. The isolated page exposes the authorized request queue and exact
-   catalog but not expected actions, arguments, effects, assertions, or diagnosis.
+4. Confirm opening the URL does not claim it. Explicitly receive and start the test in one visible
+   Browser context. The isolated page exposes the authorized request queue and exact catalog but not
+   expected actions, arguments, effects, assertions, or diagnosis.
 5. Process one request at a time. Confirm Thurstone admits at most one eligible native action per
    case and verifies it before the next request.
 6. For regression mode, confirm the site fixture resets and the queue continues after an independent

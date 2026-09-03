@@ -239,9 +239,9 @@ No Thurstone account or credentials are required. Start at
 4. In a fresh GPT-5.6 Sol or Terra Work or Codex chat, type `@`, select **Browser** from the composer
    menu, then paste the copied `Open https://…` command after that structured mention. Do not use
    the Chrome extension side panel.
-5. Thurstone receives, arms, and advances the queue automatically; no shell or visual browser-control
-   clicks are required. Continue all three native Site Tools cases in that same chat. Keep the owner
-   page open; it tracks progress and opens **Judge Results** with a downloadable report.
+5. In the one visible Browser page, choose **Receive isolated test**, **Continue to readiness**, and
+   **Start live observation** once. Continue later cases on that same page; never reopen the handoff
+   URL. The owner page tracks progress and opens **Judge Results**.
 
 If nothing is observed after approximately one minute, confirm the fresh chat is using ChatGPT
 Desktop's built-in Browser and use **Re-arm three clean cases**. The handoff is single use and expires
@@ -263,9 +263,9 @@ recommended investigation.
 5. In a fresh GPT-5.6 Sol or Terra Work or Codex chat, type `@`, select **Browser** from the composer
    menu, then paste the copied command after that structured mention. Do not use the Chrome side
    panel.
-6. Thurstone receives, arms, and advances automatically; no shell or visual browser-control clicks
-   are required. Keep the owner page open. The command shows every authorized request but withholds
-   expected actions, effects, assertions, and diagnoses, then synchronizes the final results.
+6. In the one visible Browser page, receive and start the test once. Continue later cases on that
+   same page and never reopen the handoff URL. Keep the owner page open while Thurstone withholds
+   expected behavior, verifies each case, and synchronizes the final results.
 7. Inspect or download the report. Regression suites continue after independent issues; continuous
    journeys stop after the first issue.
 

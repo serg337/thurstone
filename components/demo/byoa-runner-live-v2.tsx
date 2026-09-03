@@ -18,7 +18,6 @@ import {
   BYOA_HANDOFF_REVOKE_V2_VERSION,
   BYOA_HANDOFF_REVEAL_V2_VERSION,
   BYOA_HANDOFF_STATUS_V2_VERSION,
-  BYOA_AUTO_RUNNER_V2_MARKER_KEY,
   BYOA_RUNNER_V2_MARKER_KEY,
   byoaHandoffBootstrapResponseV2Schema,
   byoaContinuousJourneyStatusResponseSchema,
@@ -229,7 +228,6 @@ export function ByoaRunnerV2() {
   const [existingRegressionCaseDigest, setExistingRegressionCaseDigest] = useState<string | null>(
     null
   );
-  const [automaticRun, setAutomaticRun] = useState(false);
   const sessionRef = useRef<RemoteByoaSessionV2 | undefined>(undefined);
   const releaseRef = useRef<() => void>(() => undefined);
   const unsubscribeGateRef = useRef<() => void>(() => undefined);
@@ -239,10 +237,6 @@ export function ByoaRunnerV2() {
   const sourceStatusFailureCountRef = useRef(0);
   const armedAtRef = useRef<string | null>(null);
   const environmentRef = useRef<ByoaAgentEnvironmentV2 | undefined>(undefined);
-  const automaticReadyButtonRef = useRef<HTMLButtonElement | null>(null);
-  const automaticStartButtonRef = useRef<HTMLButtonElement | null>(null);
-  const automaticContinueButtonRef = useRef<HTMLButtonElement | null>(null);
-  const automaticContinuationDigestRef = useRef<string | null>(null);
 
   function freshContextId(): string {
     return readFreshContextForByoaHandoffV2(window.sessionStorage);
@@ -445,7 +439,6 @@ export function ByoaRunnerV2() {
     let disposed = false;
     void (async () => {
       try {
-        setAutomaticRun(window.sessionStorage.getItem(BYOA_AUTO_RUNNER_V2_MARKER_KEY) === "1");
         const localSession = readByoaAgentSessionV2(window.sessionStorage);
         const localProjection = readAgentVisibleRunProjectionV2(window.sessionStorage);
         const sourceUrl = readByoaHandoffUrl(window.sessionStorage);
@@ -675,15 +668,6 @@ export function ByoaRunnerV2() {
     setProgress("Ready for explicit start");
   }
 
-  useEffect(() => {
-    if (!automaticRun || error || !projection) return;
-    if (sessionState === "RECEIVED") {
-      automaticReadyButtonRef.current?.click();
-      return;
-    }
-    if (sessionState === "READY_TO_ARM") automaticStartButtonRef.current?.click();
-  }, [automaticRun, error, projection, sessionState]);
-
   async function startLiveObservation() {
     if (!projection || sessionRef.current?.state !== "READY_TO_ARM") return;
     setError(undefined);
@@ -886,21 +870,6 @@ export function ByoaRunnerV2() {
     }
   }
 
-  useEffect(() => {
-    if (
-      !automaticRun ||
-      !result ||
-      journey === undefined ||
-      journey.position >= journey.total ||
-      (journey.mode === "continuous" && result.verdict !== "pass") ||
-      automaticContinuationDigestRef.current === result.resultDigest
-    ) {
-      return;
-    }
-    automaticContinuationDigestRef.current = result.resultDigest;
-    automaticContinueButtonRef.current?.click();
-  }, [automaticRun, journey, result]);
-
   async function continueContractRun() {
     if (!source || !sourceResult) return;
     setError(undefined);
@@ -1017,15 +986,13 @@ export function ByoaRunnerV2() {
     const requestBlock = authorizedRequests
       .map((request, index) => `${index + 1}. ${request}`)
       .join("\n");
-    const automaticSourceUrl = new URL(source.url);
-    automaticSourceUrl.searchParams.set("auto", "1");
     const directCommand = [
-      `Open ${automaticSourceUrl.toString()}`,
+      `Open ${source.url}`,
       "This is my authorized Thurstone test in the website owner's designated test environment.",
       `Treat ${authorizedRequests.length === 1 ? "this as my exact request" : "these as my exact requests, in order"}:`,
       requestBlock,
-      "Thurstone receives, arms, and advances the test automatically. Do not use a shell or visual click automation.",
-      "Use only the native Site Tools exposed on the opened Thurstone page.",
+      "On the opened page, use the visible controls once: Receive isolated test, Continue to readiness, then Start live observation.",
+      "After each verified result, use the current page's Continue control. Never reopen the one-time handoff URL.",
       "Process one request at a time. Wait for Thurstone to verify and reveal the next step before continuing.",
       ...(regressionBatchSource
         ? [
@@ -1399,7 +1366,6 @@ export function ByoaRunnerV2() {
             {journey.position < journey.total &&
             (journey.mode === "regression" || result.verdict === "pass") ? (
               <button
-                ref={automaticContinueButtonRef}
                 className="button button-primary"
                 type="button"
                 onClick={() => void continueContinuousJourney()}
@@ -1457,18 +1423,12 @@ export function ByoaRunnerV2() {
           ))}
         </ul>
         {sessionState === "RECEIVED" ? (
-          <button
-            ref={automaticReadyButtonRef}
-            className="button button-primary"
-            type="button"
-            onClick={markReady}
-          >
+          <button className="button button-primary" type="button" onClick={markReady}>
             Continue to readiness
           </button>
         ) : null}
         {sessionState === "READY_TO_ARM" ? (
           <button
-            ref={automaticStartButtonRef}
             className="button button-primary"
             type="button"
             onClick={() => void startLiveObservation()}

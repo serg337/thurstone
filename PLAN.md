@@ -70,8 +70,8 @@
       collision; no authoring required.
     - Preserve answer isolation in the fresh agent document.
     - Track progress without JSON or refresh, then automatically open the full Judge Results report.
-    - Auto-receive, arm, and advance every owner-generated V2 queue so native Site Tools do not
-      depend on visual Browser computer-control availability.
+    - Preserve explicit one-context receive/start: opening or preloading a V2 handoff never claims
+      its single-use token, and later cases continue only in that same visible Browser page.
     - Add one-minute consumer guidance, clean re-arm, controlled-issue fallback, homepage entry,
       responsive/accessibility coverage, and current testing/submission instructions.
     - Run the complete non-billable release suite, deploy the exact successor, wait for terminal CI,

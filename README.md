@@ -76,9 +76,9 @@ document. It runs three evidence classes in one regression queue:
 4. In a fresh GPT-5.6 Sol or Terra Work or Codex chat, type `@`, select **Browser** from the
    composer menu, then paste the command after that structured mention. Do not use the Chrome side
    panel.
-5. Thurstone receives, arms, and advances each case automatically; no visual browser-control clicks
-   are required. Continue all three native Site Tools cases in that chat. The owner page tracks
-   progress and automatically opens a full **Judge Results** report.
+5. In the one visible Browser page, receive and start the test once, then continue each verified
+   case without reopening the handoff URL. The owner page tracks progress and automatically opens
+   a full **Judge Results** report.
 
 No JSON is required. If no native action appears after one minute, the page gives consumer guidance
 and a clean re-arm action. The handoff remains single use and expires after ten minutes.
@@ -105,9 +105,9 @@ and is never presented as an authentic agent failure.
 4. Review, arm, and copy the generated secure command. In a fresh GPT-5.6 Sol or Terra Work or Codex
    chat, type `@`, select **Browser** from the composer menu, then paste the command after that
    structured mention. Do not use the Chrome side panel.
-5. Thurstone receives, arms, and advances the test automatically; ChatGPT needs native Site Tools
-   but no shell or visual browser-control clicks. Keep the owner page open while Thurstone verifies
-   one action per case, then inspect or download the synchronized results.
+5. In the one visible Browser page, receive and start the test once. Continue subsequent verified
+   cases on that same page; never reopen the handoff URL. Keep the owner page open while Thurstone
+   verifies one action per case, then inspect or download the synchronized results.
 
 The handoff is single use and expires after ten minutes. Its command contains the owner's authorized
 request queue but never the expected actions, effects, assertions, or diagnosis. If ChatGPT asks

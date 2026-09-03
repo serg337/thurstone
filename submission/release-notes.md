@@ -18,8 +18,8 @@ site state match the owner's contract.
 
 - No-authoring three-case Judge Quick Start with a normal live baseline, disclosed deterministic
   site fault, authentic semantic collision, and full Judge Results report
-- Automatic receive, arm, and case advance after the user selects Browser from ChatGPT's `@` menu
-  and sends the copied `Open https://…` command; no visual Browser computer-control clicks required
+- Explicit single-context receive/start after the user selects Browser from ChatGPT's `@` menu;
+  opening or preloading the copied `Open https://…` command never consumes its one-time token
 - One-to-four-tool live reference catalog
 - JSON-Schema-derived contract authoring
 - Independent regression queues that continue after issues

@@ -20,6 +20,7 @@ test("canceling an unclaimed handoff revokes it and preserves the owner suite", 
   const revoked = await context.newPage();
   await installEmulatedConsumer(revoked);
   await revoked.goto(handoffUrl);
+  await revoked.getByRole("button", { name: "Receive isolated test" }).click();
   await expect(
     revoked.getByRole("heading", { name: "Open a genuinely fresh handoff." })
   ).toBeVisible();
@@ -52,13 +53,17 @@ test("reload after arm but before invocation fails closed without re-registering
   await fresh.close();
 });
 
-test("unsupported provider becomes honest UNAVAILABLE during automatic start", async ({
+test("unsupported provider becomes honest pre-arm UNAVAILABLE only after explicit start", async ({
   context,
   page: owner
 }) => {
   const handoffUrl = await prepareV2Handoff(owner);
   const fresh = await context.newPage();
   await fresh.goto(handoffUrl);
+  await fresh.getByRole("button", { name: "Receive isolated test" }).click();
+  await fresh.waitForURL(/\/demo\/run$/u);
+  await fresh.getByRole("button", { name: "Continue to readiness" }).click();
+  await fresh.getByRole("button", { name: "Start live observation" }).click();
   await expect(fresh.locator("[data-byoa-v2-state='UNAVAILABLE']")).toBeVisible();
   await expect(
     fresh.getByRole("heading", { name: "This environment could not expose the live test." })

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   byoaHandoffOpenRequestSchema,
@@ -8,7 +8,6 @@ import {
   clearRemoteByoaSession
 } from "@/lib/demo/agent-handoff";
 import {
-  BYOA_AUTO_RUNNER_V2_MARKER_KEY,
   BYOA_RUNNER_V2_MARKER_KEY,
   byoaHandoffOpenRequestV2Schema,
   clearRemoteByoaSessionV2,
@@ -34,7 +33,6 @@ export function HandoffOpener() {
   const [error, setError] = useState<string>();
   const [contaminated, setContaminated] = useState(false);
   const [claimFailure, setClaimFailure] = useState<HandoffClaimFailureReceiptV1 | null>(null);
-  const automaticReceiveStartedRef = useRef(false);
 
   function failureMessage(reason: HandoffClaimFailureReasonV1): string {
     if (reason === "expired") return "This handoff expired before it was received.";
@@ -55,7 +53,7 @@ export function HandoffOpener() {
     );
   }, []);
 
-  const receive = useCallback(async () => {
+  async function receive() {
     if (busy) return;
     setBusy(true);
     setError(undefined);
@@ -101,36 +99,15 @@ export function HandoffOpener() {
       clearRemoteByoaSession(window.sessionStorage);
       clearRemoteByoaSessionV2(window.sessionStorage);
       clearByoaHandoffUrl(window.sessionStorage);
-      if (usesV2) {
-        window.sessionStorage.setItem(BYOA_RUNNER_V2_MARKER_KEY, "2");
-        const automaticMode = new URLSearchParams(window.location.search).get("auto");
-        if (automaticMode === "1" || automaticMode === "judge") {
-          window.sessionStorage.setItem(BYOA_AUTO_RUNNER_V2_MARKER_KEY, "1");
-        } else {
-          window.sessionStorage.removeItem(BYOA_AUTO_RUNNER_V2_MARKER_KEY);
-        }
-      } else {
-        window.sessionStorage.removeItem(BYOA_RUNNER_V2_MARKER_KEY);
-        window.sessionStorage.removeItem(BYOA_AUTO_RUNNER_V2_MARKER_KEY);
-      }
+      if (usesV2) window.sessionStorage.setItem(BYOA_RUNNER_V2_MARKER_KEY, "2");
+      else window.sessionStorage.removeItem(BYOA_RUNNER_V2_MARKER_KEY);
       window.history.replaceState(null, "", "/demo/handoff");
       window.location.replace("/demo/run");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The handoff could not be opened.");
       setBusy(false);
     }
-  }, [busy]);
-
-  useEffect(() => {
-    if (
-      !["1", "judge"].includes(new URLSearchParams(window.location.search).get("auto") ?? "") ||
-      automaticReceiveStartedRef.current
-    ) {
-      return;
-    }
-    automaticReceiveStartedRef.current = true;
-    void receive();
-  }, [receive]);
+  }
 
   return (
     <section className="agent-runner-loading" aria-live="polite">
@@ -147,7 +124,8 @@ export function HandoffOpener() {
       </p>
       <strong className="agent-runner-recovery">
         Do not receive this link in ordinary Chrome or Chrome extension side chat. Close that tab
-        and use the complete <code>@Browser</code> command in a fresh ChatGPT task.
+        and use a fresh ChatGPT task: select <code>Browser</code> from the <code>@</code> menu, then
+        paste the complete <code>Open</code> command after that mention.
       </strong>
       {error || contaminated ? (
         <div className="agent-runner-recovery">

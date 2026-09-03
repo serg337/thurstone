@@ -40,12 +40,12 @@ The official rules and challenge website control if this file conflicts with the
 - Canonical URL: `https://thurstone.invarra.ai`
 - Judge quick start: `/judge` preloads a normal baseline, disclosed deterministic site fault, and
   authentic semantic collision; one Arm action creates an answer-isolated three-case regression
-  handoff that receives, arms, and advances without visual browser-control clicks; the owner page
+  handoff; the fresh Browser context explicitly receives and starts it once, then the owner page
   tracks progress and automatically opens a full Judge Results report
 - Owner workflow: understand the boundary → configure one to four real tools → build contract cases →
   choose regression suite or continuous journey → arm one secure queue → inspect synchronized results
-- Every owner-armed V2 queue receives, arms, and advances automatically in the fresh agent page;
-  native Site Tools do not depend on shell or visual Browser computer-control
+- Every owner-armed V2 queue is claimed only by the explicit Receive action in one visible fresh
+  Browser context; opening or preloading the URL never consumes it
 - Regression suite: one agent chat, clean fixture per request, every independent case runs even
   after an issue
 - Continuous journey: one agent context and carried state, repeated tools allowed, stops at the first

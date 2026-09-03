@@ -48,7 +48,9 @@ test("controlled mismatch uses one real JSON-string call and remains separate fr
   const fresh = await context.newPage();
   await installEmulatedConsumer(fresh, "json-string");
   await fresh.goto(handoffUrl);
-  await fresh.waitForURL(/\/demo\/run$/u);
+  await fresh.getByRole("button", { name: "Receive isolated test" }).click();
+  await fresh.getByRole("button", { name: "Continue to readiness" }).click();
+  await fresh.getByRole("button", { name: "Start live observation" }).click();
   await expect
     .poll(() =>
       fresh.evaluate(async () =>
