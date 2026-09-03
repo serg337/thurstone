@@ -89,7 +89,27 @@ Evidence classes must remain distinct:
 `npm run verify:evidence` and `npm run verify:semantic-preservation` recompute the current public
 artifacts and fail if canonical bytes drift or denominators are combined.
 
-## Manual 60-second orientation
+## Manual judge quick start
+
+1. Open `https://thurstone.invarra.ai/judge` in a clean browser tab.
+2. Confirm the preloaded owner contract visibly expects `cart_update`, Stoneware mug quantity 3,
+   revision `0 → 1`, one ledger transition, and no unrelated effects.
+3. Choose **Arm quick test** once. Confirm `Armed. Clean revision 0. Awaiting one agent action.`
+4. Copy the generated command into a genuinely fresh GPT-5.6 Sol or Terra Work or Codex chat in the
+   latest ChatGPT desktop app using its built-in Browser—not the Chrome extension side panel.
+5. Confirm the fresh agent document contains the request and four live tool descriptors but none of
+   the owner's expected tool, arguments, effects, or assertions.
+6. Invoke `cart_update` with a unique operation ID, `stoneware-mug`, and quantity 3.
+7. Without refreshing the owner page, confirm it renders a visual verdict with:
+   - observed tool and readable arguments;
+   - mug quantity `2 → 3` and revision `0 → 1` from trusted state;
+   - one operation-ledger entry and one state transition;
+   - assertion totals and any failed checks;
+   - a PASS, ISSUE, INCOMPLETE, or UNAVAILABLE result rather than raw JSON.
+8. Confirm the page offers a clean rerun. If no action appears after approximately one minute,
+   confirm the consumer hint and re-arm action appear.
+
+### Controlled issue fallback
 
 Use ChatGPT's built-in Browser or Chrome 149+ with
 `chrome://flags/#enable-webmcp-testing`:
@@ -97,16 +117,11 @@ Use ChatGPT's built-in Browser or Chrome 149+ with
 1. Open `https://thurstone.invarra.ai/demo/controlled`.
 2. Choose **Run controlled mismatch**.
 3. Confirm the result is labeled **Controlled example — no model call**.
-4. Confirm:
-   - the contract expects `checkout_request`;
-   - the observed native call is `order_review`;
-   - the handler completed but no pending checkout was created;
-   - trusted state and ledger show no checkout transition;
-   - the required-effect assertion fails;
-   - the diagnosis recommends investigation without claiming model causality.
+4. Confirm expected `checkout_request`, observed `order_review`, unchanged trusted state, failed
+   assertions, and deterministic investigation guidance.
 5. Confirm the controlled result does not alter visitor results, `24/24`, or the separate `3/3`.
 
-This verifies the verdict mechanism, not agent performance.
+This fallback verifies the verdict mechanism, not agent performance.
 
 ## Manual full Demo verification
 

@@ -212,6 +212,7 @@ Google Chrome, Playwright, Vitest, JSON Schema, Zod, GitHub Actions
 ## Try it out
 
 - Live application: https://thurstone.invarra.ai
+- Judge quick start: https://thurstone.invarra.ai/judge
 - Demo: https://thurstone.invarra.ai/demo
 - Research: https://thurstone.invarra.ai/research
 - Public source: https://github.com/serg337/thurstone
@@ -226,18 +227,28 @@ Google Chrome, Playwright, Vitest, JSON Schema, Zod, GitHub Actions
 
 ## Testing instructions
 
-No Thurstone account or credentials are required. ChatGPT access is required for the
-authentic-agent path.
+No Thurstone account or credentials are required. Start at
+`https://thurstone.invarra.ai/judge`. ChatGPT access is required for the authentic-agent path.
 
-### 60-second controlled orientation
+### Judge quick start — no authoring required
 
-1. In ChatGPT's built-in Browser, open `https://thurstone.invarra.ai/demo/controlled`.
-2. Choose **Run controlled mismatch**.
-3. Inspect the declared checkout intent, observed native read-only call, unchanged trusted state,
-   failed assertions, and recommended investigation.
+1. Open `https://thurstone.invarra.ai/judge` in any browser.
+2. Review the preloaded mug-quantity contract and choose **Arm quick test**.
+3. Copy the exact command into a fresh GPT-5.6 Sol or Terra Work or Codex chat in the latest
+   ChatGPT desktop app using its built-in Browser—not the Chrome extension side panel.
+4. Keep the owner page open. It updates automatically with the observed tool and arguments, trusted
+   before-and-after state, ledger transition, contract checks, and verdict.
 
-This is a deterministic no-model demonstration, not an agent failure. It requires a consumer that
-exposes in-page WebMCP execution; WebMCP-enabled Chrome is also supported.
+If nothing is observed after approximately one minute, confirm the fresh chat is using ChatGPT
+Desktop's built-in Browser and use **Re-arm a clean test**. The handoff is single use and expires
+after ten minutes.
+
+### Controlled issue without an agent
+
+Open `https://thurstone.invarra.ai/demo/controlled` and choose **Run controlled mismatch**. This is
+a deterministic no-model demonstration, not an agent failure. It visually shows the declared
+checkout intent, wrong native read-only call, unchanged trusted state, failed assertions, and
+recommended investigation.
 
 ### Full authentic-agent workflow
 

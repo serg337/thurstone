@@ -18,6 +18,7 @@ import {
   createByoaHandoffLedgerV2Redis,
   reportByoaHandoffV2Result
 } from "@/lib/demo/handoff-ledger-v2.server";
+import { storeByoaOwnerSummary } from "@/lib/demo/handoff-owner-summary.server";
 import { recordContinuousJourneyResult } from "@/lib/demo/continuous-journey.server";
 
 export const dynamic = "force-dynamic";
@@ -47,6 +48,12 @@ export async function POST(request: Request) {
       freshContextId,
       verdict: input.verdict,
       resultDigest: input.resultDigest
+    });
+    await storeByoaOwnerSummary({
+      runId: input.runId,
+      contractDigest: input.contractDigest,
+      resultDigest: input.resultDigest,
+      ownerSummary: input.ownerSummary
     });
     await recordContinuousJourneyResult(
       input.runId,

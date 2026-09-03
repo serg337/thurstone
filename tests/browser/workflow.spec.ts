@@ -83,7 +83,7 @@ test("Results is reserved for Demo runs while reference evidence remains on Home
 
 test("new judge pages reflow without horizontal page overflow", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  for (const route of ["/", "/results"]) {
+  for (const route of ["/", "/judge", "/results"]) {
     await page.goto(route);
     if (route === "/") {
       await expect(page.locator(".workflow-path-mobile")).toBeVisible();

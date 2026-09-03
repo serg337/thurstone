@@ -31,7 +31,10 @@ export default function HomePage() {
             customers.
           </p>
           <div className="button-row intro-actions" aria-label="Start with Thurstone">
-            <a className="button button-primary" href="/demo">
+            <a className="button button-primary" href="/judge">
+              Judges: start here
+            </a>
+            <a className="button button-secondary" href="/demo">
               Test with your agent
             </a>
           </div>

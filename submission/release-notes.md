@@ -16,6 +16,8 @@ site state match the owner's contract.
 
 ## What is included
 
+- No-authoring judge quick start with one preloaded four-tool contract and synchronized visual
+  verdict
 - One-to-four-tool live reference catalog
 - JSON-Schema-derived contract authoring
 - Independent regression queues that continue after issues
@@ -32,6 +34,7 @@ site state match the owner's contract.
 ## Try it
 
 - Live: https://thurstone.invarra.ai
+- Judge quick start: https://thurstone.invarra.ai/judge
 - Demo: https://thurstone.invarra.ai/demo
 - Public sample: https://github.com/serg337/thurstone/blob/challenge-submission-v1.0.0/evidence/sample-report.md
 - Video: <PUBLIC_YOUTUBE_URL>

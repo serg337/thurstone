@@ -13,6 +13,7 @@ prohibited effects, and a deterministic verdict in one inspectable run.
 **Thurstone by Invarra. Created and owned by Sergio Valencia.**
 
 [Live application](https://thurstone.invarra.ai) ·
+[Judge quick start](https://thurstone.invarra.ai/judge) ·
 [Test Thurstone](https://thurstone.invarra.ai/demo) ·
 [Research](https://thurstone.invarra.ai/research) ·
 [Source](https://github.com/serg337/thurstone) ·
@@ -58,18 +59,28 @@ authoritative effects. None of those can replace the others.
 
 ## Try it
 
-### 60-second controlled orientation
+### Judge quick start
 
-This shows the verdict mechanism without making a model call:
+The preloaded path needs no contract authoring and keeps the owner answer out of the fresh agent's
+document:
 
-1. Open [the controlled example](https://thurstone.invarra.ai/demo/controlled) in ChatGPT's built-in
-   Browser or Chrome 149+ with `chrome://flags/#enable-webmcp-testing`.
-2. Choose **Run controlled mismatch**.
-3. Inspect the declared checkout intent, observed native read-only call, unchanged trusted state,
-   failed assertions, and recommended investigation.
+1. Open [Judge quick start](https://thurstone.invarra.ai/judge) in any browser.
+2. Review the preloaded request, expected tool, arguments, effect, and prohibited changes.
+3. Choose **Arm quick test**, copy the exact command, and paste it into a fresh GPT-5.6 Sol or Terra
+   Work or Codex chat in the latest ChatGPT desktop app.
+4. Use ChatGPT's built-in Browser—not the Chrome side panel—and keep the owner page open.
+5. Watch the visual verdict update automatically with observed action, trusted state, ledger, and
+   contract checks.
 
-This route deliberately invokes the wrong real tool. It is labeled **Controlled example — no model
-call** and is never presented as an authentic agent failure.
+No JSON is required. If no native action appears after one minute, the page gives consumer guidance
+and a clean re-arm action. The handoff remains single use and expires after ten minutes.
+
+### Controlled issue example
+
+[The controlled example](https://thurstone.invarra.ai/demo/controlled) deliberately invokes the
+wrong real tool through native WebMCP without a model call. It visually demonstrates expected versus
+observed action, trusted state, failed assertions, and diagnosis. It is always labeled as controlled
+and is never presented as an authentic agent failure.
 
 ### Full bring-your-own-agent Demo
 

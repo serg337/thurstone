@@ -61,11 +61,21 @@
    - Run install, formatting, lint, types, full deterministic and browser suites, evidence,
      publication, audits, production build, and clean-clone reproduction.
 
-9. **Private pre-recording release — CANDIDATE CREATED; EXTERNAL RECEIPTS PENDING**
+9. **Private pre-recording release — PASS at `655bda0…`**
    - Commit explicit paths, push both private branches, deploy exact SHA, wait for terminal CI,
      verify signed-out Production, and record the release identity.
 
-10. **Recording handoff — PENDING**
+10. **Judge quick-start successor — QUALIFIED; RELEASE PENDING**
+    - Add `/judge` with one preloaded real four-tool `cart_update` contract and no authoring.
+    - Preserve answer isolation in the fresh agent document.
+    - Synchronize observed tool, arguments, trusted state, ledger, assertions, and verdict to the
+      owner page without JSON or refresh.
+    - Add one-minute consumer guidance, clean re-arm, controlled-issue fallback, homepage entry,
+      responsive/accessibility coverage, and current testing/submission instructions.
+    - Run the complete non-billable release suite, deploy the exact successor, wait for terminal CI,
+      and verify `/judge` signed out in Production.
+
+11. **Recording handoff — PENDING**
     - Freeze the candidate and return the exact SHA, deployment, CI, screens, narration, assets,
       approved/prohibited claims, limitations, and remaining human actions.
 

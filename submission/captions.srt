@@ -26,29 +26,27 @@ and a regression the owner can run again.
 
 5
 00:00:58,000 --> 00:01:20,000
-In the Demo, I act as a WebMCP owner.
-Thurstone reads the live catalog.
-I choose real tools, write a representative customer request,
-and declare the expected action, arguments, allowed effects,
-prohibited effects, and replay policy.
-Larger suites can run as independent regressions or one stateful customer journey.
+For a judge, this contract is already loaded.
+The request asks to set the mug quantity to three.
+The owner expects cart update with that item and quantity,
+one exact state transition, and no checkout or unrelated change.
+I arm it once; the expected answer remains outside the fresh agent's document.
 
 6
 00:01:20,000 --> 00:01:42,000
-I arm an explicit checkout case and open its one-time command
-in a fresh ChatGPT desktop Browser task.
-The agent receives the customer request and exact live catalog,
+I paste the one-time command into a fresh ChatGPT desktop Browser task.
+The agent receives the customer's request and exact four-tool catalog,
 but not my expected action or effects.
-After I approve the simulated action, it invokes the page through native WebMCP.
+It chooses and invokes the page through native WebMCP
+while this owner page waits for the result.
 
 7
 00:01:42,000 --> 00:02:04,000
 Thurstone does not trust the agent's explanation or the tool's success response.
-It compares the native call and canonical arguments with site-owned state before and after
+It compares the native call and arguments with site-owned state before and after
 and the append-only ledger.
-Here one pending human-approval checkout was created, nothing else changed,
-and the contract passed.
-No purchase or payment occurred.
+Here the mug changed from two to three, revision advanced once,
+nothing else changed, and the contract passed.
 
 8
 00:02:04,000 --> 00:02:20,000

@@ -10,7 +10,8 @@ English narration, no music, 1920×1080, 16:9, 30 fps, and readable browser zoom
 The main script uses:
 
 1. the deterministic `/demo/controlled` mismatch, explicitly labeled **no model call**;
-2. one authentic fresh ChatGPT desktop Browser PASS through native WebMCP;
+2. the preloaded `/judge` contract and one authentic fresh ChatGPT desktop Browser PASS through
+   native WebMCP;
 3. trusted before/after state, ledger, assertions, and diagnosis;
 4. bounded reference evidence at the end.
 
@@ -72,47 +73,47 @@ checkout request, observed `order_review`, unchanged pending-checkout state, and
 
 **Cursor:** Move through Define, Test, Verify, Diagnose, Save, and Rerun without opening panels.
 
-### 0:58–1:20 — Build the owner contract
+### 0:58–1:20 — See and arm the preloaded contract
 
-**Shot:** Demo Stage 2 and Stage 3. Select the real `order_review` and `checkout_request` tools, show
-agent-visible wording, then add the explicit checkout request and its derived contract.
+**Shot:** `/judge`. Show the preloaded mug-quantity request, expected `cart_update` arguments,
+allowed effect, prohibited effects, and **Arm quick test**.
 
 **Narration:**
 
-> In the Demo, I act as a WebMCP owner. Thurstone reads the live catalog. I choose real tools, write
-> a representative customer request, and declare the expected action, arguments, allowed effects,
-> prohibited effects, and replay policy. Larger suites can run as independent regressions or one
-> stateful customer journey.
+> For a judge, this contract is already loaded. The request asks to set the mug quantity to three.
+> The owner expects cart update with that item and quantity, one exact state transition, and no
+> checkout or unrelated change. I arm it once; the expected answer remains outside the fresh
+> agent's document.
 
-**Cursor:** One click per tool. Scroll once to the case. Show the contract summary; do not edit
-anything during recording.
+**Cursor:** Move through request, expected tool, arguments, effect, and prohibited changes. Click
+**Arm quick test** once.
 
 ### 1:20–1:42 — A real agent acts
 
-**Shot:** Review and arm the explicit checkout case. Crop or blur the entire token-bearing command.
+**Shot:** Show the armed owner page and copy action. Crop or blur the entire token-bearing command.
 Cut to a fresh GPT-5.6 Sol or Terra Work/Codex task in the latest ChatGPT desktop app using its
-built-in Browser. Include the action-time human confirmation.
+built-in Browser.
 
 **Narration:**
 
-> I arm an explicit checkout case and open its one-time command in a fresh ChatGPT desktop Browser
-> task. The agent receives the customer request and exact live catalog, but not my expected action
-> or effects. After I approve the simulated action, it invokes the page through native WebMCP.
+> I paste the one-time command into a fresh ChatGPT desktop Browser task. The agent receives the
+> customer's request and exact four-tool catalog, but not my expected action or effects. It chooses
+> and invokes the page through native WebMCP while this owner page waits for the result.
 
 **Cursor:** Show the owner **Arm** action, then the fresh chat and native tool activity. Never reveal
 the opaque URL, cookie, or storage.
 
 ### 1:42–2:04 — Verify reality
 
-**Shot:** Authentic PASS result. Highlight `checkout_request`, canonical operation ID, revision
-change, one pending human-approval record, ledger event, and all passed assertions.
+**Shot:** Authentic PASS synchronized onto `/judge`. Highlight `cart_update`, readable arguments,
+mug quantity `2 → 3`, revision `0 → 1`, one ledger transition, and all passed contract checks.
 
 **Narration:**
 
 > Thurstone does not trust the agent's explanation or the tool's success response. It compares the
-> native call and canonical arguments with site-owned state before and after and the append-only
-> ledger. Here one pending human-approval checkout was created, nothing else changed, and the
-> contract passed. No purchase or payment occurred.
+> native call and arguments with site-owned state before and after and the append-only ledger. Here
+> the mug changed from two to three, revision advanced once, nothing else changed, and the contract
+> passed.
 
 **Cursor:** Expected action → observed action → before/after → ledger → assertion count.
 
@@ -131,8 +132,8 @@ as regression**. Do not imply the controlled result was repaired.
 
 ### 2:20–2:36 — Stateful journey and bounded evidence
 
-**Shot:** Use the authentic seven-request report only if `evidence/sample-run.json` verifies it.
-Otherwise show the regression/journey selector followed by current `24/24` and separate `3/3`.
+**Shot:** Briefly show the full `/demo` contract builder and regression/journey selector, followed by
+current `24/24` and separate `3/3`.
 
 **Narration with verified seven-request sample:**
 
@@ -162,8 +163,8 @@ Prepare before pressing Record:
 
 1. Clean production homepage.
 2. Controlled mismatch already completed in a supported WebMCP consumer.
-3. Demo owner workspace ready at Stage 2.
-4. Explicit checkout contract ready to review.
+3. Judge quick start clean and ready to arm.
+4. Fresh judge quick-start handoff ready to generate once.
 5. Fresh ChatGPT desktop Work/Codex task ready with GPT-5.6 Sol or Terra.
 6. Authentic PASS result available or a rehearsed safe path to produce it once.
 7. Results reference sections collapsed to the exact views needed.
@@ -173,7 +174,7 @@ Record short source clips rather than one fragile take:
 
 1. homepage collaboration and loop;
 2. controlled mismatch;
-3. catalog and contract;
+3. preloaded judge contract and arm;
 4. arm and fresh-agent native execution;
 5. authentic result;
 6. bounded evidence and closing URL.
@@ -248,6 +249,7 @@ WebMCP makes website tools callable. It does not guarantee correct tool choice o
 The owner defines what a request should mean. A visitor's agent uses the live WebMCP tools. Thurstone checks whether the action and page state match that meaning.
 
 Live: https://thurstone.invarra.ai
+Judge quick start: https://thurstone.invarra.ai/judge
 Demo: https://thurstone.invarra.ai/demo
 Source: https://github.com/serg337/thurstone
 
