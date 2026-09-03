@@ -356,7 +356,7 @@ test("fresh v2 command auto-arms while the manual handoff remains explicit", asy
   await page.waitForURL(/\/demo\/run#handoff-source-v2$/u);
 
   const command = await page.getByLabel("Exact fresh-agent command").inputValue();
-  expect(command).toMatch(/^@Browser Open https?:\/\/[^\s]+\/demo\/handoff\?auto=1#[^\s]+\n/u);
+  expect(command).toMatch(/^Open https?:\/\/[^\s]+\/demo\/handoff\?auto=1#[^\s]+\n/u);
   expect(command).toContain("Do not use a shell or visual click automation.");
   expect(command).toContain("Treat this as my exact request:");
   expect(command).toContain("I authorize only the exact test-environment changes");

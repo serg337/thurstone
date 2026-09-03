@@ -64,7 +64,7 @@ test("Demo presents one five-stage WebMCP-owner workflow without a model call", 
   ).toBeVisible();
   await page.getByRole("button", { name: "Copy Demo launch command" }).click();
   await expect(page.getByRole("button", { name: "Demo launch command copied" })).toBeVisible();
-  await expect(page.getByText(/Paste it into the fresh ChatGPT chat/iu)).toBeVisible();
+  await expect(page.getByText(/Select Browser from the @ menu/iu)).toBeVisible();
   await expect(page.getByLabel("Demo scope")).toHaveCount(0);
   await expect(page.getByText("Flagged Chrome compatibility", { exact: true })).toHaveCount(0);
   expect(inferenceRequests).toEqual([]);

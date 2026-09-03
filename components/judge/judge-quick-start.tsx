@@ -57,7 +57,7 @@ function nextTimestamp(after: string, offset: number): string {
 function commandFor(source: JudgeQuickStartSource): string {
   const requests = source.steps.map(({ request }, index) => `${index + 1}. ${request}`).join("\n");
   return [
-    `@Browser Open ${source.handoffUrl}`,
+    `Open ${source.handoffUrl}`,
     "This is my authorized Thurstone Judge Quick Start in the website owner's test environment.",
     "Treat these as my exact requests, in order:",
     requests,
@@ -429,7 +429,10 @@ export function JudgeQuickStart() {
           </p>
           <ol className={styles.instructions}>
             <li>Open a fresh GPT-5.6 Sol or Terra Work or Codex chat in ChatGPT Desktop.</li>
-            <li>Paste the exact command below and send it.</li>
+            <li>
+              Type <code>@</code> and select <strong>Browser</strong> from the composer menu.
+            </li>
+            <li>Paste the exact command below after the Browser mention, then send it.</li>
             <li>Keep this page open. Judge Results opens automatically when all cases finish.</li>
           </ol>
           <div className={styles.actions}>

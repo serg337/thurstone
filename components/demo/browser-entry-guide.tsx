@@ -6,7 +6,7 @@ interface BrowserEntryGuideProps {
   readonly compact?: boolean;
 }
 
-const MANUAL_BROWSER_COMMAND = "@Browser Open https://thurstone.invarra.ai/demo";
+const MANUAL_BROWSER_COMMAND = "Open https://thurstone.invarra.ai/demo";
 
 function copyWithSelectionFallback(value: string): boolean {
   const field = document.createElement("textarea");
@@ -48,9 +48,9 @@ export function BrowserEntryGuide({ compact = false }: BrowserEntryGuideProps) {
         <h2 id="browser-entry-title">Open Thurstone in ChatGPT&apos;s In-App Browser</h2>
         <p>
           Open a fresh Work or Codex chat in the latest ChatGPT desktop app using GPT-5.6 Sol or
-          Terra (<strong>not the Chrome side panel</strong>). You can build the owner contract in
-          any browser. Only the fresh-agent Site Tools test requires the desktop app&apos;s built-in
-          Browser.
+          Terra (<strong>not the Chrome side panel</strong>). Type <code>@</code>, select
+          <strong> Browser</strong> from the composer menu, then paste the copied command. You can
+          build the owner contract in any browser; only the fresh-agent test requires Site Tools.
         </p>
         <button
           className="button button-secondary browser-entry-copy"
@@ -62,7 +62,7 @@ export function BrowserEntryGuide({ compact = false }: BrowserEntryGuideProps) {
         {copyState !== "idle" ? (
           <span className="browser-entry-copy-status" aria-live="polite">
             {copyState === "copied"
-              ? "Paste it into the fresh ChatGPT chat."
+              ? "Select Browser from the @ menu, then paste the command after the mention."
               : "Copy was blocked. Select the command below."}
           </span>
         ) : null}

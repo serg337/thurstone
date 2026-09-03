@@ -61,7 +61,8 @@ with supported ChatGPT Work or Codex Sol/Terra models as the Site Tools consumer
 “Open in ChatGPT” control on OpenAI-owned documentation pages, but no general public deep-link URL
 contract that a third-party site can safely synthesize and no agent-ready callback for a third-party
 document. Thurstone therefore will not invent a private link scheme or infer readiness: the fresh
-handoff must provide a complete copyable `@Browser Open <opaque-url>` command, and tool registration
+handoff must provide a complete copyable `Open <opaque-url>` command paired with an explicit
+instruction to select Browser from ChatGPT's `@` menu first, and tool registration
 plus the bounded observation timer must begin only after an explicit **Start live observation**
 action. Opening the handoff in ordinary Chrome is preparation evidence only.
 

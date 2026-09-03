@@ -4,7 +4,7 @@ import type { RuntimeModelContext } from "@/lib/webmcp/runtime";
 
 import { installEmulatedConsumer } from "./emulated-consumer";
 
-const HANDOFF_COMMAND_PREFIX = "@Browser Open ";
+const HANDOFF_COMMAND_PREFIX = "Open ";
 
 export function handoffUrlFromCommand(command: string): string {
   const firstLine = command.split("\n", 1)[0] ?? "";

@@ -1020,7 +1020,7 @@ export function ByoaRunnerV2() {
     const automaticSourceUrl = new URL(source.url);
     automaticSourceUrl.searchParams.set("auto", "1");
     const directCommand = [
-      `@Browser Open ${automaticSourceUrl.toString()}`,
+      `Open ${automaticSourceUrl.toString()}`,
       "This is my authorized Thurstone test in the website owner's designated test environment.",
       `Treat ${authorizedRequests.length === 1 ? "this as my exact request" : "these as my exact requests, in order"}:`,
       requestBlock,
@@ -1211,13 +1211,16 @@ export function ByoaRunnerV2() {
                   <span>2</span>
                   <div>
                     <strong>Open a separate fresh ChatGPT desktop task</strong>
-                    <p>Use GPT-5.6 Sol or Terra in a Work or Codex chat.</p>
+                    <p>
+                      Use GPT-5.6 Sol or Terra in a Work or Codex chat. Type <code>@</code> and
+                      select <strong>Browser</strong> from the composer menu.
+                    </p>
                   </div>
                 </li>
                 <li>
                   <span>3</span>
                   <div>
-                    <strong>Paste the command and send</strong>
+                    <strong>Paste after the Browser mention and send</strong>
                     <p>
                       Keep this owner page open. Continue the full{" "}
                       {continuousSource ? "journey" : "suite"} in that same agent task.

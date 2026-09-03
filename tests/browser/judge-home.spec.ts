@@ -32,7 +32,7 @@ test("Home presents the semantic release product before technical detail", async
   ).toBeVisible();
   await page.getByRole("button", { name: "Copy Demo launch command" }).click();
   await expect(page.getByRole("button", { name: "Demo launch command copied" })).toBeVisible();
-  await expect(page.getByText(/Paste it into the fresh ChatGPT chat/iu)).toBeVisible();
+  await expect(page.getByText(/Select Browser from the @ menu/iu)).toBeVisible();
   await expect(page.getByText("Flagged Chrome compatibility", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Open the technical Lab" })).toHaveCount(0);
   const footer = page.locator("footer");

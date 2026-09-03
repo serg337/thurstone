@@ -72,9 +72,10 @@ document. It runs three evidence classes in one regression queue:
 
 1. Open [Judge quick start](https://thurstone.invarra.ai/judge) in any browser.
 2. Review the three preloaded requests and what each is designed to prove.
-3. Choose **Arm Judge Quick Start**, copy the exact command, and paste it into a fresh GPT-5.6 Sol or Terra
-   Work or Codex chat in the latest ChatGPT desktop app.
-4. Use ChatGPT's built-in Browser—not the Chrome side panel—and keep the owner page open.
+3. Choose **Arm Judge Quick Start** and copy the exact command.
+4. In a fresh GPT-5.6 Sol or Terra Work or Codex chat, type `@`, select **Browser** from the
+   composer menu, then paste the command after that structured mention. Do not use the Chrome side
+   panel.
 5. Thurstone receives, arms, and advances each case automatically; no visual browser-control clicks
    are required. Continue all three native Site Tools cases in that chat. The owner page tracks
    progress and automatically opens a full **Judge Results** report.
@@ -101,9 +102,9 @@ and is never presented as an authentic agent failure.
    - **Continuous journey:** two or more ordered requests run in one agent context with verified
      state carried forward; the journey stops on the first issue so later cases never inherit
      untrusted state.
-4. Review, arm, and copy the generated secure command into a fresh GPT-5.6 Sol or Terra Work or
-   Codex chat in the latest ChatGPT desktop app. Use ChatGPT's built-in Browser—not the Chrome
-   extension side panel.
+4. Review, arm, and copy the generated secure command. In a fresh GPT-5.6 Sol or Terra Work or Codex
+   chat, type `@`, select **Browser** from the composer menu, then paste the command after that
+   structured mention. Do not use the Chrome side panel.
 5. Thurstone receives, arms, and advances the test automatically; ChatGPT needs native Site Tools
    but no shell or visual browser-control clicks. Keep the owner page open while Thurstone verifies
    one action per case, then inspect or download the synchronized results.
