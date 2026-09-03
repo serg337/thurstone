@@ -217,11 +217,17 @@ Evidence classes remain separate:
    calls for privileged-field injection, nonexistent item, and replay/idempotency.
 4. **Direct Site Tools observations:** four fresh-context observations kept separate from scored
    reference evidence.
-5. **Controlled mismatch:** a provider-free product demonstration; it enters no score.
+5. **Seven-request ChatGPT journey:** a digest-bound owner export from one continuous Browser task;
+   seven observed native actions, seven passes, and one final pending checkout.
+6. **Controlled mismatch:** a provider-free product demonstration; it enters no score.
 
 The [public sample run](evidence/sample-report.md) preserves an authentic Chrome 152 native
 checkout PASS with complete contract, canonical arguments, trusted state, ledger diff, and seven
 assertions. It is labeled direct compatibility evidence—not answer-isolated model selection.
+
+The [seven-request journey](evidence/seven-request-journey.md) preserves Sergio's owner-exported
+continuous ChatGPT run and its [canonical JSON receipt](evidence/seven-request-journey.json). Its
+report digest was independently recomputed; the documented evidence boundary remains explicit.
 
 Hashes bind internal artifacts and release lineage. They are integrity checks, not independent
 attestation or certification.

@@ -163,6 +163,11 @@ The public sample report contains a complete authentic Chrome 152 native checkou
 contract, canonical arguments, trusted state before and after, ledger diff, and seven assertions.
 It is explicitly direct compatibility evidence rather than answer-isolated model selection.
 
+The public seven-request journey report preserves a digest-bound owner export from one continuous
+ChatGPT desktop Browser task: seven observed native actions, seven PASS results, final revision 3,
+Stoneware mug quantity 3, Field notebook removed, and one pending human-approval checkout. Its
+canonical JSON receipt and readable report are both included in the repository.
+
 ### Built during the challenge
 
 Thurstone product work began on **August 26, 2026**, during the challenge period. The application,

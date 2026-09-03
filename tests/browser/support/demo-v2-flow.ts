@@ -4,14 +4,15 @@ import type { RuntimeModelContext } from "@/lib/webmcp/runtime";
 
 import { installEmulatedConsumer } from "./emulated-consumer";
 
-const HANDOFF_COMMAND_PREFIX = "Open ";
+const HANDOFF_COMMAND_PREFIXES = ["@Browser Open ", "Open "] as const;
 
 export function handoffUrlFromCommand(command: string): string {
   const firstLine = command.split("\n", 1)[0] ?? "";
-  if (!firstLine.startsWith(HANDOFF_COMMAND_PREFIX)) {
+  const prefix = HANDOFF_COMMAND_PREFIXES.find((candidate) => firstLine.startsWith(candidate));
+  if (!prefix) {
     throw new Error("The fresh-agent command does not match the frozen complete-command format.");
   }
-  return firstLine.slice(HANDOFF_COMMAND_PREFIX.length);
+  return firstLine.slice(prefix.length);
 }
 
 export async function prepareV2Handoff(
