@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import {
   BYOA_OWNER_SUMMARY_TTL_MS,
+  parseByoaOwnerSummaryEnvelope,
   readByoaOwnerSummary,
   resetByoaOwnerSummariesForTests,
   storeByoaOwnerSummary
@@ -65,5 +66,14 @@ describe("ephemeral owner result summary", () => {
     await expect(
       storeByoaOwnerSummary({ ...input, resultDigest: "c".repeat(64) }, environment)
     ).rejects.toThrow("owner summary conflict");
+  });
+
+  it("accepts raw Redis strings and Upstash auto-deserialized objects", () => {
+    const envelope = {
+      version: "thurstone-byoa-owner-summary@1",
+      ...input
+    } as const;
+    expect(parseByoaOwnerSummaryEnvelope(JSON.stringify(envelope))).toEqual(envelope);
+    expect(parseByoaOwnerSummaryEnvelope(envelope)).toEqual(envelope);
   });
 });

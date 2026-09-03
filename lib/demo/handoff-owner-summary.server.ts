@@ -66,6 +66,11 @@ function fakeStore(): Map<string, string> {
   return fakeGlobal.__thurstoneByoaOwnerSummaries;
 }
 
+export function parseByoaOwnerSummaryEnvelope(value: unknown): ByoaOwnerSummaryEnvelope {
+  const decoded = typeof value === "string" ? (JSON.parse(value) as unknown) : value;
+  return envelopeSchema.parse(decoded);
+}
+
 export async function storeByoaOwnerSummary(
   input: {
     readonly runId: string;
@@ -104,13 +109,13 @@ export async function readByoaOwnerSummary(
   const key = keyFor(runId);
   if (environment.TOOLPROOF_BROWSER_FAKE_PROBE === "1") {
     const bytes = fakeStore().get(key);
-    return bytes === undefined ? null : envelopeSchema.parse(JSON.parse(bytes));
+    return bytes === undefined ? null : parseByoaOwnerSummaryEnvelope(bytes);
   }
   const reply = await redis(environment).evalRo(READ_SCRIPT, [key], []);
   if (!Array.isArray(reply) || reply.length < 2) throw new Error("invalid owner summary reply");
   if (Number(reply[0]) === 2) return null;
   if (Number(reply[0]) !== 1) throw new Error("owner summary read failed");
-  return envelopeSchema.parse(JSON.parse(String(reply[1])));
+  return parseByoaOwnerSummaryEnvelope(reply[1]);
 }
 
 export function resetByoaOwnerSummariesForTests(
