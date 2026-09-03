@@ -21,8 +21,6 @@ prohibited effects, and a deterministic verdict in one inspectable run.
 [Invocation Integrity](evidence/thurstone-invocation-integrity.md) ·
 [Public sample run](evidence/sample-report.md)
 
-Public release: pending final challenge release · Video: pending final public YouTube URL
-
 **The reference checkout is simulated. No purchase, payment, shipment, inventory change, message,
 or external transaction occurs.**
 
@@ -31,6 +29,12 @@ or external transaction occurs.**
 A WebMCP handler can accept schema-valid arguments, execute correctly, and return success while the
 agent still chose the wrong action for the person's meaning—or while the page changed something the
 owner prohibited.
+
+In a [ChatGPT regression run](evidence/agent-regression-issue.json), the request was “Show me my
+current order.” The contract required `order_review`, but the agent selected `cart_get`. Nothing
+crashed and the site remained unchanged, yet the action did not satisfy the declared meaning.
+Thurstone flagged `selection.expected-tool-v3` and recommended clarifying the boundary between cart
+contents and a complete order review.
 
 Unit tests prove that a handler works. Model-only evals can test the function and arguments a model
 intends to call. Thurstone binds those layers to the live site:
@@ -73,9 +77,8 @@ document. It runs three evidence classes in one regression queue:
 1. Open [Judge quick start](https://thurstone.invarra.ai/judge) in any browser.
 2. Review the three preloaded requests and what each is designed to prove.
 3. Choose **Arm Judge Quick Start** and copy the exact command.
-4. In a fresh GPT-5.6 Sol or Terra Work or Codex chat, type `@`, select **Browser** from the
-   composer menu, then paste the command after that structured mention. Do not use the Chrome side
-   panel.
+4. Paste the complete `@Browser Open` command into a fresh GPT-5.6 Sol or Terra ChatGPT Desktop
+   chat. Do not use Chrome's side panel.
 5. In the one visible Browser page, receive and start the test once, then continue each verified
    case without reopening the handoff URL. The owner page tracks progress and automatically opens
    a full **Judge Results** report.
@@ -102,16 +105,15 @@ and is never presented as an authentic agent failure.
    - **Continuous journey:** two or more ordered requests run in one agent context with verified
      state carried forward; the journey stops on the first issue so later cases never inherit
      untrusted state.
-4. Review, arm, and copy the generated secure command. In a fresh GPT-5.6 Sol or Terra Work or Codex
-   chat, type `@`, select **Browser** from the composer menu, then paste the command after that
-   structured mention. Do not use the Chrome side panel.
+4. Review, arm, and copy the generated secure command. Paste the complete `@Browser Open` command
+   into a fresh GPT-5.6 Sol or Terra ChatGPT Desktop chat. Do not use Chrome's side panel.
 5. In the one visible Browser page, receive and start the test once. Continue subsequent verified
    cases on that same page; never reopen the handoff URL. Keep the owner page open while Thurstone
    verifies one action per case, then inspect or download the synchronized results.
 
 The handoff is single use and expires after ten minutes. Its command contains the owner's authorized
 request queue but never the expected actions, effects, assertions, or diagnosis. If ChatGPT asks
-once for permission to open the token-bearing `thurstone.invarra.ai` URL, confirm only when the
+once for permission to open the private `thurstone.invarra.ai` handoff URL, confirm only when the
 displayed domain and command are exact.
 
 ## Reference WebMCP catalog
@@ -207,7 +209,7 @@ Deterministic evaluator ◀── native WebMCP ◀── fresh external agent
 
 Three real Thurstone runs cover 11 tests: **8 passes, 3 issues, 0 not run**. Two are ChatGPT-agent
 runs; the third is a disclosed provider-free control. Every result links to its receipt. An ISSUE
-means the declared agent/site contract diverged—not that Thurstone crashed.
+means the declared agent/site contract diverged—not that Thurstone failed.
 
 - [**Three-case regression — 1 PASS, 2 ISSUES, 0 NOT RUN**](evidence/agent-regression-issue.json):
   a planted site no-op missed the required cart effect, and the agent selected `cart_get` instead
@@ -221,13 +223,11 @@ means the declared agent/site contract diverged—not that Thurstone crashed.
 
 The separate [**24/24 reference regression**](evidence/thurstone-current-result.json) covers one
 trial per frozen semantic case. It is bounded reference coverage—not an independent benchmark.
-The historical `23/24 → 23/24` experiment and separate
-[**3/3 Invocation Integrity Matrix**](evidence/thurstone-invocation-integrity.md) retain their own
-protocols and denominators.
+The separate [**3/3 Invocation Integrity Matrix**](evidence/thurstone-invocation-integrity.md)
+retains its own protocol and denominator.
 
 [**Chrome 152 compatibility**](evidence/sample-report.md): a native checkout passed all seven
-assertions covering the contract, arguments, before/after state, and ledger. Hashes provide internal
-integrity, not independent attestation or certification.
+assertions covering the contract, arguments, before/after state, and ledger.
 
 ## Built during the challenge
 
@@ -281,6 +281,7 @@ npm run verify:publication
   160-call / USD `$10` lifetime guard.
 - Opaque handoffs are origin-bound, single-use, and short-lived.
 - Production source maps are disabled; dependencies and required notices are pinned and inventoried.
+- Evidence hashes provide internal integrity, not independent attestation or certification.
 
 ## Limitations
 
