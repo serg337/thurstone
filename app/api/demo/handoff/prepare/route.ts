@@ -18,6 +18,7 @@ import {
   createByoaHandoffLedgerV2Redis,
   issueByoaHandoffV2
 } from "@/lib/demo/handoff-ledger-v2.server";
+import { issueByoaHandoffShortCode } from "@/lib/demo/handoff-short-code.server";
 import { resolveDeploymentCommit } from "@/lib/deployment/commit";
 import { storeContinuousJourney } from "@/lib/demo/continuous-journey.server";
 
@@ -94,10 +95,12 @@ export async function POST(request: Request) {
             : 503;
         return NextResponse.json({ error: "handoff_ledger_unavailable" }, { status });
       }
+      failureStage = "short-code";
+      const shortCode = await issueByoaHandoffShortCode(token, Date.parse(envelope.expiresAt));
       return NextResponse.json(
         {
           version: BYOA_HANDOFF_PREPARE_V2_VERSION,
-          handoffUrl: `${origin}/demo/handoff#${token}`,
+          handoffUrl: `${origin}/demo/handoff#${shortCode}`,
           expiresAt: envelope.expiresAt
         },
         { headers: { "Cache-Control": "no-store" } }

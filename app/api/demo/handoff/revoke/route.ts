@@ -12,6 +12,7 @@ import {
   createByoaHandoffLedgerV2Redis,
   revokeByoaHandoffV2
 } from "@/lib/demo/handoff-ledger-v2.server";
+import { resolveByoaHandoffV2Credential } from "@/lib/demo/handoff-short-code.server";
 
 export const dynamic = "force-dynamic";
 
@@ -21,14 +22,15 @@ export async function POST(request: Request) {
   }
   try {
     const input = byoaHandoffRevokeRequestV2Schema.parse(await readBoundedHandoffJson(request));
-    if (!isByoaHandoffV2Token(input.token)) {
+    const token = await resolveByoaHandoffV2Credential(input.token);
+    if (token === null || !isByoaHandoffV2Token(token)) {
       return NextResponse.json({ error: "handoff_revoke_invalid" }, { status: 400 });
     }
-    const envelope = openByoaHandoffV2(input.token);
+    const envelope = openByoaHandoffV2(token);
     const receipt = await revokeByoaHandoffV2(createByoaHandoffLedgerV2Redis(), {
       runId: envelope.session.runId,
       contractDigest: envelope.session.contractDigest,
-      token: input.token
+      token
     });
     return NextResponse.json(
       { ok: true, state: receipt.state },

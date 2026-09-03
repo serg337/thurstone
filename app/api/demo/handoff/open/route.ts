@@ -13,6 +13,10 @@ import {
   openByoaHandoffV2
 } from "@/lib/demo/agent-handoff-token-v2.server";
 import {
+  isByoaHandoffShortCode,
+  resolveByoaHandoffV2Credential
+} from "@/lib/demo/handoff-short-code.server";
+import {
   ByoaHandoffLedgerV2Error,
   claimByoaHandoffV2,
   createByoaHandoffLedgerV2Redis
@@ -74,21 +78,26 @@ export async function POST(request: Request) {
       typeof value === "object" && value !== null && typeof Reflect.get(value, "token") === "string"
         ? String(Reflect.get(value, "token"))
         : "";
-    const usesV2 = isByoaHandoffV2Token(token);
+    const resolvedToken = await resolveByoaHandoffV2Credential(token);
+    if (isByoaHandoffShortCode(token) && resolvedToken === null) {
+      return claimFailureResponse(token, "invalid_token", 410);
+    }
+    const v2Token = resolvedToken ?? token;
+    const usesV2 = isByoaHandoffV2Token(v2Token);
     if (usesV2) {
       const body = byoaHandoffOpenRequestV2Schema.parse(value);
       let envelope: ReturnType<typeof openByoaHandoffV2>;
       try {
-        envelope = openByoaHandoffV2(body.token);
+        envelope = openByoaHandoffV2(v2Token);
       } catch (caught) {
         const reason = caught instanceof ByoaHandoffTokenV2Error ? caught.code : "invalid_token";
-        return claimFailureResponse(body.token, reason, 410);
+        return claimFailureResponse(v2Token, reason, 410);
       }
       try {
         await claimByoaHandoffV2(createByoaHandoffLedgerV2Redis(), {
           runId: envelope.session.runId,
           contractDigest: envelope.session.contractDigest,
-          token: body.token,
+          token: v2Token,
           freshContextId: body.freshContextId
         });
       } catch (caught) {
@@ -106,7 +115,7 @@ export async function POST(request: Request) {
                   caught.code === "HANDOFF_BINDING_MISMATCH"
                 ? 409
                 : 503;
-        return claimFailureResponse(body.token, reason, status);
+        return claimFailureResponse(v2Token, reason, status);
       }
       const response = NextResponse.json(
         { ok: true, redirect: "/demo/run" },
@@ -114,7 +123,7 @@ export async function POST(request: Request) {
       );
       response.cookies.set(
         BYOA_HANDOFF_COOKIE,
-        body.token,
+        v2Token,
         byoaHandoffCookieOptions(request.url, envelope.expiresAt)
       );
       return response;

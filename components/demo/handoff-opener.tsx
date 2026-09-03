@@ -64,7 +64,7 @@ export function HandoffOpener() {
         );
       }
       const token = window.location.hash.slice(1);
-      const usesV2 = token.startsWith("tbh2.");
+      const usesV2 = token.startsWith("tbh2.") || token.startsWith("ths2_");
       const body = usesV2
         ? byoaHandoffOpenRequestV2Schema.parse({
             token,

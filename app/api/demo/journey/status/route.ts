@@ -16,6 +16,7 @@ import {
   readByoaHandoffV2Status
 } from "@/lib/demo/handoff-ledger-v2.server";
 import { readHandoffClaimFailure } from "@/lib/demo/handoff-claim-receipt.server";
+import { resolveByoaHandoffV2Credential } from "@/lib/demo/handoff-short-code.server";
 
 export const dynamic = "force-dynamic";
 
@@ -27,10 +28,11 @@ export async function POST(request: Request) {
     const input = byoaContinuousJourneyStatusRequestSchema.parse(
       await readBoundedHandoffJson(request)
     );
-    if (!isByoaHandoffV2Token(input.token)) {
+    const token = await resolveByoaHandoffV2Credential(input.token);
+    if (token === null || !isByoaHandoffV2Token(token)) {
       return NextResponse.json({ error: "journey_unavailable" }, { status: 404 });
     }
-    const envelope = openByoaHandoffV2(input.token);
+    const envelope = openByoaHandoffV2(token);
     if (
       envelope.session.runId !== input.runId ||
       envelope.session.contractDigest !== input.contractDigest
@@ -51,7 +53,7 @@ export async function POST(request: Request) {
         ownerSummary: result.ownerSummary
       };
     });
-    const claimFailure = await readHandoffClaimFailure(input.token);
+    const claimFailure = await readHandoffClaimFailure(token);
     const currentStatus = await readByoaHandoffV2Status(
       createByoaHandoffLedgerV2Redis(),
       record.currentRunId

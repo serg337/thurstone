@@ -356,7 +356,10 @@ test("fresh v2 handoff registers nothing before explicit start, then exposes exa
   await page.waitForURL(/\/demo\/run#handoff-source-v2$/u);
 
   const command = await page.getByLabel("Exact fresh-agent command").inputValue();
-  expect(command).toMatch(/^@Browser Open https?:\/\/[^\s]+\/demo\/handoff#[^\s]+\n/u);
+  expect(command).toMatch(
+    /^@Browser Open https?:\/\/[^\s]+\/demo\/handoff#ths2_[A-Za-z0-9_-]{24}\n/u
+  );
+  expect(command).not.toContain("#tbh2.");
   expect(command).toContain("Treat this as my exact request:");
   expect(command).toContain("I authorize only the exact test-environment changes");
   expect(command).toContain("Do not act on production data or external systems.");
