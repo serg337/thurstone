@@ -15,6 +15,7 @@ prohibited effects, and a deterministic verdict in one inspectable run.
 [Live application](https://thurstone.invarra.ai) ·
 [Judge quick start](https://thurstone.invarra.ai/judge) ·
 [Test Thurstone](https://thurstone.invarra.ai/demo) ·
+[Video demo](https://youtu.be/50YTKcpgrTs) ·
 [Research](https://thurstone.invarra.ai/research) ·
 [Source](https://github.com/serg337/thurstone) ·
 [Current semantic evidence](evidence/thurstone-current-result.json) ·
