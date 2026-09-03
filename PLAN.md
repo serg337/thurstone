@@ -61,7 +61,7 @@
    - Run install, formatting, lint, types, full deterministic and browser suites, evidence,
      publication, audits, production build, and clean-clone reproduction.
 
-9. **Private pre-recording release — IN PROGRESS**
+9. **Private pre-recording release — CANDIDATE CREATED; EXTERNAL RECEIPTS PENDING**
    - Commit explicit paths, push both private branches, deploy exact SHA, wait for terminal CI,
      verify signed-out Production, and record the release identity.
 
