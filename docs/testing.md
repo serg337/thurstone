@@ -159,8 +159,9 @@ This fallback verifies the verdict mechanism, not agent performance.
    exact `thurstone.invarra.ai` command.
 3. Confirm the single-use handoff is claimed within ten minutes. An expired, claimed, revoked, or
    invalid link must be re-armed; never reused.
-4. Confirm the isolated page exposes the authorized request queue and exact catalog but not expected
-   actions, arguments, effects, assertions, or diagnosis.
+4. Confirm Thurstone receives, reaches readiness, arms, and advances automatically without shell or
+   visual browser-control clicks. The isolated page exposes the authorized request queue and exact
+   catalog but not expected actions, arguments, effects, assertions, or diagnosis.
 5. Process one request at a time. Confirm Thurstone admits at most one eligible native action per
    case and verifies it before the next request.
 6. For regression mode, confirm the site fixture resets and the queue continues after an independent

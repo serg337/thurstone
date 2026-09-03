@@ -44,6 +44,8 @@ The official rules and challenge website control if this file conflicts with the
   tracks progress and automatically opens a full Judge Results report
 - Owner workflow: understand the boundary → configure one to four real tools → build contract cases →
   choose regression suite or continuous journey → arm one secure queue → inspect synchronized results
+- Every owner-armed V2 queue receives, arms, and advances automatically in the fresh agent page;
+  native Site Tools do not depend on shell or visual Browser computer-control
 - Regression suite: one agent chat, clean fixture per request, every independent case runs even
   after an issue
 - Continuous journey: one agent context and carried state, repeated tools allowed, stops at the first

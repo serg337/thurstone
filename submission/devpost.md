@@ -261,9 +261,9 @@ recommended investigation.
 4. Review, arm, and copy the generated secure command.
 5. Paste it into a fresh Work or Codex chat in the latest ChatGPT desktop app using GPT-5.6 Sol or
    Terra and ChatGPT's built-in Browser. Do not use the Chrome extension side panel.
-6. Keep the owner page open. The command shows the agent every authorized request but withholds
-   expected actions, effects, assertions, and diagnoses. Thurstone verifies one case at a time and
-   synchronizes the final results back to the owner page.
+6. Thurstone receives, arms, and advances automatically; no shell or visual browser-control clicks
+   are required. Keep the owner page open. The command shows every authorized request but withholds
+   expected actions, effects, assertions, and diagnoses, then synchronizes the final results.
 7. Inspect or download the report. Regression suites continue after independent issues; continuous
    journeys stop after the first issue.
 

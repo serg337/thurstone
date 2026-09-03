@@ -8,7 +8,7 @@ import {
   clearRemoteByoaSession
 } from "@/lib/demo/agent-handoff";
 import {
-  BYOA_JUDGE_AUTO_RUNNER_V2_MARKER_KEY,
+  BYOA_AUTO_RUNNER_V2_MARKER_KEY,
   BYOA_RUNNER_V2_MARKER_KEY,
   byoaHandoffOpenRequestV2Schema,
   clearRemoteByoaSessionV2,
@@ -103,14 +103,15 @@ export function HandoffOpener() {
       clearByoaHandoffUrl(window.sessionStorage);
       if (usesV2) {
         window.sessionStorage.setItem(BYOA_RUNNER_V2_MARKER_KEY, "2");
-        if (new URLSearchParams(window.location.search).get("auto") === "judge") {
-          window.sessionStorage.setItem(BYOA_JUDGE_AUTO_RUNNER_V2_MARKER_KEY, "1");
+        const automaticMode = new URLSearchParams(window.location.search).get("auto");
+        if (automaticMode === "1" || automaticMode === "judge") {
+          window.sessionStorage.setItem(BYOA_AUTO_RUNNER_V2_MARKER_KEY, "1");
         } else {
-          window.sessionStorage.removeItem(BYOA_JUDGE_AUTO_RUNNER_V2_MARKER_KEY);
+          window.sessionStorage.removeItem(BYOA_AUTO_RUNNER_V2_MARKER_KEY);
         }
       } else {
         window.sessionStorage.removeItem(BYOA_RUNNER_V2_MARKER_KEY);
-        window.sessionStorage.removeItem(BYOA_JUDGE_AUTO_RUNNER_V2_MARKER_KEY);
+        window.sessionStorage.removeItem(BYOA_AUTO_RUNNER_V2_MARKER_KEY);
       }
       window.history.replaceState(null, "", "/demo/handoff");
       window.location.replace("/demo/run");
@@ -122,7 +123,7 @@ export function HandoffOpener() {
 
   useEffect(() => {
     if (
-      new URLSearchParams(window.location.search).get("auto") !== "judge" ||
+      !["1", "judge"].includes(new URLSearchParams(window.location.search).get("auto") ?? "") ||
       automaticReceiveStartedRef.current
     ) {
       return;

@@ -18,7 +18,7 @@ import {
   BYOA_HANDOFF_REVOKE_V2_VERSION,
   BYOA_HANDOFF_REVEAL_V2_VERSION,
   BYOA_HANDOFF_STATUS_V2_VERSION,
-  BYOA_JUDGE_AUTO_RUNNER_V2_MARKER_KEY,
+  BYOA_AUTO_RUNNER_V2_MARKER_KEY,
   BYOA_RUNNER_V2_MARKER_KEY,
   byoaHandoffBootstrapResponseV2Schema,
   byoaContinuousJourneyStatusResponseSchema,
@@ -229,7 +229,7 @@ export function ByoaRunnerV2() {
   const [existingRegressionCaseDigest, setExistingRegressionCaseDigest] = useState<string | null>(
     null
   );
-  const [automaticJudgeRun, setAutomaticJudgeRun] = useState(false);
+  const [automaticRun, setAutomaticRun] = useState(false);
   const sessionRef = useRef<RemoteByoaSessionV2 | undefined>(undefined);
   const releaseRef = useRef<() => void>(() => undefined);
   const unsubscribeGateRef = useRef<() => void>(() => undefined);
@@ -445,9 +445,7 @@ export function ByoaRunnerV2() {
     let disposed = false;
     void (async () => {
       try {
-        setAutomaticJudgeRun(
-          window.sessionStorage.getItem(BYOA_JUDGE_AUTO_RUNNER_V2_MARKER_KEY) === "1"
-        );
+        setAutomaticRun(window.sessionStorage.getItem(BYOA_AUTO_RUNNER_V2_MARKER_KEY) === "1");
         const localSession = readByoaAgentSessionV2(window.sessionStorage);
         const localProjection = readAgentVisibleRunProjectionV2(window.sessionStorage);
         const sourceUrl = readByoaHandoffUrl(window.sessionStorage);
@@ -678,13 +676,13 @@ export function ByoaRunnerV2() {
   }
 
   useEffect(() => {
-    if (!automaticJudgeRun || error || !projection) return;
+    if (!automaticRun || error || !projection) return;
     if (sessionState === "RECEIVED") {
       automaticReadyButtonRef.current?.click();
       return;
     }
     if (sessionState === "READY_TO_ARM") automaticStartButtonRef.current?.click();
-  }, [automaticJudgeRun, error, projection, sessionState]);
+  }, [automaticRun, error, projection, sessionState]);
 
   async function startLiveObservation() {
     if (!projection || sessionRef.current?.state !== "READY_TO_ARM") return;
@@ -890,7 +888,7 @@ export function ByoaRunnerV2() {
 
   useEffect(() => {
     if (
-      !automaticJudgeRun ||
+      !automaticRun ||
       !result ||
       journey === undefined ||
       journey.position >= journey.total ||
@@ -901,7 +899,7 @@ export function ByoaRunnerV2() {
     }
     automaticContinuationDigestRef.current = result.resultDigest;
     automaticContinueButtonRef.current?.click();
-  }, [automaticJudgeRun, journey, result]);
+  }, [automaticRun, journey, result]);
 
   async function continueContractRun() {
     if (!source || !sourceResult) return;
@@ -1019,11 +1017,15 @@ export function ByoaRunnerV2() {
     const requestBlock = authorizedRequests
       .map((request, index) => `${index + 1}. ${request}`)
       .join("\n");
+    const automaticSourceUrl = new URL(source.url);
+    automaticSourceUrl.searchParams.set("auto", "1");
     const directCommand = [
-      `@Browser Open ${source.url}`,
+      `@Browser Open ${automaticSourceUrl.toString()}`,
       "This is my authorized Thurstone test in the website owner's designated test environment.",
       `Treat ${authorizedRequests.length === 1 ? "this as my exact request" : "these as my exact requests, in order"}:`,
       requestBlock,
+      "Thurstone receives, arms, and advances the test automatically. Do not use a shell or visual click automation.",
+      "Use only the native Site Tools exposed on the opened Thurstone page.",
       "Process one request at a time. Wait for Thurstone to verify and reveal the next step before continuing.",
       ...(regressionBatchSource
         ? [

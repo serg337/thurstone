@@ -104,8 +104,9 @@ and is never presented as an authentic agent failure.
 4. Review, arm, and copy the generated secure command into a fresh GPT-5.6 Sol or Terra Work or
    Codex chat in the latest ChatGPT desktop app. Use ChatGPT's built-in Browser—not the Chrome
    extension side panel.
-5. Keep the owner page open while Thurstone admits and verifies one native action per case, then
-   inspect or download the synchronized results.
+5. Thurstone receives, arms, and advances the test automatically; ChatGPT needs native Site Tools
+   but no shell or visual browser-control clicks. Keep the owner page open while Thurstone verifies
+   one action per case, then inspect or download the synchronized results.
 
 The handoff is single use and expires after ten minutes. Its command contains the owner's authorized
 request queue but never the expected actions, effects, assertions, or diagnosis. If ChatGPT asks

@@ -50,7 +50,9 @@ export async function openFreshV2(
 ): Promise<Page> {
   const fresh = await context.newPage();
   await installEmulatedConsumer(fresh, argumentMode);
-  await fresh.goto(handoffUrl);
+  const manualHandoffUrl = new URL(handoffUrl);
+  manualHandoffUrl.searchParams.delete("auto");
+  await fresh.goto(manualHandoffUrl.toString());
   await expect(
     fresh.getByRole("heading", { name: "Receive this test in ChatGPT's Browser." })
   ).toBeVisible();
