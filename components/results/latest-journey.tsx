@@ -21,7 +21,7 @@ function download(filename: string, bytes: string): void {
 
 function verdictLabel(verdict: OwnerJourneyReport["results"][number]["verdict"]): string {
   if (verdict === "pass") return "Pass";
-  if (verdict === "issue") return "Fail";
+  if (verdict === "issue") return "Issue";
   if (verdict === "incomplete") return "Incomplete";
   return "Unavailable";
 }
@@ -149,7 +149,7 @@ export function LatestJourney({
           <h2 id="latest-journey-title">
             {allPassed
               ? `${report.counts.passed} of ${report.total} tests passed.`
-              : `${report.counts.passed} passed, ${report.counts.issues} failed, and ${report.counts.notRun} not run.`}
+              : `${report.counts.passed} passed, ${report.counts.issues} ${report.counts.issues === 1 ? "issue" : "issues"}, and ${report.counts.notRun} not run.`}
           </h2>
           <p>
             {judgeMode

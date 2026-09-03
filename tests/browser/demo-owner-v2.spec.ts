@@ -578,9 +578,9 @@ test("regression suite runs every case in one agent chat and continues after an 
   await owner.getByRole("button", { name: "View regression results" }).click();
   await owner.waitForURL(/\/results\?journey=latest$/u);
   await expect(
-    owner.getByRole("heading", { name: "2 passed, 1 failed, and 0 not run." })
+    owner.getByRole("heading", { name: "2 passed, 1 issue, and 0 not run." })
   ).toBeVisible();
-  await expect(owner.getByText("Fail", { exact: true })).toBeVisible();
+  await expect(owner.getByText("Issue", { exact: true })).toBeVisible();
   await expect(owner.getByText("Revision 0", { exact: true })).toBeVisible();
   await expect(owner.getByText("Stoneware mug × 2")).toBeVisible();
   await expect(

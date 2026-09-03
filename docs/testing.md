@@ -111,7 +111,7 @@ artifacts and fail if canonical bytes drift or denominators are combined.
    verify an authentic selection ISSUE. Never require either outcome from a real agent.
 10. Confirm the owner page automatically opens `/results?judge=latest` after all three cases.
 11. Confirm **Judge Results** uses the normal Results presentation, labels all three evidence
-    classes, includes Pass/Fail explanations, and provides **Download results**.
+    classes, includes Pass/Issue explanations, and provides **Download results**.
 12. If no new result appears after approximately one minute, confirm the consumer hint and clean
     re-arm action appear.
 

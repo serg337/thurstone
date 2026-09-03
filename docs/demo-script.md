@@ -103,7 +103,7 @@ the opaque URL, cookie, or storage.
 
 ### 1:42–2:04 — Verify reality
 
-**Shot:** **Judge Results**. Highlight the baseline PASS, planted-fault FAIL, and semantic-collision
+**Shot:** **Judge Results**. Highlight the baseline PASS, planted-fault ISSUE, and semantic-collision
 row. Show the planted row's correct `cart_update`, unchanged state, and explanation.
 
 **Narration:**

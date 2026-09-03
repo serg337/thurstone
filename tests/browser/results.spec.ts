@@ -34,9 +34,9 @@ test("development issue preview explains the mismatch and unexecuted remainder",
   await page.goto("/results?qa=issue");
   const preview = page.locator('[data-results-level="owner-journey"][data-qa-preview="true"]');
   await expect(
-    preview.getByRole("heading", { name: "3 passed, 1 failed, and 3 not run." })
+    preview.getByRole("heading", { name: "3 passed, 1 issue, and 3 not run." })
   ).toBeVisible();
-  await expect(preview.getByText("Fail", { exact: true })).toBeVisible();
+  await expect(preview.getByText("Issue", { exact: true })).toBeVisible();
   await expect(
     preview
       .locator(".latest-journey-metrics article")

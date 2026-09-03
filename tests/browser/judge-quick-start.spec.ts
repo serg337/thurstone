@@ -86,7 +86,7 @@ test("three isolated cases become full Judge Results with an authentic collision
     owner.getByRole("heading", { name: "Results from your three preloaded tests." })
   ).toBeVisible();
   await expect(
-    owner.getByRole("heading", { name: "1 passed, 2 failed, and 0 not run." })
+    owner.getByRole("heading", { name: "1 passed, 2 issues, and 0 not run." })
   ).toBeVisible();
   const results = owner.getByRole("table", { name: "Judge Quick Start results" });
   await expect(results.getByText("Live baseline", { exact: true })).toBeVisible();
