@@ -83,7 +83,7 @@ document. It runs three evidence classes in one regression queue:
    case without reopening the handoff URL. The owner page tracks progress and automatically opens
    a full **Judge Results** report.
 
-No JSON is required. If no native action appears after one minute, the page gives consumer guidance
+No JSON is required. If no native action appears after one minute, the page gives guidance for the agent client
 and a clean re-arm action. The handoff remains single use and expires after ten minutes.
 
 ### Controlled issue example
